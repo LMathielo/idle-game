@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameState } from '../client/GameProvider';
+import { ACTIVITY_STRIP_HEIGHT } from '../components/ActivityStrip';
 import { DebugPanel } from '../components/DebugPanel';
 import { formatNumber } from '../components/format';
 import { Bar, Panel } from '../components/Panel';
@@ -177,6 +178,7 @@ const SlotBox = memo(function SlotBox({ item, size }: { item?: Item; size: numbe
   return (
     <View
       style={[styles.slot, size === 58 ? styles.slot58 : styles.slot52, item && { borderColor: RARITY_COLORS[item.rarity] }]}
+      accessible
       accessibilityLabel={item ? `${item.name}${item.quantity ? ` x${item.quantity}` : ''}` : 'Empty slot'}
     >
       {item ? <Text style={size === 58 ? styles.icon58 : styles.icon52}>{item.icon}</Text> : null}
@@ -196,7 +198,8 @@ function formatQty(n: number): string {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.night },
   flex: { flex: 1 },
-  content: { padding: 12, paddingBottom: 32 },
+  // Room for the activity strip that floats above the tab bar.
+  content: { padding: 12, paddingBottom: 32 + ACTIVITY_STRIP_HEIGHT },
 
   headerRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   portrait: {

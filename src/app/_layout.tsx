@@ -4,18 +4,21 @@ import { PixelifySans_400Regular, PixelifySans_700Bold } from '@expo-google-font
 import { useFonts } from 'expo-font';
 import { BottomTabBar, type BottomTabBarProps, Tabs } from 'expo-router/js-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { GameProvider } from '../client/GameProvider';
 import { ActivityStrip } from '../components/ActivityStrip';
 import { AwayModal } from '../components/AwayModal';
 import { colors, fonts } from '../theme';
 
-/** Tab bar with the running-activity strip stacked on top of it. */
+/**
+ * Tab bar with the running-activity strip floating above it. The strip is absolutely positioned,
+ * so starting/stopping an activity never changes the tab bar height or the screen size.
+ */
 function TabBarWithStrip(props: BottomTabBarProps) {
   return (
-    <View>
-      <ActivityStrip />
+    <View style={styles.tabBarWrap}>
       <BottomTabBar {...props} />
+      <ActivityStrip />
     </View>
   );
 }
@@ -62,3 +65,8 @@ export default function RootLayout() {
     </GameProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  // Render over the screens (the strip sticks out above this view) and never clip it.
+  tabBarWrap: { overflow: 'visible', zIndex: 1, elevation: 8 },
+});

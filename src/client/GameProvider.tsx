@@ -5,19 +5,18 @@ import { AppState, StyleSheet, Text, View } from 'react-native';
 import { PixelButton } from '../components/PixelButton';
 import { colors, fonts } from '../theme';
 import { createAppClient } from './createAppClient';
-import type { LocalGameClient } from './LocalGameClient';
-import type { GameSnapshot } from './types';
+import type { GameClient, GameSnapshot } from './types';
 
 const TICK_MS = 1000;
 
-const GameClientContext = createContext<LocalGameClient | null>(null);
+const GameClientContext = createContext<GameClient | null>(null);
 
 function reportError(where: string) {
   return (err: unknown) => console.warn(`[game] ${where} failed`, err);
 }
 
 export function GameProvider({ children }: { children: ReactNode }) {
-  const [client] = useState(createAppClient);
+  const [client] = useState<GameClient>(createAppClient);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
 
@@ -83,7 +82,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   return <GameClientContext.Provider value={client}>{children}</GameClientContext.Provider>;
 }
 
-export function useGameClient(): LocalGameClient {
+export function useGameClient(): GameClient {
   const client = useContext(GameClientContext);
   if (!client) throw new Error('useGameClient must be used inside <GameProvider>');
   return client;
@@ -92,7 +91,10 @@ export function useGameClient(): LocalGameClient {
 /** Full snapshot: state plus client-side flags (clock paused, away summary, debug offset). */
 export function useGameSnapshot(): GameSnapshot {
   const client = useGameClient();
-  return useSyncExternalStore(client.subscribe, client.getSnapshot);
+  // Wrapped so any GameClient works, even one whose methods are not pre-bound.
+  const subscribe = useCallback((listener: () => void) => client.subscribe(listener), [client]);
+  const getSnapshot = useCallback(() => client.getSnapshot(), [client]);
+  return useSyncExternalStore(subscribe, getSnapshot);
 }
 
 export function useGameState() {

@@ -21,6 +21,8 @@ export default function VillageScreen() {
   const { character, activity } = useGameState();
   const [toast, setToast] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** True while a start/stop is being saved; extra taps are ignored so a double tap can't toggle twice. */
+  const inFlight = useRef(false);
 
   const showToast = useCallback((text: string) => {
     if (timer.current) clearTimeout(timer.current);
@@ -38,6 +40,8 @@ export default function VillageScreen() {
         showToast(`${COMING_SOON[action]}: coming soon`);
         return;
       }
+      if (inFlight.current) return;
+      inFlight.current = true;
       const running = client.getState().activity?.kind === 'woodcutting';
       client
         .dispatch(running ? { type: 'STOP_ACTIVITY' } : { type: 'START_ACTIVITY', kind: 'woodcutting' })
@@ -45,7 +49,10 @@ export default function VillageScreen() {
           if (!res.ok) showToast(res.error.message);
           else if (!res.duplicate) showToast(running ? 'Stopped woodcutting' : 'Woodcutting started');
         })
-        .catch(() => showToast('Could not save. Try again.'));
+        .catch(() => showToast('Could not save. Try again.'))
+        .finally(() => {
+          inFlight.current = false;
+        });
     },
     [client, showToast],
   );

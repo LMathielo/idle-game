@@ -16,6 +16,7 @@ import {
   isNoteworthy,
   loadSave,
   type LogType,
+  markDebugUsed,
   mergeSummaries,
   newGame,
   simulate,
@@ -33,8 +34,13 @@ import type {
   SyncTransport,
 } from './types';
 
-/** Unsaved live progress is written at least this often. */
+/** Unsaved live progress is written at least this often while an activity runs. */
 export const CHECKPOINT_INTERVAL_MS = 30_000;
+/**
+ * With no activity only time moves, so the 30s checkpoint is skipped. This much slower one keeps
+ * highestSeenAt/lastSimulatedAt reasonably fresh if an idle app stays open for hours and is then killed.
+ */
+export const IDLE_CHECKPOINT_INTERVAL_MS = 10 * 60_000;
 /** A tick that sees more time than this since the last one was suspended: treat it as a resume. */
 export const TICK_RESUME_GAP_MS = 60_000;
 export const META_CLOCK_OFFSET = 'debug_clock_offset_ms';
@@ -144,7 +150,7 @@ export class LocalGameClient implements GameClient {
       const adv = this.advance(now, 'SIMULATE');
       if (adv.rows.length > 0) {
         await this.commit([...pre, ...adv.rows]);
-      } else if (this.isDirty() && this.unsavedMs() >= CHECKPOINT_INTERVAL_MS) {
+      } else if (this.isDirty() && this.unsavedMs() >= this.checkpointIntervalMs()) {
         await this.commit([this.checkpointRow()]);
       }
       this.noteAway(adv, false);
@@ -196,7 +202,8 @@ export class LocalGameClient implements GameClient {
         const offsetMs = this.clock.offsetMs;
         const now = this.clock.now();
         try {
-          const offsetRow = this.row('DEBUG_CLOCK_OFFSET', { deltaMs, offsetMs }, now, this.getState());
+          this.state = markDebugUsed(this.getState());
+          const offsetRow = this.row('DEBUG_CLOCK_OFFSET', { deltaMs, offsetMs }, now, this.state);
           const adv = this.advance(now, 'RESUME');
           await this.commit([offsetRow, ...adv.rows], { [META_CLOCK_OFFSET]: String(offsetMs) });
           this.noteAway(adv, true);
@@ -216,14 +223,14 @@ export class LocalGameClient implements GameClient {
         const rows: NewLogRow[] = [];
         if (this.state) {
           await this.flushDirty();
-          rows.push(this.row('DEBUG_RESET_SAVE', {}, this.clock.now(), this.state));
+          rows.push(this.row('DEBUG_RESET_SAVE', {}, this.clock.now(), markDebugUsed(this.state)));
         }
         const previousOffset = this.clock.offsetMs;
         this.clock.offsetMs = 0;
         const now = this.clock.now();
         const seed = this.ids.seed() >>> 0;
-        const fresh = newGame(seed, now);
-        rows.push(this.row('NEW_GAME', { seed, reason: 'debug_reset' }, now, fresh));
+        const fresh = markDebugUsed(newGame(seed, now));
+        rows.push(this.row('NEW_GAME', { seed, reason: 'debug_reset', debugUsed: true }, now, fresh));
         const prevState = this.state;
         this.state = fresh;
         try {
@@ -290,7 +297,10 @@ export class LocalGameClient implements GameClient {
     const newAnomaly = capped || (backward && !this.paused);
     const accepted = Number.isFinite(now); // non-finite time is a no-op in the engine and never logged
 
-    if (accepted && (source === 'RESUME' || newAnomaly)) {
+    const hasAnomaly = res.summary.anomalies.length > 0;
+    // A RESUME that moved no time and saw no anomaly changes nothing: not worth a row.
+    const resumeWorthLogging = source === 'RESUME' && (res.summary.requestedMs > 0 || hasAnomaly);
+    if (accepted && (resumeWorthLogging || newAnomaly)) {
       rows.push(this.row(source, { summary: res.summary }, now, res.state));
       for (const a of res.summary.anomalies) rows.push(this.row('CLOCK_ANOMALY', a, now, res.state));
     }
@@ -310,6 +320,10 @@ export class LocalGameClient implements GameClient {
 
   private isDirty(): boolean {
     return this.state !== null && this.state !== this.committed;
+  }
+
+  private checkpointIntervalMs(): number {
+    return this.getState().activity ? CHECKPOINT_INTERVAL_MS : IDLE_CHECKPOINT_INTERVAL_MS;
   }
 
   private unsavedMs(): number {
