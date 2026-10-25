@@ -55,7 +55,7 @@ npm test                    # Vitest (tests/)
 npx expo-doctor             # diagnose dependency/config issues
 ```
 
-Before declaring a task done: `npm run typecheck` and `npm test` must pass and `npx expo export --platform android` must bundle.
+Before declaring a task done: `npm run typecheck` and `npm test` must pass and `npx expo export --platform all` must bundle (iOS + Android only).
 
 ## Navigation
 
@@ -82,6 +82,7 @@ Village sign positions are fractions of the artwork (`SIGNS` in `VillageScene.ts
 
 ## Native rules
 
+- **Mobile only:** `app.json` `expo.platforms` must stay `["ios", "android"]`. Without it, `eas update --platform all` also bundles web, which fails (e.g. expo-sqlite's web worker needs wasm). CI runs `npx expo export --platform all` on every PR to catch this.
 - `ios/` and `android/` are generated (Continuous Native Generation). Never create or edit them by hand; configure via `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. Prefer libraries that work in Expo Go, so the EAS Update → Expo Go preview keeps working. Adding a native module outside Expo Go means switching to a development build; flag it before doing so.
 - Use EAS (`npx eas-cli@latest ...`) for real builds and OTA updates when needed.

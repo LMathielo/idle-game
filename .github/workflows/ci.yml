@@ -1,6 +1,6 @@
 name: CI
 
-# Typecheck and tests on every pull request (the EAS publish workflow only runs on main).
+# Typecheck, tests and a full export on every pull request (the EAS publish workflow only runs on main).
 on:
   pull_request:
   workflow_dispatch:
@@ -29,3 +29,14 @@ jobs:
       - run: npm run typecheck
 
       - run: npm test
+
+      # Same export `eas update --platform all` runs. app.json `platforms` must stay [ios, android]:
+      # if web sneaks back in, this fails here instead of at publish time.
+      - name: Export all platforms (must be iOS + Android only)
+        run: |
+          npx expo export --platform all --output-dir /tmp/export-check
+          ls /tmp/export-check/_expo/static/js
+          if [ -d /tmp/export-check/_expo/static/js/web ]; then
+            echo "::error::Web bundle was produced. This app is mobile only: keep app.json expo.platforms = [ios, android]."
+            exit 1
+          fi
