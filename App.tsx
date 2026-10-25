@@ -13,7 +13,7 @@ export default function App() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Idle Game</Text>
-      <Text style={styles.subtitle}>Hello, world ⚔️</Text>
+      <Text style={styles.subtitle}>Hello world from mobile 📱⚔️</Text>
       <Text style={styles.ticker}>Idle for {seconds}s</Text>
       <Text style={styles.meta}>Running on {Platform.OS}</Text>
       <StatusBar style="light" />
