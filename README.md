@@ -2,7 +2,7 @@
 
 A mobile idle/incremental RPG inspired by Gladiatus. Your gladiator levels up combat and non-combat skills, gears up, and fights in dungeons that run automatically. You click, it fights, you watch.
 
-**Status:** barebone hello-world. Game code comes next.
+**Status:** UI skeleton with mocked data. Village (main) tab with location signs, Hero tab with stats, equipment, inventory and skills. No game logic or saving yet.
 
 **Preview:** every push to `main` publishes an EAS Update you open in Expo Go. No machine needed.
 
@@ -18,7 +18,7 @@ The game must be server-authoritative later, but runs fully on-device for the PO
 
 - **Engine** (to come, `packages/engine` or `src/engine`): pure TypeScript, no React, no I/O, deterministic (seeded RNG, time passed in). Exposes `applyCommand(state, cmd)` and `simulate(state, elapsedMs)`.
 - **GameClient** interface between UI and engine. `LocalGameClient` now (engine + on-device save), `RemoteGameClient` later (same commands over the network to a Node server that imports the same engine).
-- **UI**: three tabs: Character, Inventory, Dungeon. Combat is a log produced by the engine and replayed as a simple animation.
+- **UI**: two tabs, Village (main hub) and Hero (character sheet). Combat is a log produced by the engine and replayed as a simple animation.
 
 ## Running it
 
