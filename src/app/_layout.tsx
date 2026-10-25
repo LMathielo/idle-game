@@ -2,19 +2,35 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Jacquard12_400Regular } from '@expo-google-fonts/jacquard-12';
 import { PixelifySans_400Regular, PixelifySans_700Bold } from '@expo-google-fonts/pixelify-sans';
 import { useFonts } from 'expo-font';
-import { Tabs } from 'expo-router/js-tabs';
+import { BottomTabBar, type BottomTabBarProps, Tabs } from 'expo-router/js-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
+import { GameProvider } from '../client/GameProvider';
+import { ActivityStrip } from '../components/ActivityStrip';
+import { AwayModal } from '../components/AwayModal';
 import { colors, fonts } from '../theme';
+
+/** Tab bar with the running-activity strip stacked on top of it. */
+function TabBarWithStrip(props: BottomTabBarProps) {
+  return (
+    <View>
+      <ActivityStrip />
+      <BottomTabBar {...props} />
+    </View>
+  );
+}
+
+const renderTabBar = (props: BottomTabBarProps) => <TabBarWithStrip {...props} />;
 
 export default function RootLayout() {
   const [loaded] = useFonts({ Jacquard12_400Regular, PixelifySans_400Regular, PixelifySans_700Bold });
   if (!loaded) return <View style={{ flex: 1, backgroundColor: colors.night }} />;
 
   return (
-    <>
+    <GameProvider>
       <StatusBar style="light" />
       <Tabs
+        tabBar={renderTabBar}
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: colors.gold,
@@ -42,6 +58,7 @@ export default function RootLayout() {
           }}
         />
       </Tabs>
-    </>
+      <AwayModal />
+    </GameProvider>
   );
 }

@@ -5,15 +5,23 @@ type Props = {
   label: string;
   icon?: string;
   onPress?: () => void;
+  /** Highlighted (e.g. the running activity). */
+  active?: boolean;
 };
 
 /** Wooden sign button with hard pixel bevels (no rounded corners). */
-export function PixelButton({ label, icon, onPress }: Props) {
+export function PixelButton({ label, icon, onPress, active }: Props) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: !!active }}
+      hitSlop={6}
+    >
       {({ pressed }) => (
-        <View style={[styles.outer, pressed && styles.outerPressed]}>
-          <View style={[styles.inner, pressed && styles.innerPressed]}>
+        <View style={[styles.outer, active && styles.outerActive, pressed && styles.outerPressed]}>
+          <View style={[styles.inner, active && styles.innerActive, pressed && styles.innerPressed]}>
             {icon ? <Text style={styles.icon}>{icon}</Text> : null}
             <Text style={styles.label}>{label}</Text>
           </View>
@@ -34,6 +42,7 @@ const styles = StyleSheet.create({
     shadowRadius: 0,
     elevation: 4,
   },
+  outerActive: { backgroundColor: colors.gold },
   outerPressed: { transform: [{ translateY: 2 }], shadowOffset: { width: 1, height: 1 } },
   inner: {
     flexDirection: 'row',
@@ -51,6 +60,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.woodDark,
     borderRightColor: colors.woodDark,
   },
+  innerActive: { backgroundColor: colors.skill, borderTopColor: '#7cc576', borderLeftColor: '#7cc576' },
   innerPressed: { backgroundColor: colors.woodDark },
   icon: { fontSize: 14 },
   label: {

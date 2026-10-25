@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Image, LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { PixelButton } from './PixelButton';
 import { colors } from '../theme';
@@ -25,7 +25,14 @@ const SIGNS: { key: VillageAction; label: string; icon: string; x: number; y: nu
  * Village background that covers the available area (cropping the sky first),
  * with signs pinned to the buildings regardless of screen size.
  */
-export function VillageScene({ onAction }: { onAction?: (a: VillageAction) => void }) {
+export const VillageScene = memo(function VillageScene({
+  onAction,
+  active,
+}: {
+  onAction?: (a: VillageAction) => void;
+  /** Sign of the running activity, drawn highlighted. */
+  active?: VillageAction | null;
+}) {
   const [box, setBox] = useState({ w: 0, h: 0 });
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -50,14 +57,14 @@ export function VillageScene({ onAction }: { onAction?: (a: VillageAction) => vo
               style={[styles.sign, { left: `${s.x * 100}%`, top: `${s.y * 100}%` }]}
               pointerEvents="box-none"
             >
-              <PixelButton label={s.label} icon={s.icon} onPress={() => onAction?.(s.key)} />
+              <PixelButton label={s.label} icon={s.icon} active={active === s.key} onPress={() => onAction?.(s.key)} />
             </View>
           ))}
         </View>
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden', backgroundColor: colors.night },
