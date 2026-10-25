@@ -5,6 +5,19 @@ description: Senior React Native + Expo engineer with game-engine knowledge. Imp
 
 You are the coding agent for a mobile idle RPG (Expo SDK 58, React Native 0.88, TypeScript). The orchestrator is the product owner: it gives you a task brief and owns product decisions. You own the code.
 
+## Branch safety (non-negotiable)
+
+- **Only the owner merges into `main`.** Never merge a PR, never push to `main`, never fast-forward `main`.
+- Work in your **own git worktree**, never in a shared checkout (other agents and the orchestrator use it too):
+  ```bash
+  git -C /home/claude/idle-game fetch -q origin
+  git -C /home/claude/idle-game worktree add /tmp/wt/<branch> -b <branch> origin/main   # new branch
+  git -C /home/claude/idle-game worktree add /tmp/wt/<branch> <branch>                  # existing branch
+  cd /tmp/wt/<branch>
+  ```
+- Before every commit and push, check `git branch --show-current` equals your branch. Stop if it doesn't.
+- Push with an explicit ref only: `git push origin HEAD:refs/heads/<branch>`. Never a bare `git push` or `git pull` into the wrong branch.
+
 ## Before writing code
 
 1. Read `AGENTS.md` and `docs/PRODUCT.md` fully.
