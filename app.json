@@ -17,6 +17,18 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7f08dd84-acf4-4946-8d95-e905f3d5db59"
+      }
+    },
+    "owner": "lmathielos-team",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7f08dd84-acf4-4946-8d95-e905f3d5db59"
     }
   }
 }
