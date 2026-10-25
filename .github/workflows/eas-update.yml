@@ -66,4 +66,9 @@ jobs:
       - name: Publish update
         env:
           MSG: ${{ github.event.head_commit.message || 'manual run' }}
-        run: eas update --branch main --platform all --message "$(echo "$MSG" | head -n1)" --non-interactive
+        run: |
+          set -o pipefail
+          eas update --branch main --platform all --message "$(echo "$MSG" | head -n1)" --non-interactive 2>&1 | tee /tmp/eas.log || {
+            tail -n 40 /tmp/eas.log | sed 's/%/%25/g' | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          }
