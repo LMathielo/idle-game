@@ -2,7 +2,7 @@
 
 A mobile idle/incremental RPG inspired by Gladiatus. Your gladiator levels up combat and non-combat skills, gears up, and fights in dungeons that run automatically. You click, it fights, you watch.
 
-**Status:** UI skeleton with mocked data. Village (main) tab with location signs, Hero tab with stats, equipment, inventory and skills. No game logic or saving yet.
+**Status:** M1. Deterministic engine with an on-device SQLite save and action log. Woodcutting runs live and offline (8h cap) with a "While you were away" summary; the Hero tab shows real state. See `docs/ENGINE.md`.
 
 **Preview:** every push to `main` publishes an EAS Update you open in Expo Go. No machine needed.
 
@@ -16,7 +16,7 @@ A mobile idle/incremental RPG inspired by Gladiatus. Your gladiator levels up co
 
 The game must be server-authoritative later, but runs fully on-device for the POC.
 
-- **Engine** (to come, `packages/engine` or `src/engine`): pure TypeScript, no React, no I/O, deterministic (seeded RNG, time passed in). Exposes `applyCommand(state, cmd)` and `simulate(state, elapsedMs)`.
+- **Engine** (`src/engine`): pure TypeScript, no React, no I/O, deterministic (seeded RNG, time passed in). Exposes `applyCommand(state, cmd, now)` and `simulate(state, now)`.
 - **GameClient** interface between UI and engine. `LocalGameClient` now (engine + on-device save), `RemoteGameClient` later (same commands over the network to a Node server that imports the same engine).
 - **UI**: two tabs, Village (main hub) and Hero (character sheet). Combat is a log produced by the engine and replayed as a simple animation.
 
