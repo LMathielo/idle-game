@@ -47,6 +47,8 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 | 2026-10-25 | Device clock moved back = progress paused until real time catches up, no other penalty | Defeats "clock forward, collect, clock back, collect again" without punishing honest timezone/clock fixes |
 | 2026-10-25 | XP curve: `round(base × L^1.5 × multiplier)`, hero base 1500, skills base 500, growth 1.00 (1–19), 1.05 (20–39), 1.07 (40–99), 1.18 (100+), no level cap | Targets ~2 days to hero Lv20 and >1 year to Lv100; table in `docs/ENGINE.md` |
 | 2026-10-25 | Hero XP comes from combat only; skills give skill XP + items | Keeps gathering and combat as separate progression tracks |
+| 2026-10-25 | "While you were away" opens only after ≥60 s of real time away (with at least one action) or on any clock anomaly | A quick app switch should not interrupt the player |
+| 2026-10-25 | Debug panel stays enabled for the POC; any DEBUG_* action permanently sets `flags.debugUsed` on the save | Owner tests on the phone; a future server can tell debugged saves apart. Debug log rows stay replayable in any build |
 
 ## Backlog (not scheduled)
 
@@ -56,3 +58,6 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - Prestige / rebirth layer.
 - Offline cap upgrade (raise `offline.capMs` / `efficiency` per player, e.g. bought in the village).
 - Big-number support for XP beyond ~level 150 (values clamp to `Number.MAX_SAFE_INTEGER` today).
+- Server-owned time: closes the repeated "clock forward 8h, open, repeat" offline-cap farm, which can't be detected on the device (see ENGINE.md exploit table).
+- Before the first save or rules change after M1: log a `MIGRATE` / `ENGINE_UPGRADE` row, replay by each row's `engineVersion`, and add SQL schema migrations.
+- Action-log retention once sync exists: delete synced rows older than 30 days.
