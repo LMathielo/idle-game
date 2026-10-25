@@ -15,6 +15,14 @@ The owner works mostly from a phone. Keep that in mind:
 - Experiments go on a branch (`exp/<name>` or `feat/<name>`) and are merged by PR.
 - Keep PR descriptions short and readable on a phone screen.
 
+## Workflow (how work gets done here)
+
+- The orchestrating assistant is the **product owner**: it turns requests into task briefs, keeps `docs/PRODUCT.md` current and does not write game code. See `.claude/skills/product-owner/SKILL.md`.
+- Coding is done by the **`game-engineer`** agent (`.claude/agents/game-engineer.md`) on a `feat/`, `fix/` or `chore/` branch, ending in a PR to `main`.
+- Every PR gets the **5-reviewer council** (`.claude/skills/pr-review-council/SKILL.md`, reviewers in `.claude/agents/code-reviewer.md`). Confirmed issues go back to the engineer; repeat until clean.
+- Skills live in `.claude/skills/`: `idle-rpg-game-design` (game knowledge), `product-owner`, `pr-review-council`, plus vendored official Expo skills (MIT, see `EXPO-SKILLS-LICENSE`).
+- GitHub GraphQL is blocked in the agent environment: use `gh api` REST calls for PRs and comments.
+
 ## Architecture rules
 
 These hold from the first line of game code. They are what let us move logic to a server later without a rewrite.
