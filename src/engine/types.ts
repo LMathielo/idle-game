@@ -67,8 +67,13 @@ export type GameStats = {
   itemsGathered: Record<string, number>;
 };
 
+export type GameFlags = {
+  /** Set forever once any DEBUG_* command touched this save. A future server can ignore or reset such saves. */
+  debugUsed: boolean;
+};
+
 export type GameState = {
-  saveVersion: 1;
+  saveVersion: 2;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -80,6 +85,7 @@ export type GameState = {
   offline: { capMs: number; efficiency: number };
   activity: Activity | null;
   stats: GameStats;
+  flags: GameFlags;
   character: Character;
   inventory: Inventory;
 };

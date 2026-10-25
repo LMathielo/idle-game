@@ -6,6 +6,7 @@ export type GrowthSegment = { fromLevel: number; growth: number };
 
 export type XpCurveConfig = {
   base: number;
+  /** Whole or half number only (1.5 = L × √L), so the result is identical on every JS runtime. */
   power: number;
   /** Sorted by fromLevel; the first segment must start at level 1. */
   segments: readonly GrowthSegment[];

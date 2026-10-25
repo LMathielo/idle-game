@@ -31,12 +31,26 @@ function multiplier(curve: XpCurveConfig, level: number): number {
 }
 
 /**
+ * level^power using only exactly-rounded IEEE 754 operations (multiply, sqrt), so every JS
+ * engine (Hermes on the phone, V8 on a server) gets the same bits. Math.pow is not guaranteed
+ * to be correctly rounded and can differ between runtimes. Supports whole and half powers.
+ */
+export function levelPower(level: number, power: number): number {
+  const twice = power * 2;
+  if (!Number.isInteger(twice) || power < 0) throw new RangeError(`levelPower: unsupported power ${power}`);
+  let result = 1;
+  for (let i = 0; i < Math.floor(power); i++) result *= level;
+  if (twice % 2 === 1) result *= Math.sqrt(level);
+  return result;
+}
+
+/**
  * XP needed to go from `level` to `level + 1`.
  * Clamped to Number.MAX_SAFE_INTEGER (reached only far beyond level 150; big numbers are a backlog item).
  */
 export function xpToNext(curve: XpCurveConfig, level: number): number {
   if (!Number.isInteger(level) || level < 1) throw new RangeError(`xpToNext: invalid level ${level}`);
-  const raw = Math.round(curve.base * Math.pow(level, curve.power) * multiplier(curve, level));
+  const raw = Math.round(curve.base * levelPower(level, curve.power) * multiplier(curve, level));
   return Number.isFinite(raw) && raw < MAX ? raw : MAX;
 }
 

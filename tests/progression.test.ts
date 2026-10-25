@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, newGame } from '../src/engine';
 import { HERO_XP_CURVE, SKILL_XP_CURVE } from '../src/engine/config/xpCurve';
-import { addXp, cumulativeXp, xpToNext } from '../src/engine/progression';
+import { addXp, cumulativeXp, levelPower, xpToNext } from '../src/engine/progression';
 import { T0, cmd } from './helpers';
 
 const REFERENCE: [number, number][] = [
@@ -54,6 +54,26 @@ describe('hero XP curve', () => {
   it('rejects invalid levels', () => {
     expect(() => xpToNext(HERO_XP_CURVE, 0)).toThrow();
     expect(() => xpToNext(HERO_XP_CURVE, 1.5)).toThrow();
+  });
+});
+
+describe('levelPower (runtime-independent L^power)', () => {
+  it('L^1.5 is computed as L × √L (exactly-rounded ops only)', () => {
+    for (let l = 1; l <= 500; l++) expect(levelPower(l, 1.5)).toBe(l * Math.sqrt(l));
+  });
+
+  it('agrees with Math.pow after rounding for every level that matters', () => {
+    for (let l = 1; l <= 160; l++) {
+      expect(Math.round(1500 * levelPower(l, 1.5))).toBe(Math.round(1500 * Math.pow(l, 1.5)));
+    }
+  });
+
+  it('supports whole and half powers only', () => {
+    expect(levelPower(9, 2)).toBe(81);
+    expect(levelPower(9, 0.5)).toBe(3);
+    expect(levelPower(9, 0)).toBe(1);
+    expect(() => levelPower(9, 1.6)).toThrow();
+    expect(() => levelPower(9, -1)).toThrow();
   });
 });
 

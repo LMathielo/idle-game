@@ -284,6 +284,21 @@ describe('commands', () => {
     expect(again.activity?.progressMs).toBe(2000);
   });
 
+  it('DEBUG_GRANT_HERO_XP sets flags.debugUsed; normal commands do not', () => {
+    const s = newGame(1, T0);
+    const normal = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting' }, T0);
+    expect(normal.flags.debugUsed).toBe(false);
+    const debug = apply(normal, { type: 'DEBUG_GRANT_HERO_XP', amount: 1 }, T0);
+    expect(debug.flags.debugUsed).toBe(true);
+    expect(apply(debug, { type: 'STOP_ACTIVITY' }, T0 + HOUR).flags.debugUsed).toBe(true);
+    expect(simulate(debug, T0 + HOUR).state.flags.debugUsed).toBe(true);
+  });
+
+  it('allowDebug: false rejects DEBUG_* commands with a typed error', () => {
+    const res = applyCommand(newGame(1, T0), cmd({ type: 'DEBUG_GRANT_HERO_XP', amount: 1 }), T0, { allowDebug: false });
+    expect(res).toEqual({ ok: false, error: expect.objectContaining({ code: 'DEBUG_DISABLED' }) });
+  });
+
   it('typed errors, input untouched', () => {
     const s = newGame(1, T0);
     const unknown = applyCommand(s, cmd({ type: 'START_ACTIVITY', kind: 'fishing' as 'woodcutting' }), T0);

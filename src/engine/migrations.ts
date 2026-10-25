@@ -3,13 +3,16 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 1 as const;
+export const CURRENT_SAVE_VERSION = 2 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
 
-/** MIGRATIONS[n] upgrades a version-n document to version n + 1. Empty while we are at v1. */
-export const MIGRATIONS: Readonly<Record<number, Migration>> = {};
+/** MIGRATIONS[n] upgrades a version-n document to version n + 1. */
+export const MIGRATIONS: Readonly<Record<number, Migration>> = {
+  // v2 adds flags.debugUsed. A v1 document carries no record of debug use, so it starts false.
+  1: (doc) => ({ ...doc, saveVersion: 2, flags: { debugUsed: false } }),
+};
 
 export class SaveVersionError extends Error {}
 

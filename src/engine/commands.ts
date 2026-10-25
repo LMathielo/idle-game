@@ -3,6 +3,7 @@ import { grantHeroXp } from './activities';
 import { cloneState } from './clone';
 import { ACTIVITIES, isActivityKind } from './config/activities';
 import { DEV_TOOLS_ENABLED } from './config/dev';
+import { markDebugUsed } from './flags';
 import { simulate } from './simulate';
 import type { ActivityKind, GameEvent, GameState, SimulationSummary } from './types';
 
@@ -32,11 +33,20 @@ export const MAX_DEBUG_XP_GRANT = 1_000_000_000_000;
 
 const fail = (code: CommandErrorCode, message: string): CommandResult => ({ ok: false, error: { code, message } });
 
+export type ApplyOptions = {
+  /**
+   * Accept DEBUG_* commands. Defaults to DEV_TOOLS_ENABLED for live play. Replay always passes
+   * true so a logged debug row stays replayable even in a build where the debug tools are off.
+   */
+  allowDebug?: boolean;
+};
+
 /**
  * Simulates up to `now` (so rewards are never lost or double-counted), then applies `cmd`.
  * Returns a typed error and leaves the input untouched when the command is invalid.
  */
-export function applyCommand(state: GameState, cmd: Command, now: number): CommandResult {
+export function applyCommand(state: GameState, cmd: Command, now: number, options: ApplyOptions = {}): CommandResult {
+  const allowDebug = options.allowDebug ?? DEV_TOOLS_ENABLED;
   if (!cmd || typeof cmd !== 'object' || typeof cmd.id !== 'string' || cmd.id.length === 0) {
     return fail('INVALID_COMMAND', 'Command must be an object with a non-empty id');
   }
@@ -44,7 +54,7 @@ export function applyCommand(state: GameState, cmd: Command, now: number): Comma
 
   const sim = simulate(state, now);
   // simulate() shares unchanged sub-objects with its input; commands work on a full copy.
-  const draft = cloneState(sim.state);
+  let draft = cloneState(sim.state);
   const events: GameEvent[] = [...sim.events];
 
   switch (cmd.type) {
@@ -63,11 +73,12 @@ export function applyCommand(state: GameState, cmd: Command, now: number): Comma
       break;
     }
     case 'DEBUG_GRANT_HERO_XP': {
-      if (!DEV_TOOLS_ENABLED) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
       const { amount } = cmd;
       if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0 || amount > MAX_DEBUG_XP_GRANT) {
         return fail('INVALID_AMOUNT', `Invalid XP amount ${String(amount)}`);
       }
+      draft = markDebugUsed(draft);
       grantHeroXp(draft, amount, null, events);
       break;
     }

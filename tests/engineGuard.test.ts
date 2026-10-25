@@ -35,4 +35,10 @@ describe('engine purity guard', () => {
     const src = readFileSync(file, 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
     expect(src).not.toMatch(/Date\.now|new Date\(|Math\.random|performance\.now/);
   });
+
+  // Not correctly rounded in IEEE 754: results may differ between Hermes (phone) and V8 (server).
+  it.each(files.map((f) => [relative(ENGINE_DIR, f), f]))('%s avoids runtime-dependent Math functions', (_name, file) => {
+    const src = readFileSync(file, 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(src).not.toMatch(/Math\.(pow|exp|expm1|log|log2|log10|log1p|sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|cbrt|hypot)\b|\*\*/);
+  });
 });

@@ -32,6 +32,7 @@ export function newGame(seed: number, now: number): GameState {
     offline: { capMs: DEFAULT_OFFLINE_CAP_MS, efficiency: DEFAULT_OFFLINE_EFFICIENCY },
     activity: null,
     stats: { totalActions: 0, itemsGathered: {} },
+    flags: { debugUsed: false },
     character: {
       name: STARTING_HERO.name,
       title: STARTING_HERO.title,

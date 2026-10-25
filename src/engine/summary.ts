@@ -1,3 +1,4 @@
+import { AWAY_SUMMARY_MIN_MS } from './config/time';
 import type { SimulationSummary } from './types';
 
 export function emptySummary(): SimulationSummary {
@@ -37,7 +38,10 @@ export function mergeSummaries(a: SimulationSummary, b: SimulationSummary): Simu
   };
 }
 
-/** Worth showing in "While you were away": at least one action or any clock anomaly. */
-export function isNoteworthy(s: SimulationSummary): boolean {
-  return s.actions > 0 || s.anomalies.length > 0;
+/**
+ * Worth showing in "While you were away": any clock anomaly, or at least AWAY_SUMMARY_MIN_MS
+ * of real time away with at least one action. A quick app switch never opens the modal.
+ */
+export function isNoteworthy(s: SimulationSummary, minAwayMs: number = AWAY_SUMMARY_MIN_MS): boolean {
+  return s.anomalies.length > 0 || (s.requestedMs >= minAwayMs && s.actions > 0);
 }

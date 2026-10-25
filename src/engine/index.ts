@@ -12,4 +12,5 @@ export * from './selectors';
 export { actionIntervalMs, currentActionIntervalMs } from './activities';
 export { ENGINE_VERSION } from './version';
 export * from './replay';
+export { markDebugUsed } from './flags';
 export * from './config';

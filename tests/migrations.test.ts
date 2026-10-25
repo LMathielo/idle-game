@@ -4,7 +4,15 @@ import { CURRENT_SAVE_VERSION, loadSave, migrateDoc, type Migration, SaveVersion
 import { T0 } from './helpers';
 
 describe('save migrations', () => {
-  it('v1 round-trip: store as JSON, load back, identical state', () => {
+  it('real v1 → v2 migration adds flags.debugUsed = false and keeps everything else', () => {
+    const v2 = newGame(77, T0);
+    const { flags: _flags, ...rest } = v2;
+    const v1 = { ...rest, saveVersion: 1 };
+    const migrated = loadSave(v1);
+    expect(migrated).toEqual({ ...v2, flags: { debugUsed: false } });
+  });
+
+  it('current-version round-trip: store as JSON, load back, identical state', () => {
     const s = newGame(77, T0);
     const stored = JSON.parse(JSON.stringify(s));
     const loaded = loadSave(stored);

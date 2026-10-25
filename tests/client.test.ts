@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock } from '../src/client/clock';
-import { CHECKPOINT_INTERVAL_MS, LocalGameClient } from '../src/client/LocalGameClient';
+import { CHECKPOINT_INTERVAL_MS, IDLE_CHECKPOINT_INTERVAL_MS, LocalGameClient } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import { NoopSyncTransport } from '../src/client/types';
-import { hashState, replayStep, simulate, type GameState } from '../src/engine';
+import { ENGINE_VERSION, hashState, replayLog, replayStep, simulate, type GameState } from '../src/engine';
 import { HOUR, MIN, SEC, T0, idSource, makeClient, qty } from './helpers';
 
 /** Replays the stored log and checks every row's state_hash. Returns the final state. */
@@ -25,15 +25,16 @@ async function tickFor(client: LocalGameClient, clock: FakeClock, seconds: numbe
 }
 
 describe('LocalGameClient', () => {
-  it('first load creates a new game, logs NEW_GAME + RESUME and stores meta', async () => {
+  it('first load creates a new game, logs NEW_GAME (no empty RESUME) and stores meta', async () => {
     const { repo, client } = makeClient();
     const snap = await client.load();
     expect(snap.state.character.level).toBe(1);
     expect(snap.state.character.name).toBe('Lucius');
+    expect(snap.state.flags.debugUsed).toBe(false);
     const rows = await repo.getAllLog();
-    expect(rows.map((r) => r.type)).toEqual(['NEW_GAME', 'RESUME']);
+    expect(rows.map((r) => r.type)).toEqual(['NEW_GAME']);
     expect(await repo.getMeta('device_id')).toBeTruthy();
-    expect(await repo.getMeta('engine_version')).toBe('1.0.0');
+    expect(await repo.getMeta('engine_version')).toBe(ENGINE_VERSION);
     expect(await repo.getMeta('schema_version')).toBe('1');
     expect(JSON.parse(repo.stateDoc!)).toEqual(snap.state);
   });
@@ -215,7 +216,7 @@ describe('LocalGameClient', () => {
     expect(new Set(rows.map((r) => r.commandId)).size).toBe(rows.length);
     for (const r of rows) {
       expect(r.stateHash).toMatch(/^[0-9a-f]{8}$/);
-      expect(r.engineVersion).toBe('1.0.0');
+      expect(r.engineVersion).toBe(ENGINE_VERSION);
     }
     const replayed = await verifyLog(repo);
     expect(hashState(replayed)).toBe(hashState(client.getState()));
@@ -237,11 +238,12 @@ describe('LocalGameClient', () => {
   it('sync outbox: unsynced rows are exposed; Noop transport acknowledges nothing', async () => {
     const { client } = makeClient();
     await client.load();
+    await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting' });
     const unsynced = await client.getUnsyncedLog();
-    expect(unsynced.map((r) => r.type)).toEqual(['NEW_GAME', 'RESUME']);
+    expect(unsynced.map((r) => r.type)).toEqual(['NEW_GAME', 'START_ACTIVITY']);
     expect(await client.syncOnce(new NoopSyncTransport())).toBe(0);
     expect(await client.syncOnce({ pushLog: async (rows) => [rows[0].seq, 999] })).toBe(1);
-    expect((await client.getUnsyncedLog()).map((r) => r.type)).toEqual(['RESUME']);
+    expect((await client.getUnsyncedLog()).map((r) => r.type)).toEqual(['START_ACTIVITY']);
   });
 
   it('notifies subscribers only when the snapshot changes', async () => {
@@ -266,5 +268,112 @@ describe('LocalGameClient', () => {
     await Promise.all([client.tick(), client.resume(), client.debug.grantHeroXp(100), client.persist(), client.tick()]);
     expect(client.getState().stats.totalActions).toBe(20);
     expect(client.getState().character.xp).toBe(100);
+  });
+
+  describe('"While you were away" threshold (60s of real time or any anomaly)', () => {
+    it('a quick app switch (a few seconds) does not open the modal but is still simulated', async () => {
+      const { client, clock } = makeClient();
+      await client.load();
+      await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting' });
+      await client.persist();
+      clock.advance(10 * SEC); // background → foreground after 10s
+      const summary = await client.resume();
+      expect(summary.actions).toBe(3);
+      expect(client.getSnapshot().awaySummary).toBeNull();
+    });
+
+    it('59s away: no modal; 60s away: modal', async () => {
+      const a = makeClient();
+      await a.client.load();
+      await a.client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting' });
+      a.clock.advance(59 * SEC);
+      await a.client.resume();
+      expect(a.client.getSnapshot().awaySummary).toBeNull();
+
+      const b = makeClient();
+      await b.client.load();
+      await b.client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting' });
+      b.clock.advance(60 * SEC);
+      await b.client.resume();
+      expect(b.client.getSnapshot().awaySummary?.actions).toBe(20);
+    });
+
+    it('an anomaly always opens it, even with no time granted', async () => {
+      const { client } = makeClient();
+      await client.load();
+      await client.debug.shiftClock(-2 * HOUR);
+      expect(client.getSnapshot().awaySummary?.anomalies[0]?.kind).toBe('backward');
+    });
+
+    it('long time away with no activity shows nothing (no actions to report)', async () => {
+      const { client, clock } = makeClient();
+      await client.load();
+      clock.advance(2 * HOUR);
+      await client.resume();
+      expect(client.getSnapshot().awaySummary).toBeNull();
+    });
+  });
+
+  describe('log growth', () => {
+    it('idle hero: no 30s checkpoints while only time moves', async () => {
+      const { repo, client, clock } = makeClient();
+      await client.load();
+      const n = repo.log.length;
+      await tickFor(client, clock, 5 * 60);
+      expect(repo.log.length).toBe(n);
+      // A much slower idle checkpoint still bounds what a kill can lose.
+      await tickFor(client, clock, IDLE_CHECKPOINT_INTERVAL_MS / SEC);
+      expect(repo.log.slice(n).map((r) => r.type)).toEqual(['SIMULATE']);
+      await verifyLog(repo);
+    });
+
+    it('a RESUME with no elapsed time and no anomaly writes no row', async () => {
+      const { repo, client } = makeClient();
+      await client.load();
+      const n = repo.log.length;
+      await client.resume();
+      await client.resume();
+      expect(repo.log.length).toBe(n);
+    });
+
+    it('a RESUME after real time passed is still logged', async () => {
+      const { repo, client, clock } = makeClient();
+      await client.load();
+      clock.advance(5 * SEC);
+      await client.resume();
+      expect(repo.log.at(-1)?.type).toBe('RESUME');
+    });
+  });
+
+  describe('flags.debugUsed', () => {
+    it('stays false in normal play', async () => {
+      const { client, clock } = makeClient();
+      await client.load();
+      await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting' });
+      clock.advance(HOUR);
+      await client.resume();
+      expect(client.getState().flags.debugUsed).toBe(false);
+    });
+
+    it.each([
+      ['DEBUG_GRANT_HERO_XP', (c: LocalGameClient) => c.debug.grantHeroXp(10)],
+      ['DEBUG_CLOCK_OFFSET (+1h)', (c: LocalGameClient) => c.debug.shiftClock(HOUR)],
+      ['DEBUG_CLOCK_OFFSET (−2h)', (c: LocalGameClient) => c.debug.shiftClock(-2 * HOUR)],
+      ['DEBUG_RESET_SAVE', (c: LocalGameClient) => c.debug.resetSave()],
+    ])('%s sets it, it persists, and replay reproduces it', async (_name, action) => {
+      const { repo, client, clock } = makeClient();
+      await client.load();
+      await action(client);
+      expect(client.getState().flags.debugUsed).toBe(true);
+      expect(JSON.parse(repo.stateDoc!).flags.debugUsed).toBe(true);
+      // permanent: later normal play never clears it
+      await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting' });
+      clock.advance(HOUR);
+      await client.resume();
+      expect(client.getState().flags.debugUsed).toBe(true);
+      const replayed = await verifyLog(repo);
+      expect(replayed.flags.debugUsed).toBe(true);
+      expect(hashState(replayLog(await repo.getAllLog()))).toBe(hashState(client.getState()));
+    });
   });
 });
