@@ -1,0 +1,67 @@
+name: Publish to Expo Go
+
+# Every push to main publishes an EAS Update. Open it in Expo Go on the phone
+# (expo.dev → project → Updates, or the QR code there). No local dev server needed.
+#
+# First run only: links the project to the Expo account behind EXPO_TOKEN
+# (eas init + update:configure) and commits the resulting app.json back to main.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: eas-update-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN secret is missing (repo Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - name: Verify Expo login
+        run: eas whoami
+
+      - name: Link project to Expo (first run only)
+        run: |
+          if ! grep -q '"projectId"' app.json; then
+            eas init --force --non-interactive
+            eas update:configure --platform all --non-interactive
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app.json eas.json 2>/dev/null || git add app.json
+            git commit -m "Link project to Expo account [skip ci]"
+            git push
+          fi
+
+      - name: Publish update
+        env:
+          MSG: ${{ github.event.head_commit.message || 'manual run' }}
+        run: eas update --branch main --platform all --message "$(echo "$MSG" | head -n1)" --non-interactive

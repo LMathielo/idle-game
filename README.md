@@ -4,13 +4,13 @@ A mobile idle/incremental RPG inspired by Gladiatus. Your gladiator levels up co
 
 **Status:** barebone hello-world. Game code comes next.
 
-**Live web preview:** https://lmathielo.github.io/idle-game/ (redeployed on every push to `main`)
+**Preview:** every push to `main` publishes an EAS Update you open in Expo Go. No machine needed.
 
 ## Stack
 
 - [Expo](https://expo.dev) (SDK 58) + React Native 0.88 + TypeScript
-- One codebase for iOS, Android and web
-- Web build deployed to GitHub Pages by GitHub Actions
+- One codebase for iOS and Android (mobile only, no web target)
+- EAS Update published by GitHub Actions, opened in Expo Go
 
 ## Planned architecture
 
@@ -22,28 +22,21 @@ The game must be server-authoritative later, but runs fully on-device for the PO
 
 ## Running it
 
-### From a phone, no computer (main workflow while travelling)
+### From a phone, no computer (main workflow)
 
 1. Push to `main` (or merge a PR).
-2. Wait for the **Deploy web preview** action to go green (~2 min).
-3. Open https://lmathielo.github.io/idle-game/ on the phone. "Add to Home Screen" makes it feel app-like.
+2. Wait for the **Publish to Expo Go** action to go green (~2–3 min).
+3. Open Expo Go (logged into the same Expo account). The project shows up under your projects; open the latest `main` update. Alternatively, go to expo.dev → project → Updates and scan the QR code.
 
-Branches don't deploy automatically. Merge to `main` to see a change, or run the workflow manually from the Actions tab.
+Branches don't publish automatically. Merge to `main`, or run the workflow manually from the Actions tab.
 
-### Native, in Expo Go (needs a machine running the dev server)
+Expo Go in the stores supports only the latest Expo SDK. When Expo ships a new SDK, upgrade with `npx expo install expo@latest && npx expo install --fix`.
 
-```bash
-npm install
-npx expo start --tunnel   # scan the QR code with Expo Go (Android) or the Camera app (iOS)
-```
-
-`--tunnel` works when the phone and computer are on different networks.
-
-### Local web
+### With a machine
 
 ```bash
 npm install
-npm run web
+npx expo start --tunnel   # scan the QR code with Expo Go
 ```
 
 ## Scripts
@@ -51,13 +44,13 @@ npm run web
 | Script | What it does |
 | --- | --- |
 | `npm start` | Expo dev server |
-| `npm run web` | Dev server in the browser |
-| `npm run build:web` | Static web export to `dist/` |
+| `npm run android` / `npm run ios` | Dev server, open on device/emulator |
 | `npm run typecheck` | `tsc --noEmit` |
 
-## One-time GitHub setup
+## One-time setup
 
-Settings → Pages → **Build and deployment → Source: GitHub Actions**. Without this, the deploy job fails.
+- Repo secret `EXPO_TOKEN` (Settings → Secrets and variables → Actions) holding an expo.dev access token.
+- The first workflow run links the project to that Expo account and commits `app.json` back to `main`.
 
 ## Branching
 

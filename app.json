@@ -17,13 +17,6 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "favicon": "./assets/favicon.png",
-      "output": "single"
-    },
-    "experiments": {
-      "baseUrl": "/idle-game"
     }
   }
 }

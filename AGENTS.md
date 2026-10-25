@@ -8,7 +8,8 @@ Mobile idle/incremental RPG inspired by Gladiatus. POC scope: three tabs (Charac
 
 The owner works mostly from a phone. Keep that in mind:
 - Commit directly to the GitHub repo; there is no "local copy" the owner can open.
-- Every change on `main` must build, because `main` deploys to https://lmathielo.github.io/idle-game/ and that is how the owner tests.
+- Every change on `main` must build, because `main` publishes an EAS Update that the owner opens in Expo Go. That is how he tests.
+- Mobile only (iOS + Android). Do not add a web target.
 - Experiments go on a branch (`exp/<name>` or `feat/<name>`) and are merged by PR.
 - Keep PR descriptions short and readable on a phone screen.
 
@@ -40,18 +41,17 @@ Expo ships breaking changes every SDK release. Before writing code that touches 
 npx expo install <package>  # ALWAYS use instead of npm add — resolves SDK-compatible versions
 npx expo start              # dev server (add --tunnel for a phone on another network)
 npm run typecheck           # tsc --noEmit
-npm run build:web           # static web export (what CI deploys)
 npx expo-doctor             # diagnose dependency/config issues
 ```
 
-Before declaring a task done: `npm run typecheck` and `npm run build:web` must pass.
+Before declaring a task done: `npm run typecheck` must pass and `npx expo export --platform android` must bundle.
 
 ## Navigation
 
-When we add the tabs, use **Expo Router**. Routes live in `src/app/`; every file there is a screen and `_layout.tsx` files define navigators. Keep non-route code outside `src/app/`. Note `app.json` sets `experiments.baseUrl` to `/idle-game` for GitHub Pages; keep it.
+When we add the tabs, use **Expo Router**. Routes live in `src/app/`; every file there is a screen and `_layout.tsx` files define navigators. Keep non-route code outside `src/app/`.
 
 ## Native rules
 
 - `ios/` and `android/` are generated (Continuous Native Generation). Never create or edit them by hand; configure via `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. Prefer libraries that work in Expo Go and on web, so the phone-browser preview keeps working.
+- Expo Go only includes its bundled native modules. Prefer libraries that work in Expo Go, so the EAS Update → Expo Go preview keeps working. Adding a native module outside Expo Go means switching to a development build; flag it before doing so.
 - Use EAS (`npx eas-cli@latest ...`) for real builds and OTA updates when needed.
