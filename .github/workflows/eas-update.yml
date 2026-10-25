@@ -46,6 +46,8 @@ jobs:
 
       - run: npm run typecheck
 
+      - run: npm test
+
       - name: Verify Expo login
         run: eas whoami
 
