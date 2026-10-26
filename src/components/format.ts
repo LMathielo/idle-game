@@ -1,4 +1,12 @@
-import { getItemDef } from '../engine';
+import { type AttributeKey, getItemDef } from '../engine';
+
+/** Display names. A Record, so adding an attribute to ATTRIBUTE_KEYS fails typecheck until it is named here. */
+export const ATTRIBUTE_NAMES: Record<AttributeKey, { short: string; label: string }> = {
+  strength: { short: 'STR', label: 'Strength' },
+  dexterity: { short: 'DEX', label: 'Dexterity' },
+  endurance: { short: 'END', label: 'Endurance' },
+  intelligence: { short: 'INT', label: 'Intelligence' },
+};
 
 /** 2h 05m · 4m 12s · 37s */
 export function formatDuration(ms: number): string {

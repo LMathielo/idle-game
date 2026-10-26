@@ -14,16 +14,8 @@ import {
   type ValuePart,
 } from '../engine';
 import { colors, fonts } from '../theme';
-import { formatClock, formatHoursMinutes, formatNumber, itemName } from './format';
+import { ATTRIBUTE_NAMES, formatClock, formatHoursMinutes, formatNumber, itemName } from './format';
 import { Bar, Panel } from './Panel';
-
-/** Display names. A Record, so adding an attribute to ATTRIBUTE_KEYS fails typecheck until it is named here. */
-export const ATTRIBUTE_NAMES: Record<AttributeKey, { short: string; label: string }> = {
-  strength: { short: 'STR', label: 'Strength' },
-  dexterity: { short: 'DEX', label: 'Dexterity' },
-  endurance: { short: 'END', label: 'Endurance' },
-  intelligence: { short: 'INT', label: 'Intelligence' },
-};
 
 /** What one point does, built from the engine coefficients so the text can't drift from the rules. */
 const ATTRIBUTE_EFFECTS: Record<AttributeKey, string | null> = {

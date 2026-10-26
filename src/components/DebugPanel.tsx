@@ -3,10 +3,9 @@ import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
 import { ATTRIBUTE_KEYS } from '../engine';
-import { formatDuration } from './format';
+import { ATTRIBUTE_NAMES, formatDuration } from './format';
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
-import { ATTRIBUTE_NAMES } from './StatusPanel';
 import { colors, fonts } from '../theme';
 
 const HOUR = 3_600_000;
