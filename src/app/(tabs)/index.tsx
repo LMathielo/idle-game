@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameClient, useGameState } from '../../client/GameProvider';
+import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
 import { confirmCancelRun } from '../../components/dungeon/confirmCancelRun';
 import { type VillageAction, VillageScene } from '../../components/VillageScene';
 import { formatNumber } from '../../components/format';
@@ -21,6 +22,12 @@ export default function VillageScreen() {
   const client = useGameClient();
   const { character, activity } = useGameState();
   const [toast, setToast] = useState<string | null>(null);
+  /** Bottom edge of the top HUD (safe area included); signs are kept below it. */
+  const [hudBottom, setHudBottom] = useState(0);
+  const onHudLayout = useCallback((e: LayoutChangeEvent) => {
+    const { y, height } = e.nativeEvent.layout;
+    setHudBottom(y + height);
+  }, []);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** True while a start/stop is being saved; extra taps are ignored so a double tap can't toggle twice. */
   const inFlight = useRef(false);
@@ -70,10 +77,11 @@ export default function VillageScreen() {
 
   return (
     <View style={styles.root}>
-      <VillageScene onAction={onAction} active={activity?.kind ?? null} />
+      {/* The activity strip is reserved even when hidden, so signs never move when an activity starts. */}
+      <VillageScene onAction={onAction} active={activity?.kind ?? null} topReserve={hudBottom} bottomReserve={ACTIVITY_STRIP_HEIGHT} />
       {/* Top HUD over the sky */}
       <SafeAreaView edges={['top']} style={styles.hudWrap} pointerEvents="none">
-        <View style={styles.hud}>
+        <View style={styles.hud} onLayout={onHudLayout}>
           <Text style={styles.hudName}>
             {character.name} <Text style={styles.hudLevel}>Lv {character.level}</Text>
           </Text>
