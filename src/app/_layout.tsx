@@ -1,72 +1,56 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Jacquard12_400Regular } from '@expo-google-fonts/jacquard-12';
 import { PixelifySans_400Regular, PixelifySans_700Bold } from '@expo-google-fonts/pixelify-sans';
 import { useFonts } from 'expo-font';
-import { BottomTabBar, type BottomTabBarProps, Tabs } from 'expo-router/js-tabs';
+import { usePathname } from 'expo-router';
+import { Stack } from 'expo-router/stack';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { GameProvider } from '../client/GameProvider';
-import { ActivityStrip } from '../components/ActivityStrip';
 import { AwayModal } from '../components/AwayModal';
-import { colors, fonts } from '../theme';
+import { colors } from '../theme';
+
+/** The tabs sit under every village modal, also when a modal is the first route opened. */
+export const unstable_settings = { anchor: '(tabs)' };
+
+/** Village modal routes. Each one renders its own <AwayModal /> (see RootAwayModal). */
+const VILLAGE_MODAL_PATHS: readonly string[] = ['/dungeon'];
 
 /**
- * Tab bar with the running-activity strip floating above it. The strip is absolutely positioned,
- * so starting/stopping an activity never changes the tab bar height or the screen size.
+ * iOS presents an RN <Modal> from the view controller that owns it. Mounted here it belongs to the
+ * root controller, which cannot present a second modal while a full-screen village modal is up, so
+ * the summary would never appear. While a village modal is open, that screen hosts the AwayModal.
  */
-function TabBarWithStrip(props: BottomTabBarProps) {
-  return (
-    <View style={styles.tabBarWrap}>
-      <BottomTabBar {...props} />
-      <ActivityStrip />
-    </View>
-  );
+function RootAwayModal() {
+  const pathname = usePathname();
+  return VILLAGE_MODAL_PATHS.includes(pathname) ? null : <AwayModal />;
 }
 
-const renderTabBar = (props: BottomTabBarProps) => <TabBarWithStrip {...props} />;
-
+/**
+ * Root stack: the tabs group, plus one full-screen modal per village sign (only Dungeon today).
+ * fullScreenModal: iOS covers the whole screen with no swipe-to-dismiss (the modal's ✕ closes it);
+ * Android has no such style and falls back to 'modal', so the slide-up is set explicitly to match
+ * (a fade when the system asks to reduce motion).
+ */
 export default function RootLayout() {
   const [loaded] = useFonts({ Jacquard12_400Regular, PixelifySans_400Regular, PixelifySans_700Bold });
-  if (!loaded) return <View style={{ flex: 1, backgroundColor: colors.night }} />;
+  // Reduce Motion: a fade instead of the slide-up (iOS also cross-dissolves for 'fade' on modals).
+  const reducedMotion = useReducedMotion();
+  if (!loaded) return <View style={styles.blank} />;
 
   return (
     <GameProvider>
       <StatusBar style="light" />
-      <Tabs
-        tabBar={renderTabBar}
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: colors.gold,
-          tabBarInactiveTintColor: colors.parchmentDark,
-          tabBarStyle: {
-            backgroundColor: colors.woodDark,
-            borderTopWidth: 3,
-            borderTopColor: colors.wood,
-          },
-          tabBarLabelStyle: { fontFamily: fonts.title, fontSize: 18 },
-        }}
-      >
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: 'Village',
-            tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="castle" color={color as string} size={size} />,
-          }}
-        />
-        <Tabs.Screen
-          name="hero"
-          options={{
-            title: 'Hero',
-            tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="shield-account" color={color as string} size={size} />,
-          }}
-        />
-      </Tabs>
-      <AwayModal />
+      <Stack screenOptions={{ headerShown: false, contentStyle: styles.content }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="dungeon" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
+      </Stack>
+      <RootAwayModal />
     </GameProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  // Render over the screens (the strip sticks out above this view) and never clip it.
-  tabBarWrap: { overflow: 'visible', zIndex: 1, elevation: 8 },
+  blank: { flex: 1, backgroundColor: colors.night },
+  content: { backgroundColor: colors.night },
 });

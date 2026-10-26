@@ -13,6 +13,8 @@ describe('replay with DEV_TOOLS_ENABLED = false', () => {
       { id: 'y', type: 'DEBUG_SPEND_STAMINA', amount: 10 },
       { id: 'z', type: 'DEBUG_REFILL_STAMINA' },
       { id: 'w', type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'strength', amount: 1 },
+      { id: 'v', type: 'DEBUG_SET_HERO_HP', hp: 1 },
+      { id: 'u', type: 'DEBUG_FINISH_DUNGEON_RUN' },
     ] as const;
     for (const c of cmds) {
       const res = applyCommand(newGame(1, T0), c, T0);
@@ -27,6 +29,9 @@ describe('replay with DEV_TOOLS_ENABLED = false', () => {
       { type: 'DEBUG_SPEND_STAMINA', payload: { id: 'd2', type: 'DEBUG_SPEND_STAMINA', amount: 10 }, clientTime: T0 },
       { type: 'DEBUG_REFILL_STAMINA', payload: { id: 'd3', type: 'DEBUG_REFILL_STAMINA' }, clientTime: T0 },
       { type: 'DEBUG_ADD_ATTRIBUTE', payload: { id: 'd4', type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'endurance', amount: 1 }, clientTime: T0 },
+      { type: 'START_ACTIVITY', payload: { id: 'd5', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar_1' }, clientTime: T0 },
+      { type: 'DEBUG_SET_HERO_HP', payload: { id: 'd6', type: 'DEBUG_SET_HERO_HP', hp: 1 }, clientTime: T0 },
+      { type: 'DEBUG_FINISH_DUNGEON_RUN', payload: { id: 'd7', type: 'DEBUG_FINISH_DUNGEON_RUN' }, clientTime: T0 },
       { type: 'DEBUG_CLOCK_OFFSET', payload: { deltaMs: HOUR, offsetMs: HOUR }, clientTime: T0 + HOUR },
       { type: 'RESUME', payload: {}, clientTime: T0 + HOUR },
       { type: 'DEBUG_RESET_SAVE', payload: {}, clientTime: T0 + HOUR },

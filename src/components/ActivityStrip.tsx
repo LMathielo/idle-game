@@ -1,78 +1,76 @@
-// Status strip shown above the tab bar while an activity runs.
-// The action bar is driven on the UI thread: each state update snaps it to the engine's
-// fraction, then a linear timing runs it to full over the remaining time.
-import { memo, useEffect } from 'react';
+// Status strip shown above the tab bar while an activity runs (woodcutting or dungeon runs).
+import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useGameSnapshot } from '../client/GameProvider';
-import { activityView, itemQuantity } from '../engine';
+import { activityView, DUNGEONS, hpView, itemQuantity } from '../engine';
 import { colors, fonts } from '../theme';
-import { formatNumber } from './format';
+import { formatClock, formatNumber } from './format';
+import { LiveBar } from './LiveBar';
 
-const ACTIVITY_LABELS = { woodcutting: { icon: '🪓', label: 'Woodcutting' } } as const;
+const GATHERING_LABELS = { woodcutting: { icon: '🪓', label: 'Woodcutting' } } as const;
 
 /** Fixed height: the strip floats over the screen, so scrollable screens reserve this much at the bottom. */
 export const ACTIVITY_STRIP_HEIGHT = 44;
+
+const PAUSED_A11Y = ', paused because the device clock moved back';
 
 export function ActivityStrip() {
   const { state, clockPaused } = useGameSnapshot();
   const view = activityView(state);
   if (!view) return null;
-  const meta = ACTIVITY_LABELS[view.kind];
+
+  if (view.kind === 'dungeon') {
+    const dungeon = DUNGEONS[view.dungeonId];
+    const hp = hpView(state);
+    return (
+      <StripView
+        title={`${dungeon.icon} ${dungeon.name} · ${formatClock(view.remainingMs)}`}
+        right={`HP ${formatNumber(hp.hp)}/${formatNumber(hp.maxHp)}`}
+        a11y={`${dungeon.name} run, ${formatClock(view.remainingMs)} left, HP ${hp.hp} of ${hp.maxHp}${clockPaused ? PAUSED_A11Y : ''}`}
+        fraction={view.fraction}
+        remainingMs={view.remainingMs}
+        paused={clockPaused}
+        color={colors.hp}
+      />
+    );
+  }
+
+  const meta = GATHERING_LABELS[view.kind];
+  const logs = itemQuantity(state, 'oak_logs');
   return (
-    <ActivityStripView
-      icon={meta.icon}
-      label={meta.label}
-      level={view.skillLevel}
+    <StripView
+      title={`${meta.icon} ${meta.label} · Lv ${view.skillLevel}`}
+      right={`🪵 ${formatNumber(logs)}`}
+      a11y={`${meta.label} level ${view.skillLevel}, ${logs} logs${clockPaused ? PAUSED_A11Y : ''}`}
       fraction={view.fraction}
       remainingMs={view.remainingMs}
-      logs={itemQuantity(state, 'oak_logs')}
       paused={clockPaused}
+      color={colors.skill}
     />
   );
 }
 
 type ViewProps = {
-  icon: string;
-  label: string;
-  level: number;
+  title: string;
+  right: string;
+  a11y: string;
   fraction: number;
   remainingMs: number;
-  logs: number;
   paused: boolean;
+  color: string;
 };
 
-const ActivityStripView = memo(function ActivityStripView({ icon, label, level, fraction, remainingMs, logs, paused }: ViewProps) {
-  const progress = useSharedValue(fraction);
-  const reducedMotion = useReducedMotion();
-
-  useEffect(() => {
-    progress.set(fraction);
-    if (!paused && !reducedMotion && remainingMs > 0) {
-      progress.set(withTiming(1, { duration: remainingMs, easing: Easing.linear }));
-    }
-  }, [fraction, remainingMs, paused, reducedMotion, progress]);
-
-  const fillStyle = useAnimatedStyle(() => ({ width: `${progress.get() * 100}%` }));
-
+const StripView = memo(function StripView({ title, right, a11y, fraction, remainingMs, paused, color }: ViewProps) {
   return (
-    <View
-      style={styles.strip}
-      pointerEvents="none"
-      accessible
-      accessibilityRole="summary"
-      accessibilityLabel={`${label} level ${level}, ${logs} logs${paused ? ', paused because the device clock moved back' : ''}`}
-    >
+    <View style={styles.strip} pointerEvents="none" accessible accessibilityRole="summary" accessibilityLabel={a11y}>
       <View style={styles.row}>
         <Text style={styles.title} numberOfLines={1}>
-          {icon} {label} · Lv {level}
+          {title}
           {paused ? <Text style={styles.paused}>  ⏸ Paused</Text> : null}
         </Text>
-        <Text style={styles.count}>🪵 {formatNumber(logs)}</Text>
+        <Text style={styles.count}>{right}</Text>
       </View>
-      <View style={styles.barOuter}>
-        <Animated.View style={[styles.barFill, fillStyle]} />
-      </View>
+      <LiveBar fraction={fraction} remainingMs={remainingMs} paused={paused} color={color} />
     </View>
   );
 });
@@ -93,9 +91,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.parchment },
-  count: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold },
-  barOuter: { height: 10, backgroundColor: colors.slot, borderWidth: 2, borderColor: colors.slotBorder, overflow: 'hidden' },
-  barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: colors.skill },
+  title: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.parchment },
+  count: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold, marginLeft: 8 },
   paused: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.gold },
 });

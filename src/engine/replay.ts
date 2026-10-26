@@ -11,10 +11,13 @@ export const LOG_TYPES = [
   'NEW_GAME',
   'START_ACTIVITY',
   'STOP_ACTIVITY',
+  'SKIP_DUNGEON_RUN',
   'DEBUG_GRANT_HERO_XP',
   'DEBUG_SPEND_STAMINA',
   'DEBUG_REFILL_STAMINA',
   'DEBUG_ADD_ATTRIBUTE',
+  'DEBUG_SET_HERO_HP',
+  'DEBUG_FINISH_DUNGEON_RUN',
   'RESUME',
   'SIMULATE',
   'CLOCK_ANOMALY',
@@ -51,6 +54,9 @@ export function replayStep(state: GameState | null, entry: ReplayEntry): GameSta
   switch (type as LogType) {
     case 'START_ACTIVITY':
     case 'STOP_ACTIVITY':
+    case 'SKIP_DUNGEON_RUN':
+    case 'DEBUG_SET_HERO_HP':
+    case 'DEBUG_FINISH_DUNGEON_RUN':
     case 'DEBUG_GRANT_HERO_XP':
     case 'DEBUG_SPEND_STAMINA':
     case 'DEBUG_REFILL_STAMINA':

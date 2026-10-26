@@ -1,16 +1,17 @@
+import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useGameClient, useGameState } from '../client/GameProvider';
-import { type VillageAction, VillageScene } from '../components/VillageScene';
-import { formatNumber } from '../components/format';
-import { colors, fonts } from '../theme';
+import { useGameClient, useGameState } from '../../client/GameProvider';
+import { confirmCancelRun } from '../../components/dungeon/confirmCancelRun';
+import { type VillageAction, VillageScene } from '../../components/VillageScene';
+import { formatNumber } from '../../components/format';
+import { colors, fonts } from '../../theme';
 
-const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting'>, string> = {
+const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'dungeon'>, string> = {
   storage: 'Storage',
   merchant: 'Merchant',
-  dungeon: 'Dungeon',
   training: 'Training',
 };
 
@@ -34,27 +35,37 @@ export default function VillageScreen() {
     if (timer.current) clearTimeout(timer.current);
   }, []);
 
+  const toggleWoodcutting = useCallback(() => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    const running = client.getState().activity?.kind === 'woodcutting';
+    client
+      .dispatch(running ? { type: 'STOP_ACTIVITY' } : { type: 'START_ACTIVITY', kind: 'woodcutting' })
+      .then((res) => {
+        if (!res.ok) showToast(res.error.message);
+        else if (!res.duplicate) showToast(running ? 'Stopped woodcutting' : 'Woodcutting started');
+      })
+      .catch(() => showToast('Could not save. Try again.'))
+      .finally(() => {
+        inFlight.current = false;
+      });
+  }, [client, showToast]);
+
   const onAction = useCallback(
     (action: VillageAction) => {
+      if (action === 'dungeon') {
+        router.push('/dungeon');
+        return;
+      }
       if (action !== 'woodcutting') {
         showToast(`${COMING_SOON[action]}: coming soon`);
         return;
       }
-      if (inFlight.current) return;
-      inFlight.current = true;
-      const running = client.getState().activity?.kind === 'woodcutting';
-      client
-        .dispatch(running ? { type: 'STOP_ACTIVITY' } : { type: 'START_ACTIVITY', kind: 'woodcutting' })
-        .then((res) => {
-          if (!res.ok) showToast(res.error.message);
-          else if (!res.duplicate) showToast(running ? 'Stopped woodcutting' : 'Woodcutting started');
-        })
-        .catch(() => showToast('Could not save. Try again.'))
-        .finally(() => {
-          inFlight.current = false;
-        });
+      // One activity at a time: woodcutting would end the dungeon run in progress, so ask first.
+      if (client.getState().activity?.kind === 'dungeon') confirmCancelRun('Start woodcutting', toggleWoodcutting);
+      else toggleWoodcutting();
     },
-    [client, showToast],
+    [client, showToast, toggleWoodcutting],
   );
 
   return (

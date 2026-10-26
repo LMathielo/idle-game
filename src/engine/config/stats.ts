@@ -14,6 +14,8 @@ export const STATS = {
   hp: { base: 50, perLevel: 10 },
   /** maxMana = base + perLevel × (level − 1) */
   mana: { base: 20, perLevel: 5 },
+  /** Flat HP regen per minute = basePerMin + perEndurance × END. Runs always (idle, gathering, runs, offline). */
+  hpRegen: { basePerMin: 5, perEndurance: 1 },
 } as const;
 
 /** Percent bonuses are integers in basis points: 100 = +1%, 1000 = +10%, −500 = −5%. */

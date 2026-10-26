@@ -49,6 +49,14 @@ function SummaryBody({ summary, capHours }: { summary: SimulationSummary; capHou
       {capped ? <Text style={styles.warn}>Rewards capped at {formatNumber(capHours)}h.</Text> : null}
       {backward ? <Text style={styles.warn}>Your device clock moved back — progress is paused until it catches up.</Text> : null}
 
+      {summary.dungeon.runs > 0 ? (
+        <Line
+          label="💀 Dungeon runs"
+          value={`${formatNumber(summary.dungeon.runs)} (${formatNumber(summary.dungeon.wins)} won, ${formatNumber(summary.dungeon.losses)} lost)`}
+        />
+      ) : null}
+      {summary.heroXpGained > 0 ? <Line label="✨ Hero XP" value={`+${formatNumber(summary.heroXpGained)}`} /> : null}
+      {summary.goldGained > 0 ? <Line label="🪙 Gold" value={`+${formatNumber(summary.goldGained)}`} /> : null}
       {gained.map(([id, n]) => (
         <Line key={id} label={`${itemIcon(id)} ${itemName(id)}`} value={`+${formatNumber(n)}`} />
       ))}
@@ -68,7 +76,7 @@ function SummaryBody({ summary, capHours }: { summary: SimulationSummary; capHou
           Inventory full: {formatNumber(n)} {itemName(id)} lost
         </Text>
       ))}
-      {summary.actions === 0 && !backward ? <Text style={styles.muted}>Nothing was gathered.</Text> : null}
+      {summary.actions === 0 && summary.dungeon.runs === 0 && !backward ? <Text style={styles.muted}>Nothing was gathered.</Text> : null}
     </View>
   );
 }
