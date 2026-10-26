@@ -8,10 +8,11 @@ import { resolveFight } from './combat';
 import { hpRegenPerMinute, maxHpOf, regenHp } from './hp';
 import { addStackable } from './inventory';
 import { chance, nextInt } from './rng';
+import { effectiveAttributes } from './attributes';
 import { getDerivedStats } from './stats';
 import type { Attributes, DungeonActivity, DungeonId, DungeonTotals, FightRewards, GameEvent, GameState, SimulationSummary } from './types';
 
-/** runMs = max(minMs, baseMs − perDexterityMs × DEX), with the dungeon's own timing. */
+/** runMs = max(minMs, baseMs − perDexterityMs × DEX), with the dungeon's own timing. Pass EFFECTIVE attributes. */
 export function runMsFor(dungeonId: DungeonId, attributes: Pick<Attributes, 'dexterity'>): number {
   const t = DUNGEONS[dungeonId].run;
   return Math.max(t.minMs, t.baseMs - t.perDexterityMs * attributes.dexterity);
@@ -170,8 +171,8 @@ export function advanceDungeon(
   summary: SimulationSummary,
   events: GameEvent[],
 ): void {
-  const rate = hpRegenPerMinute(draft.character.attributes);
-  const runMs = runMsFor(activity.dungeonId, draft.character.attributes);
+  const rate = hpRegenPerMinute(draft);
+  const runMs = runMsFor(activity.dungeonId, effectiveAttributes(draft));
   const efficiency = draft.offline.efficiency;
   let regenLeft = requestedMs;
   const regen = (ms: number) => {
@@ -224,7 +225,7 @@ export type DungeonRunView = {
 export function dungeonRunView(state: GameState): DungeonRunView | null {
   const a = state.activity;
   if (!a || a.kind !== 'dungeon') return null;
-  const runMs = runMsFor(a.dungeonId, state.character.attributes);
+  const runMs = runMsFor(a.dungeonId, effectiveAttributes(state));
   const progress = Math.min(a.progressMs, runMs);
   const remainingMs = Math.max(0, runMs - progress);
   return { kind: 'dungeon', dungeonId: a.dungeonId, run: state.dungeon.totals.runs + 1, runMs, fraction: runMs > 0 ? progress / runMs : 0, remainingMs, skipCost: skipCost(remainingMs) };

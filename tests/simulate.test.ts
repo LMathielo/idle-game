@@ -3,7 +3,7 @@ import { applyCommand, hashState, itemQuantity, newGame, simulate, type GameStat
 import { actionIntervalMs } from '../src/engine/activities';
 import { ACTIVITIES } from '../src/engine/config/activities';
 import { CLOCK_BACKWARD_TOLERANCE_MS, DEFAULT_OFFLINE_CAP_MS } from '../src/engine/config/time';
-import { HOUR, MIN, SEC, T0, apply, cmd, qty, woodcuttingGame } from './helpers';
+import { HOUR, MIN, SEC, T0, apply, cmd, qty, woodcuttingGame, progressMs } from './helpers';
 
 const WC = ACTIVITIES.woodcutting;
 
@@ -31,11 +31,11 @@ describe('woodcutting rules', () => {
   it('keeps the partial remainder between resumes', () => {
     const s = woodcuttingGame();
     const a = simulate(s, T0 + 2000).state;
-    expect(a.activity?.progressMs).toBe(2000);
+    expect(progressMs(a)).toBe(2000);
     expect(qty(a, 'oak_logs')).toBe(0);
     const b = simulate(a, T0 + 3500).state;
     expect(qty(b, 'oak_logs')).toBe(1);
-    expect(b.activity?.progressMs).toBe(500);
+    expect(progressMs(b)).toBe(500);
   });
 
   it('bird nest drops at ~1/200 over a long run and rolls the seeded RNG', () => {
@@ -61,7 +61,7 @@ describe('woodcutting rules', () => {
     expect(r.summary.actions).toBe(51);
     expect(r.summary.skillLevelsGained.woodcutting).toBe(1);
     expect(r.state.character.skills.woodcutting.level).toBe(2);
-    expect(r.state.activity?.progressMs).toBe(0);
+    expect(progressMs(r.state)).toBe(0);
   });
 
   it('inventory full: logs still stack, a new stack is lost and counted', () => {
@@ -188,7 +188,7 @@ describe('time rules', () => {
     const s = { ...woodcuttingGame(), offline: { capMs: 12 * HOUR, efficiency: 0.5 } };
     const r = simulate(s, T0 + 24 * HOUR);
     expect(r.summary.grantedMs).toBe(12 * HOUR);
-    expect(r.state.activity!.progressMs + r.summary.actions * 0).toBeGreaterThanOrEqual(0);
+    expect(progressMs(r.state)! + r.summary.actions * 0).toBeGreaterThanOrEqual(0);
     // efficiency 0.5: 6h of effective progress
     const full = simulate({ ...woodcuttingGame(), offline: { capMs: 12 * HOUR, efficiency: 1 } }, T0 + 6 * HOUR);
     expect(r.summary.actions).toBe(full.summary.actions);
@@ -294,7 +294,7 @@ describe('commands', () => {
   it('starting the running activity again keeps its banked progress', () => {
     const s = simulate(woodcuttingGame(), T0 + 2 * SEC).state;
     const again = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting' }, T0 + 2 * SEC);
-    expect(again.activity?.progressMs).toBe(2000);
+    expect(progressMs(again)).toBe(2000);
   });
 
   it('DEBUG_GRANT_HERO_XP sets flags.debugUsed; normal commands do not', () => {

@@ -103,6 +103,10 @@ export interface GameClient {
     finishDungeonRun(): Promise<DispatchResult>;
     /** Adds wins to an unlocked dungeon's counters (default 10). Logged as DEBUG_ADD_DUNGEON_WINS. */
     addDungeonWins(dungeonId: DungeonId, amount?: number): Promise<DispatchResult>;
+    /** Adds training XP (default 60 = 60 trained minutes) to the attribute being trained. Logged as DEBUG_ADD_TRAINING_XP. */
+    addTrainingXp(xp?: number): Promise<DispatchResult>;
+    /** Adds gold (default 1,000). Logged as DEBUG_ADD_GOLD. */
+    addGold(amount?: number): Promise<DispatchResult>;
     /** New game with a new seed and a real clock (offset 0). Logged, never deletes the log. */
     resetSave(): Promise<void>;
   };

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MemoryGameRepository } from '../src/client/memoryRepository';
 import { dungeonRunView, type GameState, hashState, replayLog, replayStep } from '../src/engine';
-import { current, HOUR, makeClient, MIN, SEC, T0 } from './helpers';
+import { current, HOUR, makeClient, MIN, SEC, T0, progressMs } from './helpers';
 
 async function verifyLog(repo: MemoryGameRepository): Promise<GameState> {
   const rows = await repo.getAllLog();
@@ -117,7 +117,7 @@ describe('dungeon through the client', () => {
     await client.resume();
     expect(client.getSnapshot().clockPaused).toBe(true);
     expect(client.getState().character.hp).toBe(at.character.hp);
-    expect(client.getState().activity?.progressMs).toBe(at.activity?.progressMs);
+    expect(progressMs(client.getState())).toBe(progressMs(at));
     expect(client.getState().dungeon.totals.runs).toBe(0);
   });
 });

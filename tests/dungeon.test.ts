@@ -16,7 +16,7 @@ import {
   simulate,
   skipCost,
 } from '../src/engine';
-import { apply, HOUR, MIN, SEC, T0 } from './helpers';
+import { apply, HOUR, MIN, SEC, T0, progressMs } from './helpers';
 
 const RAT_CELLAR = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } as const;
 const RUN_MS = 290 * SEC; // DEX 10
@@ -396,7 +396,7 @@ describe('offline catch-up', () => {
     expect(r.summary.grantedMs).toBe(8 * HOUR);
     expect(r.summary.dungeon.runs).toBe(Math.floor((8 * HOUR) / RUN_MS)); // 99
     expect(r.state.dungeon.totals.runs).toBe(99);
-    expect(r.state.activity?.progressMs).toBe(8 * HOUR - 99 * RUN_MS);
+    expect(progressMs(r.state)).toBe(8 * HOUR - 99 * RUN_MS);
   });
 
   it('30 minutes away → 6 runs, rewards summed, HP consistent', () => {
@@ -417,7 +417,7 @@ describe('offline catch-up', () => {
     expect(r.state.dungeon.lastFight?.heroHpStart).toBe(5);
     // After the 10th loss (0 HP), 30 s of regen at 5/min: 2 HP and 2.5 → 30 000 units banked.
     expect(r.state.character).toMatchObject({ hp: 2, hpRegenProgress: 30_000 });
-    expect(r.state.activity?.progressMs).toBe(30 * SEC);
+    expect(progressMs(r.state)).toBe(30 * SEC);
   });
 
   it('a chain at low HP: the next run starts at once whatever the HP, and regen carries the hero back', () => {
@@ -445,7 +445,7 @@ describe('offline catch-up', () => {
     expect(back.summary.anomalies[0]).toMatchObject({ kind: 'backward' });
     // Real time catches up: only time after the highest seen counts.
     const later = simulate(back.state, T0 + 2 * MIN + 10 * SEC).state;
-    expect(later.activity?.progressMs).toBe(2 * MIN + 10 * SEC);
+    expect(progressMs(later)).toBe(2 * MIN + 10 * SEC);
   });
 });
 
@@ -485,7 +485,7 @@ describe('one activity at a time', () => {
   it('starting the same dungeon again keeps the current run; unknown dungeons are refused', () => {
     const s = dungeonGame();
     const again = applyCommand(s, { id: 'd', ...RAT_CELLAR }, T0 + MIN);
-    expect(again.ok && again.state.activity?.progressMs).toBe(MIN);
+    expect(again.ok && progressMs(again.state)).toBe(MIN);
     const bad = applyCommand(s, { id: 'x', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'nope' as never }, T0);
     expect(bad).toMatchObject({ ok: false, error: { code: 'UNKNOWN_DUNGEON' } });
   });
@@ -513,7 +513,7 @@ describe('debug commands', () => {
     if (!r.ok) throw new Error(r.error.message);
     expect(r.state.stamina.current).toBe(100);
     expect(r.state.dungeon.totals.runs).toBe(1);
-    expect(r.state.activity?.progressMs).toBe(0);
+    expect(progressMs(r.state)).toBe(0);
     expect(r.state.flags.debugUsed).toBe(true);
     expect(applyCommand(newGame(1, T0), { id: 'g', type: 'DEBUG_FINISH_DUNGEON_RUN' }, T0)).toMatchObject({
       ok: false,

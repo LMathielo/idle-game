@@ -370,9 +370,9 @@ describe('danger hint', () => {
   });
 
   it('a strong hero sees every tier as Easy; a hero who cannot win within the round cap sees Deadly', () => {
-    const strong = { character: { ...fresh.character, attributes: { ...fresh.character.attributes, strength: 1000, endurance: 1000 } } };
+    const strong = { ...fresh, character: { ...fresh.character, attributes: { ...fresh.character.attributes, strength: 1000, endurance: 1000 } } };
     expect(levels(strong as GameState)).toEqual(['easy', 'easy', 'easy', 'easy', 'easy']);
-    const weak = { character: { ...fresh.character, equipment: {}, attributes: { ...fresh.character.attributes, strength: 0, endurance: 10_000 } } };
+    const weak = { ...fresh, character: { ...fresh.character, equipment: {}, attributes: { ...fresh.character.attributes, strength: 0, endurance: 10_000 } } };
     // Unarmed 1–2 vs the troll's 300 HP: 300 hits > 50 rounds, even though the troll barely scratches.
     expect(dangerHint(weak as GameState, 'troll_bridge')).toMatchObject({ level: 'deadly' });
   });

@@ -248,6 +248,10 @@ export class LocalGameClient implements GameClient {
     addDungeonWins: (dungeonId: DungeonId, amount = 10): Promise<DispatchResult> =>
       this.dispatch({ type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId, amount }),
 
+    addTrainingXp: (xp = 60): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_TRAINING_XP', xp }),
+
+    addGold: (amount = 1000): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_GOLD', amount }),
+
     resetSave: (): Promise<void> =>
       this.serial(async () => {
         const rows: NewLogRow[] = [];

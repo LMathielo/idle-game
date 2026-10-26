@@ -13,12 +13,18 @@
 // at the end of the old script); the hash changed because of the new `byDungeon` field and the id. The
 // script gained a tier segment: DEBUG_ADD_DUNGEON_WINS unlocks Bat Cave, a locked Wolf Den start is
 // refused, then 2 h of Bat Cave runs.
+// 1.4.0 → 1.5.0 (2026-10-26): save v6 (training state: gold-bought tiers, per-attribute training levels;
+// effective attributes = base + trained feed every rule). Every outcome of the 1.4.0 script is unchanged (a
+// golden test pins it: same actions, runs, gold, HP, stamina, levels, loot); the hash changed because of the
+// new `training` field. The script gained a training segment: Tier 1 bought, STR trained 30 min, switch to
+// END, debug XP and gold, Tier 2 bought, 10 h capped training, debug XP to the cap (auto-stop), then a Rat
+// Cellar hour with the trained attributes.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { applyCommand, type Command, CURRENT_SAVE_VERSION, ENGINE_VERSION, RELEASED_ENGINES, getDerivedStats, hashState, loadSave, newGame, simulate } from '../src/engine';
+import { applyCommand, type Command, CURRENT_SAVE_VERSION, ENGINE_VERSION, RELEASED_ENGINES, getDerivedStats, hashState, loadSave, newGame, newTrainingState, simulate } from '../src/engine';
 import { actionIntervalMs, ACTIVITIES } from '../src/engine';
-import { HOUR, MIN, SEC, T0 } from './helpers';
+import { HOUR, MIN, SEC, T0, progressMs } from './helpers';
 
 const SCRIPT: { at: number; cmd?: Command }[] = [
   { at: T0 + SEC, cmd: { id: 'g1', type: 'START_ACTIVITY', kind: 'woodcutting' } },
@@ -42,6 +48,18 @@ const SCRIPT: { at: number; cmd?: Command }[] = [
   { at: T0 + 34 * HOUR + 402 * SEC, cmd: { id: 't1', type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId: 'bat_cave', amount: 10 } },
   { at: T0 + 34 * HOUR + 403 * SEC, cmd: { id: 't2', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'bat_cave' } },
   { at: T0 + 36 * HOUR + 403 * SEC }, // 2h of Bat Cave runs (DEX 10 → 6:50 each)
+  // 1.5.0: training. 300 gold → Tier 1 (100). Training STR cancels the Bat Cave run in progress.
+  { at: T0 + 36 * HOUR + 404 * SEC, cmd: { id: 'r1', type: 'UNLOCK_TRAINING_TIER', tier: 1 } },
+  { at: T0 + 36 * HOUR + 405 * SEC, cmd: { id: 'r2', type: 'START_ACTIVITY', kind: 'training', attribute: 'strength' } },
+  { at: T0 + 36 * HOUR + 405 * SEC + 30 * MIN + 30 * SEC }, // STR Lv2 (5 + 15 min), 10 XP + 30 s toward Lv3
+  { at: T0 + 36 * HOUR + 406 * SEC + 30 * MIN + 30 * SEC, cmd: { id: 'r3', type: 'START_ACTIVITY', kind: 'training', attribute: 'endurance' } },
+  { at: T0 + 36 * HOUR + 407 * SEC + 30 * MIN + 30 * SEC, cmd: { id: 'r4', type: 'DEBUG_ADD_TRAINING_XP', xp: 60 } },
+  { at: T0 + 36 * HOUR + 408 * SEC + 30 * MIN + 30 * SEC, cmd: { id: 'r5', type: 'DEBUG_ADD_GOLD', amount: 1000 } },
+  { at: T0 + 36 * HOUR + 409 * SEC + 30 * MIN + 30 * SEC, cmd: { id: 'r6', type: 'UNLOCK_TRAINING_TIER', tier: 2 } },
+  { at: T0 + 46 * HOUR + 409 * SEC + 30 * MIN + 30 * SEC }, // 10 h away: capped at 8 h of END training
+  { at: T0 + 46 * HOUR + 410 * SEC + 30 * MIN + 30 * SEC, cmd: { id: 'r7', type: 'DEBUG_ADD_TRAINING_XP', xp: 100_000 } }, // END → 40, stops
+  { at: T0 + 46 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC, cmd: { id: 'r8', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } },
+  { at: T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC }, // 1 h of Rat Cellar with trained STR/END
 ];
 
 function runScript(steps = SCRIPT) {
@@ -83,6 +101,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.2.0', 3],
       ['1.3.0', 4],
       ['1.4.0', 5],
+      ['1.5.0', 6],
     ]);
   });
 });
@@ -113,6 +132,36 @@ describe('golden', () => {
     expect(locked).toEqual({ ok: false, error: expect.objectContaining({ code: 'DUNGEON_LOCKED' }) });
   });
 
+  it('the 1.4.0 script keeps its exact outcomes (no 1.4.0 rule changed in 1.5.0)', () => {
+    const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => x.cmd?.id === 'r1')));
+    expect({
+      actions: s.stats.totalActions,
+      batWings: s.inventory.items.find((i) => i.defId === 'bat_wing')?.quantity,
+      byDungeon: s.dungeon.byDungeon,
+      gold: s.character.gold,
+      heroLevel: s.character.level,
+      hp: [s.character.hp, s.character.hpRegenProgress],
+      lastFightRounds: s.dungeon.lastFight?.rounds,
+      nests: s.stats.itemsGathered.bird_nest,
+      stamina: s.stamina,
+      strength: s.character.attributes.strength,
+      woodcutting: s.character.skills.woodcutting.level,
+    }).toEqual({
+      actions: 18670,
+      batWings: 9,
+      byDungeon: { bat_cave: { runs: 27, wins: 27, losses: 0 }, rat_cellar: { runs: 38, wins: 38, losses: 0 } },
+      gold: 300,
+      heroLevel: 11,
+      hp: [150, 0],
+      lastFightRounds: 5,
+      nests: 113,
+      stamina: { current: 100, max: 100, progressMs: 0 },
+      strength: 13,
+      woodcutting: 15,
+    });
+    expect(s.training).toEqual(newTrainingState());
+  });
+
   it('fixed seed + fixed script → fixed final state hash', () => {
     const s = runScript();
     expect({
@@ -130,9 +179,12 @@ describe('golden', () => {
       byDungeon: s.dungeon.byDungeon,
       lastFightRounds: s.dungeon.lastFight?.rounds,
       batWings: s.inventory.items.find((i) => i.defId === 'bat_wing')?.quantity,
+      training: s.training,
+      activity: s.activity?.kind ?? null,
     }).toMatchInlineSnapshot(`
       {
         "actions": 18670,
+        "activity": "dungeon",
         "batWings": 9,
         "byDungeon": {
           "bat_cave": {
@@ -142,24 +194,24 @@ describe('golden', () => {
           },
           "rat_cellar": {
             "losses": 0,
-            "runs": 38,
-            "wins": 38,
+            "runs": 50,
+            "wins": 50,
           },
         },
         "dungeon": {
           "losses": 0,
-          "runs": 65,
-          "wins": 65,
+          "runs": 77,
+          "wins": 77,
         },
-        "engineVersion": "1.4.0",
-        "gold": 300,
-        "hash": "1a586ed3",
+        "engineVersion": "1.5.0",
+        "gold": 446,
+        "hash": "50b2a7aa",
         "heroLevel": 11,
         "hp": [
           150,
           0,
         ],
-        "lastFightRounds": 5,
+        "lastFightRounds": 2,
         "nests": 113,
         "stamina": {
           "current": 100,
@@ -167,6 +219,31 @@ describe('golden', () => {
           "progressMs": 0,
         },
         "strength": 13,
+        "training": {
+          "attributes": {
+            "dexterity": {
+              "level": 0,
+              "progressMs": 0,
+              "xp": 0,
+            },
+            "endurance": {
+              "level": 40,
+              "progressMs": 0,
+              "xp": 0,
+            },
+            "intelligence": {
+              "level": 0,
+              "progressMs": 0,
+              "xp": 0,
+            },
+            "strength": {
+              "level": 2,
+              "progressMs": 31000,
+              "xp": 10,
+            },
+          },
+          "tier": 2,
+        },
         "woodcutting": 15,
       }
     `);
@@ -176,24 +253,24 @@ describe('golden', () => {
     const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v1.json'), 'utf8'));
     expect(raw.saveVersion).toBe(1);
     const s = loadSave(raw);
-    expect(s.saveVersion).toBe(5);
+    expect(s.saveVersion).toBe(6);
     expect(s.flags).toEqual({ debugUsed: false });
     expect(s.character.attributes).toEqual({ strength: 10, dexterity: 10, endurance: 10, intelligence: 10 });
     expect(s.stats.totalActions).toBe(2499);
     // Banked progress carries over: 60s plus the stored remainder, at the stored skill level's interval.
     const interval = actionIntervalMs(ACTIVITIES.woodcutting, s.character.skills.woodcutting.level);
     const next = simulate(s, s.time.lastSimulatedAt + MIN);
-    expect(next.summary.actions).toBe(Math.floor((MIN + s.activity!.progressMs) / interval));
+    expect(next.summary.actions).toBe(Math.floor((MIN + progressMs(s)!) / interval));
     expect(next.summary.actions).toBeGreaterThan(0);
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // migration is deterministic
   });
 
-  it('frozen v2 save (tests/fixtures/save-v2.json) migrates to v5 without losing progress, and plays on', () => {
+  it('frozen v2 save (tests/fixtures/save-v2.json) migrates to v6 without losing progress, and plays on', () => {
     // Produced by the 1.1.0 engine (save v2): woodcutting ~3h, +20k hero XP via debug.
     const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v2.json'), 'utf8'));
     expect(raw.saveVersion).toBe(2);
     const s = loadSave(raw);
-    expect(s.saveVersion).toBe(5);
+    expect(s.saveVersion).toBe(6);
 
     // Progress kept: level, XP, skills, woodcutting banked time, inventory, stats, rng, time, flags.
     expect(s.character.level).toBe(raw.character.level);
@@ -234,7 +311,7 @@ describe('golden', () => {
     // Plays on: banked woodcutting progress carries over and actions run.
     const interval = actionIntervalMs(ACTIVITIES.woodcutting, s.character.skills.woodcutting.level);
     const next = simulate(s, s.time.lastSimulatedAt + MIN);
-    expect(next.summary.actions).toBe(Math.floor((MIN + s.activity!.progressMs) / interval));
+    expect(next.summary.actions).toBe(Math.floor((MIN + progressMs(s)!) / interval));
     expect(next.summary.actions).toBeGreaterThan(0);
     // Logs keep stacking on the migrated stack (matched by defId).
     expect(next.state.inventory.items.filter((i) => i.defId === 'oak_logs')).toHaveLength(1);
@@ -245,20 +322,21 @@ describe('golden', () => {
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // migration is deterministic
   });
 
-  it('frozen v3 save (tests/fixtures/save-v3.json) migrates to v5 (via v4: full HP) and plays on, dungeon included', () => {
+  it('frozen v3 save (tests/fixtures/save-v3.json) migrates to v6 (via v4: full HP) and plays on, dungeon included', () => {
     // Produced by the 1.2.0 engine (save v3), before the dungeon: woodcutting ~3h, +30k hero XP,
     // +5 DEX, +2 END and 40 stamina spent via debug.
     const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v3.json'), 'utf8'));
     expect(raw.saveVersion).toBe(3);
     expect(raw.character).not.toHaveProperty('hp');
     const s = loadSave(raw);
-    expect(s.saveVersion).toBe(5);
+    expect(s.saveVersion).toBe(6);
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // deterministic
 
     // Everything from v3 survives as it was.
     const { hp, hpRegenProgress, ...character } = s.character;
     expect(character).toEqual(raw.character);
-    const { dungeon, character: _c, saveVersion: _v, ...rest } = s;
+    const { dungeon, training, character: _c, saveVersion: _v, ...rest } = s;
+    expect(training).toEqual(newTrainingState());
     const { character: _rc, saveVersion: _rv, ...rawRest } = raw;
     expect(rest).toEqual(rawRest);
 
@@ -271,7 +349,7 @@ describe('golden', () => {
     // Plays on: woodcutting banked progress carries over, then a dungeon with DEX 15 runs 4:45.
     const interval = actionIntervalMs(ACTIVITIES.woodcutting, s.character.skills.woodcutting.level);
     const next = simulate(s, s.time.lastSimulatedAt + MIN);
-    expect(next.summary.actions).toBe(Math.floor((MIN + (s.activity?.progressMs ?? 0)) / interval));
+    expect(next.summary.actions).toBe(Math.floor((MIN + (progressMs(s) ?? 0)) / interval));
     const at = s.time.lastSimulatedAt + MIN;
     const d = applyCommand(next.state, { id: 'v3-d', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, at);
     if (!d.ok) throw new Error(d.error.message);

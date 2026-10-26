@@ -8,7 +8,11 @@ export const ATTRIBUTE_KEYS = ['strength', 'dexterity', 'endurance', 'intelligen
 
 export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
 
-/** Plain integers. Raised later by Training (gold + time, M3); read by getDerivedStats(). */
+/**
+ * Plain integers. `character.attributes` holds the BASE values (10 for a new hero, plus debug points); the
+ * training levels in `state.training` add to them. Rules always read effective = base + trained
+ * (effectiveAttributes() in src/engine/attributes.ts).
+ */
 export type Attributes = Record<AttributeKey, number>;
 
 export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots';
@@ -74,8 +78,8 @@ export type RngState = { seed: number };
 /** Gathering skills: one action per interval (config/activities.ts). */
 export type GatheringKind = 'woodcutting';
 
-/** Only one activity runs at a time: a gathering skill or auto-repeating dungeon runs. */
-export type ActivityKind = GatheringKind | 'dungeon';
+/** Only one activity runs at a time: a gathering skill, auto-repeating dungeon runs, or training one attribute. */
+export type ActivityKind = GatheringKind | 'dungeon' | 'training';
 
 /** Dungeon tiers 1–5, in order. Data lives in config/dungeons.ts. */
 export type DungeonId = 'rat_cellar' | 'bat_cave' | 'wolf_den' | 'forgotten_crypt' | 'troll_bridge';
@@ -94,7 +98,31 @@ export type GatheringActivity = ActivityBase & { kind: GatheringKind };
 /** Auto-repeat: runs follow each other back-to-back until stopped. Stopping loses the current run. */
 export type DungeonActivity = ActivityBase & { kind: 'dungeon'; dungeonId: DungeonId };
 
-export type Activity = GatheringActivity | DungeonActivity;
+/**
+ * Trains one attribute. Its progress lives in `state.training.attributes[attribute]`, not here, so pausing
+ * or switching never loses XP.
+ */
+export type TrainingActivity = { kind: 'training'; attribute: AttributeKey; startedAt: number };
+
+export type Activity = GatheringActivity | DungeonActivity | TrainingActivity;
+
+// ---------- Training ----------
+
+/** One attribute's training progress. Kept forever (pause, switch, sessions). */
+export type AttributeTraining = {
+  /** Training level, 0..cap of the current tier. Adds to the base attribute. */
+  level: number;
+  /** Whole training XP toward the next level (1 XP per trained minute at the base rate). */
+  xp: number;
+  /** Trained time toward the next XP point, 0..msPerXp − 1. Never lost between resumes. 0 at the cap. */
+  progressMs: number;
+};
+
+export type TrainingState = {
+  /** Unlocked training tier, 0..10. Global for all attributes; tier t allows levels up to 20 × t. 0 = nothing trainable. */
+  tier: number;
+  attributes: Record<AttributeKey, AttributeTraining>;
+};
 
 // ---------- Combat ----------
 
@@ -178,7 +206,7 @@ export type Stamina = {
 };
 
 export type GameState = {
-  saveVersion: 5;
+  saveVersion: 6;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -191,6 +219,8 @@ export type GameState = {
   activity: Activity | null;
   stamina: Stamina;
   dungeon: DungeonState;
+  /** Save v6. Gold-bought tiers and per-attribute training progress. */
+  training: TrainingState;
   stats: GameStats;
   flags: GameFlags;
   character: Character;
@@ -214,7 +244,12 @@ export type GameEvent =
   | { type: 'DUNGEON_RUN_CANCELLED'; dungeonId: DungeonId }
   | { type: 'FIGHT_RESOLVED'; dungeonId: DungeonId; won: boolean }
   /** A dungeon's unlock requirement was just met (a win, or the debug win grant). */
-  | { type: 'DUNGEON_UNLOCKED'; dungeonId: DungeonId };
+  | { type: 'DUNGEON_UNLOCKED'; dungeonId: DungeonId }
+  | { type: 'TRAINING_TIER_UNLOCKED'; tier: number }
+  /** One per level gained, also when several levels come in one simulate() call. */
+  | { type: 'TRAINING_LEVEL_UP'; attribute: AttributeKey; level: number }
+  /** The attribute reached its tier's cap: training stopped by itself. */
+  | { type: 'TRAINING_MAXED'; attribute: AttributeKey };
 
 /** What happened during one simulate() call. Shown in the "While you were away" modal. */
 export type SimulationSummary = {
@@ -235,5 +270,11 @@ export type SimulationSummary = {
   dungeon: { runs: number; wins: number; losses: number };
   /** Dungeons unlocked during this period, in the order they unlocked. */
   dungeonsUnlocked: DungeonId[];
+  /** Training XP (whole points) earned per attribute. */
+  trainingXpGained: Partial<Record<AttributeKey, number>>;
+  /** Training levels gained per attribute. */
+  trainingLevelsGained: Partial<Record<AttributeKey, number>>;
+  /** Attributes that hit their tier cap (training stopped), in order. */
+  trainingMaxed: AttributeKey[];
   anomalies: ClockAnomalyEvent[];
 };

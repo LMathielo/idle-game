@@ -49,3 +49,9 @@ export function qty(state: GameState, id: string): number {
 export function current(rows: ReplayEntry[]): ReplayEntry[] {
   return rows.map((r) => ({ engineVersion: ENGINE_VERSION, ...r }));
 }
+
+/** Banked time of a gathering or dungeon activity (training keeps its progress per attribute instead). */
+export function progressMs(state: GameState): number | undefined {
+  const a = state.activity;
+  return a && 'progressMs' in a ? a.progressMs : undefined;
+}

@@ -7,6 +7,7 @@ import { maxHpOf } from './hp';
 import { makeItem } from './inventory';
 import { newProgress } from './progression';
 import { createRng } from './rng';
+import { newTrainingState } from './training';
 import type { Character, GameState, Item, SkillKey } from './types';
 import { CURRENT_SAVE_VERSION } from './migrations';
 
@@ -27,7 +28,8 @@ export function newGame(seed: number, now: number): GameState {
   const hero = newProgress(HERO_XP_CURVE);
   const items: Item[] = STARTING_HERO.inventory.map((s) => makeItem(s.itemId, s.quantity));
   const attributes = { ...STARTING_HERO.attributes };
-  const maxHp = maxHpOf({ character: { level: hero.level, attributes, equipment } });
+  const training = newTrainingState();
+  const maxHp = maxHpOf({ character: { level: hero.level, attributes, equipment }, training });
 
   return {
     saveVersion: CURRENT_SAVE_VERSION,
@@ -37,6 +39,7 @@ export function newGame(seed: number, now: number): GameState {
     activity: null,
     stamina: { current: STAMINA.startMax, max: STAMINA.startMax, progressMs: 0 },
     dungeon: { lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {} },
+    training,
     stats: { totalActions: 0, itemsGathered: {} },
     flags: { debugUsed: false },
     character: {

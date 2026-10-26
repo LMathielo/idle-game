@@ -4,6 +4,7 @@
 //
 // The remainder is banked in character.hpRegenProgress in "HP·ms per minute" units: each ms adds the
 // rate, and every 60 000 units is 1 HP. Integer math only, exact across resumes and rate changes.
+import { type AttributeInput, effectiveAttributes, type TrainingLevels } from './attributes';
 import { STATS } from './config/stats';
 import { getDerivedStats, type StatsInput } from './stats';
 import type { Character } from './types';
@@ -11,8 +12,9 @@ import type { Character } from './types';
 /** Units of hpRegenProgress per HP: one minute. */
 export const HP_REGEN_UNIT = 60_000;
 
-export function hpRegenPerMinute(attributes: Character['attributes']): number {
-  const rate = STATS.hpRegen.basePerMin + STATS.hpRegen.perEndurance * attributes.endurance;
+/** Uses the EFFECTIVE endurance (base + trained). */
+export function hpRegenPerMinute(state: AttributeInput): number {
+  const rate = STATS.hpRegen.basePerMin + STATS.hpRegen.perEndurance * effectiveAttributes(state).endurance;
   return Math.max(0, rate);
 }
 
@@ -52,10 +54,13 @@ export type HpView = {
 };
 
 /** Read-only view for UIs. */
-export function hpView(state: { character: Pick<Character, 'level' | 'attributes' | 'equipment' | 'hp' | 'hpRegenProgress'> }): HpView {
+export function hpView(state: {
+  character: Pick<Character, 'level' | 'attributes' | 'equipment' | 'hp' | 'hpRegenProgress'>;
+  training: TrainingLevels;
+}): HpView {
   const c = state.character;
   const maxHp = maxHpOf(state);
-  const regenPerMin = hpRegenPerMinute(c.attributes);
+  const regenPerMin = hpRegenPerMinute(state);
   const hp = Math.min(c.hp, maxHp);
   if (hp >= maxHp) return { hp, maxHp, regenPerMin, full: true, fullInMs: 0 };
   const needed = (maxHp - hp) * HP_REGEN_UNIT - c.hpRegenProgress;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type GameState, getDerivedStats, hashState, newGame } from '../src/engine';
+import { type GameState, getDerivedStats, hashState, newGame, newTrainingState } from '../src/engine';
 import { CURRENT_SAVE_VERSION, loadSave, migrateDoc, type Migration, MIGRATIONS, SaveVersionError } from '../src/engine/migrations';
 import { T0 } from './helpers';
 
@@ -55,8 +55,8 @@ describe('save migrations', () => {
       equipment: undefined,
     });
     expect(v3.rng).toEqual(v2.rng);
-    // Derived stats read the catalog through the new defIds: 2–4 + 21 STR, 1 armor + 17 END.
-    const d = getDerivedStats(v3);
+    // Derived stats read the catalog through the new defIds: 2–4 + 21 STR, 1 armor + 17 END (no training in v3).
+    const d = getDerivedStats({ ...v3, training: newTrainingState() });
     expect([d.damage.min, d.damage.max, d.defense.value]).toEqual([23, 25, 18]);
   });
 
@@ -126,10 +126,10 @@ describe('save migrations', () => {
     });
   });
 
-  it('newest save loads unchanged; a new game is already v5', () => {
+  it('newest save loads unchanged; a new game is already v6', () => {
     const s = newGame(77, T0);
-    expect(s.saveVersion).toBe(5);
-    expect(CURRENT_SAVE_VERSION).toBe(5);
+    expect(s.saveVersion).toBe(6);
+    expect(CURRENT_SAVE_VERSION).toBe(6);
     expect(loadSave(s)).toEqual(s);
   });
 

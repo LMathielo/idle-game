@@ -15,6 +15,9 @@ export function emptySummary(): SimulationSummary {
     goldGained: 0,
     dungeon: { runs: 0, wins: 0, losses: 0 },
     dungeonsUnlocked: [],
+    trainingXpGained: {},
+    trainingLevelsGained: {},
+    trainingMaxed: [],
     anomalies: [],
   };
 }
@@ -44,14 +47,24 @@ export function mergeSummaries(a: SimulationSummary, b: SimulationSummary): Simu
       losses: a.dungeon.losses + b.dungeon.losses,
     },
     dungeonsUnlocked: [...a.dungeonsUnlocked, ...b.dungeonsUnlocked],
+    trainingXpGained: addMaps(a.trainingXpGained, b.trainingXpGained),
+    trainingLevelsGained: addMaps(a.trainingLevelsGained, b.trainingLevelsGained),
+    trainingMaxed: [...a.trainingMaxed, ...b.trainingMaxed],
     anomalies: [...a.anomalies, ...b.anomalies],
   };
 }
 
+/** Total training XP in a summary, over every attribute. */
+export function trainingXpTotal(s: Pick<SimulationSummary, 'trainingXpGained'>): number {
+  return Object.values(s.trainingXpGained).reduce<number>((n, v) => n + (v ?? 0), 0);
+}
+
 /**
- * Worth showing in "While you were away": any clock anomaly, or at least AWAY_SUMMARY_MIN_MS
- * of real time away with at least one gathering action or dungeon run. A quick app switch never opens the modal.
+ * Worth showing in "While you were away": any clock anomaly, or at least AWAY_SUMMARY_MIN_MS of real time
+ * away with at least one gathering action, dungeon run, training XP point or training cap reached. A quick
+ * app switch never opens the modal.
  */
 export function isNoteworthy(s: SimulationSummary, minAwayMs: number = AWAY_SUMMARY_MIN_MS): boolean {
-  return s.anomalies.length > 0 || (s.requestedMs >= minAwayMs && (s.actions > 0 || s.dungeon.runs > 0));
+  const progressed = s.actions > 0 || s.dungeon.runs > 0 || trainingXpTotal(s) > 0 || s.trainingMaxed.length > 0;
+  return s.anomalies.length > 0 || (s.requestedMs >= minAwayMs && progressed);
 }

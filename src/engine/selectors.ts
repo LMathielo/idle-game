@@ -2,6 +2,7 @@
 import { currentActionIntervalMs } from './activities';
 import { ACTIVITIES } from './config/activities';
 import { dungeonRunView, type DungeonRunView } from './dungeon';
+import { attributeTrainingView, type AttributeTrainingView } from './training';
 import type { GameState, GatheringKind } from './types';
 
 export type GatheringView = {
@@ -14,12 +15,16 @@ export type GatheringView = {
   remainingMs: number;
 };
 
-export type ActivityView = GatheringView | DungeonRunView;
+/** The attribute being trained (progress toward its next level). */
+export type TrainingActivityView = AttributeTrainingView & { kind: 'training' };
+
+export type ActivityView = GatheringView | DungeonRunView | TrainingActivityView;
 
 export function activityView(state: GameState): ActivityView | null {
   const a = state.activity;
   if (!a) return null;
   if (a.kind === 'dungeon') return dungeonRunView(state);
+  if (a.kind === 'training') return { kind: 'training', ...attributeTrainingView(state, a.attribute) };
   const intervalMs = currentActionIntervalMs(state, a.kind);
   const progress = Math.min(a.progressMs, intervalMs);
   return {

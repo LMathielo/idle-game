@@ -1,5 +1,6 @@
 // Player commands. Serializable, validated here (never in the UI), applied after simulating to `now`.
 import { grantHeroXp } from './activities';
+import { effectiveAttributes } from './attributes';
 import { cloneState } from './clone';
 import { ACTIVITIES, isGatheringKind } from './config/activities';
 import { DEV_TOOLS_ENABLED } from './config/dev';
@@ -9,6 +10,8 @@ import { markDebugUsed } from './flags';
 import { maxHpOf } from './hp';
 import { simulate } from './simulate';
 import { refillStamina, spendStamina } from './stamina';
+import { TRAINING } from './config/training';
+import { grantTrainingXp, trainingBlock, trainingCap, trainingTierPrice } from './training';
 import {
   type Activity,
   ATTRIBUTE_KEYS,
@@ -24,7 +27,14 @@ export type Command =
   | { id: string; type: 'START_ACTIVITY'; kind: GatheringKind }
   /** Starts auto-repeating runs. Only one activity at a time: a running one is stopped (a dungeon run in progress is lost). */
   | { id: string; type: 'START_ACTIVITY'; kind: 'dungeon'; dungeonId: DungeonId }
-  /** Stops the activity. A dungeon run in progress is lost and gives nothing. */
+  /**
+   * Trains one attribute (XP is kept per attribute). Needs tier ≥ 1 and the attribute below the tier's cap.
+   * Same attribute again = no-op; another attribute switches. Stops any other activity (a dungeon run is lost).
+   */
+  | { id: string; type: 'START_ACTIVITY'; kind: 'training'; attribute: AttributeKey }
+  /** Buys the next training tier with gold. `tier` must be the current tier + 1, so a double tap never buys two. */
+  | { id: string; type: 'UNLOCK_TRAINING_TIER'; tier: number }
+  /** Stops the activity. A dungeon run in progress is lost and gives nothing; training keeps its XP (a pause). */
   | { id: string; type: 'STOP_ACTIVITY' }
   /**
    * Spends ceil(remaining minutes) stamina to resolve the current run's fight now. Auto-repeat continues.
@@ -40,7 +50,10 @@ export type Command =
   | { id: string; type: 'DEBUG_GRANT_HERO_XP'; amount: number }
   | { id: string; type: 'DEBUG_SPEND_STAMINA'; amount: number }
   | { id: string; type: 'DEBUG_REFILL_STAMINA' }
-  | { id: string; type: 'DEBUG_ADD_ATTRIBUTE'; attribute: AttributeKey; amount: number };
+  | { id: string; type: 'DEBUG_ADD_ATTRIBUTE'; attribute: AttributeKey; amount: number }
+  /** Adds training XP (= trained minutes at the base rate) to the attribute being trained. */
+  | { id: string; type: 'DEBUG_ADD_TRAINING_XP'; xp: number }
+  | { id: string; type: 'DEBUG_ADD_GOLD'; amount: number };
 
 export type CommandType = Command['type'];
 
@@ -56,6 +69,12 @@ export type CommandErrorCode =
   | 'INVALID_AMOUNT'
   | 'UNKNOWN_ATTRIBUTE'
   | 'NOT_ENOUGH_STAMINA'
+  | 'TRAINING_LOCKED'
+  | 'TRAINING_MAXED'
+  | 'NOT_TRAINING'
+  | 'TIER_NOT_NEXT'
+  | 'MAX_TIER'
+  | 'NOT_ENOUGH_GOLD'
   | 'DEBUG_DISABLED';
 
 export type CommandError = { code: CommandErrorCode; message: string };
@@ -73,6 +92,13 @@ export const MAX_DEBUG_ATTRIBUTE_VALUE = 1_000_000;
 
 /** Debug dungeon-win grant per command. */
 export const MAX_DEBUG_DUNGEON_WINS = 1000;
+
+/** Debug training XP grant per command (minutes at the base rate). */
+export const MAX_DEBUG_TRAINING_XP = 100_000;
+
+/** Debug gold grant per command, and the most gold a save may reach that way. */
+export const MAX_DEBUG_GOLD_GRANT = 1_000_000;
+export const MAX_DEBUG_GOLD_VALUE = 1_000_000_000_000;
 
 export function isAttributeKey(key: unknown): key is AttributeKey {
   return typeof key === 'string' && (ATTRIBUTE_KEYS as readonly string[]).includes(key);
@@ -107,7 +133,18 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
   switch (cmd.type) {
     case 'START_ACTIVITY': {
       let next: Activity;
-      if (cmd.kind === 'dungeon') {
+      if (cmd.kind === 'training') {
+        const { attribute } = cmd;
+        if (!isAttributeKey(attribute)) return fail('UNKNOWN_ATTRIBUTE', `Unknown attribute ${String(attribute)}`);
+        const block = trainingBlock(draft, attribute);
+        if (block === 'TRAINING_LOCKED') return fail(block, 'Training is locked: unlock Tier 1 first');
+        if (block === 'TRAINING_MAXED') {
+          return fail(block, `${attribute} is at the Tier ${draft.training.tier} cap (${trainingCap(draft.training.tier)}): unlock the next tier`);
+        }
+        // Already training this attribute: nothing to do.
+        if (draft.activity?.kind === 'training' && draft.activity.attribute === attribute) break;
+        next = { kind: 'training', attribute, startedAt: now };
+      } else if (cmd.kind === 'dungeon') {
         if (!isDungeonId(cmd.dungeonId)) return fail('UNKNOWN_DUNGEON', `Unknown dungeon ${String(cmd.dungeonId)}`);
         if (!isDungeonUnlocked(draft, cmd.dungeonId)) return fail('DUNGEON_LOCKED', `${DUNGEONS[cmd.dungeonId].name} is locked`);
         // Already running this dungeon: keep the current run.
@@ -121,6 +158,23 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       if (draft.activity) stopActivity(draft, events);
       draft.activity = next;
       events.push({ type: 'ACTIVITY_STARTED', kind: next.kind });
+      break;
+    }
+    case 'UNLOCK_TRAINING_TIER': {
+      const { tier } = cmd;
+      if (typeof tier !== 'number' || !Number.isSafeInteger(tier)) return fail('INVALID_COMMAND', `Invalid tier ${String(tier)}`);
+      const current = draft.training.tier;
+      if (current >= TRAINING.maxTier) return fail('MAX_TIER', `Training is already at the max tier (${TRAINING.maxTier})`);
+      // Bound to what the player saw: only the next tier, so a repeated tap never buys a second one.
+      if (tier !== current + 1) return fail('TIER_NOT_NEXT', `Tier ${tier} is not the next tier (${current + 1})`);
+      const price = trainingTierPrice(tier);
+      const gold = draft.character.gold;
+      if (!Number.isSafeInteger(gold) || gold < price) {
+        return fail('NOT_ENOUGH_GOLD', `Tier ${tier} costs ${price} gold, you have ${gold} (${price - gold} missing)`);
+      }
+      draft.character.gold = gold - price;
+      draft.training.tier = tier;
+      events.push({ type: 'TRAINING_TIER_UNLOCKED', tier });
       break;
     }
     case 'STOP_ACTIVITY': {
@@ -138,7 +192,7 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       if (typeof run !== 'number' || !Number.isSafeInteger(run) || run <= 0) return fail('INVALID_COMMAND', `Invalid run ${String(run)}`);
       // The run the player saw finished (simulating to now, or earlier): never resolve the next one instead.
       if (run !== draft.dungeon.totals.runs + 1) return fail('RUN_CHANGED', 'That run already finished');
-      const remainingMs = Math.max(0, runMsFor(a.dungeonId, draft.character.attributes) - a.progressMs);
+      const remainingMs = Math.max(0, runMsFor(a.dungeonId, effectiveAttributes(draft)) - a.progressMs);
       const cost = skipCost(remainingMs);
       if (cost > maxCost) return fail('RUN_CHANGED', `Skipping now costs ${cost}, more than the ${maxCost} shown`);
       const spent = spendStamina(draft, cost);
@@ -212,6 +266,30 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       if (next > MAX_DEBUG_ATTRIBUTE_VALUE) return fail('INVALID_AMOUNT', `${attribute} would exceed ${MAX_DEBUG_ATTRIBUTE_VALUE}`);
       draft = markDebugUsed(draft);
       draft.character.attributes[attribute] = next;
+      break;
+    }
+    case 'DEBUG_ADD_TRAINING_XP': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const { xp } = cmd;
+      if (typeof xp !== 'number' || !Number.isSafeInteger(xp) || xp <= 0 || xp > MAX_DEBUG_TRAINING_XP) {
+        return fail('INVALID_AMOUNT', `Invalid training XP ${String(xp)}`);
+      }
+      const a = draft.activity;
+      if (a?.kind !== 'training') return fail('NOT_TRAINING', 'No attribute is being trained');
+      draft = markDebugUsed(draft);
+      grantTrainingXp(draft, a.attribute, xp, events);
+      break;
+    }
+    case 'DEBUG_ADD_GOLD': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const { amount } = cmd;
+      if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0 || amount > MAX_DEBUG_GOLD_GRANT) {
+        return fail('INVALID_AMOUNT', `Invalid gold amount ${String(amount)}`);
+      }
+      const next = draft.character.gold + amount;
+      if (next > MAX_DEBUG_GOLD_VALUE) return fail('INVALID_AMOUNT', `Gold would exceed ${MAX_DEBUG_GOLD_VALUE}`);
+      draft = markDebugUsed(draft);
+      draft.character.gold = next;
       break;
     }
     default: {
