@@ -1,10 +1,8 @@
 // Village → Dungeon: full-screen modal with the dungeon list and, inside the same modal, the detail
 // view (enemy, hero, start / skip / stop, last fight + replay). Rules stay in the engine: this file only
 // reads selectors (dungeonRunView, hpView, staminaView, getDerivedStats) and dispatches commands.
-import { router } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
 import {
@@ -23,9 +21,9 @@ import {
   strikeRange,
 } from '../../engine';
 import { colors, fonts } from '../../theme';
-import { AwayModal } from '../AwayModal';
 import { formatClock, formatNumber, itemIcon, itemName } from '../format';
 import { LiveBar } from '../LiveBar';
+import { ModalScreen } from '../ModalScreen';
 import { Bar, Panel } from '../Panel';
 import { PixelButton } from '../PixelButton';
 import { confirmCancelRun } from './confirmCancelRun';
@@ -43,11 +41,6 @@ export function DungeonModal() {
   const hp = hpView(state);
   const stamina = staminaView(state);
 
-  const close = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/');
-  }, []);
-
   // Android back: from a dungeon's detail, go back to the list first; from the list it closes the modal.
   useEffect(() => {
     if (!selected) return;
@@ -59,8 +52,16 @@ export function DungeonModal() {
   }, [selected]);
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      <Header hp={hp.hp} maxHp={hp.maxHp} regenPerMin={hp.regenPerMin} stamina={stamina.current} staminaMax={stamina.max} onClose={close} />
+    <ModalScreen
+      title="Dungeons"
+      closeLabel="Close dungeons"
+      headerRight={
+        <Text style={styles.stamina} accessibilityLabel={`Stamina ${stamina.current} of ${stamina.max}`}>
+          ⚡ {stamina.current}/{stamina.max}
+        </Text>
+      }
+      headerBelow={<HpRow hp={hp.hp} maxHp={hp.maxHp} regenPerMin={hp.regenPerMin} />}
+    >
       <ScrollView contentContainerStyle={styles.content}>
         {clockPaused ? <Text style={styles.paused}>⏸ Paused: your device clock moved back. Runs and regen wait until it catches up.</Text> : null}
         {selected ? (
@@ -69,52 +70,19 @@ export function DungeonModal() {
           <DungeonList state={state} running={running} onPick={setSelected} />
         )}
       </ScrollView>
-      {/* This screen's own host for "While you were away" (see RootAwayModal in app/_layout.tsx). */}
-      <AwayModal />
-    </SafeAreaView>
+    </ModalScreen>
   );
 }
 
 // ---------- header ----------
 
-const Header = memo(function Header({
-  hp,
-  maxHp,
-  regenPerMin,
-  stamina,
-  staminaMax,
-  onClose,
-}: {
-  hp: number;
-  maxHp: number;
-  regenPerMin: number;
-  stamina: number;
-  staminaMax: number;
-  onClose: () => void;
-}) {
+const HpRow = memo(function HpRow({ hp, maxHp, regenPerMin }: { hp: number; maxHp: number; regenPerMin: number }) {
   return (
-    <View style={styles.header}>
-      <View style={styles.headerTop}>
-        <Pressable onPress={onClose} style={styles.close} accessibilityRole="button" accessibilityLabel="Close dungeons" hitSlop={8}>
-          <Text style={styles.closeText}>✕</Text>
-        </Pressable>
-        <Text style={styles.title} accessibilityRole="header">
-          Dungeons
-        </Text>
-        <Text style={styles.stamina} accessibilityLabel={`Stamina ${stamina} of ${staminaMax}`}>
-          ⚡ {stamina}/{staminaMax}
-        </Text>
+    <View style={styles.hpRow} accessible accessibilityLabel={`Hero HP ${hp} of ${maxHp}, regenerates ${regenPerMin} per minute`}>
+      <View style={styles.flex}>
+        <Bar value={hp} max={maxHp} color={colors.hp} label={`HP ${formatNumber(hp)} / ${formatNumber(maxHp)}`} />
       </View>
-      <View
-        style={styles.hpRow}
-        accessible
-        accessibilityLabel={`Hero HP ${hp} of ${maxHp}, regenerates ${regenPerMin} per minute`}
-      >
-        <View style={styles.flex}>
-          <Bar value={hp} max={maxHp} color={colors.hp} label={`HP ${formatNumber(hp)} / ${formatNumber(maxHp)}`} />
-        </View>
-        <Text style={styles.regen}>+{regenPerMin}/min</Text>
-      </View>
+      <Text style={styles.regen}>+{regenPerMin}/min</Text>
     </View>
   );
 });
@@ -418,23 +386,10 @@ function StatLine({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.night },
   flex: { flex: 1 },
   content: { padding: 12, paddingBottom: 32 },
   paused: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold, marginBottom: 10 },
 
-  header: {
-    backgroundColor: colors.woodDark,
-    borderBottomWidth: 3,
-    borderBottomColor: colors.goldDark,
-    paddingHorizontal: 12,
-    paddingBottom: 10,
-    gap: 6,
-  },
-  headerTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  closeText: { fontFamily: fonts.bodyBold, fontSize: 26, color: colors.parchment },
-  title: { flex: 1, fontFamily: fonts.title, fontSize: 34, color: colors.gold },
   stamina: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.stamina },
   hpRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   regen: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.skill },

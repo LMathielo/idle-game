@@ -30,7 +30,9 @@ export function PixelButton({ label, icon, onPress, active, disabled, accessibil
         <View style={[styles.outer, active && styles.outerActive, pressed && styles.outerPressed, disabled && styles.outerDisabled]}>
           <View style={[styles.inner, active && styles.innerActive, pressed && styles.innerPressed, disabled && styles.innerDisabled]}>
             {icon ? <Text style={styles.icon}>{icon}</Text> : null}
-            <Text style={[styles.label, disabled && styles.labelDisabled]}>{label}</Text>
+            <Text style={[styles.label, disabled && styles.labelDisabled]} numberOfLines={1}>
+              {label}
+            </Text>
           </View>
         </View>
       )}
@@ -55,6 +57,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    // 44pt tap target with the 3pt outer frame
+    minHeight: 38,
     backgroundColor: colors.wood,
     paddingHorizontal: 10,
     paddingVertical: 4,
