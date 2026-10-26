@@ -3,7 +3,7 @@
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { type EdgeInsets, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '../theme';
 import { AwayModal } from './AwayModal';
 
@@ -35,7 +35,7 @@ export function closeVillageModal() {
  * modal on iOS and Android alike.
  */
 export function ModalScreen({ title, closeLabel, onClose = closeVillageModal, headerRight, headerBelow, children }: Props) {
-  const insets = useSafeAreaInsets();
+  const insets = useModalInsets();
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top, paddingLeft: PAD + insets.left, paddingRight: PAD + insets.right }]}>
@@ -58,6 +58,22 @@ export function ModalScreen({ title, closeLabel, onClose = closeVillageModal, he
 }
 
 const PAD = 12;
+
+/**
+ * Root insets, floored by the launch-time window insets. While a fullScreenModal is up, UIKit can take the
+ * presenting view (where the root SafeAreaProvider lives) out of the window, and the provider may then
+ * report 0. The app is portrait-locked, so the launch insets stay valid for the whole session.
+ */
+function useModalInsets(): EdgeInsets {
+  const ctx = useSafeAreaInsets();
+  const init = initialWindowMetrics?.insets;
+  return {
+    top: Math.max(ctx.top, init?.top ?? 0),
+    bottom: Math.max(ctx.bottom, init?.bottom ?? 0),
+    left: Math.max(ctx.left, init?.left ?? 0),
+    right: Math.max(ctx.right, init?.right ?? 0),
+  };
+}
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.night },
