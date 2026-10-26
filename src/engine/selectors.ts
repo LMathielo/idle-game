@@ -1,10 +1,11 @@
 // Read-only helpers for UIs (pure).
 import { currentActionIntervalMs } from './activities';
 import { ACTIVITIES } from './config/activities';
-import type { ActivityKind, GameState } from './types';
+import { dungeonRunView, type DungeonRunView } from './dungeon';
+import type { GameState, GatheringKind } from './types';
 
-export type ActivityView = {
-  kind: ActivityKind;
+export type GatheringView = {
+  kind: GatheringKind;
   skillLevel: number;
   intervalMs: number;
   /** Progress of the current action, 0..1. */
@@ -13,9 +14,12 @@ export type ActivityView = {
   remainingMs: number;
 };
 
+export type ActivityView = GatheringView | DungeonRunView;
+
 export function activityView(state: GameState): ActivityView | null {
   const a = state.activity;
   if (!a) return null;
+  if (a.kind === 'dungeon') return dungeonRunView(state);
   const intervalMs = currentActionIntervalMs(state, a.kind);
   const progress = Math.min(a.progressMs, intervalMs);
   return {

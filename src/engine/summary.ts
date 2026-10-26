@@ -12,6 +12,8 @@ export function emptySummary(): SimulationSummary {
     skillLevelsGained: {},
     heroXpGained: 0,
     heroLevelsGained: 0,
+    goldGained: 0,
+    dungeon: { runs: 0, wins: 0, losses: 0 },
     anomalies: [],
   };
 }
@@ -34,14 +36,20 @@ export function mergeSummaries(a: SimulationSummary, b: SimulationSummary): Simu
     skillLevelsGained: addMaps(a.skillLevelsGained, b.skillLevelsGained),
     heroXpGained: a.heroXpGained + b.heroXpGained,
     heroLevelsGained: a.heroLevelsGained + b.heroLevelsGained,
+    goldGained: a.goldGained + b.goldGained,
+    dungeon: {
+      runs: a.dungeon.runs + b.dungeon.runs,
+      wins: a.dungeon.wins + b.dungeon.wins,
+      losses: a.dungeon.losses + b.dungeon.losses,
+    },
     anomalies: [...a.anomalies, ...b.anomalies],
   };
 }
 
 /**
  * Worth showing in "While you were away": any clock anomaly, or at least AWAY_SUMMARY_MIN_MS
- * of real time away with at least one action. A quick app switch never opens the modal.
+ * of real time away with at least one gathering action or dungeon run. A quick app switch never opens the modal.
  */
 export function isNoteworthy(s: SimulationSummary, minAwayMs: number = AWAY_SUMMARY_MIN_MS): boolean {
-  return s.anomalies.length > 0 || (s.requestedMs >= minAwayMs && s.actions > 0);
+  return s.anomalies.length > 0 || (s.requestedMs >= minAwayMs && (s.actions > 0 || s.dungeon.runs > 0));
 }

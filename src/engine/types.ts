@@ -45,7 +45,17 @@ export type Character = {
   level: number;
   xp: number;
   xpToNext: number;
-  // No hp/maxHp: max HP and mana are derived (getDerivedStats). Current HP returns with combat (M4).
+  /**
+   * Current HP, 0..maxHp. Max HP is derived (getDerivedStats), never stored. Regenerates in simulate()
+   * at 5 + END HP per minute (config/stats.ts); fights spend it. A level-up raises max, not current.
+   */
+  hp: number;
+  /**
+   * Regen banked towards the next HP, in "HP·ms per minute" units: each ms adds the regen rate
+   * (HP/min) and every 60 000 units is 1 HP. Kept across resumes like stamina's progressMs, and
+   * exact even when the rate changes. Always 0 while hp >= maxHp.
+   */
+  hpRegenProgress: number;
   gold: number;
   attributes: Attributes;
   equipment: Partial<Record<EquipmentSlot, Item>>;
@@ -61,14 +71,73 @@ export type Inventory = {
 /** Seeded PRNG state (mulberry32). `seed` is a uint32 that advances on every draw. */
 export type RngState = { seed: number };
 
-export type ActivityKind = 'woodcutting';
+/** Gathering skills: one action per interval (config/activities.ts). */
+export type GatheringKind = 'woodcutting';
 
-export type Activity = {
-  kind: ActivityKind;
+/** Only one activity runs at a time: a gathering skill or auto-repeating dungeon runs. */
+export type ActivityKind = GatheringKind | 'dungeon';
+
+export type DungeonId = 'rat_cellar_1';
+
+export type EnemyId = 'rat';
+
+type ActivityBase = {
   /** Engine time (epoch ms) the activity started. Informational only. */
   startedAt: number;
-  /** Time banked towards the next action, in ms. Never lost between resumes. */
+  /** Time banked towards the next action (gathering) or into the current run (dungeon), in ms. Never lost between resumes. */
   progressMs: number;
+};
+
+export type GatheringActivity = ActivityBase & { kind: GatheringKind };
+
+/** Auto-repeat: runs follow each other back-to-back until stopped. Stopping loses the current run. */
+export type DungeonActivity = ActivityBase & { kind: 'dungeon'; dungeonId: DungeonId };
+
+export type Activity = GatheringActivity | DungeonActivity;
+
+// ---------- Combat ----------
+
+/** One strike. The engine produces it; the UI only replays it. */
+export type FightLogEntry = {
+  round: number;
+  actor: 'hero' | 'enemy';
+  /** Raw damage roll, a whole number in [min, max]. */
+  roll: number;
+  /** Damage after the target's defense (at least 1). */
+  dealt: number;
+  targetHpAfter: number;
+};
+
+export type FightRewards = {
+  heroXp: number;
+  gold: number;
+  /** Items that went into the inventory. */
+  items: Record<string, number>;
+  /** Items that dropped but did not fit (inventory full). */
+  itemsLost: Record<string, number>;
+};
+
+/** The last fight only (saves stay small). Earlier fights live on as counters. */
+export type FightRecord = {
+  dungeonId: DungeonId;
+  enemyId: EnemyId;
+  won: boolean;
+  /** Rounds started; a fight that starts at 0 HP has 0. */
+  rounds: number;
+  heroHpStart: number;
+  heroHpEnd: number;
+  /** Max HP at the moment of the fight, for the replay bars. */
+  heroMaxHp: number;
+  enemyMaxHp: number;
+  enemyHpEnd: number;
+  rewards: FightRewards;
+  log: FightLogEntry[];
+};
+
+export type DungeonState = {
+  lastFight: FightRecord | null;
+  /** Lifetime counters. */
+  totals: { runs: number; wins: number; losses: number };
 };
 
 export type GameStats = {
@@ -81,7 +150,7 @@ export type GameFlags = {
   debugUsed: boolean;
 };
 
-/** Pays for dungeon runs and bosses (M4). Regenerates in simulate(); see docs/ENGINE.md. */
+/** Pays for skipping dungeon runs. Regenerates in simulate(); see docs/ENGINE.md. */
 export type Stamina = {
   current: number;
   /** Per player so a future upgrade can raise it. */
@@ -91,7 +160,7 @@ export type Stamina = {
 };
 
 export type GameState = {
-  saveVersion: 3;
+  saveVersion: 4;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -103,6 +172,7 @@ export type GameState = {
   offline: { capMs: number; efficiency: number };
   activity: Activity | null;
   stamina: Stamina;
+  dungeon: DungeonState;
   stats: GameStats;
   flags: GameFlags;
   character: Character;
@@ -122,7 +192,9 @@ export type GameEvent =
   | { type: 'ACTIVITY_STOPPED'; kind: ActivityKind }
   | { type: 'SKILL_LEVEL_UP'; skill: SkillKey; level: number }
   | { type: 'HERO_LEVEL_UP'; level: number }
-  | { type: 'RARE_DROP'; itemId: string };
+  | { type: 'RARE_DROP'; itemId: string }
+  | { type: 'DUNGEON_RUN_CANCELLED'; dungeonId: DungeonId }
+  | { type: 'FIGHT_RESOLVED'; dungeonId: DungeonId; won: boolean };
 
 /** What happened during one simulate() call. Shown in the "While you were away" modal. */
 export type SimulationSummary = {
@@ -138,5 +210,8 @@ export type SimulationSummary = {
   skillLevelsGained: Partial<Record<SkillKey, number>>;
   heroXpGained: number;
   heroLevelsGained: number;
+  goldGained: number;
+  /** Dungeon runs resolved (won + lost). */
+  dungeon: { runs: number; wins: number; losses: number };
   anomalies: ClockAnomalyEvent[];
 };

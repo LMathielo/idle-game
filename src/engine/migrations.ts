@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 3 as const;
+export const CURRENT_SAVE_VERSION = 4 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -13,6 +13,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   // v2 adds flags.debugUsed. A v1 document carries no record of debug use, so it starts false.
   1: (doc) => ({ ...doc, saveVersion: 2, flags: { debugUsed: false } }),
   2: migrateV2toV3,
+  3: migrateV3toV4,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -65,6 +66,28 @@ function migrateV2toV3(doc: SaveDoc): SaveDoc {
     stamina: { ...V3_STAMINA },
     character: { ...restCharacter, attributes, equipment },
     inventory: { ...inventory, items },
+  };
+}
+
+// ---- v3 → v4 (2026-10-26): current HP, dungeon state ----
+// Frozen literals again: max HP at the hero's level as the v4 rules define it (50 + 10 × (level − 1)),
+// so a later change to config/stats.ts cannot change what this migration produces.
+const V4_MAX_HP_BASE = 50;
+const V4_MAX_HP_PER_LEVEL = 10;
+
+/**
+ * - character.hp = max HP at the hero's level (full), character.hpRegenProgress = 0.
+ * - dungeon = no last fight, counters at 0.
+ * - activity kept as is: v3 only had woodcutting, so no save is in a dungeon.
+ */
+function migrateV3toV4(doc: SaveDoc): SaveDoc {
+  const character = isDoc(doc.character) ? doc.character : {};
+  const level = typeof character.level === 'number' && Number.isSafeInteger(character.level) && character.level >= 1 ? character.level : 1;
+  return {
+    ...doc,
+    saveVersion: 4,
+    character: { ...character, hp: V4_MAX_HP_BASE + V4_MAX_HP_PER_LEVEL * (level - 1), hpRegenProgress: 0 },
+    dungeon: { lastFight: null, totals: { runs: 0, wins: 0, losses: 0 } },
   };
 }
 

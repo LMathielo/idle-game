@@ -7,9 +7,7 @@ export const STAMINA = {
   startMax: 100,
   /** +1 stamina per interval while below max. 100 points ≈ 8h20 from empty. */
   regenIntervalMs: 5 * MIN_MS,
-  /** Planned costs (M4). Not used by any rule yet. */
-  costs: {
-    dungeonRun: 10,
-    boss: 25,
-  },
 } as const;
+
+// Stamina is spent only to skip the rest of a dungeon run (config/dungeons.ts, DUNGEON_RUN.skip).
+// Waiting is always free.

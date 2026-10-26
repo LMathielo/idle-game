@@ -93,6 +93,10 @@ export interface GameClient {
     spendStamina(amount: number): Promise<DispatchResult>;
     refillStamina(): Promise<DispatchResult>;
     addAttribute(attribute: AttributeKey, amount?: number): Promise<DispatchResult>;
+    /** Sets current HP (0..max). Logged as DEBUG_SET_HERO_HP. */
+    setHeroHp(hp: number): Promise<DispatchResult>;
+    /** Resolves the current dungeon run's fight now, for free. Logged as DEBUG_FINISH_DUNGEON_RUN. */
+    finishDungeonRun(): Promise<DispatchResult>;
     /** New game with a new seed and a real clock (offset 0). Logged, never deletes the log. */
     resetSave(): Promise<void>;
   };

@@ -70,10 +70,30 @@ describe('save migrations', () => {
     expect(v3.inventory.items).toEqual([]);
   });
 
-  it('newest save loads unchanged; a new game is already v3', () => {
+  it('real v3 → v4: full HP at the hero level, no dungeon activity, empty fight state; pure', () => {
+    const v3 = {
+      saveVersion: 3,
+      activity: { kind: 'woodcutting', startedAt: 1, progressMs: 7 },
+      character: { name: 'Lucius', level: 6, xp: 3, gold: 9, attributes: { strength: 10, dexterity: 10, endurance: 10, intelligence: 10 } },
+      stamina: { current: 50, max: 100, progressMs: 3 },
+    };
+    const frozenInput = JSON.parse(JSON.stringify(v3));
+    const v4 = MIGRATIONS[3](v3) as unknown as GameState;
+    expect(v3).toEqual(frozenInput);
+    expect(v4.saveVersion).toBe(4);
+    expect(v4.character).toEqual({ ...v3.character, hp: 100, hpRegenProgress: 0 }); // 50 + 10 × 5
+    expect(v4.dungeon).toEqual({ lastFight: null, totals: { runs: 0, wins: 0, losses: 0 } });
+    expect(v4.activity).toEqual(v3.activity);
+    expect(v4.stamina).toEqual(v3.stamina);
+    // A broken level counts as 1.
+    expect((MIGRATIONS[3]({ saveVersion: 3, character: { level: 'x' } }) as unknown as GameState).character.hp).toBe(50);
+    expect((MIGRATIONS[3]({ saveVersion: 3 }) as unknown as GameState).character).toEqual({ hp: 50, hpRegenProgress: 0 });
+  });
+
+  it('newest save loads unchanged; a new game is already v4', () => {
     const s = newGame(77, T0);
-    expect(s.saveVersion).toBe(3);
-    expect(CURRENT_SAVE_VERSION).toBe(3);
+    expect(s.saveVersion).toBe(4);
+    expect(CURRENT_SAVE_VERSION).toBe(4);
     expect(loadSave(s)).toEqual(s);
   });
 

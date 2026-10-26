@@ -14,7 +14,7 @@ describe('stamina', () => {
   it('new hero starts full at 100/100 with no timer', () => {
     expect(newGame(1, T0).stamina).toEqual({ current: 100, max: 100, progressMs: 0 });
     expect(INTERVAL).toBe(300_000);
-    expect(STAMINA.costs).toEqual({ dungeonRun: 10, boss: 25 });
+    expect(STAMINA).not.toHaveProperty('costs'); // replaced by the dungeon skip rule (config/dungeons.ts)
   });
 
   it('+1 every 5 minutes, exactly on the interval', () => {

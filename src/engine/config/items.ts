@@ -22,6 +22,7 @@ export const ITEMS = {
   oak_logs: { id: 'oak_logs', name: 'Oak Logs', icon: '🪵', rarity: 'common', stackable: true },
   bird_nest: { id: 'bird_nest', name: 'Bird Nest', icon: '🪺', rarity: 'rare', stackable: true },
   bread: { id: 'bread', name: 'Bread', icon: '🍞', rarity: 'common', stackable: true },
+  rat_skin: { id: 'rat_skin', name: 'Rat Skin', icon: '🐾', rarity: 'common', stackable: true },
   rusty_gladius: {
     id: 'rusty_gladius',
     name: 'Rusty Gladius',

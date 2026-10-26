@@ -3,6 +3,7 @@ import { INVENTORY_CAPACITY } from './config/items';
 import { STAMINA } from './config/stamina';
 import { DEFAULT_OFFLINE_CAP_MS, DEFAULT_OFFLINE_EFFICIENCY } from './config/time';
 import { HERO_XP_CURVE, SKILL_XP_CURVE } from './config/xpCurve';
+import { maxHpOf } from './hp';
 import { makeItem } from './inventory';
 import { newProgress } from './progression';
 import { createRng } from './rng';
@@ -25,6 +26,8 @@ export function newGame(seed: number, now: number): GameState {
 
   const hero = newProgress(HERO_XP_CURVE);
   const items: Item[] = STARTING_HERO.inventory.map((s) => makeItem(s.itemId, s.quantity));
+  const attributes = { ...STARTING_HERO.attributes };
+  const maxHp = maxHpOf({ character: { level: hero.level, attributes, equipment } });
 
   return {
     saveVersion: CURRENT_SAVE_VERSION,
@@ -33,6 +36,7 @@ export function newGame(seed: number, now: number): GameState {
     offline: { capMs: DEFAULT_OFFLINE_CAP_MS, efficiency: DEFAULT_OFFLINE_EFFICIENCY },
     activity: null,
     stamina: { current: STAMINA.startMax, max: STAMINA.startMax, progressMs: 0 },
+    dungeon: { lastFight: null, totals: { runs: 0, wins: 0, losses: 0 } },
     stats: { totalActions: 0, itemsGathered: {} },
     flags: { debugUsed: false },
     character: {
@@ -41,8 +45,10 @@ export function newGame(seed: number, now: number): GameState {
       level: hero.level,
       xp: hero.xp,
       xpToNext: hero.xpToNext,
+      hp: maxHp,
+      hpRegenProgress: 0,
       gold: STARTING_HERO.gold,
-      attributes: { ...STARTING_HERO.attributes },
+      attributes,
       equipment,
       skills,
     },

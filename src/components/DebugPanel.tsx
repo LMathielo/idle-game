@@ -66,6 +66,8 @@ export function DebugPanel() {
             <PixelButton label="+10k hero XP" onPress={run(() => client.debug.grantHeroXp(10_000))} />
             <PixelButton label="Spend 10 stamina" onPress={run(() => client.debug.spendStamina(10))} />
             <PixelButton label="Refill stamina" onPress={run(() => client.debug.refillStamina())} />
+            <PixelButton label="Hero HP → 1" onPress={run(() => client.debug.setHeroHp(1))} />
+            <PixelButton label="Finish run now (free)" onPress={run(() => client.debug.finishDungeonRun())} />
             {ATTRIBUTE_BUTTONS.map((a) => (
               <PixelButton key={a.key} label={a.label} onPress={run(() => client.debug.addAttribute(a.key))} />
             ))}

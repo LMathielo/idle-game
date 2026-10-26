@@ -2,6 +2,8 @@
 // Same code path for live ticks (1s) and offline catch-up (up to the cap).
 import { currentActionIntervalMs, performAction } from './activities';
 import { cloneState } from './clone';
+import { advanceDungeon } from './dungeon';
+import { hpRegenPerMinute, maxHpOf, regenHp } from './hp';
 import { regenStamina } from './stamina';
 import { CLOCK_BACKWARD_TOLERANCE_MS, MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { emptySummary } from './summary';
@@ -19,8 +21,11 @@ export type SimulationResult = { state: GameState; events: GameEvent[]; summary:
  *  e. non-finite now → no-op + ERROR event.
  *  f. highestSeenAt = max(highestSeenAt, now) whenever now is accepted.
  *
- * Stamina regenerates on the accepted elapsed time (rules b, c and e grant none), but NOT on the
- * capped time: its max already bounds it, so a long absence can fill the bar (docs/ENGINE.md).
+ * Stamina and HP regenerate on the accepted elapsed time (rules b, c and e grant none), but NOT on the
+ * capped time: their max already bounds them, so a long absence can fill both (docs/ENGINE.md).
+ *
+ * Gathering and dungeon runs share this path. Dungeon runs interleave with HP regen in time order
+ * (advanceDungeon); otherwise HP simply regenerates over the whole elapsed time.
  */
 export function simulate(state: GameState, now: number): SimulationResult {
   const summary = emptySummary();
@@ -71,6 +76,11 @@ export function simulate(state: GameState, now: number): SimulationResult {
   draft.stamina = regenStamina(state.stamina, requestedMs);
 
   const activity = draft.activity;
+  if (activity?.kind === 'dungeon') {
+    advanceDungeon(draft, activity, grantedMs, requestedMs, summary, events);
+    return { state: draft, events, summary };
+  }
+
   if (activity && grantedMs > 0) {
     const kind = activity.kind;
     activity.progressMs += grantedMs * draft.offline.efficiency;
@@ -94,6 +104,10 @@ export function simulate(state: GameState, now: number): SimulationResult {
       guard += 1;
     }
   }
+
+  // Gathering never touches HP, so regen over the whole (uncapped) time is the same in any order.
+  // Same object when nothing changed (full HP).
+  draft.character = regenHp(draft.character, maxHpOf(draft), hpRegenPerMinute(draft.character.attributes), requestedMs);
 
   return { state: draft, events, summary };
 }

@@ -4,7 +4,7 @@ import { HERO_XP_CURVE, SKILL_XP_CURVE } from './config/xpCurve';
 import { addStackable } from './inventory';
 import { addXp } from './progression';
 import { chance } from './rng';
-import type { ActivityKind, GameEvent, GameState, SimulationSummary } from './types';
+import type { GameEvent, GameState, GatheringKind, SimulationSummary } from './types';
 
 /** Action interval for a skill level: base −1% of base per level above 1, floored. */
 export function actionIntervalMs(cfg: ActivityConfig, skillLevel: number): number {
@@ -12,7 +12,7 @@ export function actionIntervalMs(cfg: ActivityConfig, skillLevel: number): numbe
   return Math.max(cfg.minIntervalMs, Math.round(raw));
 }
 
-export function currentActionIntervalMs(state: GameState, kind: ActivityKind): number {
+export function currentActionIntervalMs(state: GameState, kind: GatheringKind): number {
   const cfg = ACTIVITIES[kind];
   return actionIntervalMs(cfg, state.character.skills[cfg.skill].level);
 }
@@ -25,7 +25,7 @@ function bump(map: Record<string, number>, key: string, by: number) {
 /** Performs one action on `draft` (mutated), recording into `summary` and `events`. */
 export function performAction(
   draft: GameState,
-  kind: ActivityKind,
+  kind: GatheringKind,
   summary: SimulationSummary,
   events: GameEvent[],
 ): void {

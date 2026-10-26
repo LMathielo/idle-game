@@ -1,15 +1,15 @@
 import { memo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useGameState } from '../client/GameProvider';
-import { ACTIVITY_STRIP_HEIGHT } from '../components/ActivityStrip';
-import { DebugPanel } from '../components/DebugPanel';
-import { formatNumber } from '../components/format';
-import { Bar, Panel } from '../components/Panel';
-import { StatusPanel } from '../components/StatusPanel';
-import { DEV_TOOLS_ENABLED } from '../engine/config/dev';
-import type { Character, EquipmentSlot, Inventory, Item, ItemRarity, SkillKey } from '../engine/types';
-import { colors, fonts } from '../theme';
+import { useGameState } from '../../client/GameProvider';
+import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
+import { DebugPanel } from '../../components/DebugPanel';
+import { formatNumber } from '../../components/format';
+import { Bar, Panel } from '../../components/Panel';
+import { StatusPanel } from '../../components/StatusPanel';
+import { DEV_TOOLS_ENABLED } from '../../engine/config/dev';
+import type { Character, EquipmentSlot, Inventory, Item, ItemRarity, SkillKey } from '../../engine/types';
+import { colors, fonts } from '../../theme';
 
 const SKILL_LABELS: Record<SkillKey, { label: string; icon: string }> = {
   woodcutting: { label: 'Woodcutting', icon: '🪓' },
@@ -56,6 +56,8 @@ export default function HeroScreen() {
           level={character.level}
           attributes={character.attributes}
           equipment={character.equipment}
+          hp={character.hp}
+          hpRegenProgress={character.hpRegenProgress}
           stamina={stamina}
         />
         <EquipmentPanel equipment={character.equipment} />
@@ -69,7 +71,7 @@ export default function HeroScreen() {
 
 // Each panel is memoized on the slice it shows. simulate() keeps untouched slices by reference,
 // so a woodcutting action re-renders Header, Inventory and Skills, not Equipment. Status re-renders
-// only when level, attributes, equipment or stamina change (stamina ticks while it regenerates).
+// only when level, attributes, equipment, HP or stamina change (HP and stamina tick while they regenerate).
 
 const HeaderPanel = memo(function HeaderPanel({ character }: { character: Character }) {
   return (

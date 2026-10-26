@@ -7,11 +7,13 @@ import {
   type AttributeKey,
   type Character,
   getDerivedStats,
+  hpView,
   type RangePart,
   type Stamina,
   STATS,
   staminaView,
   type ValuePart,
+  DUNGEON_RUN,
 } from '../engine';
 import { colors, fonts } from '../theme';
 import { ATTRIBUTE_NAMES, formatClock, formatHoursMinutes, formatNumber, itemName } from './format';
@@ -20,8 +22,8 @@ import { Bar, Panel } from './Panel';
 /** What one point does, built from the engine coefficients so the text can't drift from the rules. */
 const ATTRIBUTE_EFFECTS: Record<AttributeKey, string | null> = {
   strength: `+${STATS.damagePerStrength} damage`,
-  dexterity: null,
-  endurance: `+${STATS.defensePerEndurance} defense`,
+  dexterity: `−${DUNGEON_RUN.perDexterityMs / 1000}s dungeon run`,
+  endurance: `+${STATS.defensePerEndurance} defense, +${STATS.hpRegen.perEndurance} HP/min`,
   intelligence: null,
 };
 
@@ -73,11 +75,14 @@ type Props = {
   level: number;
   attributes: Character['attributes'];
   equipment: Character['equipment'];
+  hp: number;
+  hpRegenProgress: number;
   stamina: Stamina;
 };
 
-export const StatusPanel = memo(function StatusPanel({ level, attributes, equipment, stamina }: Props) {
+export const StatusPanel = memo(function StatusPanel({ level, attributes, equipment, hp, hpRegenProgress, stamina }: Props) {
   const stats = useMemo(() => getDerivedStats({ character: { level, attributes, equipment } }), [level, attributes, equipment]);
+  const hpNow = hpView({ character: { level, attributes, equipment, hp, hpRegenProgress } });
   const [open, setOpen] = useState<StatKey | null>(null);
   const toggle = useCallback((k: StatKey) => setOpen((cur) => (cur === k ? null : k)), []);
 
@@ -115,8 +120,9 @@ export const StatusPanel = memo(function StatusPanel({ level, attributes, equipm
         <StatRow
           statKey="maxHp"
           label="HP"
-          value={formatNumber(stats.maxHp.value)}
-          detail={describeValue(stats.maxHp.breakdown)}
+          value={`${formatNumber(hpNow.hp)} / ${formatNumber(stats.maxHp.value)}`}
+          note={`+${hpNow.regenPerMin}/min${hpNow.full ? '' : ` · full in ${formatHoursMinutes(hpNow.fullInMs)}`}`}
+          detail={`Max HP ${formatNumber(stats.maxHp.value)} = ${describeValue(stats.maxHp.breakdown)}. Regen ${hpNow.regenPerMin}/min = ${STATS.hpRegen.basePerMin} base + ${STATS.hpRegen.perEndurance} × END.`}
           open={open === 'maxHp'}
           onToggle={toggle}
         />
@@ -139,6 +145,7 @@ const StatRow = memo(function StatRow({
   statKey,
   label,
   value,
+  note,
   detail,
   open,
   onToggle,
@@ -146,6 +153,8 @@ const StatRow = memo(function StatRow({
   statKey: StatKey;
   label: string;
   value: string;
+  /** Always shown under the value (e.g. HP regen). */
+  note?: string;
   detail: string;
   open: boolean;
   onToggle: (k: StatKey) => void;
@@ -155,7 +164,7 @@ const StatRow = memo(function StatRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={open ? `${label} ${value} equals ${detail}` : `${label} ${value}`}
+      accessibilityLabel={`${label} ${value}${note ? `, ${note}` : ''}${open ? `. ${detail}` : ''}`}
       accessibilityHint="Shows where this number comes from"
       accessibilityState={{ expanded: open }}
       style={styles.statRow}
@@ -166,9 +175,10 @@ const StatRow = memo(function StatRow({
         </Text>
         <Text style={styles.statValue}>{value}</Text>
       </View>
+      {note ? <Text style={styles.statNote}>{note}</Text> : null}
       {open ? (
         <Text style={styles.statDetail}>
-          {label} {value} = {detail}
+          {note ? detail : `${label} ${value} = ${detail}`}
         </Text>
       ) : null}
     </Pressable>
@@ -216,6 +226,7 @@ const styles = StyleSheet.create({
   statLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   statLabel: { fontFamily: fonts.body, fontSize: 16, color: colors.ink },
   statValue: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.ink },
+  statNote: { fontFamily: fonts.body, fontSize: 12, color: colors.skill, textAlign: 'right' },
   statDetail: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, marginTop: 4 },
 
   stamina: { marginTop: 12, gap: 4 },

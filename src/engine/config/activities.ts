@@ -1,8 +1,8 @@
 // Acted skills (data). Each action: fixed rewards + skill XP + independent rare-drop rolls.
-import type { ActivityKind, SkillKey } from '../types';
+import type { GatheringKind, SkillKey } from '../types';
 
 export type ActivityConfig = {
-  kind: ActivityKind;
+  kind: GatheringKind;
   skill: SkillKey;
   /** Action interval at skill level 1. */
   baseIntervalMs: number;
@@ -18,7 +18,7 @@ export type ActivityConfig = {
   rareDrops: readonly { itemId: string; chance: number }[];
 };
 
-export const ACTIVITIES: Record<ActivityKind, ActivityConfig> = {
+export const ACTIVITIES: Record<GatheringKind, ActivityConfig> = {
   woodcutting: {
     kind: 'woodcutting',
     skill: 'woodcutting',
@@ -32,6 +32,7 @@ export const ACTIVITIES: Record<ActivityKind, ActivityConfig> = {
   },
 };
 
-export function isActivityKind(kind: unknown): kind is ActivityKind {
+/** Gathering kinds only. Dungeon runs have their own config (config/dungeons.ts). */
+export function isGatheringKind(kind: unknown): kind is GatheringKind {
   return typeof kind === 'string' && Object.prototype.hasOwnProperty.call(ACTIVITIES, kind);
 }

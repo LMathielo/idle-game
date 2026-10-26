@@ -7,23 +7,30 @@ type Props = {
   onPress?: () => void;
   /** Highlighted (e.g. the running activity). */
   active?: boolean;
+  /** Greyed out and not pressable. */
+  disabled?: boolean;
+  /** Spoken instead of `label` when the visible text is not enough. */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
 /** Wooden sign button with hard pixel bevels (no rounded corners). */
-export function PixelButton({ label, icon, onPress, active }: Props) {
+export function PixelButton({ label, icon, onPress, active, disabled, accessibilityLabel, accessibilityHint }: Props) {
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: !!active }}
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ selected: !!active, disabled: !!disabled }}
       hitSlop={6}
     >
       {({ pressed }) => (
-        <View style={[styles.outer, active && styles.outerActive, pressed && styles.outerPressed]}>
-          <View style={[styles.inner, active && styles.innerActive, pressed && styles.innerPressed]}>
+        <View style={[styles.outer, active && styles.outerActive, pressed && styles.outerPressed, disabled && styles.outerDisabled]}>
+          <View style={[styles.inner, active && styles.innerActive, pressed && styles.innerPressed, disabled && styles.innerDisabled]}>
             {icon ? <Text style={styles.icon}>{icon}</Text> : null}
-            <Text style={styles.label}>{label}</Text>
+            <Text style={[styles.label, disabled && styles.labelDisabled]}>{label}</Text>
           </View>
         </View>
       )}
@@ -62,6 +69,8 @@ const styles = StyleSheet.create({
   },
   innerActive: { backgroundColor: colors.skill, borderTopColor: '#7cc576', borderLeftColor: '#7cc576' },
   innerPressed: { backgroundColor: colors.woodDark },
+  outerDisabled: { shadowOpacity: 0, elevation: 0 },
+  innerDisabled: { backgroundColor: colors.slot, borderTopColor: colors.slotBorder, borderLeftColor: colors.slotBorder },
   icon: { fontSize: 14 },
   label: {
     fontFamily: fonts.title,
@@ -71,4 +80,5 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 0,
   },
+  labelDisabled: { color: colors.parchmentDark, opacity: 0.6 },
 });

@@ -142,9 +142,9 @@ describe('derived stats', () => {
     ]);
   });
 
-  it('derived stats are never stored in the save', () => {
+  it('derived stats are never stored in the save (current HP is, since v4; max HP is not)', () => {
     const s = fresh();
-    expect(s.character).not.toHaveProperty('hp');
+    expect(s.character.hp).toBe(50);
     expect(s.character).not.toHaveProperty('maxHp');
     expect(JSON.stringify(s)).not.toMatch(/"(damage|defense|maxMana|maxHp)"/);
   });

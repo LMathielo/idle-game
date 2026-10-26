@@ -1,5 +1,6 @@
 export * from './activities';
 export * from './dev';
+export * from './dungeons';
 export * from './items';
 export * from './newGame';
 export * from './stamina';

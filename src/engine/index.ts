@@ -15,4 +15,7 @@ export * from './replay';
 export { markDebugUsed } from './flags';
 export * from './stats';
 export * from './stamina';
+export * from './hp';
+export { dealtDamage, resolveFight, type Combatant, type FightResult } from './combat';
+export { dungeonRunView, runMsFor, skipCost, type DungeonRunView } from './dungeon';
 export * from './config';

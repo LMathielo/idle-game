@@ -226,6 +226,10 @@ export class LocalGameClient implements GameClient {
     addAttribute: (attribute: AttributeKey, amount = 1): Promise<DispatchResult> =>
       this.dispatch({ type: 'DEBUG_ADD_ATTRIBUTE', attribute, amount }),
 
+    setHeroHp: (hp: number): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_SET_HERO_HP', hp }),
+
+    finishDungeonRun: (): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_FINISH_DUNGEON_RUN' }),
+
     resetSave: (): Promise<void> =>
       this.serial(async () => {
         const rows: NewLogRow[] = [];

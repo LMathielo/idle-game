@@ -1,16 +1,36 @@
 // Player commands. Serializable, validated here (never in the UI), applied after simulating to `now`.
 import { grantHeroXp } from './activities';
 import { cloneState } from './clone';
-import { ACTIVITIES, isActivityKind } from './config/activities';
+import { ACTIVITIES, isGatheringKind } from './config/activities';
 import { DEV_TOOLS_ENABLED } from './config/dev';
+import { isDungeonId } from './config/dungeons';
+import { completeRun, runMsFor, skipCost } from './dungeon';
 import { markDebugUsed } from './flags';
+import { maxHpOf } from './hp';
 import { simulate } from './simulate';
 import { refillStamina, spendStamina } from './stamina';
-import { type ActivityKind, ATTRIBUTE_KEYS, type AttributeKey, type GameEvent, type GameState, type SimulationSummary } from './types';
+import {
+  type Activity,
+  ATTRIBUTE_KEYS,
+  type AttributeKey,
+  type DungeonId,
+  type GameEvent,
+  type GameState,
+  type GatheringKind,
+  type SimulationSummary,
+} from './types';
 
 export type Command =
-  | { id: string; type: 'START_ACTIVITY'; kind: ActivityKind }
+  | { id: string; type: 'START_ACTIVITY'; kind: GatheringKind }
+  /** Starts auto-repeating runs. Only one activity at a time: a running one is stopped (a dungeon run in progress is lost). */
+  | { id: string; type: 'START_ACTIVITY'; kind: 'dungeon'; dungeonId: DungeonId }
+  /** Stops the activity. A dungeon run in progress is lost and gives nothing. */
   | { id: string; type: 'STOP_ACTIVITY' }
+  /** Spends ceil(remaining minutes) stamina to resolve the current run's fight now. Auto-repeat continues. */
+  | { id: string; type: 'SKIP_DUNGEON_RUN' }
+  | { id: string; type: 'DEBUG_SET_HERO_HP'; hp: number }
+  /** Resolves the current run's fight now, for free. */
+  | { id: string; type: 'DEBUG_FINISH_DUNGEON_RUN' }
   | { id: string; type: 'DEBUG_GRANT_HERO_XP'; amount: number }
   | { id: string; type: 'DEBUG_SPEND_STAMINA'; amount: number }
   | { id: string; type: 'DEBUG_REFILL_STAMINA' }
@@ -22,7 +42,9 @@ export type CommandErrorCode =
   | 'INVALID_TIME'
   | 'INVALID_COMMAND'
   | 'UNKNOWN_ACTIVITY'
+  | 'UNKNOWN_DUNGEON'
   | 'NO_ACTIVE_ACTIVITY'
+  | 'NO_DUNGEON_RUN'
   | 'INVALID_AMOUNT'
   | 'UNKNOWN_ATTRIBUTE'
   | 'NOT_ENOUGH_STAMINA'
@@ -73,17 +95,55 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
 
   switch (cmd.type) {
     case 'START_ACTIVITY': {
-      if (!isActivityKind(cmd.kind)) return fail('UNKNOWN_ACTIVITY', `Unknown activity ${String(cmd.kind)}`);
-      if (draft.activity?.kind === cmd.kind) break; // already running: keep its banked progress
-      if (draft.activity) events.push({ type: 'ACTIVITY_STOPPED', kind: draft.activity.kind });
-      draft.activity = { kind: cmd.kind, startedAt: now, progressMs: 0 };
-      events.push({ type: 'ACTIVITY_STARTED', kind: cmd.kind });
+      let next: Activity;
+      if (cmd.kind === 'dungeon') {
+        if (!isDungeonId(cmd.dungeonId)) return fail('UNKNOWN_DUNGEON', `Unknown dungeon ${String(cmd.dungeonId)}`);
+        // Already running this dungeon: keep the current run.
+        if (draft.activity?.kind === 'dungeon' && draft.activity.dungeonId === cmd.dungeonId) break;
+        next = { kind: 'dungeon', dungeonId: cmd.dungeonId, startedAt: now, progressMs: 0 };
+      } else {
+        if (!isGatheringKind(cmd.kind)) return fail('UNKNOWN_ACTIVITY', `Unknown activity ${String(cmd.kind)}`);
+        if (draft.activity?.kind === cmd.kind) break; // already running: keep its banked progress
+        next = { kind: cmd.kind, startedAt: now, progressMs: 0 };
+      }
+      if (draft.activity) stopActivity(draft, events);
+      draft.activity = next;
+      events.push({ type: 'ACTIVITY_STARTED', kind: next.kind });
       break;
     }
     case 'STOP_ACTIVITY': {
       if (!draft.activity) return fail('NO_ACTIVE_ACTIVITY', 'No activity is running');
-      events.push({ type: 'ACTIVITY_STOPPED', kind: draft.activity.kind });
-      draft.activity = null;
+      stopActivity(draft, events);
+      break;
+    }
+    case 'SKIP_DUNGEON_RUN': {
+      const a = draft.activity;
+      if (a?.kind !== 'dungeon') return fail('NO_DUNGEON_RUN', 'No dungeon run in progress');
+      const remainingMs = Math.max(0, runMsFor(draft.character.attributes) - a.progressMs);
+      const spent = spendStamina(draft, skipCost(remainingMs));
+      if (!spent.ok) return fail(spent.error.code, spent.error.message);
+      draft = spent.state;
+      finishRunNow(draft, a.dungeonId, events);
+      break;
+    }
+    case 'DEBUG_SET_HERO_HP': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const { hp } = cmd;
+      const maxHp = maxHpOf(draft);
+      if (typeof hp !== 'number' || !Number.isSafeInteger(hp) || hp < 0 || hp > maxHp) {
+        return fail('INVALID_AMOUNT', `HP must be a whole number from 0 to ${maxHp}`);
+      }
+      draft = markDebugUsed(draft);
+      draft.character.hp = hp;
+      draft.character.hpRegenProgress = 0;
+      break;
+    }
+    case 'DEBUG_FINISH_DUNGEON_RUN': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const a = draft.activity;
+      if (a?.kind !== 'dungeon') return fail('NO_DUNGEON_RUN', 'No dungeon run in progress');
+      draft = markDebugUsed(draft);
+      finishRunNow(draft, a.dungeonId, events);
       break;
     }
     case 'DEBUG_GRANT_HERO_XP': {
@@ -130,5 +190,20 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
   return { ok: true, state: draft, events, summary: sim.summary };
 }
 
-/** Activity kinds, for UIs that list them. */
-export const ACTIVITY_KINDS = Object.keys(ACTIVITIES) as ActivityKind[];
+/** Stops the running activity on a full draft copy. A dungeon run in progress is lost: no fight, no rewards. */
+function stopActivity(draft: GameState, events: GameEvent[]) {
+  const a = draft.activity;
+  if (!a) return;
+  if (a.kind === 'dungeon') events.push({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: a.dungeonId });
+  events.push({ type: 'ACTIVITY_STOPPED', kind: a.kind });
+  draft.activity = null;
+}
+
+/** Resolves the current run's fight at the current HP (draft is a full copy), then starts the next run. */
+function finishRunNow(draft: GameState, dungeonId: DungeonId, events: GameEvent[]) {
+  completeRun(draft, dungeonId, null, events);
+  if (draft.activity?.kind === 'dungeon') draft.activity.progressMs = 0;
+}
+
+/** Gathering kinds, for UIs that list them. */
+export const GATHERING_KINDS = Object.keys(ACTIVITIES) as GatheringKind[];
