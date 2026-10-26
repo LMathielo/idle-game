@@ -5,12 +5,16 @@ import { ACTIVITIES, isActivityKind } from './config/activities';
 import { DEV_TOOLS_ENABLED } from './config/dev';
 import { markDebugUsed } from './flags';
 import { simulate } from './simulate';
-import type { ActivityKind, GameEvent, GameState, SimulationSummary } from './types';
+import { refillStamina, spendStamina } from './stamina';
+import type { ActivityKind, AttributeKey, GameEvent, GameState, SimulationSummary } from './types';
 
 export type Command =
   | { id: string; type: 'START_ACTIVITY'; kind: ActivityKind }
   | { id: string; type: 'STOP_ACTIVITY' }
-  | { id: string; type: 'DEBUG_GRANT_HERO_XP'; amount: number };
+  | { id: string; type: 'DEBUG_GRANT_HERO_XP'; amount: number }
+  | { id: string; type: 'DEBUG_SPEND_STAMINA'; amount: number }
+  | { id: string; type: 'DEBUG_REFILL_STAMINA' }
+  | { id: string; type: 'DEBUG_ADD_ATTRIBUTE'; attribute: AttributeKey; amount: number };
 
 export type CommandType = Command['type'];
 
@@ -20,6 +24,8 @@ export type CommandErrorCode =
   | 'UNKNOWN_ACTIVITY'
   | 'NO_ACTIVE_ACTIVITY'
   | 'INVALID_AMOUNT'
+  | 'UNKNOWN_ATTRIBUTE'
+  | 'NOT_ENOUGH_STAMINA'
   | 'DEBUG_DISABLED';
 
 export type CommandError = { code: CommandErrorCode; message: string };
@@ -30,6 +36,16 @@ export type CommandResult =
 
 /** Upper bound for the debug XP grant, keeps numbers far from MAX_SAFE_INTEGER. */
 export const MAX_DEBUG_XP_GRANT = 1_000_000_000_000;
+
+/** Debug attribute grants: per command, and the highest value an attribute may reach that way. */
+export const MAX_DEBUG_ATTRIBUTE_GRANT = 1000;
+export const MAX_DEBUG_ATTRIBUTE_VALUE = 1_000_000;
+
+const ATTRIBUTE_KEYS: readonly AttributeKey[] = ['strength', 'dexterity', 'endurance', 'intelligence'];
+
+export function isAttributeKey(key: unknown): key is AttributeKey {
+  return typeof key === 'string' && (ATTRIBUTE_KEYS as readonly string[]).includes(key);
+}
 
 const fail = (code: CommandErrorCode, message: string): CommandResult => ({ ok: false, error: { code, message } });
 
@@ -80,6 +96,31 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       }
       draft = markDebugUsed(draft);
       grantHeroXp(draft, amount, null, events);
+      break;
+    }
+    case 'DEBUG_SPEND_STAMINA': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const spent = spendStamina(draft, cmd.amount);
+      if (!spent.ok) return fail(spent.error.code, spent.error.message);
+      draft = markDebugUsed(spent.state);
+      break;
+    }
+    case 'DEBUG_REFILL_STAMINA': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      draft = markDebugUsed(refillStamina(draft));
+      break;
+    }
+    case 'DEBUG_ADD_ATTRIBUTE': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const { attribute, amount } = cmd;
+      if (!isAttributeKey(attribute)) return fail('UNKNOWN_ATTRIBUTE', `Unknown attribute ${String(attribute)}`);
+      if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0 || amount > MAX_DEBUG_ATTRIBUTE_GRANT) {
+        return fail('INVALID_AMOUNT', `Invalid attribute amount ${String(amount)}`);
+      }
+      const next = draft.character.attributes[attribute] + amount;
+      if (next > MAX_DEBUG_ATTRIBUTE_VALUE) return fail('INVALID_AMOUNT', `${attribute} would exceed ${MAX_DEBUG_ATTRIBUTE_VALUE}`);
+      draft = markDebugUsed(draft);
+      draft.character.attributes[attribute] = next;
       break;
     }
     default: {

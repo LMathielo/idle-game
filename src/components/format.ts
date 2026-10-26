@@ -11,6 +11,22 @@ export function formatDuration(ms: number): string {
   return `${s}s`;
 }
 
+/** Countdown as m:ss, rounded up to the next whole second (5:00, 0:07). Hours fold into minutes. */
+export function formatClock(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** 8h 20m · 4m (rounded up to the next whole minute, so it never reads 0m while time is left). */
+export function formatHoursMinutes(ms: number): string {
+  const totalMin = Math.max(0, Math.ceil(ms / 60_000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 export function itemName(id: string): string {
   return getItemDef(id)?.name ?? id;
 }

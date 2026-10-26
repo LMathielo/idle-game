@@ -1,5 +1,5 @@
 // Contracts between the UI, the client and storage. No React, no Expo.
-import type { Command, CommandError, GameState, LogType, SimulationSummary } from '../engine';
+import type { AttributeKey, Command, CommandError, GameState, LogType, SimulationSummary } from '../engine';
 
 /** Wall clock. The app uses SystemClock; tests use a fake. */
 export interface Clock {
@@ -90,6 +90,9 @@ export interface GameClient {
     /** Moves the debug clock by `deltaMs` (negative = backwards), then resumes. */
     shiftClock(deltaMs: number): Promise<SimulationSummary>;
     grantHeroXp(amount: number): Promise<DispatchResult>;
+    spendStamina(amount: number): Promise<DispatchResult>;
+    refillStamina(): Promise<DispatchResult>;
+    addAttribute(attribute: AttributeKey, amount?: number): Promise<DispatchResult>;
     /** New game with a new seed and a real clock (offset 0). Logged, never deletes the log. */
     resetSave(): Promise<void>;
   };

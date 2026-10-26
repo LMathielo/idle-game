@@ -9,6 +9,7 @@
 //   replaying the log from NEW_GAME reproduces every row's state_hash exactly.
 import {
   applyCommand,
+  type AttributeKey,
   type Command,
   ENGINE_VERSION,
   type GameState,
@@ -217,6 +218,13 @@ export class LocalGameClient implements GameClient {
       }),
 
     grantHeroXp: (amount: number): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_GRANT_HERO_XP', amount }),
+
+    spendStamina: (amount: number): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_SPEND_STAMINA', amount }),
+
+    refillStamina: (): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_REFILL_STAMINA' }),
+
+    addAttribute: (attribute: AttributeKey, amount = 1): Promise<DispatchResult> =>
+      this.dispatch({ type: 'DEBUG_ADD_ATTRIBUTE', attribute, amount }),
 
     resetSave: (): Promise<void> =>
       this.serial(async () => {

@@ -12,6 +12,9 @@ export const LOG_TYPES = [
   'START_ACTIVITY',
   'STOP_ACTIVITY',
   'DEBUG_GRANT_HERO_XP',
+  'DEBUG_SPEND_STAMINA',
+  'DEBUG_REFILL_STAMINA',
+  'DEBUG_ADD_ATTRIBUTE',
   'RESUME',
   'SIMULATE',
   'CLOCK_ANOMALY',
@@ -48,7 +51,10 @@ export function replayStep(state: GameState | null, entry: ReplayEntry): GameSta
   switch (type as LogType) {
     case 'START_ACTIVITY':
     case 'STOP_ACTIVITY':
-    case 'DEBUG_GRANT_HERO_XP': {
+    case 'DEBUG_GRANT_HERO_XP':
+    case 'DEBUG_SPEND_STAMINA':
+    case 'DEBUG_REFILL_STAMINA':
+    case 'DEBUG_ADD_ATTRIBUTE': {
       const res = applyCommand(state, payload as Command, clientTime, { allowDebug: true });
       if (!res.ok) throw new ReplayError(`${type} rejected on replay: ${res.error.code}`);
       return res.state;

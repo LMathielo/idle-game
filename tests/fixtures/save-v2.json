@@ -1,0 +1,121 @@
+{
+  "saveVersion": 2,
+  "rng": {
+    "seed": 399775279
+  },
+  "time": {
+    "lastSimulatedAt": 1793005207777,
+    "highestSeenAt": 1793005207777
+  },
+  "offline": {
+    "capMs": 28800000,
+    "efficiency": 1
+  },
+  "activity": {
+    "kind": "woodcutting",
+    "startedAt": 1792994400000,
+    "progressMs": 2437
+  },
+  "stats": {
+    "totalActions": 3785,
+    "itemsGathered": {
+      "oak_logs": 3785,
+      "bird_nest": 20
+    }
+  },
+  "flags": {
+    "debugUsed": true
+  },
+  "character": {
+    "name": "Lucius",
+    "title": "Novice Gladiator",
+    "level": 4,
+    "xp": 6463,
+    "xpToNext": 12000,
+    "hp": 50,
+    "maxHp": 50,
+    "gold": 25,
+    "attributes": {
+      "strength": 5,
+      "dexterity": 5,
+      "agility": 5,
+      "constitution": 5,
+      "charisma": 5,
+      "intelligence": 5
+    },
+    "equipment": {
+      "weapon": {
+        "id": "start-rusty_gladius",
+        "name": "Rusty Gladius",
+        "icon": "🗡️",
+        "rarity": "common",
+        "slot": "weapon"
+      },
+      "armor": {
+        "id": "start-linen_tunic",
+        "name": "Linen Tunic",
+        "icon": "🥋",
+        "rarity": "common",
+        "slot": "armor"
+      },
+      "boots": {
+        "id": "start-worn_sandals",
+        "name": "Worn Sandals",
+        "icon": "👢",
+        "rarity": "common",
+        "slot": "boots"
+      }
+    },
+    "skills": {
+      "woodcutting": {
+        "level": 8,
+        "xp": 7140,
+        "xpToNext": 11314
+      },
+      "mining": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      },
+      "fishing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      },
+      "smithing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      }
+    }
+  },
+  "inventory": {
+    "capacity": 20,
+    "items": [
+      {
+        "id": "bread",
+        "name": "Bread",
+        "icon": "🍞",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 3
+      },
+      {
+        "id": "oak_logs",
+        "name": "Oak Logs",
+        "icon": "🪵",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 3785
+      },
+      {
+        "id": "bird_nest",
+        "name": "Bird Nest",
+        "icon": "🪺",
+        "rarity": "rare",
+        "stackable": true,
+        "quantity": 20
+      }
+    ]
+  }
+}

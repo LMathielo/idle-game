@@ -6,7 +6,7 @@ import type { Inventory, Item } from './types';
 export function makeItem(defId: string, quantity = 1, instanceId?: string): Item {
   const def = getItemDef(defId);
   if (!def) throw new Error(`Unknown item ${defId}`);
-  const item: Item = { id: instanceId ?? def.id, name: def.name, icon: def.icon, rarity: def.rarity };
+  const item: Item = { id: instanceId ?? def.id, defId: def.id, name: def.name, icon: def.icon, rarity: def.rarity };
   if (def.slot) item.slot = def.slot;
   if (def.stackable) {
     item.stackable = true;

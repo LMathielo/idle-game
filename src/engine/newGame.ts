@@ -1,5 +1,6 @@
 import { STARTING_HERO } from './config/newGame';
 import { INVENTORY_CAPACITY } from './config/items';
+import { STAMINA } from './config/stamina';
 import { DEFAULT_OFFLINE_CAP_MS, DEFAULT_OFFLINE_EFFICIENCY } from './config/time';
 import { HERO_XP_CURVE, SKILL_XP_CURVE } from './config/xpCurve';
 import { makeItem } from './inventory';
@@ -31,6 +32,7 @@ export function newGame(seed: number, now: number): GameState {
     time: { lastSimulatedAt: now, highestSeenAt: now },
     offline: { capMs: DEFAULT_OFFLINE_CAP_MS, efficiency: DEFAULT_OFFLINE_EFFICIENCY },
     activity: null,
+    stamina: { current: STAMINA.startMax, max: STAMINA.startMax, progressMs: 0 },
     stats: { totalActions: 0, itemsGathered: {} },
     flags: { debugUsed: false },
     character: {
@@ -39,8 +41,6 @@ export function newGame(seed: number, now: number): GameState {
       level: hero.level,
       xp: hero.xp,
       xpToNext: hero.xpToNext,
-      hp: STARTING_HERO.maxHp,
-      maxHp: STARTING_HERO.maxHp,
       gold: STARTING_HERO.gold,
       attributes: { ...STARTING_HERO.attributes },
       equipment,

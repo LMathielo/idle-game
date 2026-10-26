@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 2 as const;
+export const CURRENT_SAVE_VERSION = 3 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -12,7 +12,58 @@ export type Migration = (doc: SaveDoc) => SaveDoc;
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   // v2 adds flags.debugUsed. A v1 document carries no record of debug use, so it starts false.
   1: (doc) => ({ ...doc, saveVersion: 2, flags: { debugUsed: false } }),
+  2: migrateV2toV3,
 };
+
+// ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
+// Values here are frozen literals on purpose: a migration must give the same result forever,
+// even after config/newGame.ts or config/stamina.ts change.
+
+const V3_ATTRIBUTE_DEFAULT = 10;
+const V3_STAMINA = { current: 100, max: 100, progressMs: 0 } as const;
+
+type Doc = Record<string, unknown>;
+const isDoc = (v: unknown): v is Doc => !!v && typeof v === 'object' && !Array.isArray(v);
+const intOr = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isSafeInteger(v) ? v : fallback);
+
+/** v2 items had no defId. Stackables used the definition id as id; starting gear used `start-<defId>`. */
+function withDefId(item: unknown): unknown {
+  if (!isDoc(item) || typeof item.defId === 'string') return item;
+  const id = typeof item.id === 'string' ? item.id : '';
+  return { ...item, defId: id.startsWith('start-') ? id.slice('start-'.length) : id };
+}
+
+/**
+ * - attributes: strength→strength, dexterity→dexterity, constitution→endurance, intelligence→intelligence
+ *   (old values kept); agility and charisma are dropped.
+ * - character.hp / maxHp dropped (derived now; current HP returns with combat).
+ * - stamina added, full.
+ * - every equipped and inventory item gets a defId.
+ */
+function migrateV2toV3(doc: SaveDoc): SaveDoc {
+  const character = isDoc(doc.character) ? doc.character : {};
+  const { hp: _hp, maxHp: _maxHp, attributes: oldAttrs, equipment: oldEquipment, ...restCharacter } = character;
+  const a = isDoc(oldAttrs) ? oldAttrs : {};
+  const attributes = {
+    strength: intOr(a.strength, V3_ATTRIBUTE_DEFAULT),
+    dexterity: intOr(a.dexterity, V3_ATTRIBUTE_DEFAULT),
+    endurance: intOr(a.constitution, V3_ATTRIBUTE_DEFAULT),
+    intelligence: intOr(a.intelligence, V3_ATTRIBUTE_DEFAULT),
+  };
+  const equipment: Doc = {};
+  if (isDoc(oldEquipment)) for (const [slot, item] of Object.entries(oldEquipment)) equipment[slot] = withDefId(item);
+
+  const inventory = isDoc(doc.inventory) ? doc.inventory : {};
+  const items = Array.isArray(inventory.items) ? inventory.items.map(withDefId) : [];
+
+  return {
+    ...doc,
+    saveVersion: 3,
+    stamina: { ...V3_STAMINA },
+    character: { ...restCharacter, attributes, equipment },
+    inventory: { ...inventory, items },
+  };
+}
 
 export class SaveVersionError extends Error {}
 

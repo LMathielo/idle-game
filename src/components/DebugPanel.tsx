@@ -2,12 +2,25 @@
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
+import type { AttributeKey } from '../engine';
 import { formatDuration } from './format';
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
 import { colors, fonts } from '../theme';
 
 const HOUR = 3_600_000;
+
+const ATTRIBUTE_BUTTONS: { key: AttributeKey; label: string }[] = [
+  { key: 'strength', label: '+1 STR' },
+  { key: 'dexterity', label: '+1 DEX' },
+  { key: 'endurance', label: '+1 END' },
+  { key: 'intelligence', label: '+1 INT' },
+];
+
+/** Debug commands that the engine refuses (e.g. not enough stamina) come back as `{ ok: false }`. */
+function isRejected(result: unknown): result is { ok: false; error: { message: string } } {
+  return !!result && typeof result === 'object' && (result as { ok?: unknown }).ok === false;
+}
 
 export function DebugPanel() {
   const client = useGameClient();
@@ -20,7 +33,8 @@ export function DebugPanel() {
     if (busy) return;
     setBusy(true);
     try {
-      await fn();
+      const result = await fn();
+      if (isRejected(result)) Alert.alert('Not possible', result.error.message);
       const { total, unsynced } = await client.countLog();
       setLogInfo(`${total} log rows (${unsynced} unsynced)`);
     } catch (err) {
@@ -55,6 +69,11 @@ export function DebugPanel() {
             <PixelButton label="+24h" onPress={run(() => client.debug.shiftClock(24 * HOUR))} />
             <PixelButton label="Clock −2h" onPress={run(() => client.debug.shiftClock(-2 * HOUR))} />
             <PixelButton label="+10k hero XP" onPress={run(() => client.debug.grantHeroXp(10_000))} />
+            <PixelButton label="Spend 10 stamina" onPress={run(() => client.debug.spendStamina(10))} />
+            <PixelButton label="Refill stamina" onPress={run(() => client.debug.refillStamina())} />
+            {ATTRIBUTE_BUTTONS.map((a) => (
+              <PixelButton key={a.key} label={a.label} onPress={run(() => client.debug.addAttribute(a.key))} />
+            ))}
             <PixelButton label="Reset save" onPress={confirmReset} />
           </View>
         </View>
