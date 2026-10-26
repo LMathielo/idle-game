@@ -1,0 +1,265 @@
+{
+  "saveVersion": 5,
+  "rng": {
+    "seed": 4087760024
+  },
+  "time": {
+    "lastSimulatedAt": 1793017829000,
+    "highestSeenAt": 1793017829000
+  },
+  "offline": {
+    "capMs": 28800000,
+    "efficiency": 1
+  },
+  "activity": {
+    "kind": "dungeon",
+    "dungeonId": "bat_cave",
+    "startedAt": 1793014200000,
+    "progressMs": 365000
+  },
+  "stamina": {
+    "current": 100,
+    "max": 100,
+    "progressMs": 0
+  },
+  "dungeon": {
+    "lastFight": {
+      "dungeonId": "bat_cave",
+      "enemyId": "bat",
+      "won": true,
+      "endReason": "enemy_defeated",
+      "rounds": 6,
+      "heroHpStart": 80,
+      "heroHpEnd": 51,
+      "heroMaxHp": 80,
+      "enemyMaxHp": 60,
+      "enemyHpEnd": 0,
+      "rewards": {
+        "heroXp": 60,
+        "gold": 9,
+        "items": {},
+        "itemsLost": {}
+      },
+      "log": [
+        {
+          "round": 1,
+          "actor": "hero",
+          "roll": 13,
+          "dealt": 12,
+          "targetHpAfter": 48
+        },
+        {
+          "round": 1,
+          "actor": "enemy",
+          "roll": 8,
+          "dealt": 6,
+          "targetHpAfter": 74
+        },
+        {
+          "round": 2,
+          "actor": "hero",
+          "roll": 13,
+          "dealt": 12,
+          "targetHpAfter": 36
+        },
+        {
+          "round": 2,
+          "actor": "enemy",
+          "roll": 6,
+          "dealt": 5,
+          "targetHpAfter": 69
+        },
+        {
+          "round": 3,
+          "actor": "hero",
+          "roll": 12,
+          "dealt": 11,
+          "targetHpAfter": 25
+        },
+        {
+          "round": 3,
+          "actor": "enemy",
+          "roll": 7,
+          "dealt": 5,
+          "targetHpAfter": 64
+        },
+        {
+          "round": 4,
+          "actor": "hero",
+          "roll": 13,
+          "dealt": 12,
+          "targetHpAfter": 13
+        },
+        {
+          "round": 4,
+          "actor": "enemy",
+          "roll": 8,
+          "dealt": 6,
+          "targetHpAfter": 58
+        },
+        {
+          "round": 5,
+          "actor": "hero",
+          "roll": 12,
+          "dealt": 11,
+          "targetHpAfter": 2
+        },
+        {
+          "round": 5,
+          "actor": "enemy",
+          "roll": 9,
+          "dealt": 7,
+          "targetHpAfter": 51
+        },
+        {
+          "round": 6,
+          "actor": "hero",
+          "roll": 14,
+          "dealt": 13,
+          "targetHpAfter": 0
+        }
+      ]
+    },
+    "totals": {
+      "runs": 33,
+      "wins": 33,
+      "losses": 0
+    },
+    "byDungeon": {
+      "rat_cellar": {
+        "runs": 25,
+        "wins": 25,
+        "losses": 0
+      },
+      "bat_cave": {
+        "runs": 8,
+        "wins": 8,
+        "losses": 0
+      }
+    }
+  },
+  "stats": {
+    "totalActions": 611,
+    "itemsGathered": {
+      "oak_logs": 611,
+      "bird_nest": 2
+    }
+  },
+  "flags": {
+    "debugUsed": true
+  },
+  "character": {
+    "name": "Lucius",
+    "title": "Novice Gladiator",
+    "level": 4,
+    "xp": 7568,
+    "xpToNext": 12000,
+    "hp": 80,
+    "hpRegenProgress": 0,
+    "gold": 198,
+    "attributes": {
+      "strength": 10,
+      "dexterity": 12,
+      "endurance": 13,
+      "intelligence": 10
+    },
+    "equipment": {
+      "weapon": {
+        "id": "start-rusty_gladius",
+        "defId": "rusty_gladius",
+        "name": "Rusty Gladius",
+        "icon": "🗡️",
+        "rarity": "common",
+        "slot": "weapon"
+      },
+      "armor": {
+        "id": "start-linen_tunic",
+        "defId": "linen_tunic",
+        "name": "Linen Tunic",
+        "icon": "🥋",
+        "rarity": "common",
+        "slot": "armor"
+      },
+      "boots": {
+        "id": "start-worn_sandals",
+        "defId": "worn_sandals",
+        "name": "Worn Sandals",
+        "icon": "👢",
+        "rarity": "common",
+        "slot": "boots"
+      }
+    },
+    "skills": {
+      "woodcutting": {
+        "level": 4,
+        "xp": 1598,
+        "xpToNext": 4000
+      },
+      "mining": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      },
+      "fishing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      },
+      "smithing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      }
+    }
+  },
+  "inventory": {
+    "capacity": 20,
+    "items": [
+      {
+        "id": "bread",
+        "defId": "bread",
+        "name": "Bread",
+        "icon": "🍞",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 3
+      },
+      {
+        "id": "oak_logs",
+        "defId": "oak_logs",
+        "name": "Oak Logs",
+        "icon": "🪵",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 611
+      },
+      {
+        "id": "bird_nest",
+        "defId": "bird_nest",
+        "name": "Bird Nest",
+        "icon": "🪺",
+        "rarity": "rare",
+        "stackable": true,
+        "quantity": 2
+      },
+      {
+        "id": "rat_skin",
+        "defId": "rat_skin",
+        "name": "Rat Skin",
+        "icon": "🐾",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 12
+      },
+      {
+        "id": "bat_wing",
+        "defId": "bat_wing",
+        "name": "Bat Wing",
+        "icon": "🪽",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 3
+      }
+    ]
+  }
+}
