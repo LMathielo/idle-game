@@ -14,7 +14,7 @@ import { loadSave } from './migrations';
 import { newGame } from './newGame';
 import { simulate } from './simulate';
 import type { GameState } from './types';
-import { ENGINE_VERSION, releasedEngineIndex } from './version';
+import { ENGINE_VERSION, RELEASED_ENGINES, releasedEngineIndex } from './version';
 
 /** Every row type the client writes to the action log. */
 export const LOG_TYPES = [
@@ -77,7 +77,8 @@ const isSpanStart = (type: string) => type === 'NEW_GAME' || type === 'MIGRATE';
  * state:
  *  - the row has its engineVersion (= toEngine) and a stateHash that matches the snapshot;
  *  - it is chained to the row before it: fromHash = that row's stateHash, fromEngine = its engineVersion;
- *  - it is a real version change: fromEngine ≠ toEngine, or fromSave < toSave (= snapshot.saveVersion);
+ *  - it is an engine change: fromEngine ≠ toEngine (every save bump ships with an engine bump), and
+ *    fromSave / toSave (= snapshot.saveVersion) are the save versions RELEASED_ENGINES lists for them;
  *  - when the span before it was re-simulated (`replayed` non-null), migrating that state gives the snapshot.
  * When the span before it was NOT re-simulated (another engine), the snapshot is trusted as far as the chain
  * goes: a server must re-run that span with the old engine build to verify it.
@@ -97,8 +98,12 @@ export function checkAnchor(entry: ReplayEntry, prev: ReplayEntry | null | undef
   if (p.fromEngine !== prev.engineVersion) throw bad(`fromEngine ${String(p.fromEngine)} is not the previous row's engine ${prev.engineVersion}`);
   const snapshotSave = (p.snapshot as { saveVersion?: unknown }).saveVersion;
   if (p.toSave !== snapshotSave) throw bad(`toSave ${String(p.toSave)} is not the snapshot's saveVersion`);
-  const saveUp = typeof p.fromSave === 'number' && typeof p.toSave === 'number' && p.fromSave < p.toSave;
-  if (p.fromEngine === p.toEngine && !saveUp) throw bad('same engine and save version: not a migration');
+  if (p.fromEngine === p.toEngine) throw bad('same engine on both sides: not a migration');
+  const fromIdx = releasedEngineIndex(p.fromEngine);
+  const toIdx = releasedEngineIndex(p.toEngine);
+  if (fromIdx < 0 || toIdx < 0 || fromIdx > toIdx) throw bad(`engine ${String(p.fromEngine)} → ${String(p.toEngine)} is not a released upgrade`);
+  if (p.fromSave !== RELEASED_ENGINES[fromIdx].save) throw bad(`fromSave ${String(p.fromSave)} is not what engine ${p.fromEngine} wrote`);
+  if (p.toSave !== RELEASED_ENGINES[toIdx].save) throw bad(`toSave ${String(p.toSave)} is not what engine ${p.toEngine} writes`);
   if (replayed && hashState(loadSave(replayed)) !== snapshotHash) throw bad('snapshot differs from the migrated replayed state');
   // A copy, so later replay steps never share objects with the log entry.
   return loadSave(p.snapshot);
@@ -189,6 +194,10 @@ export function replayLogReport(entries: readonly ReplayEntry[]): ReplayReport {
     while (end < entries.length && !isSpanStart(entries[end].type)) end++;
     const span = entries.slice(i, end);
     if (!span.every(isCurrent)) {
+      // A genuine log anchors on entry to the current engine, so a skipped span never holds current rows.
+      // (Old spans need not be uniform: real pre-1.4.0 logs mix 1.2.0 and 1.3.0 rows without anchors.)
+      const cur = span.findIndex(isCurrent);
+      if (cur >= 0) throw new ReplayError(`Row ${i + cur} (${span[cur].type}) is ${ENGINE_VERSION} inside an older-engine span: no anchor before it`);
       if (end === entries.length) {
         const old = span.find((e) => !isCurrent(e))!;
         throw new ReplayError(`Rows from engine ${old.engineVersion} after the last anchor: cannot replay with ${ENGINE_VERSION}`);

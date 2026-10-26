@@ -219,10 +219,10 @@ describe('replay with anchors', () => {
         engineVersion: ENGINE_VERSION,
         stateHash: hashState(rich),
       };
-      expect(() => replayLogReport([...rows, forged])).toThrow(/not a migration/);
+      expect(() => replayLogReport([...rows, forged])).toThrow(/same engine on both sides/);
     });
 
-    it('forged mid-log anchor claiming a save migration: rejected, its snapshot is not the migrated replayed state', async () => {
+    it('forged mid-log anchor claiming a save migration under one engine: rejected (save bumps ship with engine bumps)', async () => {
       const { rows } = await currentLog();
       const prev = rows.at(-1)!;
       const rich = loadSave(JSON.parse(JSON.stringify(V4_SAVE)));
@@ -233,12 +233,23 @@ describe('replay with anchors', () => {
         engineVersion: ENGINE_VERSION,
         stateHash: hashState(rich),
       };
-      expect(() => replayLogReport([...rows, forged])).toThrow(/differs from the migrated replayed state/);
+      expect(() => replayLogReport([...rows, forged])).toThrow(/same engine on both sides/);
     });
 
     it('fromHash that is not the previous row\'s hash', async () => {
       const { rows } = await upgradedLog();
       expect(() => replayLogReport(withAnchor(rows, (p) => ({ ...p, fromHash: 'deadbeef' })))).toThrow(/fromHash deadbeef/);
+    });
+
+    it('fromSave / toSave that do not match what RELEASED_ENGINES says those engines wrote', async () => {
+      const { rows } = await upgradedLog();
+      expect(() => replayLogReport(withAnchor(rows, (p) => ({ ...p, fromSave: 3 })))).toThrow(/fromSave 3 is not what engine 1\.3\.0 wrote/);
+      const i = anchorIndex(rows);
+      const p = rows[i].payload as MigratePayload;
+      // toSave must equal both the snapshot's saveVersion and the save the target engine writes.
+      const wrongTo = { ...rows[i], payload: { ...p, toSave: 4, snapshot: { ...(p.snapshot as GameState), saveVersion: 4 } } };
+      wrongTo.stateHash = hashState(wrongTo.payload.snapshot);
+      expect(() => replayStep(null, wrongTo, rows[i - 1])).toThrow(/toSave 4 is not what engine 1\.4\.0 writes/);
     });
 
     it('fromEngine that is not the previous row\'s engine', async () => {
@@ -252,7 +263,7 @@ describe('replay with anchors', () => {
       // Rewrite the previous row so the chain itself is consistent: only the version rule can catch it.
       const same = withAnchor(rows, (p) => ({ ...p, fromEngine: ENGINE_VERSION, fromSave: CURRENT_SAVE_VERSION }));
       same[i - 1] = { ...same[i - 1], engineVersion: ENGINE_VERSION };
-      expect(() => replayStep(null, same[i], same[i - 1])).toThrow(/not a migration/);
+      expect(() => replayStep(null, same[i], same[i - 1])).toThrow(/same engine on both sides/);
     });
 
     it('missing engineVersion: on any row of a log, and on the anchor itself', async () => {
@@ -343,6 +354,26 @@ describe('replay with anchors', () => {
       const { rows } = await currentLog();
       const relabelled = rows.map((r, k) => (k === rows.length - 1 ? { ...r, engineVersion: '1.3.0' } : r));
       expect(() => replayLogReport([...relabelled, forgeAfter(relabelled)])).toThrow(/1\.3\.0, older than an earlier row/);
+    });
+
+    it('relabelling only row 0 of a current log as 1.3.0, then a 1.4.0 → 1.4.0 save 4 → 5 anchor: rejected', async () => {
+      const { rows } = await currentLog();
+      const relabelled = rows.map((r, k) => (k === 0 ? { ...r, engineVersion: '1.3.0' } : r));
+      const forged = forgeAfter(relabelled); // fromEngine 1.4.0 (the last row), toEngine 1.4.0, save 4 → 5
+      expect((forged.payload as MigratePayload).fromEngine).toBe(ENGINE_VERSION);
+      // The skipped span still holds 1.4.0 rows: a genuine log would have anchored before them.
+      expect(() => replayLogReport([...relabelled, forged])).toThrow(/1\.4\.0 inside an older-engine span/);
+      // And the anchor alone is refused too: same engine on both sides.
+      expect(() => replayStep(null, forged, relabelled.at(-1))).toThrow(/same engine on both sides/);
+    });
+
+    it('an old span may mix released engines without anchors (real pre-1.4.0 logs did)', () => {
+      const rows: ReplayEntry[] = [
+        { type: 'NEW_GAME', payload: { seed: 1 }, clientTime: T0, engineVersion: '1.2.0' },
+        { type: 'RESUME', payload: {}, clientTime: T0 + HOUR, engineVersion: '1.3.0' },
+        { type: 'NEW_GAME', payload: { seed: 2 }, clientTime: T0 + 2 * HOUR, engineVersion: ENGINE_VERSION },
+      ];
+      expect(replayLogReport(rows)).toMatchObject({ skippedOldEngine: 2, replayed: 1 });
     });
 
     it('the genuine frozen v4 upgrade (1.3.0 rows, then 1.4.0) still replays', async () => {
