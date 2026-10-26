@@ -60,8 +60,9 @@ export function dungeonUnlockView(state: Pick<GameState, 'dungeon'>, dungeonId: 
 }
 
 /**
- * Adds to one dungeon's counters (and the global ones), then emits DUNGEON_UNLOCKED for every dungeon
- * whose requirement this crossed. Mutates `draft.dungeon`, which the caller must own.
+ * Adds to one dungeon's counters (and the global ones), then emits DUNGEON_UNLOCKED for every dungeon that
+ * was locked before and is unlocked after. Compared through isDungeonUnlocked(), so any future unlock
+ * condition is covered without changing this. Mutates `draft.dungeon`, which the caller must own.
  */
 export function recordDungeonResults(
   draft: GameState,
@@ -71,18 +72,16 @@ export function recordDungeonResults(
   summary: SimulationSummary | null,
   events: GameEvent[],
 ): void {
+  const lockedBefore = DUNGEON_IDS.filter((id) => !isDungeonUnlocked(draft, id));
   const before = dungeonTotals(draft, dungeonId);
   const after = { runs: before.runs + wins + losses, wins: before.wins + wins, losses: before.losses + losses };
   draft.dungeon.byDungeon = { ...draft.dungeon.byDungeon, [dungeonId]: after };
   const totals = draft.dungeon.totals;
   draft.dungeon.totals = { runs: totals.runs + wins + losses, wins: totals.wins + wins, losses: totals.losses + losses };
-  if (wins <= 0) return;
-  for (const id of DUNGEON_IDS) {
-    const rule = DUNGEONS[id].unlock;
-    if (rule && rule.dungeonId === dungeonId && before.wins < rule.wins && after.wins >= rule.wins) {
-      events.push({ type: 'DUNGEON_UNLOCKED', dungeonId: id });
-      summary?.dungeonsUnlocked.push(id);
-    }
+  for (const id of lockedBefore) {
+    if (!isDungeonUnlocked(draft, id)) continue;
+    events.push({ type: 'DUNGEON_UNLOCKED', dungeonId: id });
+    summary?.dungeonsUnlocked.push(id);
   }
 }
 

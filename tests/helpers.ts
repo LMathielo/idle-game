@@ -2,7 +2,7 @@ import { FakeClock } from '../src/client/clock';
 import { LocalGameClient } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import type { CommandInput } from '../src/client/types';
-import { applyCommand, type Command, type GameState, newGame } from '../src/engine';
+import { applyCommand, type Command, ENGINE_VERSION, type GameState, newGame, type ReplayEntry } from '../src/engine';
 
 export const T0 = Date.UTC(2026, 9, 25, 12, 0, 0); // fixed epoch for deterministic tests
 export const SEC = 1000;
@@ -43,4 +43,9 @@ export function woodcuttingGame(seed = 42): GameState {
 
 export function qty(state: GameState, id: string): number {
   return state.inventory.items.find((i) => i.id === id)?.quantity ?? 0;
+}
+
+/** Hand-written log rows, stamped with the current engine (replayLog requires every row's engineVersion). */
+export function current(rows: ReplayEntry[]): ReplayEntry[] {
+  return rows.map((r) => ({ engineVersion: ENGINE_VERSION, ...r }));
 }

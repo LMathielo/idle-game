@@ -124,10 +124,10 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
 
 /**
  * Danger hint shown before a run (dangerHint in src/engine/danger.ts): expected HP lost per fight, with
- * average rolls, as a percent of max HP. Below `riskyAtPercent` → Easy; below `deadlyAtPercent` → Risky;
+ * average rolls, as a percent of max HP. Below `toughAtPercent` → Easy; below `deadlyAtPercent` → Tough;
  * otherwise (or when the hero can't win within the round cap) → Deadly.
  */
-export const DANGER = { riskyAtPercent: 40, deadlyAtPercent: 100 } as const;
+export const DANGER = { toughAtPercent: 40, deadlyAtPercent: 100 } as const;
 
 /** All dungeons, by tier (the list order in the UI). */
 export const DUNGEON_IDS = (Object.keys(DUNGEONS) as DungeonId[]).sort((a, b) => DUNGEONS[a].tier - DUNGEONS[b].tier);

@@ -66,6 +66,7 @@ The cap (`offline.capMs`) and `offline.efficiency` live in each player's save, s
 | Kill the app mid-session | The last stored state is re-simulated on next launch; the engine is deterministic, so the result equals uninterrupted play. Tested. |
 | Re-send the same command | `command_id` is UNIQUE; a duplicate is ignored and not re-applied. Tested. |
 | Garbage time values | Rule e: no-op. |
+| Forge a `MIGRATE` row to reset the state to anything | Rejected by replay unless the anchor is chained to the row before it (`fromHash` = its `state_hash`, `fromEngine` = its engine), is a real version change, matches its own `state_hash`, and, when the span before it was re-simulated, equals that replayed state after migration. Tested for each case. **Known limit:** after a span written by an older engine (not re-simulated), the anchor's snapshot is only chain-checked, so it stays client-trusted until a server re-runs that span with the old engine build. |
 | Repeat "clock forward 8 h → open → clock forward 8 h → open…" | **Known limit, not closed on the device.** Each jump is a fresh, legitimate-looking 8 h (the cap is per call), so a player can farm 8 h per jump. Nothing on the phone can tell this from real waiting. **Closed by server-owned time**: once the server stamps `now`, the client clock is ignored. Every jump is logged (`RESUME` with `requestedMs`, `CLOCK_ANOMALY` when capped), so a server can flag it retroactively. |
 
 ## XP curves
@@ -186,10 +187,10 @@ unlocked  ⇔  lifetime WINS in unlock.dungeonId ≥ unlock.wins
 heroAvg  = mean dealt per hero strike over every roll (after enemy defense)
 enemyAvg = mean dealt per enemy strike (after hero defense)
 heroHits = ceil(enemy HP / heroAvg);  expected loss = (heroHits − 1) × enemyAvg   (the hero strikes first)
-percent  = loss / max HP:  < 40% Easy · < 100% Risky · otherwise Deadly (also Deadly when heroHits > 50 rounds)
+percent  = loss / max HP:  < 40% Easy · < 100% Tough · otherwise Deadly (also Deadly when heroHits > 50 rounds)
 ```
 
-Thresholds live in `DANGER`. A fresh hero sees Easy, Risky, Deadly, Deadly, Deadly.
+Thresholds live in `DANGER`. It measures the HP a fight costs, not the chance to lose: a fresh hero sees Bat Cave as Tough yet wins it every time. A fresh hero sees Easy, Tough, Deadly, Deadly, Deadly. The UI colors pass 4.5:1 on parchment.
 
 ### One activity at a time
 
@@ -274,7 +275,7 @@ Current version: **5**.
 
 Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests/fixtures/save-v2.json` (made with the 1.1.0 engine: hero Lv4, woodcutting Lv8, 3785 logs, banked progress), `tests/fixtures/save-v3.json` (made with the 1.2.0 engine before the dungeon: hero Lv5, DEX 15, END 12, woodcutting running, 68 stamina), and `tests/fixtures/save-v4.json` + `log-v4.json` (made with the 1.3.0 engine before the tiers: hero Lv3, DEX 13, END 12, Rat Cellar running mid-run, 19 runs / 18 wins / 1 loss, plus the action log that produced it, all rows at engine 1.3.0).
 
-**Rules version.** `ENGINE_VERSION` (`src/engine/version.ts`) is written on every log row. Bump it whenever rules change outcomes. `tests/golden.test.ts` pins the final state hash of a fixed seed and script, so an unintended rules change fails CI. 1.1.0: XP curve uses `L × √L`, and `flags.debugUsed` was added. 1.2.0 (2026-10-26): save v3, stamina regen in `simulate()`, stamina/attribute debug commands; woodcutting outcomes unchanged (same actions, levels and drops in the golden script). The golden script now also spends stamina and adds STR, so the hash changed. 1.3.0 (2026-10-26): save v4, HP regen, dungeon runs and combat. Woodcutting outcomes unchanged (same actions, levels, nests and stamina in the golden script); the script gained a dungeon segment (start, skip, HP debug, 3 h of runs, woodcutting cancelling a run), so the hash changed. 1.4.0 (2026-10-26): save v5, dungeon tiers 1–5, per-dungeon counters, unlocks, `DEBUG_ADD_DUNGEON_WINS`, MIGRATE anchors. Rat Cellar outcomes unchanged (a golden test pins the 1.3.0 part of the script: same runs, gold, HP, stamina, level); the hash changed because of `byDungeon` and the id rename. The script gained a tier segment (debug wins, Bat Cave runs).
+**Rules version.** `ENGINE_VERSION` (`src/engine/version.ts`) is written on every log row. Bump it whenever rules change outcomes. **Every save-version bump also bumps `ENGINE_VERSION`** (pinned by a guard test in `tests/golden.test.ts`: save v2 → 1.1.0, v3 → 1.2.0, v4 → 1.3.0, v5 → 1.4.0), so a replay span never mixes two save shapes under one engine version. `tests/golden.test.ts` pins the final state hash of a fixed seed and script, so an unintended rules change fails CI. 1.1.0: XP curve uses `L × √L`, and `flags.debugUsed` was added. 1.2.0 (2026-10-26): save v3, stamina regen in `simulate()`, stamina/attribute debug commands; woodcutting outcomes unchanged (same actions, levels and drops in the golden script). The golden script now also spends stamina and adds STR, so the hash changed. 1.3.0 (2026-10-26): save v4, HP regen, dungeon runs and combat. Woodcutting outcomes unchanged (same actions, levels, nests and stamina in the golden script); the script gained a dungeon segment (start, skip, HP debug, 3 h of runs, woodcutting cancelling a run), so the hash changed. 1.4.0 (2026-10-26): save v5, dungeon tiers 1–5, per-dungeon counters, unlocks, `DEBUG_ADD_DUNGEON_WINS`, MIGRATE anchors. Rat Cellar outcomes unchanged (a golden test pins the 1.3.0 part of the script: same runs, gold, HP, stamina, level); the hash changed because of `byDungeon` and the id rename. The script gained a tier segment (debug wins, Bat Cave runs).
 
 **Known limit, still open:**
 - The SQL schema has only `schema_version = 1` in `meta` and `CREATE TABLE IF NOT EXISTS`. Add ordered SQL schema migrations keyed on `meta.schema_version` before the first table change.
@@ -300,13 +301,20 @@ Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests
 **Rule: a replay is only valid within one engine-version span; MIGRATE anchors stitch the spans together.** Rows written by engine 1.3.0 mean 1.3.0 rules (and 1.3.0 ids such as `rat_cellar_1`); running them on 1.4.0 rules would diverge or fail. So:
 
 - On `load()`, when the stored save needed a migration or `meta.engine_version` differs from `ENGINE_VERSION`, the client writes a **`MIGRATE`** row whose payload carries the full post-migration state (`snapshot`) and whose `state_hash` is that snapshot's hash, in the same transaction as the migrated document and the new `engine_version`. If that commit fails, nothing changes and the next load tries again. A fresh install writes `NEW_GAME` instead; a load with the same engine and save version writes nothing.
-- `replayStep` on a `MIGRATE` row resets the state to the snapshot (checking it against the row's `stateHash` when given, then `loadSave` in case a later save version reads it) and continues with the current engine.
-- `replayLogReport(entries)` splits the log into spans that start at `NEW_GAME` or `MIGRATE`. A span whose rows all carry the current `engineVersion` (a missing value counts as current) is re-simulated and every row's `stateHash` is checked; any other span is **not re-simulated** and is counted as `verifiedUpToAnchor`. Rows from another engine after the last anchor are an error. `ReplayEntry` carries `engineVersion` and `stateHash`.
+- The payload also carries `fromHash`, the hash of the stored document before migration, which equals the last log row's `state_hash`.
+- `replayStep(state, entry, prev)` on a `MIGRATE` row runs `checkAnchor` and then resets to the snapshot (through `loadSave`, in case a later save version reads it). An anchor is **rejected** unless all of these hold:
+  - the row has `engineVersion` (= `toEngine`) and a `stateHash` equal to the snapshot's hash;
+  - there is a previous row, with `engineVersion` and `stateHash`;
+  - `fromHash` = the previous row's `stateHash`, and `fromEngine` = its `engineVersion`;
+  - it is a real change: `fromEngine ≠ toEngine`, or `fromSave < toSave` (= the snapshot's `saveVersion`);
+  - when the span before it was re-simulated, `hashState(loadSave(replayed)) = hashState(snapshot)`.
+- `replayLogReport(entries)` requires `engineVersion` on **every** row (a missing one is an error) and splits the log into spans that start at `NEW_GAME` or `MIGRATE`. A span written entirely by the current engine is re-simulated and every row's `stateHash` is checked; any other span is **not re-simulated** and is counted in `skippedOldEngine`. Rows from another engine after the last anchor are an error.
+- **Trust boundary:** after a skipped span, the anchor is chain-checked but its snapshot is not re-derived on the device, so it stays client-trusted until a server re-runs that span with the old engine build (see the exploit table).
 - A future server keeps old engine builds (or trusts its own earlier verification) for the old spans; the anchors are where it switches.
 
 **Live play.** While the app is open, `tick()` runs every second through the same `simulate()`. Ticks stay in memory and are checkpointed every 30 s and when the app goes to the background, so the log does not grow by one row per second. If the app is killed in between, nothing is lost: the next launch re-simulates from the last stored state to now, which gives the same result (determinism).
 
-**Retention (planned, not implemented in M1).** The log grows by about 2 rows per 30 s of active play plus a few rows per session, which is a few MB per year of heavy play. Once sync exists: delete rows that are `synced = 1` and older than 30 days, never unsynced rows and never the latest `NEW_GAME`. A server that holds the full history can still replay. Until sync ships, nothing is deleted.
+**Retention (planned, not implemented in M1).** The log grows by about 2 rows per 30 s of active play plus a few rows per session, which is a few MB per year of heavy play. Once sync exists: delete rows that are `synced = 1` and older than 30 days, never unsynced rows, and **never the latest span start (`NEW_GAME` or `MIGRATE`) or anything after it**, nor the row just before a `MIGRATE` (its anchor checks `fromHash` / `fromEngine` against that row). A server that holds the full history can still replay. Until sync ships, nothing is deleted.
 
 **Sync readiness.** `SyncTransport.pushLog(rows) → acked seqs`, `LocalGameClient.getUnsyncedLog()` and `syncOnce(transport)` exist. M1 ships `NoopSyncTransport`; nothing leaves the device.
 

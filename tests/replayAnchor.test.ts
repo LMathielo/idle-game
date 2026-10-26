@@ -82,7 +82,15 @@ describe('MIGRATE row on load', () => {
     expect(row.seq).toBe(V4_LOG.length + 1); // right after the old rows, before the resume
     expect(row.engineVersion).toBe(ENGINE_VERSION);
     const p = row.payload as MigratePayload;
-    expect({ ...p, snapshot: undefined }).toEqual({ fromSave: 4, toSave: CURRENT_SAVE_VERSION, fromEngine: '1.3.0', toEngine: ENGINE_VERSION, snapshot: undefined });
+    expect({ ...p, snapshot: undefined }).toEqual({
+      fromSave: 4,
+      toSave: CURRENT_SAVE_VERSION,
+      fromEngine: '1.3.0',
+      toEngine: ENGINE_VERSION,
+      fromHash: hashState(V4_SAVE), // = the last 1.3.0 row's state_hash
+      snapshot: undefined,
+    });
+    expect(p.fromHash).toBe(V4_LOG.at(-1)!.stateHash);
     expect(p.snapshot).toEqual(loadSave(V4_SAVE));
     expect(row.stateHash).toBe(hashState(p.snapshot));
     expect(row.stateHash).toBe(hashState(loadSave(V4_SAVE)));
@@ -130,56 +138,154 @@ describe('MIGRATE row on load', () => {
   });
 });
 
+/** The phone's full log after the upgrade plus some play: 1.3.0 rows, the MIGRATE anchor, 1.4.0 rows. */
+async function upgradedLog() {
+  const { repo, clock, client } = await v4Phone();
+  await client.load();
+  await client.dispatch({ type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'bat_cave' });
+  for (let i = 0; i < 40; i++) {
+    clock.advance(SEC);
+    await client.tick();
+  }
+  await client.debug.addDungeonWins('bat_cave', 10);
+  clock.advance(2 * HOUR);
+  await client.resume();
+  await client.persist();
+  return { rows: entries(await repo.getAllLog()), client };
+}
+
+const anchorIndex = (rows: ReplayEntry[]) => rows.findIndex((r) => r.type === 'MIGRATE');
+
+/** Copy of `rows` with the MIGRATE payload changed (stateHash kept consistent with the snapshot). */
+function withAnchor(rows: ReplayEntry[], change: (p: MigratePayload) => MigratePayload): ReplayEntry[] {
+  const i = anchorIndex(rows);
+  const payload = change({ ...(rows[i].payload as MigratePayload) });
+  const out = [...rows];
+  out[i] = { ...rows[i], payload, stateHash: hashState(payload.snapshot) };
+  return out;
+}
+
+/** A current-engine log (NEW_GAME + an hour of play), as the client writes it. */
+async function currentLog() {
+  const { repo, clock, client } = makeClient({ prefix: 'cur' });
+  await client.load();
+  await client.dispatch({ type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' });
+  clock.advance(HOUR);
+  await client.resume();
+  return { rows: entries(await repo.getAllLog()), state: client.getState() };
+}
+
 describe('replay with anchors', () => {
   it('the mixed-version log (1.3.0 rows + MIGRATE + new rows) replays to the live hash without throwing', async () => {
-    const { repo, clock, client } = await v4Phone();
-    await client.load();
-    await client.dispatch({ type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'bat_cave' });
-    for (let i = 0; i < 40; i++) {
-      clock.advance(SEC);
-      await client.tick();
-    }
-    await client.debug.addDungeonWins('bat_cave', 10);
-    clock.advance(2 * HOUR);
-    await client.resume();
-    await client.persist();
-
-    const rows = await repo.getAllLog();
-    const report = replayLogReport(entries(rows));
+    const { rows, client } = await upgradedLog();
+    const report = replayLogReport(rows);
     expect(report.anchors).toBe(1);
-    expect(report.verifiedUpToAnchor).toBe(V4_LOG.length);
+    expect(report.skippedOldEngine).toBe(V4_LOG.length);
     expect(report.replayed).toBe(rows.length - V4_LOG.length);
     expect(hashState(report.state)).toBe(hashState(client.getState()));
     expect(hashState(report.state)).toBe(rows.at(-1)!.stateHash);
     expect(rows.some((r) => r.type === 'DEBUG_ADD_DUNGEON_WINS')).toBe(true);
+    // The anchor is chained to the last 1.3.0 row.
+    const m = rows[anchorIndex(rows)].payload as MigratePayload;
+    expect([m.fromHash, m.fromEngine]).toEqual([V4_LOG.at(-1)!.stateHash, '1.3.0']);
   });
 
   it('why anchors matter: re-running the 1.3.0 rows on the current rules fails', () => {
-    // Old rows name `rat_cellar_1`, which no longer exists.
-    const blind = V4_LOG.map((r) => ({ type: r.type, payload: r.payload, clientTime: r.clientTime }));
+    // Old rows name `rat_cellar_1`, which no longer exists. (Stamped as current to force a re-run.)
+    const blind = V4_LOG.map((r) => ({ type: r.type, payload: r.payload, clientTime: r.clientTime, engineVersion: ENGINE_VERSION }));
     expect(() => replayLog(blind)).toThrow(ReplayError);
   });
 
-  it('replayStep on a MIGRATE row resets to its snapshot, whatever came before', () => {
-    const snapshot = loadSave(V4_SAVE);
-    const anchor: ReplayEntry = {
-      type: 'MIGRATE',
-      payload: { fromSave: 4, toSave: 5, fromEngine: '1.3.0', toEngine: ENGINE_VERSION, snapshot },
-      clientTime: T0,
-      stateHash: hashState(snapshot),
-    };
-    const out = replayStep(newGame(1, T0), anchor);
+  it('replayStep on a valid MIGRATE row resets to a copy of its snapshot', async () => {
+    const { rows } = await upgradedLog();
+    const i = anchorIndex(rows);
+    const snapshot = (rows[i].payload as MigratePayload).snapshot;
+    const out = replayStep(null, rows[i], rows[i - 1]);
     expect(out).toEqual(snapshot);
-    expect(out).not.toBe(snapshot); // a copy: later steps never mutate the log entry
+    expect(out).not.toBe(snapshot); // later steps never mutate the log entry
   });
 
-  it('a tampered anchor snapshot is rejected by its hash', () => {
-    const snapshot = loadSave(V4_SAVE);
-    const hash = hashState(snapshot);
-    const tampered = { ...snapshot, character: { ...snapshot.character, gold: 1_000_000 } };
-    const anchor = { type: 'MIGRATE', payload: { snapshot: tampered }, clientTime: T0, stateHash: hash };
-    expect(() => replayStep(null, anchor)).toThrow(/does not match/);
-    expect(() => replayStep(null, { type: 'MIGRATE', payload: {}, clientTime: T0 })).toThrow(/without snapshot/);
+  describe('rejected anchors', () => {
+    it('forged mid-log anchor (same engine, same save version): rejected as "not a migration"', async () => {
+      const { rows } = await currentLog();
+      const prev = rows.at(-1)!;
+      const rich = loadSave(JSON.parse(JSON.stringify(V4_SAVE)));
+      const forged: ReplayEntry = {
+        type: 'MIGRATE',
+        payload: { fromSave: CURRENT_SAVE_VERSION, toSave: CURRENT_SAVE_VERSION, fromEngine: ENGINE_VERSION, toEngine: ENGINE_VERSION, fromHash: prev.stateHash, snapshot: rich },
+        clientTime: prev.clientTime,
+        engineVersion: ENGINE_VERSION,
+        stateHash: hashState(rich),
+      };
+      expect(() => replayLogReport([...rows, forged])).toThrow(/not a migration/);
+    });
+
+    it('forged mid-log anchor claiming a save migration: rejected, its snapshot is not the migrated replayed state', async () => {
+      const { rows } = await currentLog();
+      const prev = rows.at(-1)!;
+      const rich = loadSave(JSON.parse(JSON.stringify(V4_SAVE)));
+      const forged: ReplayEntry = {
+        type: 'MIGRATE',
+        payload: { fromSave: 4, toSave: CURRENT_SAVE_VERSION, fromEngine: ENGINE_VERSION, toEngine: ENGINE_VERSION, fromHash: prev.stateHash, snapshot: rich },
+        clientTime: prev.clientTime,
+        engineVersion: ENGINE_VERSION,
+        stateHash: hashState(rich),
+      };
+      expect(() => replayLogReport([...rows, forged])).toThrow(/differs from the migrated replayed state/);
+    });
+
+    it('fromHash that is not the previous row\'s hash', async () => {
+      const { rows } = await upgradedLog();
+      expect(() => replayLogReport(withAnchor(rows, (p) => ({ ...p, fromHash: 'deadbeef' })))).toThrow(/fromHash deadbeef/);
+    });
+
+    it('fromEngine that is not the previous row\'s engine', async () => {
+      const { rows } = await upgradedLog();
+      expect(() => replayLogReport(withAnchor(rows, (p) => ({ ...p, fromEngine: '1.2.0' })))).toThrow(/fromEngine 1.2.0/);
+    });
+
+    it('same-version anchor (fromEngine = toEngine and no save change)', async () => {
+      const { rows } = await upgradedLog();
+      const i = anchorIndex(rows);
+      // Rewrite the previous row so the chain itself is consistent: only the version rule can catch it.
+      const same = withAnchor(rows, (p) => ({ ...p, fromEngine: ENGINE_VERSION, fromSave: CURRENT_SAVE_VERSION }));
+      same[i - 1] = { ...same[i - 1], engineVersion: ENGINE_VERSION };
+      expect(() => replayStep(null, same[i], same[i - 1])).toThrow(/not a migration/);
+    });
+
+    it('missing engineVersion: on any row of a log, and on the anchor itself', async () => {
+      const { rows } = await upgradedLog();
+      const i = anchorIndex(rows);
+      const noVersion = rows.map((r, k) => (k === 3 ? { ...r, engineVersion: undefined } : r));
+      expect(() => replayLogReport(noVersion)).toThrow(/Row 3 .* has no engineVersion/);
+      expect(() => replayStep(null, { ...rows[i], engineVersion: undefined }, rows[i - 1])).toThrow(/row has no engineVersion/);
+      expect(() => replayStep(null, rows[i], { ...rows[i - 1], engineVersion: undefined })).toThrow(/before it has no engineVersion/);
+    });
+
+    it('toEngine that is not the row\'s engine, a tampered snapshot, a missing snapshot or no previous row', async () => {
+      const { rows } = await upgradedLog();
+      const i = anchorIndex(rows);
+      expect(() => replayStep(null, { ...rows[i], payload: { ...(rows[i].payload as MigratePayload), toEngine: '9.9.9' } }, rows[i - 1])).toThrow(
+        /toEngine 9.9.9/,
+      );
+      const p = rows[i].payload as MigratePayload;
+      const tampered = { ...rows[i], payload: { ...p, snapshot: { ...(p.snapshot as GameState), character: { ...(p.snapshot as GameState).character, gold: 1e6 } } } };
+      expect(() => replayStep(null, tampered, rows[i - 1])).toThrow(/does not match the row/);
+      expect(() => replayStep(null, { ...rows[i], payload: { ...p, snapshot: undefined } }, rows[i - 1])).toThrow(/no snapshot/);
+      expect(() => replayStep(null, rows[i])).toThrow(/no row before it/);
+      expect(() => replayLogReport(rows.slice(i))).toThrow(/no row before it/);
+    });
+
+    it('known limit: after a skipped old-engine span the anchor is chain-checked only (client-trusted until a server re-runs the old span)', async () => {
+      const { rows } = await upgradedLog();
+      const i = anchorIndex(rows);
+      const rich = { ...((rows[i].payload as MigratePayload).snapshot as GameState) };
+      rich.character = { ...rich.character, gold: 123_456 };
+      const forged = withAnchor(rows.slice(0, i + 1), (p) => ({ ...p, snapshot: rich }));
+      const r = replayLogReport(forged);
+      expect(r.state?.character.gold).toBe(123_456);
+      expect(r.skippedOldEngine).toBe(V4_LOG.length);
+    });
   });
 
   it('a row whose replayed hash differs is reported with its index', () => {
@@ -205,16 +311,8 @@ describe('replay with anchors', () => {
       { type: 'NEW_GAME', payload: { seed: 2 }, clientTime: T0 + HOUR, engineVersion: ENGINE_VERSION },
     ];
     const r = replayLogReport(rows);
-    expect(r).toMatchObject({ replayed: 1, verifiedUpToAnchor: 2, anchors: 0 });
+    expect(r).toMatchObject({ replayed: 1, skippedOldEngine: 2, anchors: 0 });
     expect(r.state).toEqual(newGame(2, T0 + HOUR));
-  });
-
-  it('rows without engineVersion count as current (older callers keep working)', () => {
-    const s = replayLog([
-      { type: 'NEW_GAME', payload: { seed: 3 }, clientTime: T0 },
-      { type: 'RESUME', payload: {}, clientTime: T0 + HOUR },
-    ]);
-    expect(s?.time.lastSimulatedAt).toBe(T0 + HOUR);
   });
 });
 
@@ -238,6 +336,15 @@ describe('client: unlock banner and the debug win grant', () => {
 
     const report = replayLogReport(entries(await repo.getAllLog()));
     expect(hashState(report.state)).toBe(hashState(client.getState()));
+  });
+
+  it('no banner when the commit that holds the unlock fails (state rolled back)', async () => {
+    const { repo, client } = makeClient({ prefix: 'fail' });
+    await client.load();
+    repo.failNextCommit = new Error('disk full');
+    await expect(client.debug.addDungeonWins('rat_cellar')).rejects.toThrow('disk full');
+    expect(client.getSnapshot().unlockedDungeons).toEqual([]);
+    expect(isDungeonUnlocked(client.getState(), 'bat_cave')).toBe(false);
   });
 
   it('an unlock earned by live ticks reaches the banner too', async () => {

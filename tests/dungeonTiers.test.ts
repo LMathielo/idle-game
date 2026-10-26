@@ -315,6 +315,15 @@ describe('DEBUG_ADD_DUNGEON_WINS', () => {
     expect(r.state.character.gold).toBe(s.character.gold);
   });
 
+  it('emits DUNGEON_UNLOCKED only for dungeons that were locked before and are open after', () => {
+    // Already open: no event. 40 Rat Cellar wins open Bat Cave only (Wolf Den needs Bat Cave wins).
+    const open = withCounters({ rat_cellar: { runs: 12, wins: 12, losses: 0 } });
+    const again = applyCommand(open, cmd({ type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId: 'rat_cellar', amount: 10 }), T0);
+    expect(again.ok && again.events.filter((e) => e.type === 'DUNGEON_UNLOCKED')).toEqual([]);
+    const big = applyCommand(newGame(5, T0), cmd({ type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId: 'rat_cellar', amount: 40 }), T0);
+    expect(big.ok && big.events.filter((e) => e.type === 'DUNGEON_UNLOCKED')).toEqual([{ type: 'DUNGEON_UNLOCKED', dungeonId: 'bat_cave' }]);
+  });
+
   it('refuses locked or unknown dungeons and bad amounts', () => {
     const s = newGame(5, T0);
     const code = (c: object) => {
@@ -341,12 +350,12 @@ describe('danger hint', () => {
   const fresh = newGame(1, T0);
   const levels = (s: GameState) => DUNGEON_IDS.map((id) => dangerHint(s, id).level);
 
-  it('fresh hero: Easy, Risky, Deadly, Deadly, Deadly', () => {
-    expect(levels(fresh)).toEqual<DangerLevel[]>(['easy', 'risky', 'deadly', 'deadly', 'deadly']);
+  it('fresh hero: Easy, Tough, Deadly, Deadly, Deadly', () => {
+    expect(levels(fresh)).toEqual<DangerLevel[]>(['easy', 'tough', 'deadly', 'deadly', 'deadly']);
     // Rat: 3 hits to kill (avg 11.7 vs 30 HP), the rat strikes twice for ~3 → 6 of 50 HP.
     expect(dangerHint(fresh, 'rat_cellar')).toEqual({ level: 'easy', expectedHpLoss: 6, maxHp: 50, percent: 12, heroHits: 3 });
     // Bat: 5 hits (avg 12 vs 60 HP), 4 bat strikes of 6 → 24 of 50 HP.
-    expect(dangerHint(fresh, 'bat_cave')).toEqual({ level: 'risky', expectedHpLoss: 24, maxHp: 50, percent: 48, heroHits: 5 });
+    expect(dangerHint(fresh, 'bat_cave')).toEqual({ level: 'tough', expectedHpLoss: 24, maxHp: 50, percent: 48, heroHits: 5 });
   });
 
   it('expected loss grows tier by tier for the same hero', () => {

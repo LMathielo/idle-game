@@ -59,7 +59,7 @@ export interface IdSource {
 
 export type DebugClock = Clock & { offsetMs: number };
 
-type Advance = { rows: NewLogRow[]; summary: SimulationSummary; newAnomaly: boolean };
+type Advance = { rows: NewLogRow[]; summary: SimulationSummary; events: GameEvent[]; newAnomaly: boolean };
 
 export const META_ENGINE_VERSION = 'engine_version';
 
@@ -126,7 +126,6 @@ export class LocalGameClient implements GameClient {
       const pre = this.pendingCheckpoint();
       const adv = this.advance(now, 'SIMULATE');
       const res = applyCommand(this.getState(), cmd, now);
-      if (res.ok) this.noteUnlocks(res.events);
       if (!res.ok) {
         if (adv.rows.length > 0) await this.commit([...pre, ...adv.rows]);
         this.noteAway(adv, false);
@@ -136,6 +135,7 @@ export class LocalGameClient implements GameClient {
       this.state = res.state;
       await this.commit([...pre, ...adv.rows, this.row(cmd.type, cmd, now, res.state, cmd.id)]);
       this.noteAway(adv, false);
+      this.noteUnlocks(res.events); // only once the state that holds the unlock is stored
       this.publish();
       return { ok: true, duplicate: false, state: res.state };
     });
@@ -303,6 +303,8 @@ export class LocalGameClient implements GameClient {
           toSave: CURRENT_SAVE_VERSION,
           fromEngine: storedEngine,
           toEngine: ENGINE_VERSION,
+          // Hash of the stored document as it was: equals the last log row's state_hash, chaining the anchor.
+          fromHash: hashState(raw),
           snapshot: state,
         };
         await this.commit([this.row('MIGRATE', payload, this.clock.now(), state)], engineMeta);
@@ -348,12 +350,11 @@ export class LocalGameClient implements GameClient {
       for (const a of res.summary.anomalies) rows.push(this.row('CLOCK_ANOMALY', a, now, res.state));
     }
     for (const e of res.events) if (e.type === 'ERROR') console.warn(`[engine] ${e.message}`);
-    this.noteUnlocks(res.events);
 
     // Paused exactly while the engine keeps reporting a backward clock.
     if (accepted) this.paused = backward;
     this.state = res.state;
-    return { rows, summary: res.summary, newAnomaly };
+    return { rows, summary: res.summary, events: res.events, newAnomaly };
   }
 
   private noteUnlocks(events: readonly GameEvent[]) {
@@ -361,7 +362,13 @@ export class LocalGameClient implements GameClient {
     if (ids.length > 0) this.unlockedDungeons = [...this.unlockedDungeons, ...ids.filter((id) => !this.unlockedDungeons.includes(id))];
   }
 
+  /**
+   * Called after the advance's rows were committed (or when it needed none: live ticks stay in memory and
+   * are re-simulated identically after a kill). A failed commit throws before this, so no banner shows
+   * for a state that was rolled back.
+   */
   private noteAway(adv: Advance, fromResume: boolean) {
+    this.noteUnlocks(adv.events);
     const show = (fromResume && isNoteworthy(adv.summary)) || adv.newAnomaly;
     if (!show) return;
     this.awaySummary = this.awaySummary ? mergeSummaries(this.awaySummary, adv.summary) : adv.summary;

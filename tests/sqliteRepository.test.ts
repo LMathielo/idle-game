@@ -118,7 +118,7 @@ describe('SQLiteGameRepository (real SQL)', () => {
     const repo = new SQLiteGameRepository(open);
     await repo.init();
     const rows = await repo.getAllLog();
-    const replayed = replayLog(rows.map((r) => ({ type: r.type, payload: r.payload, clientTime: r.clientTime })));
+    const replayed = replayLog(rows.map((r) => ({ type: r.type, payload: r.payload, clientTime: r.clientTime, engineVersion: r.engineVersion })));
     expect(hashState(replayed)).toBe(rows.at(-1)!.stateHash);
     expect(hashState(replayed)).toBe(hashState(snap.state));
   });
@@ -129,7 +129,8 @@ describe('SQLiteGameRepository (real SQL)', () => {
     const v4 = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v4.json'), 'utf8'));
     const legacy = new SQLiteGameRepository(open);
     await legacy.init();
-    await legacy.commit([{ ...row('old'), engineVersion: '1.3.0' }], v4 as GameState, { [META_ENGINE_VERSION]: '1.3.0' });
+    // The legacy row's state_hash is the stored document's hash, as the 1.3.0 client wrote it.
+    await legacy.commit([{ ...row('old', hashState(v4)), engineVersion: '1.3.0' }], v4 as GameState, { [META_ENGINE_VERSION]: '1.3.0' });
 
     const clock = new FakeClock(v4.time.lastSimulatedAt + 60_000);
     const client = new LocalGameClient(new SQLiteGameRepository(open), clock, idSource('sql'));
@@ -144,7 +145,7 @@ describe('SQLiteGameRepository (real SQL)', () => {
     expect(migrate.stateHash).toBe(hashState(loadSave(v4)));
     expect(await repo.getMeta(META_ENGINE_VERSION)).toBe(ENGINE_VERSION);
     const report = replayLogReport(rows.map((r) => ({ ...r, stateHash: r.stateHash })));
-    expect(report).toMatchObject({ anchors: 1, verifiedUpToAnchor: 1 });
+    expect(report).toMatchObject({ anchors: 1, skippedOldEngine: 1 });
     expect(hashState(report.state)).toBe(hashState(client.getState()));
   });
 });

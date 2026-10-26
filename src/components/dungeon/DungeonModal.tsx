@@ -95,7 +95,7 @@ const HpRow = memo(function HpRow({ hp, maxHp, regenPerMin }: { hp: number; maxH
 
 // ---------- list ----------
 
-const DANGER_LABELS: Record<DangerLevel, string> = { easy: 'Easy', risky: 'Risky', deadly: 'Deadly' };
+const DANGER_LABELS: Record<DangerLevel, string> = { easy: 'Easy', tough: 'Tough', deadly: 'Deadly' };
 
 /** "Win 10× in Rat Cellar · 7/10" */
 function requirementText(req: { dungeonId: DungeonId; wins: number }, progress: number): string {
@@ -172,7 +172,6 @@ const LockedCard = memo(function LockedCard({ id, requirement }: { id: DungeonId
     <Pressable
       onPress={explain}
       accessibilityRole="button"
-      accessibilityState={{ disabled: true }}
       accessibilityLabel={`${d.name}, locked, ${enemy.name}. ${requirement}`}
       accessibilityHint="Shows what unlocks it"
     >
@@ -535,9 +534,9 @@ const styles = StyleSheet.create({
   debugRow: { alignItems: 'center', marginTop: 8 },
   dangerRow: { marginTop: 10, alignItems: 'center', gap: 2 },
   dangerLabel: { fontFamily: fonts.bodyBold, fontSize: 16 },
-  dangerEasy: { color: colors.skill },
-  dangerRisky: { color: colors.goldDark },
-  dangerDeadly: { color: colors.hp },
+  dangerEasy: { color: colors.dangerEasy },
+  dangerTough: { color: colors.dangerTough },
+  dangerDeadly: { color: colors.dangerDeadly },
 
   lastBox: { gap: 10, alignItems: 'center' },
   outcome: { fontFamily: fonts.title, fontSize: 28, textAlign: 'center' },
@@ -550,6 +549,6 @@ const styles = StyleSheet.create({
 
 const DANGER_STYLES: Record<DangerLevel, (typeof styles)[keyof typeof styles]> = {
   easy: styles.dangerEasy,
-  risky: styles.dangerRisky,
+  tough: styles.dangerTough,
   deadly: styles.dangerDeadly,
 };

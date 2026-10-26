@@ -6,13 +6,14 @@
 //   heroHits = ceil(enemy HP / heroAvg)                 the hero strikes first, so the enemy gets
 //   expectedHpLoss = (heroHits − 1) × enemyAvg          one strike fewer than the hero
 //   percent  = expectedHpLoss / max HP
-//   Easy < riskyAtPercent ≤ Risky < deadlyAtPercent ≤ Deadly; heroHits > maxRounds is always Deadly.
+//   Easy < toughAtPercent ≤ Tough < deadlyAtPercent ≤ Deadly; heroHits > maxRounds is always Deadly.
 import { COMBAT, DANGER, DUNGEONS, ENEMIES } from './config/dungeons';
 import { dealtDamage } from './combat';
 import { getDerivedStats, type StatsInput } from './stats';
 import type { DungeonId } from './types';
 
-export type DangerLevel = 'easy' | 'risky' | 'deadly';
+/** How much one fight costs in HP (not the chance to lose): Tough fights are usually won, at a price. */
+export type DangerLevel = 'easy' | 'tough' | 'deadly';
 
 export type DangerHint = {
   level: DangerLevel;
@@ -49,6 +50,6 @@ export function dangerHint(state: StatsInput, dungeonId: DungeonId): DangerHint 
   const percent = maxHp > 0 ? Math.round((expectedHpLoss * 100) / maxHp) : 100;
   let level: DangerLevel = 'easy';
   if (heroHits > COMBAT.maxRounds || percent >= DANGER.deadlyAtPercent) level = 'deadly';
-  else if (percent >= DANGER.riskyAtPercent) level = 'risky';
+  else if (percent >= DANGER.toughAtPercent) level = 'tough';
   return { level, expectedHpLoss, maxHp, percent, heroHits };
 }

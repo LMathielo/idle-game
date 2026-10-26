@@ -3,8 +3,10 @@
 //
 // Replay is valid within one engine-version span. A rules change (ENGINE_VERSION bump) or a save
 // migration writes a MIGRATE row: an ANCHOR that carries the full post-migration state. Replay resets to
-// the anchor's snapshot (after checking its hash), so anchors stitch the spans together. A span written
-// by another engine version is not re-simulated: it is reported as "verified up to anchor".
+// the anchor's snapshot, so anchors stitch the spans together. An anchor is only accepted when it is
+// chained to the row before it (fromHash, fromEngine) and really is a version change; see checkAnchor().
+// A span written by another engine version is not re-simulated: it is counted as skippedOldEngine, and
+// the anchor after it stays client-trusted until a server re-runs that span with the old engine build.
 import { applyCommand, type Command } from './commands';
 import { markDebugUsed } from './flags';
 import { hashState } from './hash';
@@ -42,11 +44,12 @@ export type ReplayEntry = {
   payload: unknown;
   clientTime: number;
   /**
-   * Engine version that wrote the row. replayLogReport() re-simulates only spans written by the current
-   * ENGINE_VERSION (a missing value counts as current) and skips older spans up to the next anchor.
+   * Engine version that wrote the row. replayLogReport() requires it on every row, re-simulates only
+   * spans written by the current ENGINE_VERSION and skips older spans up to the next anchor.
+   * replayStep() alone ignores it, except on MIGRATE rows.
    */
   engineVersion?: string;
-  /** state_hash of the row. When present, replayLogReport() checks it; MIGRATE rows always check it. */
+  /** state_hash of the row. replayLogReport() checks it when present; MIGRATE rows (and the row before them) must have it. */
   stateHash?: string;
 };
 
@@ -54,9 +57,11 @@ export type ReplayEntry = {
 export type MigratePayload = {
   fromSave: number | null;
   toSave: number;
-  /** Engine version the save was last written with (null when unknown). */
+  /** Engine version the save was last written with (null when unknown). Must equal the previous row's engineVersion. */
   fromEngine: string | null;
   toEngine: string;
+  /** Hash of the stored document BEFORE migration. Must equal the previous row's state_hash. */
+  fromHash: string;
   /** The full GameState document after migration. Its hash is the row's state_hash. */
   snapshot: unknown;
 };
@@ -66,13 +71,35 @@ export class ReplayError extends Error {}
 /** Starts a new replay span: the state no longer depends on earlier rows. */
 const isSpanStart = (type: string) => type === 'NEW_GAME' || type === 'MIGRATE';
 
-/** Resets to a MIGRATE row's snapshot. Checks the snapshot against `stateHash` when given, then brings it to the current save version. */
-function fromAnchor(entry: ReplayEntry): GameState {
+/**
+ * Validates a MIGRATE row and returns the state to continue from (a copy of its snapshot, brought to the
+ * current save version). An anchor that fails any check is rejected, so a log can't reset to an arbitrary
+ * state:
+ *  - the row has its engineVersion (= toEngine) and a stateHash that matches the snapshot;
+ *  - it is chained to the row before it: fromHash = that row's stateHash, fromEngine = its engineVersion;
+ *  - it is a real version change: fromEngine ≠ toEngine, or fromSave < toSave (= snapshot.saveVersion);
+ *  - when the span before it was re-simulated (`replayed` non-null), migrating that state gives the snapshot.
+ * When the span before it was NOT re-simulated (another engine), the snapshot is trusted as far as the chain
+ * goes: a server must re-run that span with the old engine build to verify it.
+ */
+export function checkAnchor(entry: ReplayEntry, prev: ReplayEntry | null | undefined, replayed: GameState | null): GameState {
   const p = entry.payload as Partial<MigratePayload> | null;
-  if (!p || !p.snapshot || typeof p.snapshot !== 'object') throw new ReplayError('MIGRATE without snapshot');
-  if (entry.stateHash !== undefined && hashState(p.snapshot) !== entry.stateHash) {
-    throw new ReplayError(`MIGRATE snapshot hash ${hashState(p.snapshot)} does not match the row (${entry.stateHash})`);
-  }
+  const bad = (why: string) => new ReplayError(`MIGRATE rejected: ${why}`);
+  if (!p || !p.snapshot || typeof p.snapshot !== 'object') throw bad('no snapshot');
+  const snapshotHash = hashState(p.snapshot);
+  if (typeof entry.engineVersion !== 'string') throw bad('row has no engineVersion');
+  if (p.toEngine !== entry.engineVersion) throw bad(`toEngine ${String(p.toEngine)} is not the row's engine ${entry.engineVersion}`);
+  if (typeof entry.stateHash !== 'string') throw bad('row has no stateHash');
+  if (snapshotHash !== entry.stateHash) throw bad(`snapshot hash ${snapshotHash} does not match the row (${entry.stateHash})`);
+  if (!prev) throw bad('no row before it');
+  if (typeof prev.engineVersion !== 'string' || typeof prev.stateHash !== 'string') throw bad('the row before it has no engineVersion/stateHash');
+  if (p.fromHash !== prev.stateHash) throw bad(`fromHash ${String(p.fromHash)} is not the previous row's hash ${prev.stateHash}`);
+  if (p.fromEngine !== prev.engineVersion) throw bad(`fromEngine ${String(p.fromEngine)} is not the previous row's engine ${prev.engineVersion}`);
+  const snapshotSave = (p.snapshot as { saveVersion?: unknown }).saveVersion;
+  if (p.toSave !== snapshotSave) throw bad(`toSave ${String(p.toSave)} is not the snapshot's saveVersion`);
+  const saveUp = typeof p.fromSave === 'number' && typeof p.toSave === 'number' && p.fromSave < p.toSave;
+  if (p.fromEngine === p.toEngine && !saveUp) throw bad('same engine and save version: not a migration');
+  if (replayed && hashState(loadSave(replayed)) !== snapshotHash) throw bad('snapshot differs from the migrated replayed state');
   // A copy, so later replay steps never share objects with the log entry.
   return loadSave(p.snapshot);
 }
@@ -80,8 +107,10 @@ function fromAnchor(entry: ReplayEntry): GameState {
 /**
  * Applies one log entry. CLOCK_ANOMALY rows leave the state unchanged; DEBUG_CLOCK_OFFSET and
  * DEBUG_RESET_SAVE only set flags.debugUsed. DEBUG_* commands are accepted whatever the build flag says.
+ * A MIGRATE row needs `prev` (the row before it) and is validated by checkAnchor(); `state` is then the
+ * re-simulated state before it, or null when that span was not re-simulated.
  */
-export function replayStep(state: GameState | null, entry: ReplayEntry): GameState {
+export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: ReplayEntry | null): GameState {
   const { type, payload, clientTime } = entry;
   if (type === 'NEW_GAME') {
     const p = payload as { seed?: unknown; debugUsed?: unknown } | null;
@@ -90,7 +119,7 @@ export function replayStep(state: GameState | null, entry: ReplayEntry): GameSta
     // A save created by the debug "Reset save" starts flagged.
     return p.debugUsed === true ? markDebugUsed(fresh) : fresh;
   }
-  if (type === 'MIGRATE') return fromAnchor(entry);
+  if (type === 'MIGRATE') return checkAnchor(entry, prev, state);
   if (!state) throw new ReplayError(`${type} before NEW_GAME`);
   switch (type as LogType) {
     case 'START_ACTIVITY':
@@ -124,21 +153,25 @@ export type ReplayReport = {
   state: GameState | null;
   /** Rows re-simulated with the current engine (and hash-checked when they carry a stateHash). */
   replayed: number;
-  /** Rows of an older (or other) engine version, not re-simulated: trusted up to the anchor after them. */
-  verifiedUpToAnchor: number;
+  /** Rows of another engine version, not re-simulated. The anchor after them is chain-checked, not re-run. */
+  skippedOldEngine: number;
   /** MIGRATE rows the replay reset to. */
   anchors: number;
 };
 
 /**
  * Replays a whole log, span by span. A span starts at NEW_GAME or MIGRATE and runs to the next one.
- * A span whose rows were all written by the current ENGINE_VERSION is re-simulated; any other span is
- * skipped and counted as verified up to the anchor that follows it. The last span must be current
- * (the client writes a MIGRATE anchor on the first load after an engine change), otherwise this throws.
+ * Every row must carry its engineVersion. A span whose rows were all written by the current
+ * ENGINE_VERSION is re-simulated (and hash-checked); any other span is skipped (skippedOldEngine). Each
+ * MIGRATE is validated against the row before it (checkAnchor). The last span must be current (the
+ * client writes a MIGRATE anchor on the first load after an engine change), otherwise this throws.
  */
 export function replayLogReport(entries: readonly ReplayEntry[]): ReplayReport {
-  const report: ReplayReport = { state: null, replayed: 0, verifiedUpToAnchor: 0, anchors: 0 };
-  const isCurrent = (e: ReplayEntry) => e.engineVersion === undefined || e.engineVersion === ENGINE_VERSION;
+  const report: ReplayReport = { state: null, replayed: 0, skippedOldEngine: 0, anchors: 0 };
+  entries.forEach((e, k) => {
+    if (typeof e.engineVersion !== 'string' || e.engineVersion.length === 0) throw new ReplayError(`Row ${k} (${e.type}) has no engineVersion`);
+  });
+  const isCurrent = (e: ReplayEntry) => e.engineVersion === ENGINE_VERSION;
   let i = 0;
   while (i < entries.length) {
     let end = i + 1;
@@ -150,11 +183,11 @@ export function replayLogReport(entries: readonly ReplayEntry[]): ReplayReport {
         throw new ReplayError(`Rows from engine ${old.engineVersion} after the last anchor: cannot replay with ${ENGINE_VERSION}`);
       }
       report.state = null;
-      report.verifiedUpToAnchor += span.length;
+      report.skippedOldEngine += span.length;
     } else {
       for (let k = 0; k < span.length; k++) {
         const e = span[k];
-        report.state = replayStep(report.state, e);
+        report.state = replayStep(report.state, e, i + k > 0 ? entries[i + k - 1] : null);
         if (e.type === 'MIGRATE') report.anchors += 1;
         report.replayed += 1;
         if (e.stateHash !== undefined && hashState(report.state) !== e.stateHash) {
