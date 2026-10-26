@@ -13,7 +13,8 @@ The owner (Lucas) works from his phone. The orchestrator is the product owner an
 2. **Decide open questions** using the game-design skill. Only ask the owner when the choice changes the game's direction or is expensive to undo; otherwise decide, and record the decision in `docs/PRODUCT.md` (Decision log).
 3. **Write the task brief** (template below) and launch `game-engineer` with it. Branch: `feat/<slug>` (or `fix/`, `chore/`).
 4. When the agent reports the PR is open, run the **`pr-review-council`** skill. Loop fixes until clean.
-5. **Report to the owner** in a few phone-readable lines: what was built, the PR link, review rounds and what they caught, and how to test it. Merging to `main` publishes to Expo Go; merge only when the owner says so, unless he has said to merge when clean.
+5. **Report to the owner** in a few phone-readable lines: what was built, the PR link, review rounds and what they caught, and how to test it. Merging to `main` publishes to Expo Go. **Only the owner merges** — no agent or orchestrator merges or pushes to `main`.
+6. Never switch branches in the shared checkout while an agent is working; use a separate worktree for any investigation.
 
 ## Task brief template
 
