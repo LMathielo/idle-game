@@ -21,6 +21,8 @@ import {
   ReplayError,
   replayLog,
   replayLogReport,
+  RELEASED_ENGINES,
+  releasedEngineIndex,
   replayStep,
 } from '../src/engine';
 import { HOUR, makeClient, MIN, SEC, T0 } from './helpers';
@@ -298,10 +300,57 @@ describe('replay with anchors', () => {
 
   it('old-engine rows after the last anchor cannot be replayed (clear error, no silent pass)', () => {
     const rows = [
-      { type: 'NEW_GAME', payload: { seed: 1 }, clientTime: T0, engineVersion: ENGINE_VERSION },
-      { type: 'RESUME', payload: {}, clientTime: T0 + HOUR, engineVersion: '0.9.0' },
+      { type: 'NEW_GAME', payload: { seed: 1 }, clientTime: T0, engineVersion: '1.3.0' },
+      { type: 'RESUME', payload: {}, clientTime: T0 + HOUR, engineVersion: '1.3.0' },
     ];
     expect(() => replayLogReport(rows)).toThrow(/after the last anchor/);
+  });
+
+  describe('engine labels are checked before they decide what is skipped', () => {
+    /** A forged anchor after `rows`, chained to the last row's label and hash, worth 999,999 gold. */
+    function forgeAfter(rows: ReplayEntry[]): ReplayEntry {
+      const prev = rows.at(-1)!;
+      const rich = { ...newGame(1, T0), character: { ...newGame(1, T0).character, gold: 999_999 } };
+      return {
+        type: 'MIGRATE',
+        payload: { fromSave: 4, toSave: CURRENT_SAVE_VERSION, fromEngine: prev.engineVersion, toEngine: ENGINE_VERSION, fromHash: prev.stateHash, snapshot: rich },
+        clientTime: prev.clientTime,
+        engineVersion: ENGINE_VERSION,
+        stateHash: hashState(rich),
+      };
+    }
+
+    it("relabelling a current row as '9.9.9' to skip its span is rejected (the reviewer's 999,999 gold case)", async () => {
+      const { rows } = await currentLog();
+      const relabelled = rows.map((r, k) => (k === rows.length - 1 ? { ...r, engineVersion: '9.9.9' } : r));
+      expect(() => replayLogReport([...relabelled, forgeAfter(relabelled)])).toThrow(/9\.9\.9, which never shipped/);
+    });
+
+    it('an unknown older label is rejected too', async () => {
+      const { rows } = await currentLog();
+      const relabelled = rows.map((r, k) => (k === 1 ? { ...r, engineVersion: '0.9.0' } : r));
+      expect(() => replayLogReport(relabelled)).toThrow(/0\.9\.0, which never shipped/);
+    });
+
+    it('a label newer than this engine is rejected (this engine is the last released one)', async () => {
+      expect(RELEASED_ENGINES.at(-1)!.engine).toBe(ENGINE_VERSION);
+      expect(releasedEngineIndex('1.5.0')).toBe(-1);
+      const { rows } = await currentLog();
+      expect(() => replayLogReport(rows.map((r) => ({ ...r, engineVersion: '1.5.0' })))).toThrow(/1\.5\.0, which never shipped/);
+    });
+
+    it('labels never go back along the log: a 1.3.0 row after 1.4.0 rows is rejected', async () => {
+      const { rows } = await currentLog();
+      const relabelled = rows.map((r, k) => (k === rows.length - 1 ? { ...r, engineVersion: '1.3.0' } : r));
+      expect(() => replayLogReport([...relabelled, forgeAfter(relabelled)])).toThrow(/1\.3\.0, older than an earlier row/);
+    });
+
+    it('the genuine frozen v4 upgrade (1.3.0 rows, then 1.4.0) still replays', async () => {
+      const { rows, client } = await upgradedLog();
+      const report = replayLogReport(rows);
+      expect(report.skippedOldEngine).toBe(V4_LOG.length);
+      expect(hashState(report.state)).toBe(hashState(client.getState()));
+    });
   });
 
   it('a later NEW_GAME (debug reset) also starts a fresh span after old rows', () => {

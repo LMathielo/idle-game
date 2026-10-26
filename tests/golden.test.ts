@@ -16,7 +16,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { applyCommand, type Command, CURRENT_SAVE_VERSION, ENGINE_VERSION, getDerivedStats, hashState, loadSave, newGame, simulate } from '../src/engine';
+import { applyCommand, type Command, CURRENT_SAVE_VERSION, ENGINE_VERSION, RELEASED_ENGINES, getDerivedStats, hashState, loadSave, newGame, simulate } from '../src/engine';
 import { actionIntervalMs, ACTIVITIES } from '../src/engine';
 import { HOUR, MIN, SEC, T0 } from './helpers';
 
@@ -58,27 +58,32 @@ function runScript(steps = SCRIPT) {
   return s;
 }
 
-describe('save version ↔ engine version', () => {
-  // Rule (docs/ENGINE.md): every save-version bump ships with an ENGINE_VERSION bump, so a MIGRATE anchor
-  // always also changes the engine and replay spans never mix two save shapes under one engine version.
-  // When you bump CURRENT_SAVE_VERSION, add its row here with the new ENGINE_VERSION.
-  const ENGINE_FOR_SAVE: Record<number, string> = { 2: '1.1.0', 3: '1.2.0', 4: '1.3.0', 5: '1.4.0' };
+describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
+  // Rule (docs/ENGINE.md): every save-version bump ships with an ENGINE_VERSION bump, and every engine
+  // bump appends a row to RELEASED_ENGINES (src/engine/version.ts). Replay trusts no other labels.
   const semver = (v: string) => v.split('.').map(Number) as [number, number, number];
   const cmp = (a: string, b: string) => {
     const [x, y] = [semver(a), semver(b)];
     return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
   };
 
-  it('the current save version is pinned to the engine version that introduced it', () => {
-    expect(ENGINE_FOR_SAVE[CURRENT_SAVE_VERSION]).toBeDefined();
-    expect(cmp(ENGINE_VERSION, ENGINE_FOR_SAVE[CURRENT_SAVE_VERSION])).toBeGreaterThanOrEqual(0);
+  it('the last released engine is the current one, writing the current save version', () => {
+    expect(RELEASED_ENGINES.at(-1)).toEqual({ engine: ENGINE_VERSION, save: CURRENT_SAVE_VERSION });
   });
 
-  it('each save version came with a newer engine version than the previous one', () => {
-    const versions = Object.keys(ENGINE_FOR_SAVE).map(Number).sort((a, b) => a - b);
-    for (let i = 1; i < versions.length; i++) {
-      expect(cmp(ENGINE_FOR_SAVE[versions[i]], ENGINE_FOR_SAVE[versions[i - 1]])).toBeGreaterThan(0);
+  it('engines strictly increase; save versions never go down and only change with a new engine', () => {
+    for (let i = 1; i < RELEASED_ENGINES.length; i++) {
+      const [prev, next] = [RELEASED_ENGINES[i - 1], RELEASED_ENGINES[i]];
+      expect(cmp(next.engine, prev.engine)).toBeGreaterThan(0);
+      expect(next.save).toBeGreaterThanOrEqual(prev.save);
     }
+    expect(RELEASED_ENGINES.map((r) => [r.engine, r.save])).toEqual([
+      ['1.0.0', 1],
+      ['1.1.0', 2],
+      ['1.2.0', 3],
+      ['1.3.0', 4],
+      ['1.4.0', 5],
+    ]);
   });
 });
 

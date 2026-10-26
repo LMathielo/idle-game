@@ -14,7 +14,7 @@ import { loadSave } from './migrations';
 import { newGame } from './newGame';
 import { simulate } from './simulate';
 import type { GameState } from './types';
-import { ENGINE_VERSION } from './version';
+import { ENGINE_VERSION, releasedEngineIndex } from './version';
 
 /** Every row type the client writes to the action log. */
 export const LOG_TYPES = [
@@ -161,15 +161,26 @@ export type ReplayReport = {
 
 /**
  * Replays a whole log, span by span. A span starts at NEW_GAME or MIGRATE and runs to the next one.
- * Every row must carry its engineVersion. A span whose rows were all written by the current
+ * Every row must carry an engineVersion from RELEASED_ENGINES (not newer than ENGINE_VERSION), and the
+ * versions never decrease along the log. A span whose rows were all written by the current
  * ENGINE_VERSION is re-simulated (and hash-checked); any other span is skipped (skippedOldEngine). Each
  * MIGRATE is validated against the row before it (checkAnchor). The last span must be current (the
  * client writes a MIGRATE anchor on the first load after an engine change), otherwise this throws.
  */
 export function replayLogReport(entries: readonly ReplayEntry[]): ReplayReport {
   const report: ReplayReport = { state: null, replayed: 0, skippedOldEngine: 0, anchors: 0 };
+  // engineVersion is written by the client, so it is checked before it decides what gets re-simulated:
+  // only versions that shipped (up to this engine), and never going back in time along the log.
+  // Otherwise relabelling one current row as '9.9.9' would turn its span into a "skipped" one.
+  const current = releasedEngineIndex(ENGINE_VERSION);
+  let highest = -1;
   entries.forEach((e, k) => {
     if (typeof e.engineVersion !== 'string' || e.engineVersion.length === 0) throw new ReplayError(`Row ${k} (${e.type}) has no engineVersion`);
+    const idx = releasedEngineIndex(e.engineVersion);
+    if (idx < 0) throw new ReplayError(`Row ${k} (${e.type}) has engine ${e.engineVersion}, which never shipped`);
+    if (idx > current) throw new ReplayError(`Row ${k} (${e.type}) has engine ${e.engineVersion}, newer than ${ENGINE_VERSION}`);
+    if (idx < highest) throw new ReplayError(`Row ${k} (${e.type}) has engine ${e.engineVersion}, older than an earlier row`);
+    highest = idx;
   });
   const isCurrent = (e: ReplayEntry) => e.engineVersion === ENGINE_VERSION;
   let i = 0;
