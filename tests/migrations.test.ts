@@ -90,10 +90,46 @@ describe('save migrations', () => {
     expect((MIGRATIONS[3]({ saveVersion: 3 }) as unknown as GameState).character).toEqual({ hp: 50, hpRegenProgress: 0 });
   });
 
-  it('newest save loads unchanged; a new game is already v4', () => {
+  it('real v4 → v5: renames rat_cellar_1, moves the lifetime totals to Rat Cellar; pure', () => {
+    const fight = { dungeonId: 'rat_cellar_1', enemyId: 'rat', won: true, rounds: 3 };
+    const v4 = {
+      saveVersion: 4,
+      activity: { kind: 'dungeon', dungeonId: 'rat_cellar_1', startedAt: 1, progressMs: 7 },
+      dungeon: { lastFight: fight, totals: { runs: 12, wins: 9, losses: 3 } },
+      character: { name: 'Lucius' },
+    };
+    const frozenInput = JSON.parse(JSON.stringify(v4));
+    const v5 = MIGRATIONS[4](v4) as unknown as GameState;
+    expect(v4).toEqual(frozenInput);
+    expect(v5.saveVersion).toBe(5);
+    expect(v5.activity).toEqual({ ...v4.activity, dungeonId: 'rat_cellar' });
+    expect(v5.dungeon).toEqual({
+      lastFight: { ...fight, dungeonId: 'rat_cellar' },
+      totals: { runs: 12, wins: 9, losses: 3 },
+      byDungeon: { rat_cellar: { runs: 12, wins: 9, losses: 3 } },
+    });
+    expect(v5.character).toEqual(v4.character);
+  });
+
+  it('v4 → v5 edge cases: no runs → empty byDungeon; woodcutting activity untouched; broken counters count as 0', () => {
+    const wood = { kind: 'woodcutting', startedAt: 1, progressMs: 2 };
+    const a = MIGRATIONS[4]({ saveVersion: 4, activity: wood, dungeon: { lastFight: null, totals: { runs: 0, wins: 0, losses: 0 } } }) as unknown as GameState;
+    expect(a.activity).toEqual(wood);
+    expect(a.dungeon).toEqual({ lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {} });
+    const b = MIGRATIONS[4]({ saveVersion: 4, activity: null, dungeon: { totals: { runs: 'x', wins: -1, losses: 2 } } }) as unknown as GameState;
+    expect(b.activity).toBeNull();
+    expect(b.dungeon).toEqual({ lastFight: null, totals: { runs: 0, wins: 0, losses: 2 }, byDungeon: { rat_cellar: { runs: 0, wins: 0, losses: 2 } } });
+    expect((MIGRATIONS[4]({ saveVersion: 4 }) as unknown as GameState).dungeon).toEqual({
+      lastFight: null,
+      totals: { runs: 0, wins: 0, losses: 0 },
+      byDungeon: {},
+    });
+  });
+
+  it('newest save loads unchanged; a new game is already v5', () => {
     const s = newGame(77, T0);
-    expect(s.saveVersion).toBe(4);
-    expect(CURRENT_SAVE_VERSION).toBe(4);
+    expect(s.saveVersion).toBe(5);
+    expect(CURRENT_SAVE_VERSION).toBe(5);
     expect(loadSave(s)).toEqual(s);
   });
 

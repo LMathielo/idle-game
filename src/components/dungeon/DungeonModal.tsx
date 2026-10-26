@@ -1,16 +1,22 @@
 // Village → Dungeon: full-screen modal with the dungeon list and, inside the same modal, the detail
-// view (enemy, hero, start / skip / stop, last fight + replay). Rules stay in the engine: this file only
-// reads selectors (dungeonRunView, hpView, staminaView, getDerivedStats) and dispatches commands.
+// view (enemy, hero, danger hint, start / skip / stop, last fight + replay). Rules stay in the engine: this
+// file only reads selectors (dungeonRunView, dungeonUnlockView, dangerHint, hpView, staminaView,
+// getDerivedStats) and dispatches commands. Locked dungeons can't be opened; the engine refuses them too.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
 import {
+  type DangerLevel,
+  dangerHint,
+  DEV_TOOLS_ENABLED,
   DUNGEON_IDS,
   type DungeonId,
   DUNGEONS,
   dungeonRunView,
   type DungeonRunView,
+  dungeonTotals,
+  dungeonUnlockView,
   ENEMIES,
   type FightRecord,
   type GameState,
@@ -89,12 +95,32 @@ const HpRow = memo(function HpRow({ hp, maxHp, regenPerMin }: { hp: number; maxH
 
 // ---------- list ----------
 
+const DANGER_LABELS: Record<DangerLevel, string> = { easy: 'Easy', tough: 'Tough', deadly: 'Deadly' };
+
+/** "Win 10× in Rat Cellar · 7/10" */
+function requirementText(req: { dungeonId: DungeonId; wins: number }, progress: number): string {
+  return `Win ${req.wins}× in ${DUNGEONS[req.dungeonId].name} · ${formatNumber(progress)}/${formatNumber(req.wins)}`;
+}
+
 function DungeonList({ state, running, onPick }: { state: GameState; running: DungeonId | null; onPick: (id: DungeonId) => void }) {
   return (
     <View>
-      {DUNGEON_IDS.map((id) => (
-        <DungeonCard key={id} id={id} runMs={runMsFor(id, state.character.attributes)} running={running === id} onPick={onPick} />
-      ))}
+      {DUNGEON_IDS.map((id) => {
+        const unlock = dungeonUnlockView(state, id);
+        if (!unlock.unlocked && unlock.requirement) {
+          return <LockedCard key={id} id={id} requirement={requirementText(unlock.requirement, unlock.progress)} />;
+        }
+        return (
+          <DungeonCard
+            key={id}
+            id={id}
+            runMs={runMsFor(id, state.character.attributes)}
+            wins={dungeonTotals(state, id).wins}
+            running={running === id}
+            onPick={onPick}
+          />
+        );
+      })}
     </View>
   );
 }
@@ -102,22 +128,24 @@ function DungeonList({ state, running, onPick }: { state: GameState; running: Du
 const DungeonCard = memo(function DungeonCard({
   id,
   runMs,
+  wins,
   running,
   onPick,
 }: {
   id: DungeonId;
   runMs: number;
+  wins: number;
   running: boolean;
   onPick: (id: DungeonId) => void;
 }) {
   const d = DUNGEONS[id];
   const enemy = ENEMIES[d.enemyId];
-  const line = `${d.name} · Lv ${d.level} · ${enemy.name} · ${formatClock(runMs)} per run`;
+  const line = `Tier ${d.tier} · ${enemy.name} · ${formatClock(runMs)} per run`;
   return (
     <Pressable
       onPress={() => onPick(id)}
       accessibilityRole="button"
-      accessibilityLabel={`${line}${running ? ', running' : ''}`}
+      accessibilityLabel={`${d.name}, ${line}, ${wins} wins${running ? ', running' : ''}`}
       accessibilityHint="Opens the dungeon"
     >
       {({ pressed }) => (
@@ -125,11 +153,38 @@ const DungeonCard = memo(function DungeonCard({
           <Text style={styles.cardIcon}>{enemy.icon}</Text>
           <View style={styles.flex}>
             <Text style={styles.cardTitle}>{d.name}</Text>
-            <Text style={styles.cardLine}>
-              Lv {d.level} · {enemy.name} · {formatClock(runMs)} per run
-            </Text>
+            <Text style={styles.cardLine}>{line}</Text>
+            <Text style={styles.cardLine}>Wins: {formatNumber(wins)}</Text>
           </View>
           {running ? <Text style={styles.badge}>Running</Text> : <Text style={styles.chevron}>›</Text>}
+        </View>
+      )}
+    </Pressable>
+  );
+});
+
+/** Dimmed, never opens the detail: a tap only repeats what unlocks it. */
+const LockedCard = memo(function LockedCard({ id, requirement }: { id: DungeonId; requirement: string }) {
+  const d = DUNGEONS[id];
+  const enemy = ENEMIES[d.enemyId];
+  const explain = () => Alert.alert(`🔒 ${d.name}`, `Locked. ${requirement}.`);
+  return (
+    <Pressable
+      onPress={explain}
+      accessibilityRole="button"
+      accessibilityLabel={`${d.name}, locked, ${enemy.name}. ${requirement}`}
+      accessibilityHint="Shows what unlocks it"
+    >
+      {({ pressed }) => (
+        <View style={[styles.card, styles.cardLocked, pressed && styles.cardPressed]}>
+          <Text style={[styles.cardIcon, styles.dimmed]}>🔒</Text>
+          <View style={styles.flex}>
+            <Text style={[styles.cardTitle, styles.dimmed]}>{d.name}</Text>
+            <Text style={styles.cardLine}>
+              Tier {d.tier} · {enemy.name}
+            </Text>
+            <Text style={styles.lockLine}>{requirement}</Text>
+          </View>
         </View>
       )}
     </Pressable>
@@ -156,6 +211,9 @@ function DungeonDetail({
   const enemy = ENEMIES[d.enemyId];
   const { level, attributes, equipment } = state.character;
   const stats = useMemo(() => getDerivedStats({ character: { level, attributes, equipment } }), [level, attributes, equipment]);
+  const danger = useMemo(() => dangerHint({ character: { level, attributes, equipment } }, id), [level, attributes, equipment, id]);
+  const unlock = dungeonUnlockView(state, id);
+  const totals = dungeonTotals(state, id);
   const hp = hpView(state);
   const run = running ? dungeonRunView(state) : null;
   const inFlight = useRef(false);
@@ -189,6 +247,19 @@ function DungeonDetail({
   const hits = strikeRange(enemy.damage, stats.defense.value);
   const stop = useCallback(() => confirmCancelRun('Stop', () => send({ type: 'STOP_ACTIVITY' })), [send]);
   const otherActivity = state.activity && !running ? state.activity.kind : null;
+  const addWins = useCallback(() => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    client.debug
+      .addDungeonWins(id, 10)
+      .then((res) => {
+        if (!res.ok) Alert.alert('Not possible', res.error.message);
+      })
+      .catch(() => Alert.alert('Could not save', 'Try again.'))
+      .finally(() => {
+        inFlight.current = false;
+      });
+  }, [client, id]);
 
   return (
     <View>
@@ -196,7 +267,7 @@ function DungeonDetail({
         <Text style={styles.backText}>‹ All dungeons</Text>
       </Pressable>
 
-      <Panel title={`${d.name} · Lv ${d.level}`}>
+      <Panel title={`${d.name} · Tier ${d.tier}`}>
         <View style={styles.versus}>
           <View
             style={styles.side}
@@ -221,6 +292,17 @@ function DungeonDetail({
             <StatLine label="Damage" value={range(stats.damage.min, stats.damage.max)} />
             <StatLine label="Defense" value={`${stats.defense.value}`} />
           </View>
+        </View>
+
+        <View
+          style={styles.dangerRow}
+          accessible
+          accessibilityLabel={`Danger: ${DANGER_LABELS[danger.level]}. About ${danger.expectedHpLoss} HP lost per fight, ${danger.percent}% of your max HP`}
+        >
+          <Text style={[styles.dangerLabel, DANGER_STYLES[danger.level]]}>Danger: {DANGER_LABELS[danger.level]}</Text>
+          <Text style={styles.note}>
+            ~{formatNumber(danger.expectedHpLoss)} HP lost per fight ({danger.percent}% of max)
+          </Text>
         </View>
 
         <Text style={styles.subTitle}>Loot (win only)</Text>
@@ -251,6 +333,8 @@ function DungeonDetail({
             onSkip={skip}
             onStop={stop}
           />
+        ) : !unlock.unlocked && unlock.requirement ? (
+          <Text style={styles.note}>🔒 Locked. {requirementText(unlock.requirement, unlock.progress)}.</Text>
         ) : (
           <View style={styles.startBox}>
             <Text style={styles.note}>
@@ -262,9 +346,13 @@ function DungeonDetail({
           </View>
         )}
         <Text style={styles.totals}>
-          Lifetime: {formatNumber(state.dungeon.totals.runs)} runs · {formatNumber(state.dungeon.totals.wins)} wins ·{' '}
-          {formatNumber(state.dungeon.totals.losses)} losses
+          Lifetime here: {formatNumber(totals.runs)} runs · {formatNumber(totals.wins)} wins · {formatNumber(totals.losses)} losses
         </Text>
+        {DEV_TOOLS_ENABLED && unlock.unlocked ? (
+          <View style={styles.debugRow}>
+            <PixelButton label="+10 wins (debug)" onPress={addWins} accessibilityHint="Debug: adds 10 wins here, to test unlocks" />
+          </View>
+        ) : null}
       </Panel>
 
       <Panel title="Last fight">
@@ -407,6 +495,9 @@ const styles = StyleSheet.create({
   },
   cardPressed: { backgroundColor: colors.parchmentDark },
   cardRunning: { borderColor: colors.gold },
+  cardLocked: { backgroundColor: colors.parchmentDark, borderColor: colors.inkSoft, opacity: 0.75 },
+  dimmed: { color: colors.inkSoft },
+  lockLine: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink },
   cardIcon: { fontSize: 32 },
   cardTitle: { fontFamily: fonts.title, fontSize: 26, color: colors.ink },
   cardLine: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft },
@@ -440,6 +531,12 @@ const styles = StyleSheet.create({
   buttons: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 4 },
   note: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, textAlign: 'center' },
   totals: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft, marginTop: 10, textAlign: 'center' },
+  debugRow: { alignItems: 'center', marginTop: 8 },
+  dangerRow: { marginTop: 10, alignItems: 'center', gap: 2 },
+  dangerLabel: { fontFamily: fonts.bodyBold, fontSize: 16 },
+  dangerEasy: { color: colors.dangerEasy },
+  dangerTough: { color: colors.dangerTough },
+  dangerDeadly: { color: colors.dangerDeadly },
 
   lastBox: { gap: 10, alignItems: 'center' },
   outcome: { fontFamily: fonts.title, fontSize: 28, textAlign: 'center' },
@@ -449,3 +546,9 @@ const styles = StyleSheet.create({
   danger: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.hp, textAlign: 'center' },
   lost: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.hp, textAlign: 'center' },
 });
+
+const DANGER_STYLES: Record<DangerLevel, (typeof styles)[keyof typeof styles]> = {
+  easy: styles.dangerEasy,
+  tough: styles.dangerTough,
+  deadly: styles.dangerDeadly,
+};

@@ -11,13 +11,17 @@ import {
   applyCommand,
   type AttributeKey,
   type Command,
+  CURRENT_SAVE_VERSION,
+  type DungeonId,
   ENGINE_VERSION,
+  type GameEvent,
   type GameState,
   hashState,
   isNoteworthy,
   loadSave,
   type LogType,
   markDebugUsed,
+  type MigratePayload,
   mergeSummaries,
   newGame,
   simulate,
@@ -55,7 +59,9 @@ export interface IdSource {
 
 export type DebugClock = Clock & { offsetMs: number };
 
-type Advance = { rows: NewLogRow[]; summary: SimulationSummary; newAnomaly: boolean };
+type Advance = { rows: NewLogRow[]; summary: SimulationSummary; events: GameEvent[]; newAnomaly: boolean };
+
+export const META_ENGINE_VERSION = 'engine_version';
 
 export class LocalGameClient implements GameClient {
   private state: GameState | null = null;
@@ -63,6 +69,8 @@ export class LocalGameClient implements GameClient {
   private committed: GameState | null = null;
   private paused = false;
   private awaySummary: SimulationSummary | null = null;
+  /** Dungeons unlocked since the player last dismissed the banner (from DUNGEON_UNLOCKED events). */
+  private unlockedDungeons: readonly DungeonId[] = [];
   private snapshot: GameSnapshot | null = null;
   private listeners = new Set<() => void>();
   private queue: Promise<unknown> = Promise.resolve();
@@ -127,6 +135,7 @@ export class LocalGameClient implements GameClient {
       this.state = res.state;
       await this.commit([...pre, ...adv.rows, this.row(cmd.type, cmd, now, res.state, cmd.id)]);
       this.noteAway(adv, false);
+      this.noteUnlocks(res.events); // only once the state that holds the unlock is stored
       this.publish();
       return { ok: true, duplicate: false, state: res.state };
     });
@@ -166,6 +175,12 @@ export class LocalGameClient implements GameClient {
   dismissAwaySummary(): void {
     if (!this.awaySummary) return;
     this.awaySummary = null;
+    this.publish();
+  }
+
+  dismissUnlocks(): void {
+    if (this.unlockedDungeons.length === 0) return;
+    this.unlockedDungeons = [];
     this.publish();
   }
 
@@ -230,6 +245,9 @@ export class LocalGameClient implements GameClient {
 
     finishDungeonRun: (): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_FINISH_DUNGEON_RUN' }),
 
+    addDungeonWins: (dungeonId: DungeonId, amount = 10): Promise<DispatchResult> =>
+      this.dispatch({ type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId, amount }),
+
     resetSave: (): Promise<void> =>
       this.serial(async () => {
         const rows: NewLogRow[] = [];
@@ -254,6 +272,7 @@ export class LocalGameClient implements GameClient {
         }
         this.paused = false;
         this.awaySummary = null;
+        this.unlockedDungeons = [];
         this.publish();
       }),
   };
@@ -266,22 +285,36 @@ export class LocalGameClient implements GameClient {
     const offset = storedOffset === null ? 0 : Number(storedOffset);
     this.clock.offsetMs = Number.isFinite(offset) ? offset : 0;
 
-    const meta: Record<string, string> = {};
-    if ((await this.repo.getMeta('engine_version')) !== ENGINE_VERSION) meta.engine_version = ENGINE_VERSION;
-    if (!(await this.repo.getMeta('device_id'))) meta.device_id = this.ids.uuid();
-    if (Object.keys(meta).length > 0) await this.repo.setMeta(meta);
+    if (!(await this.repo.getMeta('device_id'))) await this.repo.setMeta({ device_id: this.ids.uuid() });
+    const storedEngine = await this.repo.getMeta(META_ENGINE_VERSION);
+    const engineMeta = { [META_ENGINE_VERSION]: ENGINE_VERSION };
 
     const raw = await this.repo.loadState();
     if (raw) {
       const state = loadSave(raw);
       this.state = state;
       this.committed = state;
+      const fromSave = (raw as { saveVersion?: unknown }).saveVersion;
+      if (fromSave !== CURRENT_SAVE_VERSION || storedEngine !== ENGINE_VERSION) {
+        // Replay anchor: the migrated state and the row that carries it are written in one transaction,
+        // with the new engine version, so a replay never runs pre-migration rows on the new rules.
+        const payload: MigratePayload = {
+          fromSave: typeof fromSave === 'number' ? fromSave : null,
+          toSave: CURRENT_SAVE_VERSION,
+          fromEngine: storedEngine,
+          toEngine: ENGINE_VERSION,
+          // Hash of the stored document as it was: equals the last log row's state_hash, chaining the anchor.
+          fromHash: hashState(raw),
+          snapshot: state,
+        };
+        await this.commit([this.row('MIGRATE', payload, this.clock.now(), state)], engineMeta);
+      }
     } else {
       const now = this.clock.now();
       const seed = this.ids.seed() >>> 0;
       const fresh = newGame(seed, now);
       this.state = fresh;
-      await this.commit([this.row('NEW_GAME', { seed }, now, fresh)]);
+      await this.commit([this.row('NEW_GAME', { seed }, now, fresh)], engineMeta);
     }
     await this.resumeInternal();
     return this.getSnapshot();
@@ -321,10 +354,21 @@ export class LocalGameClient implements GameClient {
     // Paused exactly while the engine keeps reporting a backward clock.
     if (accepted) this.paused = backward;
     this.state = res.state;
-    return { rows, summary: res.summary, newAnomaly };
+    return { rows, summary: res.summary, events: res.events, newAnomaly };
   }
 
+  private noteUnlocks(events: readonly GameEvent[]) {
+    const ids = events.flatMap((e) => (e.type === 'DUNGEON_UNLOCKED' ? [e.dungeonId] : []));
+    if (ids.length > 0) this.unlockedDungeons = [...this.unlockedDungeons, ...ids.filter((id) => !this.unlockedDungeons.includes(id))];
+  }
+
+  /**
+   * Called after the advance's rows were committed (or when it needed none: live ticks stay in memory and
+   * are re-simulated identically after a kill). A failed commit throws before this, so no banner shows
+   * for a state that was rolled back.
+   */
   private noteAway(adv: Advance, fromResume: boolean) {
+    this.noteUnlocks(adv.events);
     const show = (fromResume && isNoteworthy(adv.summary)) || adv.newAnomaly;
     if (!show) return;
     this.awaySummary = this.awaySummary ? mergeSummaries(this.awaySummary, adv.summary) : adv.summary;
@@ -391,6 +435,7 @@ export class LocalGameClient implements GameClient {
       prev.state === this.state &&
       prev.clockPaused === this.paused &&
       prev.awaySummary === this.awaySummary &&
+      prev.unlockedDungeons === this.unlockedDungeons &&
       prev.clockOffsetMs === this.clock.offsetMs
     ) {
       return;
@@ -399,6 +444,7 @@ export class LocalGameClient implements GameClient {
       state: this.state,
       clockPaused: this.paused,
       awaySummary: this.awaySummary,
+      unlockedDungeons: this.unlockedDungeons,
       clockOffsetMs: this.clock.offsetMs,
     };
     for (const l of this.listeners) l();

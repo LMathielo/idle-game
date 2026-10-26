@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 4 as const;
+export const CURRENT_SAVE_VERSION = 5 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -14,6 +14,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   1: (doc) => ({ ...doc, saveVersion: 2, flags: { debugUsed: false } }),
   2: migrateV2toV3,
   3: migrateV3toV4,
+  4: migrateV4toV5,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -89,6 +90,31 @@ function migrateV3toV4(doc: SaveDoc): SaveDoc {
     character: { ...character, hp: V4_MAX_HP_BASE + V4_MAX_HP_PER_LEVEL * (level - 1), hpRegenProgress: 0 },
     dungeon: { lastFight: null, totals: { runs: 0, wins: 0, losses: 0 } },
   };
+}
+
+// ---- v4 → v5 (2026-10-26): dungeon tiers, per-dungeon counters ----
+// Frozen literals: the v4 dungeon id and its v5 name. Every v4 run was a Rat Cellar run.
+const V5_DUNGEON_RENAMES: Readonly<Record<string, string>> = { rat_cellar_1: 'rat_cellar' };
+const V5_ALL_RUNS_IN = 'rat_cellar';
+
+const count = (v: unknown) => (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : 0);
+const renamedDungeon = (id: unknown) => (typeof id === 'string' && Object.prototype.hasOwnProperty.call(V5_DUNGEON_RENAMES, id) ? V5_DUNGEON_RENAMES[id] : id);
+
+/**
+ * - dungeon id `rat_cellar_1` → `rat_cellar` (running activity and last fight).
+ * - dungeon.byDungeon: the lifetime totals move to Rat Cellar (the only v4 dungeon), so its wins count
+ *   toward the Bat Cave unlock. The global totals stay (they are the sum, and number the next run).
+ */
+function migrateV4toV5(doc: SaveDoc): SaveDoc {
+  const dungeon = isDoc(doc.dungeon) ? doc.dungeon : {};
+  const t = isDoc(dungeon.totals) ? dungeon.totals : {};
+  const totals = { runs: count(t.runs), wins: count(t.wins), losses: count(t.losses) };
+  const lastFight = isDoc(dungeon.lastFight) ? { ...dungeon.lastFight, dungeonId: renamedDungeon(dungeon.lastFight.dungeonId) } : null;
+  const byDungeon = totals.runs + totals.wins + totals.losses > 0 ? { [V5_ALL_RUNS_IN]: { ...totals } } : {};
+
+  const activity = isDoc(doc.activity) && doc.activity.kind === 'dungeon' ? { ...doc.activity, dungeonId: renamedDungeon(doc.activity.dungeonId) } : doc.activity;
+
+  return { ...doc, saveVersion: 5, activity, dungeon: { ...dungeon, lastFight, totals, byDungeon } };
 }
 
 export class SaveVersionError extends Error {}

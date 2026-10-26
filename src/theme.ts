@@ -17,6 +17,10 @@ export const colors = {
   stamina: '#d9822b',
   slot: '#3a2a1c',
   slotBorder: '#20150c',
+  // Danger hint text on parchment: each passes 4.5:1 (WCAG AA) on #f1e4c3.
+  dangerEasy: '#2f6b2b',
+  dangerTough: '#7a5c12',
+  dangerDeadly: '#a3281c',
 } as const;
 
 export const fonts = {

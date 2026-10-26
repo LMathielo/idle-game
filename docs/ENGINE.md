@@ -66,6 +66,7 @@ The cap (`offline.capMs`) and `offline.efficiency` live in each player's save, s
 | Kill the app mid-session | The last stored state is re-simulated on next launch; the engine is deterministic, so the result equals uninterrupted play. Tested. |
 | Re-send the same command | `command_id` is UNIQUE; a duplicate is ignored and not re-applied. Tested. |
 | Garbage time values | Rule e: no-op. |
+| Forge a `MIGRATE` row to reset the state to anything | Rejected by replay unless the anchor is chained to the row before it (`fromHash` = its `state_hash`, `fromEngine` = its engine), is a released engine upgrade whose save versions match `RELEASED_ENGINES`, matches its own `state_hash`, and, when the span before it was re-simulated, equals that replayed state after migration. Row labels are checked first: every `engineVersion` must be in `RELEASED_ENGINES` (no newer than this engine), and labels never go back along the log, so relabelling a current row as `9.9.9` (or an unknown or older version) to get its span skipped fails, and a skipped span holding any current-engine row (e.g. only row 0 relabelled) is refused. Tested for each case. **Known limit, applies to any log:** `engineVersion` is written by the client, so a forger can relabel a whole log as an older *released* engine, back to `NEW_GAME`, with consistent hashes; the device then skips those spans and only chain-checks the anchor. This gap closes only when a server re-simulates old spans with archived engine builds. |
 | Repeat "clock forward 8 h → open → clock forward 8 h → open…" | **Known limit, not closed on the device.** Each jump is a fresh, legitimate-looking 8 h (the cap is per call), so a player can farm 8 h per jump. Nothing on the phone can tell this from real waiting. **Closed by server-owned time**: once the server stamps `now`, the client clock is ignored. Every jump is logged (`RESUME` with `requestedMs`, `CLOCK_ANOMALY` when capped), so a server can flag it retroactively. |
 
 ## XP curves
@@ -147,7 +148,49 @@ Base item combat stats (`damage`, `armor`) live only in the catalog `ITEMS` (`sr
 
 ## Dungeon & combat
 
-Data: `src/engine/config/dungeons.ts` (`DUNGEON_RUN` skip rule, `COMBAT`, `ENEMIES`, `DUNGEONS` with each dungeon's run timing). Rules: `src/engine/dungeon.ts` (runs), `src/engine/combat.ts` (fight), `src/engine/hp.ts` (HP regen).
+Data: `src/engine/config/dungeons.ts` (`DUNGEON_RUN` skip rule, `COMBAT`, `ENEMIES`, `DUNGEONS` with each dungeon's run timing, unlock rule and rewards, `DANGER` thresholds). Rules: `src/engine/dungeon.ts` (runs, per-dungeon counters, unlocks), `src/engine/combat.ts` (fight), `src/engine/hp.ts` (HP regen), `src/engine/danger.ts` (danger hint).
+
+### Tiers (2026-10-26, engine 1.4.0)
+
+Five dungeons, one enemy each. All of it is data (`DUNGEONS`, `ENEMIES`); no dungeon has its own code.
+
+| # | id | Name | Enemy (HP · dmg · def) | Base run (DEX 10) | Unlock | Win: XP · gold | Loot |
+| ---: | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `rat_cellar` | Rat Cellar | Rat 30 · 3–5 · 2 | 5:00 (4:50) | — | 25 · 2–5 | Rat Skin 50% |
+| 2 | `bat_cave` | Bat Cave | Bat 60 · 6–9 · 6 | 7:00 (6:50) | 10 wins in Rat Cellar | 60 · 6–12 | Bat Wing 40% |
+| 3 | `wolf_den` | Wolf Den | Wolf 110 · 10–14 · 12 | 9:00 (8:50) | 15 wins in Bat Cave | 140 · 15–30 | Wolf Pelt 30% |
+| 4 | `forgotten_crypt` | Forgotten Crypt | Skeleton 180 · 15–20 · 20 | 11:00 (10:50) | 25 wins in Wolf Den | 300 · 35–60 | Old Bone 25% |
+| 5 | `troll_bridge` | Troll Bridge | Troll 300 · 22–30 · 30 | 13:00 (12:50) | 40 wins in Crypt | 650 · 80–130 | Troll Hide 20% |
+
+Every tier uses the same run rule (−1 s per DEX, minimum 1:00), skip rule, combat, regen and auto-repeat. Loot items are stackable commons in the item catalog.
+
+Reach (1000 fights per cell with the real combat code, full HP; 2026-10-26): a hero with base attributes (STR/END 10) beats Bat Cave from Lv 1 and Wolf Den from about Lv 6–7. The Crypt needs about STR/END 20 at Lv 10 (98% wins) and the Troll about STR/END 30 at Lv 20; at STR/END 10 both are 0%. So tiers 4–5 wait for Training (M3), as intended.
+
+### Unlocks
+
+```
+DungeonDef.unlock = { dungeonId, wins } | null      (null = open from the start)
+unlocked  ⇔  lifetime WINS in unlock.dungeonId ≥ unlock.wins
+```
+
+- Only wins count, never losses or runs. Win counters never go down, so an unlock is permanent.
+- Counters: `state.dungeon.byDungeon[id] = {runs, wins, losses}` (an entry appears with the first run; missing = 0). `state.dungeon.totals` stays as the sum over all dungeons, because `totals.runs + 1` numbers the run in progress for the skip binding and must stay unique across dungeons.
+- `START_ACTIVITY {kind:'dungeon', dungeonId}` on a locked dungeon fails with **`DUNGEON_LOCKED`** and changes nothing.
+- When a win (or the debug grant) crosses a requirement, the engine emits **`DUNGEON_UNLOCKED {dungeonId}`** once and adds the id to `SimulationSummary.dungeonsUnlocked`. The client collects the events into `snapshot.unlockedDungeons` for the banner (cleared by `dismissUnlocks()`); the away summary lists offline unlocks.
+- UI selector: `dungeonUnlockView(state, id) → {unlocked, requirement: {dungeonId, wins} | null, progress}` (progress capped at the requirement). A future condition (e.g. hero level) becomes another optional field of the rule, checked in `isDungeonUnlocked`.
+
+### Danger hint
+
+`dangerHint(stats, dungeonId)` (pure, no RNG, never simulates a fight) estimates the HP one fight costs from full HP with **average rolls**:
+
+```
+heroAvg  = mean dealt per hero strike over every roll (after enemy defense)
+enemyAvg = mean dealt per enemy strike (after hero defense)
+heroHits = ceil(enemy HP / heroAvg);  expected loss = (heroHits − 1) × enemyAvg   (the hero strikes first)
+percent  = loss / max HP:  < 40% Easy · < 100% Tough · otherwise Deadly (also Deadly when heroHits > 50 rounds)
+```
+
+Thresholds live in `DANGER`. It measures the HP a fight costs, not the chance to lose: a fresh hero sees Bat Cave as Tough yet wins it every time. A fresh hero sees Easy, Tough, Deadly, Deadly, Deadly. The UI colors pass 4.5:1 on parchment.
 
 ### One activity at a time
 
@@ -201,12 +244,12 @@ dealt = max(1, round(roll × K / (defense + K)))       K = 50; 13 defense blocks
 - Hero damage and defense come from `getDerivedStats`. No hit chance or crit yet.
 - The fight ends when either side reaches 0 HP, or after **50 rounds, which is a loss**. Every loss leaves the hero at 0 HP (also a round-cap loss).
 - The engine writes why it ended into the record: `endReason` = `enemy_defeated` | `hero_defeated` | `round_cap` | `no_hp`. The UI labels it and never recomputes it.
-- **Win:** +25 hero XP (through `addXp`, so multi-level-ups carry over), +2–5 gold (rolled), Rat Skin (`rat_skin`, 50%). Rolls happen in that order after the fight. A full inventory loses the item, like woodcutting drops. **Loss:** nothing.
-- Rat Cellar Lv1 has one enemy, the Rat: HP 30, damage 3–5, defense 2. A new hero (12–14 damage, 13 defense, 50 HP) kills it in 3 hits and takes 4–8 damage (two rat strikes of 2–4 after defense).
+- **Win:** the tier's hero XP (through `addXp`, so multi-level-ups carry over), gold (rolled in the tier's range), then each drop (rolled). Rolls happen in that order after the fight. A full inventory loses the item, like woodcutting drops. **Loss:** nothing.
+- Example, Rat Cellar: one Rat (HP 30, damage 3–5, defense 2). A new hero (12–14 damage, 13 defense, 50 HP) kills it in 3 hits and takes 4–8 damage (two rat strikes of 2–4 after defense).
 
 ### Stored log policy
 
-The engine produces the fight log (`{round, actor, roll, dealt, targetHpAfter}` per strike) and the UI only replays it. To keep saves small, **only the last fight is stored** (`state.dungeon.lastFight`, at most 100 entries), plus lifetime counters `state.dungeon.totals = {runs, wins, losses}`. No per-run log is kept; an offline catch-up of 99 runs keeps only the 99th. The "While you were away" summary carries the totals for the period (runs, wins, losses, hero XP, gold, loot).
+The engine produces the fight log (`{round, actor, roll, dealt, targetHpAfter}` per strike) and the UI only replays it. To keep saves small, **only the last fight is stored** (`state.dungeon.lastFight`, at most 100 entries), plus lifetime counters: `state.dungeon.totals = {runs, wins, losses}` over all dungeons and `state.dungeon.byDungeon[id]` per dungeon. No per-run log is kept; an offline catch-up of 99 runs keeps only the 99th. The "While you were away" summary carries the totals for the period (runs, wins, losses, hero XP, gold, loot).
 
 ## Storage: SQLite as a document store
 
@@ -222,19 +265,19 @@ The repository talks to a small `SqlDatabase` interface. The app passes `expo-sq
 
 `GameState.saveVersion` plus ordered pure migrations in `src/engine/migrations.ts` (`MIGRATIONS[n]` upgrades v`n` to v`n+1`). A save newer than the app is refused instead of being overwritten. To change the shape: bump `CURRENT_SAVE_VERSION`, add the migration and a frozen fixture of the old version under `tests/fixtures/`.
 
-Current version: **4**.
+Current version: **5**.
 
 - v1 → v2 adds `flags.debugUsed` (set to `false` for old saves).
 - v2 → v3 (2026-10-26): attributes become strength→strength, dexterity→dexterity, constitution→endurance, intelligence→intelligence, each set to **max(old value, 10)** so old heroes match the new-hero baseline (owner decision); agility and charisma are dropped; `character.hp`/`maxHp` are dropped; `stamina` is added full (100/100); every equipped and inventory item gets a `defId` (stackables: their id; starting gear: `start-<defId>`). Literals in the migration are frozen on purpose, so later config changes cannot change what it produces.
 
 - v3 → v4 (2026-10-26): `character.hp` = max HP at the hero's level (`50 + 10 × (level − 1)`, frozen literals), `character.hpRegenProgress = 0`, `dungeon = {lastFight: null, totals: 0/0/0}`. The activity is kept (v3 only had woodcutting, so no save is in a dungeon).
+- v4 → v5 (2026-10-26): dungeon tiers. The dungeon id `rat_cellar_1` becomes `rat_cellar` (running activity and last fight). Every v4 run was a Rat Cellar run, so `dungeon.byDungeon = {rat_cellar: totals}` (empty when there were no runs) and the old wins count toward the Bat Cave unlock. `totals` is kept. Frozen literals again.
 
-Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests/fixtures/save-v2.json` (made with the 1.1.0 engine: hero Lv4, woodcutting Lv8, 3785 logs, banked progress), and `tests/fixtures/save-v3.json` (made with the 1.2.0 engine before the dungeon: hero Lv5, DEX 15, END 12, woodcutting running, 68 stamina).
+Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests/fixtures/save-v2.json` (made with the 1.1.0 engine: hero Lv4, woodcutting Lv8, 3785 logs, banked progress), `tests/fixtures/save-v3.json` (made with the 1.2.0 engine before the dungeon: hero Lv5, DEX 15, END 12, woodcutting running, 68 stamina), and `tests/fixtures/save-v4.json` + `log-v4.json` (made with the 1.3.0 engine before the tiers: hero Lv3, DEX 13, END 12, Rat Cellar running mid-run, 19 runs / 18 wins / 1 loss, plus the action log that produced it, all rows at engine 1.3.0).
 
-**Rules version.** `ENGINE_VERSION` (`src/engine/version.ts`) is written on every log row. Bump it whenever rules change outcomes. `tests/golden.test.ts` pins the final state hash of a fixed seed and script, so an unintended rules change fails CI. 1.1.0: XP curve uses `L × √L`, and `flags.debugUsed` was added. 1.2.0 (2026-10-26): save v3, stamina regen in `simulate()`, stamina/attribute debug commands; woodcutting outcomes unchanged (same actions, levels and drops in the golden script). The golden script now also spends stamina and adds STR, so the hash changed. 1.3.0 (2026-10-26): save v4, HP regen, dungeon runs and combat. Woodcutting outcomes unchanged (same actions, levels, nests and stamina in the golden script); the script gained a dungeon segment (start, skip, HP debug, 3 h of runs, woodcutting cancelling a run), so the hash changed.
+**Rules version.** `ENGINE_VERSION` (`src/engine/version.ts`) is written on every log row. Bump it whenever rules change outcomes. **Every save-version bump also bumps `ENGINE_VERSION`** (`RELEASED_ENGINES` in `src/engine/version.ts`: save v1 → 1.0.0, v2 → 1.1.0, v3 → 1.2.0, v4 → 1.3.0, v5 → 1.4.0; a guard test in `tests/golden.test.ts` checks it), so a replay span never mixes two save shapes under one engine version. `tests/golden.test.ts` pins the final state hash of a fixed seed and script, so an unintended rules change fails CI. 1.1.0: XP curve uses `L × √L`, and `flags.debugUsed` was added. 1.2.0 (2026-10-26): save v3, stamina regen in `simulate()`, stamina/attribute debug commands; woodcutting outcomes unchanged (same actions, levels and drops in the golden script). The golden script now also spends stamina and adds STR, so the hash changed. 1.3.0 (2026-10-26): save v4, HP regen, dungeon runs and combat. Woodcutting outcomes unchanged (same actions, levels, nests and stamina in the golden script); the script gained a dungeon segment (start, skip, HP debug, 3 h of runs, woodcutting cancelling a run), so the hash changed. 1.4.0 (2026-10-26): save v5, dungeon tiers 1–5, per-dungeon counters, unlocks, `DEBUG_ADD_DUNGEON_WINS`, MIGRATE anchors. Rat Cellar outcomes unchanged (a golden test pins the 1.3.0 part of the script: same runs, gold, HP, stamina, level); the hash changed because of `byDungeon` and the id rename. The script gained a tier segment (debug wins, Bat Cave runs).
 
-**Known limits, still open after save v4 / engine 1.3.0 (the v3 and v4 briefs kept them out of scope; now overdue):**
-- Loading a save that needed a migration (or a different `ENGINE_VERSION`) logs no row. A replay from `NEW_GAME` then runs the old rows on the current rules. Add a `MIGRATE` / `ENGINE_UPGRADE` log row carrying the hash after migration, and make replay use each row's `engineVersion` (already stored, and accepted in `ReplayEntry`, but not yet used).
+**Known limit, still open:**
 - The SQL schema has only `schema_version = 1` in `meta` and `CREATE TABLE IF NOT EXISTS`. Add ordered SQL schema migrations keyed on `meta.schema_version` before the first table change.
 
 ## Action log & sync
@@ -244,7 +287,8 @@ Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests
 | type | When | Payload |
 | --- | --- | --- |
 | `NEW_GAME` | First launch, Reset save | `{ seed }` (`+ reason, debugUsed: true` after Reset save) |
-| `START_ACTIVITY`, `STOP_ACTIVITY`, `SKIP_DUNGEON_RUN`, `DEBUG_GRANT_HERO_XP`, `DEBUG_SPEND_STAMINA`, `DEBUG_REFILL_STAMINA`, `DEBUG_ADD_ATTRIBUTE`, `DEBUG_SET_HERO_HP`, `DEBUG_FINISH_DUNGEON_RUN` | Player/debug commands; `command_id` = command id | the command |
+| `START_ACTIVITY`, `STOP_ACTIVITY`, `SKIP_DUNGEON_RUN`, `DEBUG_GRANT_HERO_XP`, `DEBUG_SPEND_STAMINA`, `DEBUG_REFILL_STAMINA`, `DEBUG_ADD_ATTRIBUTE`, `DEBUG_SET_HERO_HP`, `DEBUG_FINISH_DUNGEON_RUN`, `DEBUG_ADD_DUNGEON_WINS` | Player/debug commands; `command_id` = command id | the command |
+| `MIGRATE` | `load()` found a save that needed a migration, or `meta.engine_version` ≠ `ENGINE_VERSION`. Written in the same transaction as the migrated state and the new `engine_version` | `{ fromSave, toSave, fromEngine, toEngine, snapshot }` (snapshot = full post-migration GameState) |
 | `RESUME` | App start, back from background, debug clock change. Skipped when no time passed and there was no anomaly | `{ summary }` |
 | `SIMULATE` | Live-play checkpoint: every 30 s while an activity runs (every 10 min when idle), before any other row, on background | `{ checkpoint: true }` or `{ summary }` |
 | `CLOCK_ANOMALY` | Any anomaly from a resume, or the first one seen while ticking | the anomaly event |
@@ -252,18 +296,36 @@ Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests
 
 `state_hash` is the hash of the state **after** the row. Replaying rows in order with `replayLog` (engine) reproduces every hash: commands go through `applyCommand(state, payload, client_time)`, `RESUME`/`SIMULATE` through `simulate(state, client_time)`, `CLOCK_ANOMALY` changes nothing, and `DEBUG_CLOCK_OFFSET` / `DEBUG_RESET_SAVE` only set `flags.debugUsed`. Replay accepts `DEBUG_*` rows even in a build with `DEV_TOOLS_ENABLED = false`, so a log never becomes unreplayable. Tested on both the memory and SQL repositories.
 
+### Replay anchors (engine-version spans)
+
+**Rule: a replay is only valid within one engine-version span; MIGRATE anchors stitch the spans together.** Rows written by engine 1.3.0 mean 1.3.0 rules (and 1.3.0 ids such as `rat_cellar_1`); running them on 1.4.0 rules would diverge or fail. So:
+
+- On `load()`, when the stored save needed a migration or `meta.engine_version` differs from `ENGINE_VERSION`, the client writes a **`MIGRATE`** row whose payload carries the full post-migration state (`snapshot`) and whose `state_hash` is that snapshot's hash, in the same transaction as the migrated document and the new `engine_version`. If that commit fails, nothing changes and the next load tries again. A fresh install writes `NEW_GAME` instead; a load with the same engine and save version writes nothing.
+- The payload also carries `fromHash`, the hash of the stored document before migration, which equals the last log row's `state_hash`.
+- `replayStep(state, entry, prev)` on a `MIGRATE` row runs `checkAnchor` and then resets to the snapshot (through `loadSave`, in case a later save version reads it). An anchor is **rejected** unless all of these hold:
+  - the row has `engineVersion` (= `toEngine`) and a `stateHash` equal to the snapshot's hash;
+  - there is a previous row, with `engineVersion` and `stateHash`;
+  - `fromHash` = the previous row's `stateHash`, and `fromEngine` = its `engineVersion`;
+  - it is an engine change: `fromEngine ≠ toEngine` (every save bump ships with an engine bump), both are released, in order, and `fromSave` / `toSave` (= the snapshot's `saveVersion`) are the save versions `RELEASED_ENGINES` lists for them;
+  - when the span before it was re-simulated, `hashState(loadSave(replayed)) = hashState(snapshot)`.
+- `replayLogReport(entries)` requires `engineVersion` on **every** row (a missing one is an error) and splits the log into spans that start at `NEW_GAME` or `MIGRATE`. A span written entirely by the current engine is re-simulated and every row's `stateHash` is checked; any other span is **not re-simulated** and is counted in `skippedOldEngine`. Rows from another engine after the last anchor are an error.
+- A skipped span may mix older released engines (real pre-1.4.0 logs mix 1.2.0 and 1.3.0 rows with no anchor between them), but it may **not** contain a current-engine row: a genuine log always anchors on entry to the current engine.
+- Every `engineVersion` must appear in **`RELEASED_ENGINES`** (`src/engine/version.ts`: each shipped engine and the save version it wrote, oldest first; append a row on every bump) and be no newer than `ENGINE_VERSION`, and versions **never decrease** along the log. Otherwise the client-written label could decide which spans get skipped.
+- **Trust boundary:** labels are still client-written. A forger can relabel an entire log as an older released engine (back to `NEW_GAME`), and the device then skips it and only chain-checks the anchor after it. So any log stays client-trusted in that respect until a server re-simulates old spans with archived engine builds (see the exploit table).
+- A future server keeps old engine builds (or trusts its own earlier verification) for the old spans; the anchors are where it switches.
+
 **Live play.** While the app is open, `tick()` runs every second through the same `simulate()`. Ticks stay in memory and are checkpointed every 30 s and when the app goes to the background, so the log does not grow by one row per second. If the app is killed in between, nothing is lost: the next launch re-simulates from the last stored state to now, which gives the same result (determinism).
 
-**Retention (planned, not implemented in M1).** The log grows by about 2 rows per 30 s of active play plus a few rows per session, which is a few MB per year of heavy play. Once sync exists: delete rows that are `synced = 1` and older than 30 days, never unsynced rows and never the latest `NEW_GAME`. A server that holds the full history can still replay. Until sync ships, nothing is deleted.
+**Retention (planned, not implemented in M1).** The log grows by about 2 rows per 30 s of active play plus a few rows per session, which is a few MB per year of heavy play. Once sync exists: delete rows that are `synced = 1` and older than 30 days, never unsynced rows, and **never the latest span start (`NEW_GAME` or `MIGRATE`) or anything after it**, nor the row just before a `MIGRATE` (its anchor checks `fromHash` / `fromEngine` against that row). A server that holds the full history can still replay. Until sync ships, nothing is deleted.
 
 **Sync readiness.** `SyncTransport.pushLog(rows) → acked seqs`, `LocalGameClient.getUnsyncedLog()` and `syncOnce(transport)` exist. M1 ships `NoopSyncTransport`; nothing leaves the device.
 
 ## "While you were away"
 
-Shown after app start, a return from background or a debug clock change when **at least 60 s of real time passed and there was at least one gathering action or dungeon run** (`AWAY_SUMMARY_MIN_MS` in `config/time.ts`), or when there was **any clock anomaly**. A quick app switch is still simulated and logged, but opens no modal. It lists dungeon runs (won/lost), hero XP, gold and loot next to gathering results.
+Shown after app start, a return from background or a debug clock change when **at least 60 s of real time passed and there was at least one gathering action or dungeon run** (`AWAY_SUMMARY_MIN_MS` in `config/time.ts`), or when there was **any clock anomaly**. A quick app switch is still simulated and logged, but opens no modal. It lists dungeon runs (won/lost), dungeons unlocked, hero XP, gold and loot next to gathering results.
 
 The summary is an RN `<Modal>`. On iOS it presents from the view controller that owns it, and the root controller cannot present while a full-screen village modal is up, so each village modal route renders its own `<AwayModal />` and the root one hides on those routes (`RootAwayModal` in `src/app/_layout.tsx`).
 
 ## Debug tools
 
-`DEV_TOOLS_ENABLED` in `src/engine/config/dev.ts` shows a Debug panel on the Hero tab. It stays on for the POC. Any `DEBUG_*` action sets `state.flags.debugUsed = true` forever (it survives later play, Reset save and replay), so a future server can tell debugged saves apart. The clock buttons change a persisted **offset** on the client clock (`SystemClock.offsetMs`), then resume, so the engine sees exactly what a player who changed the phone clock would produce. "+10k hero XP" is a real logged command (`DEBUG_GRANT_HERO_XP`), and so are "Spend 10 stamina" (`DEBUG_SPEND_STAMINA`, refused with `NOT_ENOUGH_STAMINA` below 10), "Refill stamina" (`DEBUG_REFILL_STAMINA`), "+1 STR / DEX / END / INT" (`DEBUG_ADD_ATTRIBUTE`, 1–1000 per command, an attribute can reach at most 1,000,000), "Hero HP → 1" (`DEBUG_SET_HERO_HP`, 0..max, clears the regen remainder) and "Finish run now (free)" (`DEBUG_FINISH_DUNGEON_RUN`, resolves the current run's fight like a skip without stamina; refused with `NO_DUNGEON_RUN` when no dungeon runs). "Reset save" logs `DEBUG_RESET_SAVE` + `NEW_GAME` and clears the offset; it never deletes log rows. None of them change engine rules.
+`DEV_TOOLS_ENABLED` in `src/engine/config/dev.ts` shows a Debug panel on the Hero tab. It stays on for the POC. Any `DEBUG_*` action sets `state.flags.debugUsed = true` forever (it survives later play, Reset save and replay), so a future server can tell debugged saves apart. The clock buttons change a persisted **offset** on the client clock (`SystemClock.offsetMs`), then resume, so the engine sees exactly what a player who changed the phone clock would produce. "+10k hero XP" is a real logged command (`DEBUG_GRANT_HERO_XP`), and so are "Spend 10 stamina" (`DEBUG_SPEND_STAMINA`, refused with `NOT_ENOUGH_STAMINA` below 10), "Refill stamina" (`DEBUG_REFILL_STAMINA`), "+1 STR / DEX / END / INT" (`DEBUG_ADD_ATTRIBUTE`, 1–1000 per command, an attribute can reach at most 1,000,000), "Hero HP → 1" (`DEBUG_SET_HERO_HP`, 0..max, clears the regen remainder) and "Finish run now (free)" (`DEBUG_FINISH_DUNGEON_RUN`, resolves the current run's fight like a skip without stamina; refused with `NO_DUNGEON_RUN` when no dungeon runs). In a dungeon's detail view, "+10 wins (debug)" (`DEBUG_ADD_DUNGEON_WINS`, 1–1000 per command, unlocked dungeons only) adds wins and runs to that dungeon's counters with no fight and no rewards, so unlocks can be tested on the phone. "Reset save" logs `DEBUG_RESET_SAVE` + `NEW_GAME` and clears the offset; it never deletes log rows. None of them change engine rules.

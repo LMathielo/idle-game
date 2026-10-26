@@ -1,7 +1,7 @@
 // Dungeon runs (pure): run time, skip cost, resolving one run, and the auto-repeat loop used by
 // simulate(). See docs/ENGINE.md ("Dungeon & combat").
 import { cloneState } from './clone';
-import { DUNGEON_RUN, DUNGEONS, ENEMIES } from './config/dungeons';
+import { DUNGEON_IDS, DUNGEON_RUN, DUNGEONS, ENEMIES } from './config/dungeons';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { grantHeroXp } from './activities';
 import { resolveFight } from './combat';
@@ -9,7 +9,7 @@ import { hpRegenPerMinute, maxHpOf, regenHp } from './hp';
 import { addStackable } from './inventory';
 import { chance, nextInt } from './rng';
 import { getDerivedStats } from './stats';
-import type { Attributes, DungeonActivity, DungeonId, FightRewards, GameEvent, GameState, SimulationSummary } from './types';
+import type { Attributes, DungeonActivity, DungeonId, DungeonTotals, FightRewards, GameEvent, GameState, SimulationSummary } from './types';
 
 /** runMs = max(minMs, baseMs − perDexterityMs × DEX), with the dungeon's own timing. */
 export function runMsFor(dungeonId: DungeonId, attributes: Pick<Attributes, 'dexterity'>): number {
@@ -26,6 +26,63 @@ export function skipCost(remainingMs: number): number {
 
 function bump(map: Record<string, number>, key: string, by: number) {
   if (by !== 0) map[key] = (map[key] ?? 0) + by;
+}
+
+// ---------- per-dungeon counters and unlocks ----------
+
+const ZERO_TOTALS: DungeonTotals = { runs: 0, wins: 0, losses: 0 };
+
+/** Lifetime runs / wins / losses in one dungeon (0/0/0 before its first run). Read-only. */
+export function dungeonTotals(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId): DungeonTotals {
+  return state.dungeon.byDungeon[dungeonId] ?? ZERO_TOTALS;
+}
+
+/** True when every condition of the dungeon's unlock rule is met. Permanent: wins never go down. */
+export function isDungeonUnlocked(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId): boolean {
+  const rule = DUNGEONS[dungeonId].unlock;
+  return !rule || dungeonTotals(state, rule.dungeonId).wins >= rule.wins;
+}
+
+export type DungeonUnlockView = {
+  unlocked: boolean;
+  /** null for a dungeon that is open from the start. */
+  requirement: { dungeonId: DungeonId; wins: number } | null;
+  /** Wins so far toward the requirement, capped at the requirement (0 when there is none). */
+  progress: number;
+};
+
+/** Read-only, for the UI: is it open, what opens it, how far along. */
+export function dungeonUnlockView(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId): DungeonUnlockView {
+  const rule = DUNGEONS[dungeonId].unlock;
+  if (!rule) return { unlocked: true, requirement: null, progress: 0 };
+  const wins = dungeonTotals(state, rule.dungeonId).wins;
+  return { unlocked: wins >= rule.wins, requirement: { dungeonId: rule.dungeonId, wins: rule.wins }, progress: Math.min(wins, rule.wins) };
+}
+
+/**
+ * Adds to one dungeon's counters (and the global ones), then emits DUNGEON_UNLOCKED for every dungeon that
+ * was locked before and is unlocked after. Compared through isDungeonUnlocked(), so any future unlock
+ * condition is covered without changing this. Mutates `draft.dungeon`, which the caller must own.
+ */
+export function recordDungeonResults(
+  draft: GameState,
+  dungeonId: DungeonId,
+  wins: number,
+  losses: number,
+  summary: SimulationSummary | null,
+  events: GameEvent[],
+): void {
+  const lockedBefore = DUNGEON_IDS.filter((id) => !isDungeonUnlocked(draft, id));
+  const before = dungeonTotals(draft, dungeonId);
+  const after = { runs: before.runs + wins + losses, wins: before.wins + wins, losses: before.losses + losses };
+  draft.dungeon.byDungeon = { ...draft.dungeon.byDungeon, [dungeonId]: after };
+  const totals = draft.dungeon.totals;
+  draft.dungeon.totals = { runs: totals.runs + wins + losses, wins: totals.wins + wins, losses: totals.losses + losses };
+  for (const id of lockedBefore) {
+    if (!isDungeonUnlocked(draft, id)) continue;
+    events.push({ type: 'DUNGEON_UNLOCKED', dungeonId: id });
+    summary?.dungeonsUnlocked.push(id);
+  }
 }
 
 /**
@@ -69,10 +126,6 @@ export function completeRun(draft: GameState, dungeonId: DungeonId, summary: Sim
     }
   }
 
-  const totals = draft.dungeon.totals;
-  totals.runs += 1;
-  if (fight.won) totals.wins += 1;
-  else totals.losses += 1;
   draft.dungeon.lastFight = {
     dungeonId,
     enemyId: enemy.id,
@@ -88,6 +141,7 @@ export function completeRun(draft: GameState, dungeonId: DungeonId, summary: Sim
     log: fight.log,
   };
   events.push({ type: 'FIGHT_RESOLVED', dungeonId, won: fight.won });
+  recordDungeonResults(draft, dungeonId, fight.won ? 1 : 0, fight.won ? 0 : 1, summary, events);
 
   if (summary) {
     summary.dungeon.runs += 1;

@@ -3,8 +3,8 @@ import { grantHeroXp } from './activities';
 import { cloneState } from './clone';
 import { ACTIVITIES, isGatheringKind } from './config/activities';
 import { DEV_TOOLS_ENABLED } from './config/dev';
-import { isDungeonId } from './config/dungeons';
-import { completeRun, runMsFor, skipCost } from './dungeon';
+import { DUNGEONS, isDungeonId } from './config/dungeons';
+import { completeRun, isDungeonUnlocked, recordDungeonResults, runMsFor, skipCost } from './dungeon';
 import { markDebugUsed } from './flags';
 import { maxHpOf } from './hp';
 import { simulate } from './simulate';
@@ -33,6 +33,8 @@ export type Command =
    */
   | { id: string; type: 'SKIP_DUNGEON_RUN'; run: number; maxCost: number }
   | { id: string; type: 'DEBUG_SET_HERO_HP'; hp: number }
+  /** Adds wins (and runs) to an unlocked dungeon's lifetime counters, so unlocks can be tested on a phone. */
+  | { id: string; type: 'DEBUG_ADD_DUNGEON_WINS'; dungeonId: DungeonId; amount: number }
   /** Resolves the current run's fight now, for free. */
   | { id: string; type: 'DEBUG_FINISH_DUNGEON_RUN' }
   | { id: string; type: 'DEBUG_GRANT_HERO_XP'; amount: number }
@@ -47,6 +49,7 @@ export type CommandErrorCode =
   | 'INVALID_COMMAND'
   | 'UNKNOWN_ACTIVITY'
   | 'UNKNOWN_DUNGEON'
+  | 'DUNGEON_LOCKED'
   | 'NO_ACTIVE_ACTIVITY'
   | 'NO_DUNGEON_RUN'
   | 'RUN_CHANGED'
@@ -67,6 +70,9 @@ export const MAX_DEBUG_XP_GRANT = 1_000_000_000_000;
 /** Debug attribute grants: per command, and the highest value an attribute may reach that way. */
 export const MAX_DEBUG_ATTRIBUTE_GRANT = 1000;
 export const MAX_DEBUG_ATTRIBUTE_VALUE = 1_000_000;
+
+/** Debug dungeon-win grant per command. */
+export const MAX_DEBUG_DUNGEON_WINS = 1000;
 
 export function isAttributeKey(key: unknown): key is AttributeKey {
   return typeof key === 'string' && (ATTRIBUTE_KEYS as readonly string[]).includes(key);
@@ -103,6 +109,7 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       let next: Activity;
       if (cmd.kind === 'dungeon') {
         if (!isDungeonId(cmd.dungeonId)) return fail('UNKNOWN_DUNGEON', `Unknown dungeon ${String(cmd.dungeonId)}`);
+        if (!isDungeonUnlocked(draft, cmd.dungeonId)) return fail('DUNGEON_LOCKED', `${DUNGEONS[cmd.dungeonId].name} is locked`);
         // Already running this dungeon: keep the current run.
         if (draft.activity?.kind === 'dungeon' && draft.activity.dungeonId === cmd.dungeonId) break;
         next = { kind: 'dungeon', dungeonId: cmd.dungeonId, startedAt: now, progressMs: 0 };
@@ -150,6 +157,18 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       draft = markDebugUsed(draft);
       draft.character.hp = hp;
       draft.character.hpRegenProgress = 0;
+      break;
+    }
+    case 'DEBUG_ADD_DUNGEON_WINS': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const { dungeonId, amount } = cmd;
+      if (!isDungeonId(dungeonId)) return fail('UNKNOWN_DUNGEON', `Unknown dungeon ${String(dungeonId)}`);
+      if (!isDungeonUnlocked(draft, dungeonId)) return fail('DUNGEON_LOCKED', `${DUNGEONS[dungeonId].name} is locked`);
+      if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0 || amount > MAX_DEBUG_DUNGEON_WINS) {
+        return fail('INVALID_AMOUNT', `Invalid win amount ${String(amount)}`);
+      }
+      draft = markDebugUsed(draft);
+      recordDungeonResults(draft, dungeonId, amount, 0, null, events);
       break;
     }
     case 'DEBUG_FINISH_DUNGEON_RUN': {

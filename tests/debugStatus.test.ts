@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MemoryGameRepository } from '../src/client/memoryRepository';
 import { applyCommand, type GameState, getDerivedStats, hashState, newGame, replayLog, replayStep } from '../src/engine';
-import { HOUR, MIN, T0, makeClient } from './helpers';
+import { current, HOUR, makeClient, MIN, T0 } from './helpers';
 
 async function verifyLog(repo: MemoryGameRepository): Promise<GameState> {
   const rows = await repo.getAllLog();
@@ -94,12 +94,12 @@ describe('debug: stamina and attributes', () => {
   });
 
   it('replayLog accepts the new debug rows', () => {
-    const state = replayLog([
+    const state = replayLog(current([
       { type: 'NEW_GAME', payload: { seed: 5 }, clientTime: T0 },
       { type: 'DEBUG_SPEND_STAMINA', payload: { id: 's', type: 'DEBUG_SPEND_STAMINA', amount: 30 }, clientTime: T0 + MIN },
       { type: 'DEBUG_ADD_ATTRIBUTE', payload: { id: 'a', type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'strength', amount: 2 }, clientTime: T0 + MIN },
       { type: 'RESUME', payload: {}, clientTime: T0 + MIN + HOUR },
-    ]);
+    ]));
     expect(state?.flags.debugUsed).toBe(true);
     expect(state?.character.attributes.strength).toBe(12);
     expect(state?.stamina).toEqual({ current: 82, max: 100, progressMs: 0 });

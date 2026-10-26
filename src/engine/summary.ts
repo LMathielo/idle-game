@@ -14,6 +14,7 @@ export function emptySummary(): SimulationSummary {
     heroLevelsGained: 0,
     goldGained: 0,
     dungeon: { runs: 0, wins: 0, losses: 0 },
+    dungeonsUnlocked: [],
     anomalies: [],
   };
 }
@@ -42,6 +43,7 @@ export function mergeSummaries(a: SimulationSummary, b: SimulationSummary): Simu
       wins: a.dungeon.wins + b.dungeon.wins,
       losses: a.dungeon.losses + b.dungeon.losses,
     },
+    dungeonsUnlocked: [...a.dungeonsUnlocked, ...b.dungeonsUnlocked],
     anomalies: [...a.anomalies, ...b.anomalies],
   };
 }

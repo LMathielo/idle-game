@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MemoryGameRepository } from '../src/client/memoryRepository';
 import { dungeonRunView, type GameState, hashState, replayLog, replayStep } from '../src/engine';
-import { HOUR, MIN, SEC, T0, makeClient } from './helpers';
+import { current, HOUR, makeClient, MIN, SEC, T0 } from './helpers';
 
 async function verifyLog(repo: MemoryGameRepository): Promise<GameState> {
   const rows = await repo.getAllLog();
@@ -15,7 +15,7 @@ async function verifyLog(repo: MemoryGameRepository): Promise<GameState> {
   return state!;
 }
 
-const START = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar_1' } as const;
+const START = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } as const;
 
 describe('dungeon through the client', () => {
   it('start → live ticks → skip → debug HP 1 → finish run → switch to woodcutting; the log replays exactly', async () => {
@@ -124,14 +124,14 @@ describe('dungeon through the client', () => {
 
 describe('replay of the new rows', () => {
   it('replayLog accepts SKIP_DUNGEON_RUN and the new debug rows', () => {
-    const state = replayLog([
+    const state = replayLog(current([
       { type: 'NEW_GAME', payload: { seed: 5 }, clientTime: T0 },
       { type: 'START_ACTIVITY', payload: { id: 'a', ...START }, clientTime: T0 },
       { type: 'SKIP_DUNGEON_RUN', payload: { id: 'b', type: 'SKIP_DUNGEON_RUN', run: 1, maxCost: 4 }, clientTime: T0 + MIN },
       { type: 'DEBUG_SET_HERO_HP', payload: { id: 'c', type: 'DEBUG_SET_HERO_HP', hp: 1 }, clientTime: T0 + MIN },
       { type: 'DEBUG_FINISH_DUNGEON_RUN', payload: { id: 'd', type: 'DEBUG_FINISH_DUNGEON_RUN' }, clientTime: T0 + MIN },
       { type: 'RESUME', payload: {}, clientTime: T0 + MIN + 10 * MIN },
-    ]);
+    ]));
     expect(state?.stamina.current).toBe(98); // 3:50 left → 4 spent, then +2 over 10 min
     expect(state?.dungeon.totals.runs).toBe(4); // skip + debug finish + 2 runs in 10 min
     expect(state?.flags.debugUsed).toBe(true);

@@ -10,12 +10,22 @@ export * from './migrations';
 export * from './summary';
 export * from './selectors';
 export { actionIntervalMs, currentActionIntervalMs } from './activities';
-export { ENGINE_VERSION } from './version';
+export { ENGINE_VERSION, RELEASED_ENGINES, releasedEngineIndex } from './version';
 export * from './replay';
 export { markDebugUsed } from './flags';
 export * from './stats';
 export * from './stamina';
 export * from './hp';
 export { dealtDamage, resolveFight, strikeRange, type Combatant, type FightResult } from './combat';
-export { dungeonRunView, runMsFor, skipCost, type DungeonRunView } from './dungeon';
+export {
+  dungeonRunView,
+  dungeonTotals,
+  dungeonUnlockView,
+  isDungeonUnlocked,
+  runMsFor,
+  skipCost,
+  type DungeonRunView,
+  type DungeonUnlockView,
+} from './dungeon';
+export * from './danger';
 export * from './config';

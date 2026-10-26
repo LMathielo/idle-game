@@ -22,17 +22,19 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 
 - Two tabs: **Village** (pixel village hub with signs: Storage, Merchant, Dungeon, Training, Woodcutting) and **Hero** (XP, Status panel with 4 attributes, derived damage/defense, current/max HP with regen, mana and stamina, 9 equipment slots, 20-slot inventory, 4 skills).
 - **M1 done and on `main`:** deterministic engine (`src/engine`), `LocalGameClient`, on-device SQLite save with an action log. Woodcutting works from the Village sign (tap to start/stop), progresses live and offline (8h cap), and shows a "While you were away" summary. Hero tab reads real state. Debug panel on the Hero tab (clock offset, +10k hero XP, stamina, attributes, hero HP → 1, finish run, reset save).
-- **M4 Dungeon in progress:** the Dungeon sign opens a full-screen modal. Rat Cellar Lv1 (one Rat) runs on auto-repeat, live and offline; each run takes 5:00 − 1 s per DEX (4:50 for a new hero) or can be skipped with stamina, and ends in a deterministic fight that gives hero XP, gold and Rat Skin. Current HP persists and regenerates (5 + END per minute). Last-fight panel with a replay of the fight log. Only one activity runs at a time.
+- **M4 Dungeon in progress:** the Dungeon sign opens a full-screen modal with **5 dungeon tiers** (Rat Cellar, Bat Cave, Wolf Den, Forgotten Crypt, Troll Bridge), one enemy each. Each tier unlocks after a number of wins in the previous one (10 / 15 / 25 / 40); locked tiers show what opens them and their progress, and a banner announces a new unlock. Runs auto-repeat, live and offline; each run takes the tier's base time (5/7/9/11/13 min) − 1 s per DEX, or can be skipped with stamina, and ends in a deterministic fight that gives hero XP, gold and the tier's loot. A danger hint (Easy / Tough / Deadly) estimates the HP cost of a fight. Current HP persists and regenerates (5 + END per minute). Last-fight panel with a replay of the fight log. Only one activity runs at a time. Tiers 4–5 need Training.
 - Merchant, Storage and Training show "coming soon". No training, merchant, storage or equipping loot yet.
 - Technical details: `docs/ENGINE.md`.
 - Delivery: PRs land on `dev` (test preview in Expo Go, EAS branch `dev`); the owner releases `dev` → `main` (EAS branch `main`) after testing.
 
 ## Roadmap (proposed, not yet committed by the owner)
 
+**Next: M3 Training (gold + time)**, so attributes can grow and dungeon tiers 4–5 become beatable.
+
 - **M1 — Core engine & save (done, on `main`):** seeded RNG, `applyCommand` / `simulate`, `LocalGameClient`, versioned on-device save, Hero tab reading real state. Also pulls in M2's core: woodcutting start/stop, offline progress (capped) and the "while you were away" summary.
 - **M2 — First idle loop: Woodcutting.** Start/stop gathering, logs accumulate over time and offline (capped), skill XP and levels, "while you were away" summary.
 - **M3 — Training & Merchant.** Raise attributes at Training by paying gold **and waiting** (Gladiatus-style: a training session takes time, cost and duration scale with the current value); sell logs/items, buy basics. First complete economy loop. Attributes stay plain integers in the save, so training only has to add to them.
-- **M4 — Dungeon (in progress).** Automated combat resolved by the engine, combat log replayed in the UI, XP/gold/loot rewards, equip from loot. First slice in review: village modal pattern, Rat Cellar, combat, persistent HP, auto-repeat runs, stamina skip. Equipping loot comes later.
+- **M4 — Dungeon (in progress).** Automated combat resolved by the engine, combat log replayed in the UI, XP/gold/loot rewards, equip from loot. Done: village modal pattern, combat, persistent HP, auto-repeat runs, stamina skip, 5 tiers with win-based unlocks. Equipping loot comes later.
 - **M5 — Storage & polish.** Storage capacity, item comparison deltas, onboarding.
 
 ## Decision log
@@ -75,6 +77,12 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 | 2026-10-26 | Run timing is per dungeon (config); the fight record stores why it ended (`endReason`) | Future dungeons can be shorter or longer; the UI never re-derives the outcome |
 | 2026-10-26 | Only the **last fight's log** is stored (`{round, actor, roll, dealt, targetHpAfter}`), plus lifetime runs/wins/losses; no per-run log | Keeps the save small; the replay is visual only |
 | 2026-10-26 | Save v4: HP full at the hero's level, no dungeon activity, empty fight state; engine 1.3.0 | Existing heroes start the dungeon at full health |
+| 2026-10-26 | **5 dungeon tiers**, one enemy each, all in config: Rat Cellar (Rat), Bat Cave (Bat), Wolf Den (Wolf), Forgotten Crypt (Skeleton), Troll Bridge (Troll); new stackable loot Bat Wing, Wolf Pelt, Old Bone, Troll Hide. Table in `docs/ENGINE.md` | Long-term goals for the combat loop without new code per dungeon |
+| 2026-10-26 | Unlock = **wins** in the previous tier: 10 / 15 / 25 / 40 (losses never count); permanent; lifetime runs/wins/losses kept per dungeon. Starting a locked tier is refused by the engine (`DUNGEON_LOCKED`) | Easier early, harder later; wins only go up, so an unlock can't be lost |
+| 2026-10-26 | Run times 5 / 7 / 9 / 11 / 13 min (−1 s per DEX, min 1:00), same skip, combat, regen and auto-repeat rules for every tier | Harder tiers take longer and pay more |
+| 2026-10-26 | Tiers 4–5 need Training to be beatable: sim says Crypt needs ~STR/END 20 (Lv 10: 98% wins), Troll ~STR/END 30 + Lv 20; at STR/END 10 both are 0%. Wolf Den is beatable from ~Lv 6–7 with base attributes | Gives Training (next milestone) a clear purpose |
+| 2026-10-26 | Danger hint before a run: expected HP lost per fight with average rolls vs max HP: < 40% Easy, < 100% **Tough**, otherwise Deadly. A hint only, never a simulation. "Tough", not "Risky": it measures HP cost, not the chance to lose | Readable risk at a glance on a phone |
+| 2026-10-26 | **Replay anchors:** a save migration or engine change writes a `MIGRATE` log row with the full migrated state, in the same transaction. Replay is valid within one engine-version span; anchors stitch spans together, and older-engine spans are skipped (`skippedOldEngine`) instead of being re-run on new rules. An anchor must chain to the row before it (`fromHash`, `fromEngine`) and be a real version change, and every row's engine label must be a released engine that never goes back along the log, so a forged anchor or a fake label is rejected. Residual gap, for any log: labels are client-written, so a forger can relabel everything as an older released engine back to `NEW_GAME`; this closes only with server re-simulation using archived engine builds. Every save-version bump also bumps the engine version. Save v5, engine 1.4.0 | A future server can validate every log across app updates; was overdue since save v3 |
 
 ## Stamina projection (2026-10-26, updated for the skip rule)
 
@@ -95,10 +103,10 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - Offline cap upgrade (raise `offline.capMs` / `efficiency` per player, e.g. bought in the village).
 - Big-number support for XP beyond ~level 150 (values clamp to `Number.MAX_SAFE_INTEGER` today).
 - Server-owned time: closes the repeated "clock forward 8h, open, repeat" offline-cap farm, which can't be detected on the device (see ENGINE.md exploit table).
-- Before the first save or rules change after M1: log a `MIGRATE` / `ENGINE_UPGRADE` row, replay by each row's `engineVersion`, and add SQL schema migrations. **MIGRATE log row before sync (now overdue: v3 and v4 bumps without it).**
+- Ordered SQL schema migrations keyed on `meta.schema_version`, before the first table change.
 - Woodcutting modal (same full-screen pattern as Dungeon; today it is still tap-to-toggle).
 - Modals for the other village signs (Merchant, Storage, Training).
-- More dungeons and enemies (multi-enemy runs, bosses, level gates).
+- More dungeon content: multi-enemy runs, bosses, unlock rules beyond wins (e.g. hero level).
 - Hit chance and crit using DEX.
 - HP potions.
 - Action-log retention once sync exists: delete synced rows older than 30 days.
