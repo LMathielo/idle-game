@@ -14,6 +14,7 @@ export const colors = {
   hp: '#c0392b',
   xp: '#3f8fd1',
   skill: '#4f9a4a',
+  stamina: '#d9822b',
   slot: '#3a2a1c',
   slotBorder: '#20150c',
 } as const;

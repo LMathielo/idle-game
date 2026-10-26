@@ -1,4 +1,8 @@
-// Item definitions (data). Stackable items are stored in the inventory with id = definition id.
+// Item catalog (data), keyed by item definition id. Stackable items are stored in the inventory with
+// id = definition id; every stored item carries `defId`. BASE combat stats live only here, never on
+// item instances, so changing a number here rebalances every save without a migration. Rolled affixes
+// (M4 loot: "+3 damage", "+5% armor") will be stored on the instance because each drop differs; see
+// docs/ENGINE.md for where they enter the stat pipeline.
 import type { EquipmentSlot, ItemRarity } from '../types';
 
 export type ItemDef = {
@@ -8,15 +12,27 @@ export type ItemDef = {
   rarity: ItemRarity;
   stackable: boolean;
   slot?: EquipmentSlot;
+  /** Weapons: base damage range before percent bonuses and attributes. Integers, min <= max. */
+  damage?: { min: number; max: number };
+  /** Armor value added to base defense while equipped. Integer. */
+  armor?: number;
 };
 
 export const ITEMS = {
   oak_logs: { id: 'oak_logs', name: 'Oak Logs', icon: '🪵', rarity: 'common', stackable: true },
   bird_nest: { id: 'bird_nest', name: 'Bird Nest', icon: '🪺', rarity: 'rare', stackable: true },
   bread: { id: 'bread', name: 'Bread', icon: '🍞', rarity: 'common', stackable: true },
-  rusty_gladius: { id: 'rusty_gladius', name: 'Rusty Gladius', icon: '🗡️', rarity: 'common', stackable: false, slot: 'weapon' },
-  linen_tunic: { id: 'linen_tunic', name: 'Linen Tunic', icon: '🥋', rarity: 'common', stackable: false, slot: 'armor' },
-  worn_sandals: { id: 'worn_sandals', name: 'Worn Sandals', icon: '👢', rarity: 'common', stackable: false, slot: 'boots' },
+  rusty_gladius: {
+    id: 'rusty_gladius',
+    name: 'Rusty Gladius',
+    icon: '🗡️',
+    rarity: 'common',
+    stackable: false,
+    slot: 'weapon',
+    damage: { min: 2, max: 4 },
+  },
+  linen_tunic: { id: 'linen_tunic', name: 'Linen Tunic', icon: '🥋', rarity: 'common', stackable: false, slot: 'armor', armor: 2 },
+  worn_sandals: { id: 'worn_sandals', name: 'Worn Sandals', icon: '👢', rarity: 'common', stackable: false, slot: 'boots', armor: 1 },
 } as const satisfies Record<string, ItemDef>;
 
 export type ItemId = keyof typeof ITEMS;

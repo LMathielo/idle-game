@@ -6,18 +6,10 @@ import { ACTIVITY_STRIP_HEIGHT } from '../components/ActivityStrip';
 import { DebugPanel } from '../components/DebugPanel';
 import { formatNumber } from '../components/format';
 import { Bar, Panel } from '../components/Panel';
+import { StatusPanel } from '../components/StatusPanel';
 import { DEV_TOOLS_ENABLED } from '../engine/config/dev';
-import type { AttributeKey, Character, EquipmentSlot, Inventory, Item, ItemRarity, SkillKey } from '../engine/types';
+import type { Character, EquipmentSlot, Inventory, Item, ItemRarity, SkillKey } from '../engine/types';
 import { colors, fonts } from '../theme';
-
-const ATTRIBUTE_LABELS: Record<AttributeKey, string> = {
-  strength: 'Strength',
-  dexterity: 'Dexterity',
-  agility: 'Agility',
-  constitution: 'Constitution',
-  charisma: 'Charisma',
-  intelligence: 'Intelligence',
-};
 
 const SKILL_LABELS: Record<SkillKey, { label: string; icon: string }> = {
   woodcutting: { label: 'Woodcutting', icon: '🪓' },
@@ -54,13 +46,18 @@ const RARITY_COLORS: Record<ItemRarity, string> = {
 };
 
 export default function HeroScreen() {
-  const { character, inventory } = useGameState();
+  const { character, inventory, stamina } = useGameState();
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView contentContainerStyle={styles.content}>
         <HeaderPanel character={character} />
-        <AttributesPanel attributes={character.attributes} />
+        <StatusPanel
+          level={character.level}
+          attributes={character.attributes}
+          equipment={character.equipment}
+          stamina={stamina}
+        />
         <EquipmentPanel equipment={character.equipment} />
         <InventoryPanel inventory={inventory} />
         <SkillsPanel skills={character.skills} />
@@ -71,7 +68,8 @@ export default function HeroScreen() {
 }
 
 // Each panel is memoized on the slice it shows. simulate() keeps untouched slices by reference,
-// so a woodcutting action re-renders Header, Inventory and Skills, not Attributes or Equipment.
+// so a woodcutting action re-renders Header, Inventory and Skills, not Equipment. Status re-renders
+// only when level, attributes, equipment or stamina change (stamina ticks while it regenerates).
 
 const HeaderPanel = memo(function HeaderPanel({ character }: { character: Character }) {
   return (
@@ -89,8 +87,6 @@ const HeaderPanel = memo(function HeaderPanel({ character }: { character: Charac
         </View>
       </View>
       <View style={styles.bars}>
-        <Text style={styles.barCaption}>Health</Text>
-        <Bar value={character.hp} max={character.maxHp} color={colors.hp} label={`${character.hp} / ${character.maxHp}`} />
         <Text style={styles.barCaption}>Experience</Text>
         <Bar
           value={character.xp}
@@ -98,21 +94,6 @@ const HeaderPanel = memo(function HeaderPanel({ character }: { character: Charac
           color={colors.xp}
           label={`${formatNumber(character.xp)} / ${formatNumber(character.xpToNext)}`}
         />
-      </View>
-    </Panel>
-  );
-});
-
-const AttributesPanel = memo(function AttributesPanel({ attributes }: { attributes: Character['attributes'] }) {
-  return (
-    <Panel title="Attributes">
-      <View style={styles.attrGrid}>
-        {(Object.keys(ATTRIBUTE_LABELS) as AttributeKey[]).map((k) => (
-          <View key={k} style={styles.attrCell}>
-            <Text style={styles.attrLabel}>{ATTRIBUTE_LABELS[k]}</Text>
-            <Text style={styles.attrValue}>{attributes[k]}</Text>
-          </View>
-        ))}
       </View>
     </Panel>
   );
@@ -217,19 +198,6 @@ const styles = StyleSheet.create({
   gold: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.goldDark, marginTop: 2 },
   bars: { marginTop: 12, gap: 4 },
   barCaption: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.inkSoft, marginTop: 4 },
-
-  attrGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  attrCell: {
-    width: '50%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 5,
-    paddingRight: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.parchmentDark,
-  },
-  attrLabel: { fontFamily: fonts.body, fontSize: 14, color: colors.ink },
-  attrValue: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink },
 
   equipRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
   equipCell: { width: 84, alignItems: 'center' },

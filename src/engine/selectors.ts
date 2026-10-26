@@ -27,6 +27,7 @@ export function activityView(state: GameState): ActivityView | null {
   };
 }
 
-export function itemQuantity(state: GameState, itemId: string): number {
-  return state.inventory.items.filter((i) => i.id === itemId).reduce((n, i) => n + (i.quantity ?? 1), 0);
+/** Total quantity of an item definition across the inventory. */
+export function itemQuantity(state: GameState, defId: string): number {
+  return state.inventory.items.filter((i) => i.defId === defId).reduce((n, i) => n + (i.quantity ?? 1), 0);
 }

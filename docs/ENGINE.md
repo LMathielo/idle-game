@@ -96,6 +96,54 @@ Owner's target: about 2 days of play to hero Lv20 and more than a year to Lv100.
 
 Woodcutting: 10 skill XP per action, interval 3000 ms at Lv1, −1% of base per level above 1, floor 1200 ms (reached at Lv61).
 
+## Attributes & derived stats
+
+The hero has 4 attributes, stored as plain integers in `character.attributes`: `strength`, `dexterity`, `endurance`, `intelligence`. A new hero starts at 10 in each. They will be raised by Training (gold + time, M3).
+
+| Attribute | Effect today |
+| --- | --- |
+| Strength | +1 flat damage per point (min and max) |
+| Endurance | +1 flat defense per point |
+| Dexterity, Intelligence | none yet |
+
+**Derived stats are computed, never stored.** `getDerivedStats(state)` (`src/engine/stats.ts`) returns `damage {min, max}`, `defense`, `maxHp` and `maxMana`, each with a `breakdown` whose parts add up to the final number (the Hero tab shows it on tap). Coefficients: `src/engine/config/stats.ts`.
+
+```
+damage  = round(weapon.damage  × (1 + Σ percent)) + STR × 1        (each of min and max)
+defense = round(Σ equipped armor × (1 + Σ percent)) + END × 1
+maxHp   = 50 + 10 × (level − 1)
+maxMana = 20 + 5 × (level − 1)
+```
+
+- **Attribute points are flat FINAL bonuses**: percent bonuses scale only the base (gear) part, never the STR/END part (owner decision; tested).
+- **Unarmed** (no weapon, or a weapon `defId` the catalog does not know): 1–2.
+- **Gear bonuses (planned, M4).** Base item stats come from the catalog. Rolled affixes on dropped items will be stored on the item instance. Flat affixes ("+3 damage", "+2 armor") will add to the **base** part, before percent bonuses. Percent affixes ("+5% armor") join the percent list. Attribute points always stay last, unscaled. Confirm this order when loot ships.
+- **Percent bonuses** are integer basis points (`1000` = +10%) collected by `percentBonuses(state)`. The list is empty today; future upgrades plug in there. They are summed and rounded once, so the breakdown has a single `percent` line whose `bonuses` field lists every source and its bp. Rounding is integer half-up, `floor((base × (10000 + Σbp) + 5000) / 10000)`, with the factor floored at 0. No `Math.pow`.
+- New hero: damage 12–14 (2–4 Rusty Gladius + 10 STR), defense 13 (2 Linen Tunic + 1 Worn Sandals + 10 END), HP 50, mana 20.
+- **No current HP or mana yet.** With no combat the hero is always at full. `hp`/`maxHp` were removed from the save in v3; current HP/mana come back with combat (M4) as stored values clamped to the derived max.
+
+### Item catalog
+
+Base item combat stats (`damage`, `armor`) live only in the catalog `ITEMS` (`src/engine/config/items.ts`), keyed by definition id. Every stored item carries `defId`; stats are looked up through it and never copied onto the instance, so a balance change needs no save migration. Inventory stacks merge by `defId`. Rolled affixes (M4) are the exception: they differ per drop, so they will live on the instance. A stored item with extra stat fields is ignored (tested).
+
+| defId | Slot | Stats |
+| --- | --- | --- |
+| `rusty_gladius` | weapon | damage 2–4 |
+| `linen_tunic` | armor | armor 2 |
+| `worn_sandals` | boots | armor 1 |
+
+## Stamina
+
+`state.stamina = { current, max, progressMs }`. A new hero starts at 100/100. `max` is stored per player (a future upgrade can raise it); it is 100 for everyone today. Data: `src/engine/config/stamina.ts`; rules: `src/engine/stamina.ts`.
+
+- **Regen: +1 every 5 minutes** (`regenIntervalMs = 300000`), never above max. The remainder stays in `progressMs`, so no partial time is lost between resumes (many small resumes = one big one; tested).
+- **At max, `progressMs` stays 0.** Time spent full is not banked; the 5-minute timer starts when stamina is spent.
+- Regen runs inside `simulate()` on the **accepted** elapsed time, so it follows the same time rules as woodcutting: clock moved back (rule b) or jitter (rule c) → no regen, paused until real time catches up; invalid time (rule e) → no-op.
+- **Not limited by the 8 h offline cap (rule d).** Stamina uses `requestedMs`, not the capped `grantedMs`. Why: the cap exists so idle *rewards* cannot pile up without limit. Stamina already has its own hard limit (max 100 = 8h20 from empty), so a long absence simply fills the bar, which is what a returning player expects. Capping it too would only matter for the 20 minutes between 8h and 8h20, and would make the bar look broken after a long break. Clock-forward abuse gains at most one full bar per jump, the same order as the activity cap, and is closed by server-owned time like the rest (see exploit table).
+- `spendStamina(state, amount)` returns `{ ok: false, error: { code: 'NOT_ENOUGH_STAMINA' | 'INVALID_AMOUNT' } }` instead of mutating. Callers simulate to `now` first (`applyCommand` does), so regen up to that moment counts.
+- Planned costs (config only, unused until M4): dungeon run 10, boss 25.
+- `staminaView(state)` gives the UI `nextInMs` (to the next point) and `fullInMs` (to a full bar).
+
 ## Storage: SQLite as a document store
 
 **Decision.** The owner prefers a MongoDB-style model because player attributes will keep growing. No MongoDB/Realm option runs in Expo Go (Realm and Atlas Device Sync are end-of-life), so we use **expo-sqlite** (bundled in Expo Go) as a document store:
@@ -110,11 +158,16 @@ The repository talks to a small `SqlDatabase` interface. The app passes `expo-sq
 
 `GameState.saveVersion` plus ordered pure migrations in `src/engine/migrations.ts` (`MIGRATIONS[n]` upgrades v`n` to v`n+1`). A save newer than the app is refused instead of being overwritten. To change the shape: bump `CURRENT_SAVE_VERSION`, add the migration and a frozen fixture of the old version under `tests/fixtures/`.
 
-Current version: **2**. v1 → v2 adds `flags.debugUsed` (set to `false` for old saves). `tests/fixtures/save-v1.json` is a frozen v1 save that must keep loading.
+Current version: **3**.
 
-**Rules version.** `ENGINE_VERSION` (`src/engine/version.ts`) is written on every log row. Bump it whenever rules change outcomes. `tests/golden.test.ts` pins the final state hash of a fixed seed and script, so an unintended rules change fails CI. 1.1.0: XP curve uses `L × √L`, and `flags.debugUsed` was added.
+- v1 → v2 adds `flags.debugUsed` (set to `false` for old saves).
+- v2 → v3 (2026-10-26): attributes become strength→strength, dexterity→dexterity, constitution→endurance, intelligence→intelligence, each set to **max(old value, 10)** so old heroes match the new-hero baseline (owner decision); agility and charisma are dropped; `character.hp`/`maxHp` are dropped; `stamina` is added full (100/100); every equipped and inventory item gets a `defId` (stackables: their id; starting gear: `start-<defId>`). Literals in the migration are frozen on purpose, so later config changes cannot change what it produces.
 
-**Known limits, fix before the first rules or save change after M1:**
+Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests/fixtures/save-v2.json` (made with the 1.1.0 engine: hero Lv4, woodcutting Lv8, 3785 logs, banked progress).
+
+**Rules version.** `ENGINE_VERSION` (`src/engine/version.ts`) is written on every log row. Bump it whenever rules change outcomes. `tests/golden.test.ts` pins the final state hash of a fixed seed and script, so an unintended rules change fails CI. 1.1.0: XP curve uses `L × √L`, and `flags.debugUsed` was added. 1.2.0 (2026-10-26): save v3, stamina regen in `simulate()`, stamina/attribute debug commands; woodcutting outcomes unchanged (same actions, levels and drops in the golden script). The golden script now also spends stamina and adds STR, so the hash changed.
+
+**Known limits, still open after save v3 / engine 1.2.0 (the brief for v3 kept them out of scope):**
 - Loading a save that needed a migration (or a different `ENGINE_VERSION`) logs no row. A replay from `NEW_GAME` then runs the old rows on the current rules. Add a `MIGRATE` / `ENGINE_UPGRADE` log row carrying the hash after migration, and make replay use each row's `engineVersion` (already stored, and accepted in `ReplayEntry`, but not yet used).
 - The SQL schema has only `schema_version = 1` in `meta` and `CREATE TABLE IF NOT EXISTS`. Add ordered SQL schema migrations keyed on `meta.schema_version` before the first table change.
 
@@ -125,7 +178,7 @@ Current version: **2**. v1 → v2 adds `flags.debugUsed` (set to `false` for old
 | type | When | Payload |
 | --- | --- | --- |
 | `NEW_GAME` | First launch, Reset save | `{ seed }` (`+ reason, debugUsed: true` after Reset save) |
-| `START_ACTIVITY`, `STOP_ACTIVITY`, `DEBUG_GRANT_HERO_XP` | Player/debug commands; `command_id` = command id | the command |
+| `START_ACTIVITY`, `STOP_ACTIVITY`, `DEBUG_GRANT_HERO_XP`, `DEBUG_SPEND_STAMINA`, `DEBUG_REFILL_STAMINA`, `DEBUG_ADD_ATTRIBUTE` | Player/debug commands; `command_id` = command id | the command |
 | `RESUME` | App start, back from background, debug clock change. Skipped when no time passed and there was no anomaly | `{ summary }` |
 | `SIMULATE` | Live-play checkpoint: every 30 s while an activity runs (every 10 min when idle), before any other row, on background | `{ checkpoint: true }` or `{ summary }` |
 | `CLOCK_ANOMALY` | Any anomaly from a resume, or the first one seen while ticking | the anomaly event |
@@ -145,4 +198,4 @@ Shown after app start, a return from background or a debug clock change when **a
 
 ## Debug tools
 
-`DEV_TOOLS_ENABLED` in `src/engine/config/dev.ts` shows a Debug panel on the Hero tab. It stays on for the POC. Any `DEBUG_*` action sets `state.flags.debugUsed = true` forever (it survives later play, Reset save and replay), so a future server can tell debugged saves apart. The clock buttons change a persisted **offset** on the client clock (`SystemClock.offsetMs`), then resume, so the engine sees exactly what a player who changed the phone clock would produce. "+10k hero XP" is a real logged command (`DEBUG_GRANT_HERO_XP`). "Reset save" logs `DEBUG_RESET_SAVE` + `NEW_GAME` and clears the offset; it never deletes log rows. None of them change engine rules.
+`DEV_TOOLS_ENABLED` in `src/engine/config/dev.ts` shows a Debug panel on the Hero tab. It stays on for the POC. Any `DEBUG_*` action sets `state.flags.debugUsed = true` forever (it survives later play, Reset save and replay), so a future server can tell debugged saves apart. The clock buttons change a persisted **offset** on the client clock (`SystemClock.offsetMs`), then resume, so the engine sees exactly what a player who changed the phone clock would produce. "+10k hero XP" is a real logged command (`DEBUG_GRANT_HERO_XP`), and so are "Spend 10 stamina" (`DEBUG_SPEND_STAMINA`, refused with `NOT_ENOUGH_STAMINA` below 10), "Refill stamina" (`DEBUG_REFILL_STAMINA`) and "+1 STR / DEX / END / INT" (`DEBUG_ADD_ATTRIBUTE`, 1–1000 per command, an attribute can reach at most 1,000,000). "Reset save" logs `DEBUG_RESET_SAVE` + `NEW_GAME` and clears the offset; it never deletes log rows. None of them change engine rules.

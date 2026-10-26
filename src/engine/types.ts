@@ -3,8 +3,12 @@
 // The whole GameState is one JSON document (see docs/ENGINE.md), so every
 // field must stay JSON-serializable: no Dates, Maps, classes or undefined values.
 
-export type AttributeKey = 'strength' | 'dexterity' | 'agility' | 'constitution' | 'charisma' | 'intelligence';
+/** The hero's attributes, in display order. Single source: AttributeKey derives from it. */
+export const ATTRIBUTE_KEYS = ['strength', 'dexterity', 'endurance', 'intelligence'] as const;
 
+export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
+
+/** Plain integers. Raised later by Training (gold + time, M3); read by getDerivedStats(). */
 export type Attributes = Record<AttributeKey, number>;
 
 export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots';
@@ -14,6 +18,12 @@ export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic';
 export type Item = {
   /** Stackable items use their definition id (e.g. `oak_logs`); unique items use an instance id. */
   id: string;
+  /**
+   * Item definition id (key of ITEMS in config/items.ts). BASE combat stats (damage, armor) are read
+   * from the catalog by this id and never copied onto the instance, so balance changes need no save
+   * migration. Rolled affixes (M4 loot) will be stored on the instance, since they differ per drop.
+   */
+  defId: string;
   name: string;
   icon: string; // placeholder glyph until we have pixel sprites
   rarity: ItemRarity;
@@ -35,8 +45,7 @@ export type Character = {
   level: number;
   xp: number;
   xpToNext: number;
-  hp: number;
-  maxHp: number;
+  // No hp/maxHp: max HP and mana are derived (getDerivedStats). Current HP returns with combat (M4).
   gold: number;
   attributes: Attributes;
   equipment: Partial<Record<EquipmentSlot, Item>>;
@@ -72,8 +81,17 @@ export type GameFlags = {
   debugUsed: boolean;
 };
 
+/** Pays for dungeon runs and bosses (M4). Regenerates in simulate(); see docs/ENGINE.md. */
+export type Stamina = {
+  current: number;
+  /** Per player so a future upgrade can raise it. */
+  max: number;
+  /** Time banked towards the next point. Always 0 while current >= max. */
+  progressMs: number;
+};
+
 export type GameState = {
-  saveVersion: 2;
+  saveVersion: 3;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -84,6 +102,7 @@ export type GameState = {
   /** Per player so a future upgrade can raise them. */
   offline: { capMs: number; efficiency: number };
   activity: Activity | null;
+  stamina: Stamina;
   stats: GameStats;
   flags: GameFlags;
   character: Character;

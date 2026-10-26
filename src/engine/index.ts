@@ -13,4 +13,6 @@ export { actionIntervalMs, currentActionIntervalMs } from './activities';
 export { ENGINE_VERSION } from './version';
 export * from './replay';
 export { markDebugUsed } from './flags';
+export * from './stats';
+export * from './stamina';
 export * from './config';

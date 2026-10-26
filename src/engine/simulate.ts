@@ -2,6 +2,7 @@
 // Same code path for live ticks (1s) and offline catch-up (up to the cap).
 import { currentActionIntervalMs, performAction } from './activities';
 import { cloneState } from './clone';
+import { regenStamina } from './stamina';
 import { CLOCK_BACKWARD_TOLERANCE_MS, MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { emptySummary } from './summary';
 import type { GameEvent, GameState, SimulationSummary } from './types';
@@ -17,6 +18,9 @@ export type SimulationResult = { state: GameState; events: GameEvent[]; summary:
  *  d. elapsed > offline.capMs → grant exactly the cap, CLOCK_ANOMALY 'forward_capped', lastSimulatedAt = now.
  *  e. non-finite now → no-op + ERROR event.
  *  f. highestSeenAt = max(highestSeenAt, now) whenever now is accepted.
+ *
+ * Stamina regenerates on the accepted elapsed time (rules b, c and e grant none), but NOT on the
+ * capped time: its max already bounds it, so a long absence can fill the bar (docs/ENGINE.md).
  */
 export function simulate(state: GameState, now: number): SimulationResult {
   const summary = emptySummary();
@@ -62,6 +66,9 @@ export function simulate(state: GameState, now: number): SimulationResult {
     time: { lastSimulatedAt: now, highestSeenAt: Math.max(highestSeenAt, now) }, // f.
     activity: state.activity ? { ...state.activity } : null,
   };
+
+  // Uncapped on purpose: requestedMs, not grantedMs. Same object when nothing changed.
+  draft.stamina = regenStamina(state.stamina, requestedMs);
 
   const activity = draft.activity;
   if (activity && grantedMs > 0) {

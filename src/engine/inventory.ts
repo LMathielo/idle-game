@@ -6,7 +6,7 @@ import type { Inventory, Item } from './types';
 export function makeItem(defId: string, quantity = 1, instanceId?: string): Item {
   const def = getItemDef(defId);
   if (!def) throw new Error(`Unknown item ${defId}`);
-  const item: Item = { id: instanceId ?? def.id, name: def.name, icon: def.icon, rarity: def.rarity };
+  const item: Item = { id: instanceId ?? def.id, defId: def.id, name: def.name, icon: def.icon, rarity: def.rarity };
   if (def.slot) item.slot = def.slot;
   if (def.stackable) {
     item.stackable = true;
@@ -20,7 +20,7 @@ export function makeItem(defId: string, quantity = 1, instanceId?: string): Item
  * Returns how many were added and how many were lost because no slot was free.
  */
 export function addStackable(inventory: Inventory, defId: string, quantity: number): { added: number; lost: number } {
-  const existing = inventory.items.find((i) => i.stackable && i.id === defId);
+  const existing = inventory.items.find((i) => i.stackable && i.defId === defId);
   if (existing) {
     existing.quantity = (existing.quantity ?? 0) + quantity;
     return { added: quantity, lost: 0 };

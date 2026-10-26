@@ -8,14 +8,25 @@ const { T0, HOUR } = await import('./helpers');
 
 describe('replay with DEV_TOOLS_ENABLED = false', () => {
   it('live play rejects DEBUG_* commands', () => {
-    const res = applyCommand(newGame(1, T0), { id: 'x', type: 'DEBUG_GRANT_HERO_XP', amount: 10 }, T0);
-    expect(res).toEqual({ ok: false, error: expect.objectContaining({ code: 'DEBUG_DISABLED' }) });
+    const cmds = [
+      { id: 'x', type: 'DEBUG_GRANT_HERO_XP', amount: 10 },
+      { id: 'y', type: 'DEBUG_SPEND_STAMINA', amount: 10 },
+      { id: 'z', type: 'DEBUG_REFILL_STAMINA' },
+      { id: 'w', type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'strength', amount: 1 },
+    ] as const;
+    for (const c of cmds) {
+      const res = applyCommand(newGame(1, T0), c, T0);
+      expect(res).toEqual({ ok: false, error: expect.objectContaining({ code: 'DEBUG_DISABLED' }) });
+    }
   });
 
   it('replay still accepts every DEBUG_* row type and flags the save', () => {
     const state = replayLog([
       { type: 'NEW_GAME', payload: { seed: 5 }, clientTime: T0 },
       { type: 'DEBUG_GRANT_HERO_XP', payload: { id: 'd1', type: 'DEBUG_GRANT_HERO_XP', amount: 10_000 }, clientTime: T0 },
+      { type: 'DEBUG_SPEND_STAMINA', payload: { id: 'd2', type: 'DEBUG_SPEND_STAMINA', amount: 10 }, clientTime: T0 },
+      { type: 'DEBUG_REFILL_STAMINA', payload: { id: 'd3', type: 'DEBUG_REFILL_STAMINA' }, clientTime: T0 },
+      { type: 'DEBUG_ADD_ATTRIBUTE', payload: { id: 'd4', type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'endurance', amount: 1 }, clientTime: T0 },
       { type: 'DEBUG_CLOCK_OFFSET', payload: { deltaMs: HOUR, offsetMs: HOUR }, clientTime: T0 + HOUR },
       { type: 'RESUME', payload: {}, clientTime: T0 + HOUR },
       { type: 'DEBUG_RESET_SAVE', payload: {}, clientTime: T0 + HOUR },
