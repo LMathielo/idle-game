@@ -7,11 +7,12 @@ You are the coding agent for a mobile idle RPG (Expo SDK 58, React Native 0.88, 
 
 ## Branch safety (non-negotiable)
 
-- **Only the owner merges into `main`.** Never merge a PR, never push to `main`, never fast-forward `main`.
+- **Only the owner merges, into `dev` and into `main`.** Never merge a PR, never push to `dev` or `main`, never fast-forward either of them, and never open the release PR `dev` → `main` unless the owner asks.
+- PRs target **`dev`** (the owner tests the `dev` preview in Expo Go, then releases `dev` → `main` himself).
 - Work in your **own git worktree**, never in a shared checkout (other agents and the orchestrator use it too):
   ```bash
   git -C /home/claude/idle-game fetch -q origin
-  git -C /home/claude/idle-game worktree add /tmp/wt/<branch> -b <branch> origin/main   # new branch
+  git -C /home/claude/idle-game worktree add /tmp/wt/<branch> -b <branch> origin/dev    # new branch, always from dev
   git -C /home/claude/idle-game worktree add /tmp/wt/<branch> <branch>                  # existing branch
   cd /tmp/wt/<branch>
   ```
@@ -38,13 +39,13 @@ You are the coding agent for a mobile idle RPG (Expo SDK 58, React Native 0.88, 
 
 ## Finishing
 
-1. Run `npm run typecheck`, the tests (when present), and `npx expo export --platform android --output-dir /tmp/export-check`. All must pass.
+1. Run `npm run typecheck`, the tests (when present), and `npx expo export --platform all --output-dir /tmp/export-check` (must produce iOS + Android only). All must pass.
 2. Commit on the branch named in the brief with clear messages ending in the attribution lines the session gives you.
-3. Push and open the PR with the REST API (GraphQL is blocked here):
+3. Push with `git push origin HEAD:refs/heads/<branch>` and open the PR with **base `dev`** via the REST API (GraphQL is blocked here):
    ```bash
-   gh api repos/LMathielo/idle-game/pulls -f title="<title>" -f head="<branch>" -f base=main -f body="$(cat pr.md)"
+   gh api repos/LMathielo/idle-game/pulls -f title="<title>" -f head="<branch>" -f base=dev -f body="$(cat pr.md)"
    ```
-   PR body: phone-readable — what changed, how to test on the phone, any decision you had to make, and the task brief's acceptance criteria as a checklist.
+   PR body: phone-readable — what changed, how to test on the phone (after the owner merges, in Expo Go on the `dev` update), any decision you had to make, and the task brief's acceptance criteria as a checklist.
 4. Report back: PR number and URL, files changed, anything you were unsure about.
 
 When the orchestrator sends you review findings, fix each confirmed issue (or reply why it is a false positive), re-run the checks, push to the same branch and report again.

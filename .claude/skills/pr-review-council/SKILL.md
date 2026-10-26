@@ -13,13 +13,13 @@ Adapted from Anthropic's official `code-review` plugin for this repo. GitHub Gra
 R=LMathielo/idle-game
 gh api repos/$R/pulls/$N                      # PR metadata (state, head, base)
 gh api repos/$R/pulls/$N/files --paginate     # changed files + patches
-git fetch origin pull/$N/head:pr-$N && git diff origin/main...pr-$N   # full diff locally
+git fetch origin dev pull/$N/head:pr-$N && git diff origin/dev...pr-$N   # full diff locally (PRs target dev)
 gh api repos/$R/issues/$N/comments -f body="$(cat review.md)"         # post the consolidated review
 ```
 
 ## Procedure
 
-1. **Eligibility:** skip if the PR is closed or merged.
+1. **Eligibility:** skip if the PR is closed or merged. Feature/fix/chore PRs must have base `dev`; if one targets `main`, flag it in the review (only the owner's release PR `dev` → `main` targets `main`, and the council does not review it unless asked).
 2. **Context:** read `AGENTS.md`, `docs/PRODUCT.md`, the task brief in the PR description, and the full diff.
 3. **Launch 5 reviewers in parallel** (`Agent` tool, `subagent_type: code-reviewer`). Each gets the PR number, the diff command, the brief and ONE lens:
    1. **Architecture & AGENTS.md compliance:** engine purity (no React/IO/`Date.now`/`Math.random` in `src/engine`), commands-in/state-out, `GameClient` boundary, file layout, Expo Go compatibility, mobile-only.
@@ -35,4 +35,4 @@ gh api repos/$R/issues/$N/comments -f body="$(cat review.md)"         # post the
    - 100: certain, frequent, evidence confirms.
 5. **Filter:** keep issues with confidence ≥ 80. Drop: pre-existing issues, things `tsc` would catch, pedantic nitpicks, generic "add more tests" unless the change adds engine rules without tests.
 6. **Post one consolidated comment** on the PR (brief, no emojis, file:line references, grouped by lens). Also list "Enhancements (optional)" separately if any reviewer proposed a valuable improvement with confidence ≥ 80.
-7. **Iterate:** send the confirmed issues back to the coding agent (`SendMessage` to the same agent, so it keeps context). After it pushes fixes, re-run steps 2–6 on the new diff. Stop when a round produces no confirmed issues, then **signal the owner that the PR is approved by the agents and ready for his final review**. Never merge: only the owner merges into `main`.
+7. **Iterate:** send the confirmed issues back to the coding agent (`SendMessage` to the same agent, so it keeps context). After it pushes fixes, re-run steps 2–6 on the new diff. Stop when a round produces no confirmed issues, then **signal the owner that the PR is approved by the agents and ready for his final review**. Never merge: only the owner merges, into `dev` and into `main`.

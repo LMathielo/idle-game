@@ -1,13 +1,17 @@
 name: Publish to Expo Go
 
-# Every push to main publishes an EAS Update. Open it in Expo Go on the phone
-# (expo.dev → project → Updates, or the QR code there). No local dev server needed.
+# A push to `dev` publishes an EAS Update on EAS branch `dev` (the owner's test preview).
+# A push to `main` publishes on EAS branch `main` (the last version the owner approved).
+# Open either one in Expo Go on the phone (expo.dev → project → Updates → pick the branch,
+# or the QR code there). No local dev server needed.
+#
+# Any other git branch never publishes: a manual run on it fails at the first step.
 #
 # First run only: links the project to the Expo account behind EXPO_TOKEN
-# (eas init + update:configure) and commits the resulting app.json back to main.
+# (eas init + update:configure) and commits the resulting app.json back to the branch.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 permissions:
@@ -21,6 +25,18 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
+      # Must stay the first step: nothing (not even the first-run link commit) may run for other refs.
+      - name: Only main and dev publish
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          if [ "$REF_TYPE" != "branch" ] || { [ "$REF_NAME" != "main" ] && [ "$REF_NAME" != "dev" ]; }; then
+            echo "::error::Refusing to publish from '$REF_NAME' ($REF_TYPE). Only the main and dev branches publish EAS Updates. Merge your PR into dev to get a preview."
+            exit 1
+          fi
+          echo "Publishing to EAS Update branch: $REF_NAME"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -63,7 +79,10 @@ jobs:
             git push
           fi
 
+      # EAS branch name = git branch name (main or dev, enforced by the first step).
+      # Expo Go loads the latest update of a branch directly; no channel or build needed.
       - name: Publish update
         env:
           MSG: ${{ github.event.head_commit.message || 'manual run' }}
-        run: eas update --branch main --platform all --message "$(echo "$MSG" | head -n1)" --non-interactive
+          EAS_BRANCH: ${{ github.ref_name }}
+        run: eas update --branch "$EAS_BRANCH" --platform all --message "$(echo "$MSG" | head -n1)" --non-interactive

@@ -10,7 +10,7 @@ You review ONE pull request through ONE lens given in your prompt. You do not ed
 2. For the game-logic lens also read `.claude/skills/idle-rpg-game-design/SKILL.md`; for the React Native/Expo lens read the relevant vendored Expo skills in `.claude/skills/` (do not trust memory about SDK 58 APIs).
 3. Get the diff (REST only, GraphQL is blocked):
    ```bash
-   git fetch origin pull/<N>/head:pr-<N> && git diff origin/main...pr-<N>
+   git fetch origin dev pull/<N>/head:pr-<N> && git diff origin/dev...pr-<N>   # PRs target dev
    ```
 4. Review only what the PR changes. Verify each finding against the code before reporting it.
 5. Return a list of findings, each: `file:line | lens | issue | why it matters | suggested fix | confidence (0-100)`. Return "No findings" if there are none. Do not pad the list; pedantic nitpicks, pre-existing issues and anything `tsc` would catch are false positives.

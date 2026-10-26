@@ -11,9 +11,9 @@ The owner (Lucas) works from his phone. The orchestrator is the product owner an
 
 1. **Understand it in product terms.** Read `docs/PRODUCT.md` and `.claude/skills/idle-rpg-game-design/SKILL.md`. Where does this feature sit in the core loop? What's the smallest version that's testable on the phone?
 2. **Decide open questions** using the game-design skill. Only ask the owner when the choice changes the game's direction or is expensive to undo; otherwise decide, and record the decision in `docs/PRODUCT.md` (Decision log).
-3. **Write the task brief** (template below) and launch `game-engineer` with it. Branch: `feat/<slug>` (or `fix/`, `chore/`).
+3. **Write the task brief** (template below) and launch `game-engineer` with it. Branch: `feat/<slug>` (or `fix/`, `chore/`), cut from `origin/dev`; the PR targets **`dev`**.
 4. When the agent reports the PR is open, run the **`pr-review-council`** skill. Loop fixes until clean.
-5. **Report to the owner** in a few phone-readable lines: what was built, the PR link, review rounds and what they caught, and how to test it. Merging to `main` publishes to Expo Go. **Only the owner merges** — no agent or orchestrator merges or pushes to `main`.
+5. **Report to the owner** in a few phone-readable lines: what was built, the PR link, review rounds and what they caught, and how to test it. Merging into `dev` publishes the `dev` update to Expo Go; once he has tested it, he releases with a PR `dev` → `main` (publishes the `main` update). **Only the owner merges**, into `dev` and into `main` — no agent or orchestrator merges, pushes to `dev`/`main`, or opens the release PR unless he asks.
 6. Never switch branches in the shared checkout while an agent is working; use a separate worktree for any investigation.
 
 ## Task brief template
@@ -25,7 +25,7 @@ Scope (in): <bullets>
 Scope (out): <bullets — prevents gold-plating>
 Product decisions already made: <bullets, with numbers/tunables if any>
 Acceptance criteria: <checkable bullets, incl. tests for engine rules>
-Constraints: AGENTS.md rules; Expo Go compatible; mobile only; branch feat/<slug>; open a PR to main with a short phone-readable description.
+Constraints: AGENTS.md rules; Expo Go compatible; mobile only; branch feat/<slug> from origin/dev; open a PR with base dev and a short phone-readable description.
 ```
 
 ## Keeping product awareness
