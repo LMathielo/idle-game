@@ -9,7 +9,7 @@ Mobile idle/incremental RPG inspired by Gladiatus. POC scope: two tabs. **Villag
 Visual style: medieval pixel art. Hard pixel bevels, no rounded corners. Fonts: Jacquard 12 (titles/signs) and Pixelify Sans (body). Colors and fonts live in `src/theme.ts`.
 
 The owner works mostly from a phone. Keep that in mind:
-- Commit directly to the GitHub repo; there is no "local copy" the owner can open.
+- Push your work to your own branch on GitHub and open a PR; there is no "local copy" the owner can open.
 - Every change on `dev` and `main` must build. A push to `dev` publishes the EAS Update branch `dev` (the owner's test preview); a push to `main` publishes EAS branch `main` (the last version he approved). He opens both in Expo Go. That is how he tests.
 - Mobile only (iOS + Android). Do not add a web target.
 - All work goes on a branch (`feat/`, `fix/`, `chore/`, `exp/`) and reaches `dev` by PR. Feature branches never publish to Expo Go.
@@ -29,7 +29,7 @@ The owner works mostly from a phone. Keep that in mind:
 
 | Branch | Role | Publishes to Expo Go | Who merges |
 | --- | --- | --- | --- |
-| `main` | Stable: only code the owner tested on `dev`. Protected (PR + `CI` check). | EAS branch `main` | Owner only, via release PR `dev` → `main` |
+| `main` | Stable: only code the owner tested on `dev`. Protected by a ruleset (PR + `CI` check, merge commit only). | EAS branch `main` | Owner only, via release PR `dev` → `main` |
 | `dev` | Integration and test preview. Default branch, so new PRs target it. | EAS branch `dev` | Owner only |
 | `feat/*`, `fix/*`, `chore/*`, `exp/*` | One task each, cut from `origin/dev`, PR into `dev` | Never | — |
 
