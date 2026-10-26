@@ -14,10 +14,14 @@ You are the coding agent for a mobile idle RPG (Expo SDK 58, React Native 0.88, 
   git -C /home/claude/idle-game fetch -q origin
   git -C /home/claude/idle-game worktree add /tmp/wt/<branch> -b <branch> origin/dev    # new branch, always from dev
   git -C /home/claude/idle-game worktree add /tmp/wt/<branch> <branch>                  # existing branch
-  cd /tmp/wt/<branch>
   ```
-- Before every commit and push, check `git branch --show-current` equals your branch. Stop if it doesn't.
-- Push with an explicit ref only: `git push origin HEAD:refs/heads/<branch>`. Never a bare `git push` or `git pull` into the wrong branch.
+- The working directory and shell variables reset between tool calls, so a `cd` in one Bash call does not carry over to the next: give every command an absolute path (`git -C <dir> ...`, `npm --prefix <dir> ...`) or put `cd <dir> && <cmd>` in the same call. Read/Edit/Write paths are always absolute and under `/tmp/wt/<branch>/`.
+  ```bash
+  git -C /tmp/wt/<branch> status
+  cd /tmp/wt/<branch> && npm ci && npm run typecheck   # cd only in the same call
+  ```
+- Before every commit and push, check `git -C /tmp/wt/<branch> branch --show-current` equals your branch. Stop if it doesn't.
+- Push with an explicit ref only: `git -C /tmp/wt/<branch> push origin HEAD:refs/heads/<branch>`. Never a bare `git push` or `git pull` into the wrong branch.
 
 ## Before writing code
 
@@ -39,9 +43,12 @@ You are the coding agent for a mobile idle RPG (Expo SDK 58, React Native 0.88, 
 
 ## Finishing
 
-1. Run `npm run typecheck`, the tests (when present), and `npx expo export --platform all --output-dir /tmp/export-check` (must produce iOS + Android only). All must pass.
-2. Commit on the branch named in the brief with clear messages ending in the attribution lines the session gives you.
-3. Push with `git push origin HEAD:refs/heads/<branch>` and open the PR with **base `dev`** via the REST API (GraphQL is blocked here):
+1. Run the checks in one call from the worktree; all must pass, and the export must produce iOS + Android only:
+   ```bash
+   cd /tmp/wt/<branch> && npm run typecheck && npm test && npx expo export --platform all --output-dir /tmp/export-check
+   ```
+2. Commit on the branch named in the brief (`git -C /tmp/wt/<branch> commit ...`) with clear messages ending in the attribution lines the session gives you.
+3. Push with `git -C /tmp/wt/<branch> push origin HEAD:refs/heads/<branch>` and open the PR with **base `dev`** via the REST API (GraphQL is blocked here):
    ```bash
    gh api repos/LMathielo/idle-game/pulls -f title="<title>" -f head="<branch>" -f base=dev -f body="$(cat pr.md)"
    ```
