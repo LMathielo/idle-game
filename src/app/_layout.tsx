@@ -5,6 +5,7 @@ import { usePathname } from 'expo-router';
 import { Stack } from 'expo-router/stack';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { GameProvider } from '../client/GameProvider';
 import { AwayModal } from '../components/AwayModal';
 import { colors } from '../theme';
@@ -28,10 +29,13 @@ function RootAwayModal() {
 /**
  * Root stack: the tabs group, plus one full-screen modal per village sign (only Dungeon today).
  * fullScreenModal: iOS covers the whole screen with no swipe-to-dismiss (the modal's ✕ closes it);
- * Android has no such style and falls back to 'modal', so the slide-up is set explicitly to match.
+ * Android has no such style and falls back to 'modal', so the slide-up is set explicitly to match
+ * (a fade when the system asks to reduce motion).
  */
 export default function RootLayout() {
   const [loaded] = useFonts({ Jacquard12_400Regular, PixelifySans_400Regular, PixelifySans_700Bold });
+  // Reduce Motion: a fade instead of the slide-up (iOS also cross-dissolves for 'fade' on modals).
+  const reducedMotion = useReducedMotion();
   if (!loaded) return <View style={styles.blank} />;
 
   return (
@@ -39,7 +43,7 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false, contentStyle: styles.content }}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="dungeon" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="dungeon" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
       </Stack>
       <RootAwayModal />
     </GameProvider>

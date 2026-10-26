@@ -6,7 +6,7 @@
 //   a hero who starts at 0 HP loses at once (no rolls)
 import { COMBAT } from './config/dungeons';
 import { nextInt } from './rng';
-import type { FightLogEntry, RngState } from './types';
+import type { FightEndReason, FightLogEntry, RngState } from './types';
 
 export type Combatant = {
   hp: number;
@@ -16,6 +16,7 @@ export type Combatant = {
 
 export type FightResult = {
   won: boolean;
+  endReason: FightEndReason;
   rounds: number;
   heroHp: number;
   enemyHp: number;
@@ -45,7 +46,7 @@ export function resolveFight(hero: Combatant, enemy: Combatant, rng: RngState, m
   let enemyHp = Math.max(0, enemy.hp);
   let r = rng;
   const log: FightLogEntry[] = [];
-  if (heroHp <= 0) return { won: false, rounds: 0, heroHp: 0, enemyHp, log, rng: r };
+  if (heroHp <= 0) return { won: false, endReason: 'no_hp', rounds: 0, heroHp: 0, enemyHp, log, rng: r };
 
   let round = 0;
   while (round < maxRounds) {
@@ -55,15 +56,20 @@ export function resolveFight(hero: Combatant, enemy: Combatant, rng: RngState, m
     const toEnemy = dealtDamage(h.value, enemy.defense);
     enemyHp = Math.max(0, enemyHp - toEnemy);
     log.push({ round, actor: 'hero', roll: h.value, dealt: toEnemy, targetHpAfter: enemyHp });
-    if (enemyHp === 0) return { won: true, rounds: round, heroHp, enemyHp, log, rng: r };
+    if (enemyHp === 0) return { won: true, endReason: 'enemy_defeated', rounds: round, heroHp, enemyHp, log, rng: r };
 
     const e = rollDamage(r, enemy.damage);
     r = e.rng;
     const toHero = dealtDamage(e.value, hero.defense);
     heroHp = Math.max(0, heroHp - toHero);
     log.push({ round, actor: 'enemy', roll: e.value, dealt: toHero, targetHpAfter: heroHp });
-    if (heroHp === 0) return { won: false, rounds: round, heroHp, enemyHp, log, rng: r };
+    if (heroHp === 0) return { won: false, endReason: 'hero_defeated', rounds: round, heroHp, enemyHp, log, rng: r };
   }
   // Round cap: counted as a loss, and every loss leaves the hero at 0 HP (brief 2026-10-26).
-  return { won: false, rounds: round, heroHp: 0, enemyHp, log, rng: r };
+  return { won: false, endReason: 'round_cap', rounds: round, heroHp: 0, enemyHp, log, rng: r };
+}
+
+/** Damage one enemy strike can deal to this defense: [dealt(min roll), dealt(max roll)]. Read-only, for UIs. */
+export function strikeRange(damage: { min: number; max: number }, defense: number): { min: number; max: number } {
+  return { min: dealtDamage(damage.min, defense), max: dealtDamage(damage.max, defense) };
 }

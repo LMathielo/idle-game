@@ -13,7 +13,7 @@ import {
   STATS,
   staminaView,
   type ValuePart,
-  DUNGEON_RUN,
+  DUNGEONS,
 } from '../engine';
 import { colors, fonts } from '../theme';
 import { ATTRIBUTE_NAMES, formatClock, formatHoursMinutes, formatNumber, itemName } from './format';
@@ -22,7 +22,8 @@ import { Bar, Panel } from './Panel';
 /** What one point does, built from the engine coefficients so the text can't drift from the rules. */
 const ATTRIBUTE_EFFECTS: Record<AttributeKey, string | null> = {
   strength: `+${STATS.damagePerStrength} damage`,
-  dexterity: `−${DUNGEON_RUN.perDexterityMs / 1000}s dungeon run`,
+  // Rat Cellar's timing; every dungeon defines its own (config/dungeons.ts).
+  dexterity: `−${DUNGEONS.rat_cellar_1.run.perDexterityMs / 1000}s dungeon run`,
   endurance: `+${STATS.defensePerEndurance} defense, +${STATS.hpRegen.perEndurance} HP/min`,
   intelligence: null,
 };

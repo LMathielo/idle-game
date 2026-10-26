@@ -73,7 +73,7 @@ Before declaring a task done: `npm run typecheck` and `npm test` must pass and `
 
 Navigation uses **Expo Router**. Routes live in `src/app/`; every file there is a screen and `_layout.tsx` files define navigators. The root is a Stack (`expo-router/stack`) holding the `(tabs)` group plus one route per village modal. Tabs come from `expo-router/js-tabs` (the root `Tabs` export is deprecated in SDK 58). Keep non-route code outside `src/app/`.
 
-**Village sign = full-screen modal.** A sign opens its own route with `presentation: 'fullScreenModal'` (iOS full screen, no swipe-down; Android falls back to `modal`) and an in-screen ✕. Sub-views (e.g. a dungeon's detail) stay inside the modal; never push a screen inside the tabs. Each modal route renders its own `<AwayModal />` and must be listed in `VILLAGE_MODAL_PATHS` in `src/app/_layout.tsx` (iOS cannot present the root's RN Modal over a full-screen modal).
+**Village sign = full-screen modal.** A sign opens its own route with `presentation: 'fullScreenModal'` (iOS full screen, no swipe-down; Android falls back to `modal`) and an in-screen ✕. Sub-views (e.g. a dungeon's detail) stay inside the modal; never push a screen inside the tabs. Android back steps out of a sub-view before it closes the modal (`BackHandler` in the modal). Under Reduce Motion the modal fades instead of sliding. Each modal route renders its own `<AwayModal />` and must be listed in `VILLAGE_MODAL_PATHS` in `src/app/_layout.tsx` (iOS cannot present the root's RN Modal over a full-screen modal).
 
 ## Layout
 

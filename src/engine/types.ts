@@ -117,11 +117,18 @@ export type FightRewards = {
   itemsLost: Record<string, number>;
 };
 
+/**
+ * Why a fight ended: the enemy or the hero reached 0 HP, the round cap was hit (a loss), or the hero
+ * had no HP at the start (an immediate loss with no rolls).
+ */
+export type FightEndReason = 'enemy_defeated' | 'hero_defeated' | 'round_cap' | 'no_hp';
+
 /** The last fight only (saves stay small). Earlier fights live on as counters. */
 export type FightRecord = {
   dungeonId: DungeonId;
   enemyId: EnemyId;
   won: boolean;
+  endReason: FightEndReason;
   /** Rounds started; a fight that starts at 0 HP has 0. */
   rounds: number;
   heroHpStart: number;

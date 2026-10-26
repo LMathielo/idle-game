@@ -147,7 +147,7 @@ Base item combat stats (`damage`, `armor`) live only in the catalog `ITEMS` (`sr
 
 ## Dungeon & combat
 
-Data: `src/engine/config/dungeons.ts` (`DUNGEON_RUN`, `COMBAT`, `ENEMIES`, `DUNGEONS`). Rules: `src/engine/dungeon.ts` (runs), `src/engine/combat.ts` (fight), `src/engine/hp.ts` (HP regen).
+Data: `src/engine/config/dungeons.ts` (`DUNGEON_RUN` skip rule, `COMBAT`, `ENEMIES`, `DUNGEONS` with each dungeon's run timing). Rules: `src/engine/dungeon.ts` (runs), `src/engine/combat.ts` (fight), `src/engine/hp.ts` (HP regen).
 
 ### One activity at a time
 
@@ -156,14 +156,17 @@ Data: `src/engine/config/dungeons.ts` (`DUNGEON_RUN`, `COMBAT`, `ENEMIES`, `DUNG
 ### Runs (auto-repeat)
 
 ```
-runMs = max(60 000, 300 000 − 1 000 × DEX)        DEX 10 → 290 s (4:50)
+runMs = max(minMs, baseMs − perDexterityMs × DEX)  per dungeon (DungeonDef.run): runMsFor(dungeonId, attributes)
+Rat Cellar: max(60 000, 300 000 − 1 000 × DEX)      DEX 10 → 290 s (4:50)
 ```
 
 `activity.progressMs` is the time into the current run. While the dungeon activity is active, runs follow each other back-to-back, live and offline: when a run's time is up its fight resolves, and the next run starts **at once, whatever the HP**. Dungeon time goes through the same `simulate()` and the same time rules as woodcutting: backward clock = pause, invalid time = no-op, and the **8 h offline cap limits the number of runs** (8 h / 4:50 = 99 runs).
 
 ### Skip
 
-`SKIP_DUNGEON_RUN` costs `ceil(remainingMs / 60 000)` stamina (1 per started minute left, at least 1: 5:00 → 5, 2:10 → 3, 0:30 → 1) and resolves the current run's fight right away at the current HP; the next run starts from 0. Not enough stamina → typed error `NOT_ENOUGH_STAMINA`, nothing changes (the UI greys the button). No dungeon running → `NO_DUNGEON_RUN`. It is a logged command, replayed like any other. Waiting is always free.
+`SKIP_DUNGEON_RUN` costs `ceil(remainingMs / 60 000)` stamina (1 per started minute left, at least 1: 5:00 → 5, 2:10 → 3, 0:30 → 1) and resolves the current run's fight right away at the current HP; the next run starts from 0. Not enough stamina → typed error `NOT_ENOUGH_STAMINA`, nothing changes (the UI greys the button). No dungeon running → `NO_DUNGEON_RUN`.
+
+The command is bound to what the player saw: `{ run, maxCost }`, where `run` is the run number on screen (`DungeonRunView.run` = lifetime runs + 1) and `maxCost` the cost on the button. If that run already finished by the time the command is applied (time passes between the tap and `now`, and the client simulates first), or the real cost is higher than `maxCost`, the skip fails with **`RUN_CHANGED`** and nothing is spent. So a skip never charges more than shown and never resolves the next run instead (the finished run was resolved for free by waiting). The UI stays quiet on `RUN_CHANGED`: the screen already shows the new run and cost. At 0 HP the skip stays enabled and the UI warns "Certain loss — 0 HP". It is a logged command, replayed like any other. Waiting is always free.
 
 ### Current HP and regen
 
@@ -197,8 +200,9 @@ dealt = max(1, round(roll × K / (defense + K)))       K = 50; 13 defense blocks
 - Rounding is integer half-up: `floor((2 × roll × K + (def + K)) / (2 × (def + K)))`. No `Math.pow`; the engine guard test bans it.
 - Hero damage and defense come from `getDerivedStats`. No hit chance or crit yet.
 - The fight ends when either side reaches 0 HP, or after **50 rounds, which is a loss**. Every loss leaves the hero at 0 HP (also a round-cap loss).
+- The engine writes why it ended into the record: `endReason` = `enemy_defeated` | `hero_defeated` | `round_cap` | `no_hp`. The UI labels it and never recomputes it.
 - **Win:** +25 hero XP (through `addXp`, so multi-level-ups carry over), +2–5 gold (rolled), Rat Skin (`rat_skin`, 50%). Rolls happen in that order after the fight. A full inventory loses the item, like woodcutting drops. **Loss:** nothing.
-- Rat Cellar Lv1 has one enemy, the Rat: HP 30, damage 3–5, defense 2. A new hero (12–14 damage, 13 defense, 50 HP) kills it in 3 hits and takes ~2–8 damage.
+- Rat Cellar Lv1 has one enemy, the Rat: HP 30, damage 3–5, defense 2. A new hero (12–14 damage, 13 defense, 50 HP) kills it in 3 hits and takes 4–8 damage (two rat strikes of 2–4 after defense).
 
 ### Stored log policy
 

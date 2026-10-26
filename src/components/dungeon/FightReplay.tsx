@@ -1,11 +1,12 @@
 // Visual-only replay of the engine's fight log: lines appear one by one while both HP bars animate.
 // Timing never changes anything; the outcome is already in the save.
 import { memo, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
-import { COMBAT, type FightLogEntry, type FightRecord } from '../../engine';
+import type { FightLogEntry, FightRecord } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { PixelButton } from '../PixelButton';
+import { OUTCOME_LABELS } from './outcome';
 
 /** Whole replay takes about this long (each line between 40 and 600 ms). */
 const REPLAY_TOTAL_MS = 3000;
@@ -14,11 +15,6 @@ const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 
 export function replayStepMs(lines: number): number {
   return Math.min(600, Math.max(40, Math.floor(REPLAY_TOTAL_MS / Math.max(1, lines))));
-}
-
-/** A round-cap loss: nobody reached 0 HP in the log. */
-export function isTimeout(fight: FightRecord): boolean {
-  return !fight.won && fight.rounds >= COMBAT.maxRounds && fight.log.at(-1)?.targetHpAfter !== 0;
 }
 
 type Props = {
@@ -54,6 +50,12 @@ export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
   }
   const done = shown >= total;
   if (done) heroHp = fight.heroHpEnd; // a round-cap loss ends at 0 even though no strike says so
+  const result = OUTCOME_LABELS[fight.endReason];
+
+  // Screen readers hear the result once, not every line as it appears.
+  useEffect(() => {
+    if (done) AccessibilityInfo.announceForAccessibility(`Replay finished: ${result}`);
+  }, [done, result]);
 
   return (
     <View style={styles.root}>
@@ -61,14 +63,14 @@ export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
         <AnimatedHpBar label={heroName} value={heroHp} max={fight.heroMaxHp} color={colors.skill} instant={reducedMotion} />
         <AnimatedHpBar label={enemyName} value={enemyHp} max={fight.enemyMaxHp} color={colors.hp} instant={reducedMotion} />
       </View>
-      <View style={styles.log} accessibilityLiveRegion="polite">
+      <View style={styles.log}>
         {fight.log.length === 0 ? <Text style={styles.line}>{heroName} had no HP left and could not fight.</Text> : null}
         {fight.log.slice(0, shown).map((e, i) => (
           <LogLine key={i} entry={e} heroName={heroName} enemyName={enemyName} />
         ))}
         {done ? (
-          <Text style={[styles.result, fight.won ? styles.win : styles.loss]} accessibilityRole="text">
-            {fight.won ? 'Victory!' : isTimeout(fight) ? `Defeat: out of time (${COMBAT.maxRounds} rounds)` : 'Defeat'}
+          <Text style={[styles.result, fight.won ? styles.win : styles.loss]} accessibilityLiveRegion="polite">
+            {result}
           </Text>
         ) : null}
       </View>

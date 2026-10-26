@@ -5,7 +5,8 @@ import {
   COMBAT,
   createRng,
   dealtDamage,
-  DUNGEON_RUN,
+  DUNGEONS,
+  dungeonRunView,
   type GameState,
   hashState,
   hpView,
@@ -28,19 +29,32 @@ function withAttributes(s: GameState, patch: Partial<GameState['character']['att
   return withCharacter(s, { attributes: { ...s.character.attributes, ...patch } });
 }
 
+/** The skip the UI would send for the run it shows in `s` (run number + cost on the button). */
+function skipFor(s: GameState, id = 'skip') {
+  const v = dungeonRunView(s);
+  if (!v) throw new Error('no run');
+  return { id, type: 'SKIP_DUNGEON_RUN', run: v.run, maxCost: v.skipCost } as const;
+}
+
+/** A skip for the current run that accepts any cost up to a full 5:00 run. */
+function skipAny(s: GameState, id = 'skip') {
+  return { id, type: 'SKIP_DUNGEON_RUN', run: s.dungeon.totals.runs + 1, maxCost: 5 } as const;
+}
+
 /** New game at T0 with Rat Cellar running. */
 function dungeonGame(seed = 7, tweak: (s: GameState) => GameState = (s) => s): GameState {
   return apply(tweak(newGame(seed, T0)), RAT_CELLAR, T0);
 }
 
 describe('run time', () => {
-  it('runMs = max(60 s, 300 s − 1 s × DEX)', () => {
-    expect(DUNGEON_RUN).toMatchObject({ baseMs: 300_000, perDexterityMs: 1_000, minMs: 60_000 });
-    expect(runMsFor({ dexterity: 10 })).toBe(290_000); // 4:50
-    expect(runMsFor({ dexterity: 0 })).toBe(300_000);
-    expect(runMsFor({ dexterity: 239 })).toBe(61_000);
-    expect(runMsFor({ dexterity: 240 })).toBe(60_000);
-    expect(runMsFor({ dexterity: 1_000_000 })).toBe(60_000); // floor
+  it('runMs = max(60 s, 300 s − 1 s × DEX), from the dungeon timing in config', () => {
+    expect(DUNGEONS.rat_cellar_1.run).toEqual({ baseMs: 300_000, perDexterityMs: 1_000, minMs: 60_000 });
+    const rc = (dexterity: number) => runMsFor('rat_cellar_1', { dexterity });
+    expect(rc(10)).toBe(290_000); // 4:50
+    expect(rc(0)).toBe(300_000);
+    expect(rc(239)).toBe(61_000);
+    expect(rc(240)).toBe(60_000);
+    expect(rc(1_000_000)).toBe(60_000); // floor
   });
 
   it('a run completes exactly at runMs, and the next one starts at once', () => {
@@ -70,7 +84,7 @@ describe('skip', () => {
   it('spends ceil(minutes) stamina, resolves the fight now, and auto-repeat continues', () => {
     const s = dungeonGame();
     const at = T0 + 2 * MIN + 40 * SEC; // 2:10 left → 3
-    const r = applyCommand(s, { id: 'skip', type: 'SKIP_DUNGEON_RUN' }, at);
+    const r = applyCommand(s, skipFor(simulate(s, at).state), at);
     if (!r.ok) throw new Error(r.error.message);
     expect(r.state.stamina.current).toBe(97);
     expect(r.state.dungeon.totals.runs).toBe(1);
@@ -84,26 +98,71 @@ describe('skip', () => {
 
   it('a full 5:00 run costs 5; 0:30 left costs 1', () => {
     const slow = dungeonGame(7, (g) => withAttributes(g, { dexterity: 0 }));
-    const full = applyCommand(slow, { id: 'a', type: 'SKIP_DUNGEON_RUN' }, T0);
+    const full = applyCommand(slow, skipFor(slow, 'a'), T0);
     expect(full.ok && full.state.stamina.current).toBe(95);
-    const late = applyCommand(dungeonGame(), { id: 'b', type: 'SKIP_DUNGEON_RUN' }, T0 + RUN_MS - 30 * SEC);
+    const late = applyCommand(dungeonGame(), skipAny(dungeonGame(), 'b'), T0 + RUN_MS - 30 * SEC);
     expect(late.ok && late.state.stamina.current).toBe(99);
   });
 
   it('typed error and no change when stamina is short or no run is going', () => {
     const s = dungeonGame(7, (g) => ({ ...g, stamina: { ...g.stamina, current: 4 } }));
-    const r = applyCommand(s, { id: 'x', type: 'SKIP_DUNGEON_RUN' }, T0); // 4:50 left → 5
+    const r = applyCommand(s, skipFor(s, 'x'), T0); // 4:50 left → 5
     expect(r).toMatchObject({ ok: false, error: { code: 'NOT_ENOUGH_STAMINA' } });
     expect(s.dungeon.totals.runs).toBe(0);
     expect(s.stamina.current).toBe(4);
-    const idle = applyCommand(newGame(1, T0), { id: 'y', type: 'SKIP_DUNGEON_RUN' }, T0);
+    const idle = applyCommand(newGame(1, T0), { id: 'y', type: 'SKIP_DUNGEON_RUN', run: 1, maxCost: 5 }, T0);
     expect(idle).toMatchObject({ ok: false, error: { code: 'NO_DUNGEON_RUN' } });
   });
 
   it('counts stamina regen up to now before spending', () => {
-    const s = dungeonGame(7, (g) => ({ ...g, stamina: { current: 0, max: 100, progressMs: 0 } }));
-    // At 4:00 there is 0:50 left (cost 1) and regen gave 0 points (one point every 5:00) → refused.
-    expect(applyCommand(s, { id: 'a', type: 'SKIP_DUNGEON_RUN' }, T0 + 4 * MIN)).toMatchObject({ ok: false });
+    // 4 stamina, 1 s from the 5th point. A fresh run costs 5.
+    const s = dungeonGame(7, (g) => ({ ...g, stamina: { current: 4, max: 100, progressMs: 299_000 } }));
+    // Without that point: refused.
+    expect(applyCommand(s, skipAny(s, 'a'), T0)).toMatchObject({ ok: false, error: { code: 'NOT_ENOUGH_STAMINA' } });
+    // 1 s later the regen gives the 5th point (4:49 left still costs 5), so the same skip succeeds.
+    const r = applyCommand(s, skipAny(s, 'b'), T0 + SEC);
+    if (!r.ok) throw new Error(r.error.message);
+    expect(r.state.stamina.current).toBe(0);
+    expect(r.state.dungeon.totals.runs).toBe(1);
+  });
+
+  it('never charges more than the button showed', () => {
+    const s = dungeonGame();
+    const r = applyCommand(s, { id: 'a', type: 'SKIP_DUNGEON_RUN', run: 1, maxCost: 4 }, T0); // real cost 5
+    expect(r).toMatchObject({ ok: false, error: { code: 'RUN_CHANGED' } });
+    expect(s.stamina.current).toBe(100);
+  });
+
+  it('never resolves two runs: a skip for a run that finished meanwhile fails with RUN_CHANGED', () => {
+    const s = dungeonGame();
+    const seen = simulate(s, T0 + RUN_MS - 30 * SEC).state; // 0:30 left, button shows "Skip (1)"
+    const cmdSeen = skipFor(seen);
+    expect(cmdSeen).toMatchObject({ run: 1, maxCost: 1 });
+    // The tap lands 40 s later: run 1 finished on its own (free), run 2 has 4:40 left (cost 5).
+    const r = applyCommand(seen, cmdSeen, T0 + RUN_MS + 10 * SEC);
+    expect(r).toMatchObject({ ok: false, error: { code: 'RUN_CHANGED' } });
+    // Even with a generous maxCost, naming run 1 can't skip run 2.
+    const r2 = applyCommand(seen, { ...cmdSeen, maxCost: 5 }, T0 + RUN_MS + 10 * SEC);
+    expect(r2).toMatchObject({ ok: false, error: { code: 'RUN_CHANGED' } });
+    // Exactly at the boundary the run also finished on its own.
+    expect(applyCommand(seen, cmdSeen, T0 + RUN_MS)).toMatchObject({ ok: false, error: { code: 'RUN_CHANGED' } });
+    // 1 ms before it, the skip still works and costs what was shown.
+    const ok = applyCommand(seen, cmdSeen, T0 + RUN_MS - 1);
+    expect(ok.ok && [ok.state.stamina.current, ok.state.dungeon.totals.runs]).toEqual([99, 1]);
+  });
+
+  it('rejects a malformed skip', () => {
+    const s = dungeonGame();
+    for (const maxCost of [0, -1, 1.5, Number.NaN]) {
+      expect(applyCommand(s, { id: 'a', type: 'SKIP_DUNGEON_RUN', run: 1, maxCost }, T0)).toMatchObject({
+        ok: false,
+        error: { code: 'INVALID_AMOUNT' },
+      });
+    }
+    expect(applyCommand(s, { id: 'b', type: 'SKIP_DUNGEON_RUN', run: 0, maxCost: 5 }, T0)).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_COMMAND' },
+    });
   });
 });
 
@@ -127,8 +186,10 @@ describe('combat', () => {
     const a = resolveFight(hero, rat, createRng(123));
     expect(resolveFight(hero, rat, createRng(123))).toEqual(a);
     expect(a.log.map((e) => e.actor)).toEqual(['hero', 'enemy', 'hero', 'enemy', 'hero']);
+    expect(a.endReason).toBe('enemy_defeated');
     expect(a).toMatchInlineSnapshot(`
       {
+        "endReason": "enemy_defeated",
         "enemyHp": 0,
         "heroHp": 46,
         "log": [
@@ -184,6 +245,7 @@ describe('combat', () => {
     expect(r.rounds).toBe(50);
     expect(r.log).toHaveLength(100);
     expect(r.won).toBe(false);
+    expect(r.endReason).toBe('round_cap');
     expect(r.heroHp).toBe(0);
     expect(r.log.at(-1)).toMatchObject({ round: 50, actor: 'enemy', targetHpAfter: 950 });
   });
@@ -191,7 +253,7 @@ describe('combat', () => {
   it('starting at 0 HP is an immediate loss with no rolls', () => {
     const rng = createRng(9);
     const r = resolveFight({ hp: 0, damage: { min: 12, max: 14 }, defense: 13 }, { hp: 30, damage: { min: 3, max: 5 }, defense: 2 }, rng);
-    expect(r).toEqual({ won: false, rounds: 0, heroHp: 0, enemyHp: 30, log: [], rng });
+    expect(r).toEqual({ won: false, endReason: 'no_hp', rounds: 0, heroHp: 0, enemyHp: 30, log: [], rng });
   });
 });
 
@@ -211,6 +273,7 @@ describe('rewards', () => {
       const r = simulate(s, T0 + RUN_MS);
       const f = r.state.dungeon.lastFight!;
       expect(f.won).toBe(true);
+      expect(f.endReason).toBe('enemy_defeated');
       expect(f.rewards.heroXp).toBe(25);
       expect(f.rewards.gold).toBeGreaterThanOrEqual(2);
       expect(f.rewards.gold).toBeLessThanOrEqual(5);
@@ -251,6 +314,7 @@ describe('rewards', () => {
     const f = r.state.dungeon.lastFight!;
     expect(f.heroHpStart).toBe(5);
     expect(f.won).toBe(false);
+    expect(f.endReason).toBe('hero_defeated');
     expect(f.rewards).toEqual({ heroXp: 0, gold: 0, items: {}, itemsLost: {} });
     expect(r.state.character).toMatchObject({ hp: 0, xp: 0, gold: s.character.gold });
     expect(r.summary).toMatchObject({ heroXpGained: 0, goldGained: 0, dungeon: { runs: 1, wins: 0, losses: 1 } });
@@ -428,7 +492,7 @@ describe('one activity at a time', () => {
   it('a dungeon can start at 0 HP: the fight is an immediate loss, then regen carries on', () => {
     const s = dungeonGame(1, (g) => withAttributes(withCharacter(g, { hp: 0 }), { endurance: -5 })); // rate 0
     const r = simulate(s, T0 + RUN_MS).state;
-    expect(r.dungeon.lastFight).toMatchObject({ won: false, rounds: 0, heroHpStart: 0, log: [] });
+    expect(r.dungeon.lastFight).toMatchObject({ won: false, endReason: 'no_hp', rounds: 0, heroHpStart: 0, log: [] });
   });
 });
 

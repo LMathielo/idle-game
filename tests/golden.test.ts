@@ -5,7 +5,9 @@
 // 1.2.0 → 1.3.0 (2026-10-26): save v4 (current HP + regen, dungeon state). Woodcutting outcomes did not
 // change (same actions, levels, nests and stamina in the first part of the script); the hash changed
 // because of the new fields. The script gained a dungeon segment: start, skip, HP debug, 3h of auto-repeat
-// runs, then woodcutting cancels the run in progress.
+// runs, then woodcutting cancels the run in progress. Council round 1 (still 1.3.0, save v4 not shipped):
+// FightRecord gained `endReason` and SKIP_DUNGEON_RUN carries `run` + `maxCost`; the hash changed
+// for that field only (same runs, wins, gold, HP and stamina).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -26,7 +28,7 @@ const SCRIPT: { at: number; cmd?: Command }[] = [
   { at: T0 + 31 * HOUR, cmd: { id: 'g3', type: 'STOP_ACTIVITY' } }, // 1h past highestSeenAt: +12
   { at: T0 + 31 * HOUR + 123 * SEC }, // remainder banked
   { at: T0 + 31 * HOUR + 200 * SEC, cmd: { id: 'd1', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar_1' } },
-  { at: T0 + 31 * HOUR + 320 * SEC, cmd: { id: 'd2', type: 'SKIP_DUNGEON_RUN' } }, // 2:50 left → 3 stamina
+  { at: T0 + 31 * HOUR + 320 * SEC, cmd: { id: 'd2', type: 'SKIP_DUNGEON_RUN', run: 1, maxCost: 3 } }, // 2:50 left → 3 stamina
   { at: T0 + 31 * HOUR + 330 * SEC, cmd: { id: 'd3', type: 'DEBUG_SET_HERO_HP', hp: 1 } },
   { at: T0 + 34 * HOUR + 330 * SEC }, // 3h of runs, HP regen interleaved
   { at: T0 + 34 * HOUR + 400 * SEC, cmd: { id: 'd4', type: 'START_ACTIVITY', kind: 'woodcutting' } }, // run lost
@@ -73,7 +75,7 @@ describe('golden', () => {
         },
         "engineVersion": "1.3.0",
         "gold": 162,
-        "hash": "b851f2b8",
+        "hash": "d8118612",
         "heroLevel": 11,
         "hp": [
           150,

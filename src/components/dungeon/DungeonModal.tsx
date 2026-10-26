@@ -2,8 +2,8 @@
 // view (enemy, hero, start / skip / stop, last fight + replay). Rules stay in the engine: this file only
 // reads selectors (dungeonRunView, hpView, staminaView, getDerivedStats) and dispatches commands.
 import { router } from 'expo-router';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
@@ -20,6 +20,7 @@ import {
   hpView,
   runMsFor,
   staminaView,
+  strikeRange,
 } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { AwayModal } from '../AwayModal';
@@ -28,10 +29,12 @@ import { LiveBar } from '../LiveBar';
 import { Bar, Panel } from '../Panel';
 import { PixelButton } from '../PixelButton';
 import { confirmCancelRun } from './confirmCancelRun';
-import { FightReplay, isTimeout } from './FightReplay';
+import { FightReplay } from './FightReplay';
+import { OUTCOME_LABELS } from './outcome';
 
 const range = (min: number, max: number) => (min === max ? `${min}` : `${min}–${max}`);
 const percent = (p: number) => `${Math.round(p * 100)}%`;
+
 
 export function DungeonModal() {
   const { state, clockPaused } = useGameSnapshot();
@@ -44,6 +47,16 @@ export function DungeonModal() {
     if (router.canGoBack()) router.back();
     else router.replace('/');
   }, []);
+
+  // Android back: from a dungeon's detail, go back to the list first; from the list it closes the modal.
+  useEffect(() => {
+    if (!selected) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelected(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [selected]);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
@@ -109,11 +122,10 @@ const Header = memo(function Header({
 // ---------- list ----------
 
 function DungeonList({ state, running, onPick }: { state: GameState; running: DungeonId | null; onPick: (id: DungeonId) => void }) {
-  const runMs = runMsFor(state.character.attributes);
   return (
     <View>
       {DUNGEON_IDS.map((id) => (
-        <DungeonCard key={id} id={id} runMs={runMs} running={running === id} onPick={onPick} />
+        <DungeonCard key={id} id={id} runMs={runMsFor(id, state.character.attributes)} running={running === id} onPick={onPick} />
       ))}
     </View>
   );
@@ -191,7 +203,9 @@ function DungeonDetail({
       client
         .dispatch(cmd)
         .then((res) => {
-          if (!res.ok) Alert.alert('Not possible', res.error.message);
+          // RUN_CHANGED: the run (or its cost) changed under the player's finger. Nothing was spent; the
+          // screen already shows the new run and cost, so no alert.
+          if (!res.ok && res.error.code !== 'RUN_CHANGED') Alert.alert('Not possible', res.error.message);
         })
         .catch(() => Alert.alert('Could not save', 'Try again.'))
         .finally(() => {
@@ -202,7 +216,9 @@ function DungeonDetail({
   );
 
   const start = () => send({ type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: id });
-  const skip = useCallback(() => send({ type: 'SKIP_DUNGEON_RUN' }), [send]);
+  /** Names the run and the cost the player saw, so the engine never charges more or skips a later run. */
+  const skip = useCallback((runNumber: number, maxCost: number) => send({ type: 'SKIP_DUNGEON_RUN', run: runNumber, maxCost }), [send]);
+  const hits = strikeRange(enemy.damage, stats.defense.value);
   const stop = useCallback(() => confirmCancelRun('Stop', () => send({ type: 'STOP_ACTIVITY' })), [send]);
   const otherActivity = state.activity && !running ? state.activity.kind : null;
 
@@ -256,12 +272,22 @@ function DungeonDetail({
 
       <Panel title="Runs">
         {run ? (
-          <RunControls run={run} paused={paused} stamina={state.stamina.current} onSkip={skip} onStop={stop} />
+          <RunControls
+            run={run}
+            paused={paused}
+            stamina={state.stamina.current}
+            hp={hp.hp}
+            enemyName={enemy.name}
+            hitMin={hits.min}
+            hitMax={hits.max}
+            onSkip={skip}
+            onStop={stop}
+          />
         ) : (
           <View style={styles.startBox}>
             <Text style={styles.note}>
               Runs repeat on their own, also while the app is closed (up to {formatNumber(state.offline.capMs / 3_600_000)}h). Each run takes{' '}
-              {formatClock(runMsFor(attributes))} and ends in a fight. Waiting is free.
+              {formatClock(runMsFor(id, attributes))} and ends in a fight. Waiting is free.
             </Text>
             {otherActivity === 'woodcutting' ? <Text style={styles.note}>Starting stops woodcutting (your logs are kept).</Text> : null}
             <PixelButton label="Start" icon="⚔️" onPress={start} accessibilityLabel={`Start ${d.name} runs`} />
@@ -302,16 +328,26 @@ const RunControls = memo(function RunControls({
   run,
   paused,
   stamina,
+  hp,
+  enemyName,
+  hitMin,
+  hitMax,
   onSkip,
   onStop,
 }: {
   run: DungeonRunView;
   paused: boolean;
   stamina: number;
-  onSkip: () => void;
+  hp: number;
+  enemyName: string;
+  /** What one enemy strike deals to the hero after defense (engine strikeRange). */
+  hitMin: number;
+  hitMax: number;
+  onSkip: (run: number, maxCost: number) => void;
   onStop: () => void;
 }) {
   const canSkip = stamina >= run.skipCost;
+  const noHp = hp <= 0;
   return (
     <View style={styles.runBox}>
       <View style={styles.runLine} accessible accessibilityLabel={`Current run, ${formatClock(run.remainingMs)} left`}>
@@ -322,13 +358,21 @@ const RunControls = memo(function RunControls({
       <View style={styles.buttons}>
         <PixelButton
           label={`Skip (${run.skipCost} ⚡)`}
-          onPress={onSkip}
+          onPress={() => onSkip(run.run, run.skipCost)}
           disabled={!canSkip}
-          accessibilityLabel={`Skip this run for ${run.skipCost} stamina`}
+          accessibilityLabel={`Skip this run for ${run.skipCost} stamina${noHp ? '. Certain loss, 0 HP' : ''}`}
           accessibilityHint={canSkip ? 'Fights now; the next run starts right after' : `Not enough stamina: you have ${stamina}`}
         />
         <PixelButton label="Stop" onPress={onStop} accessibilityHint="Asks first: the current run will be lost" />
       </View>
+      {noHp ? (
+        <Text style={styles.danger} accessibilityRole="alert">
+          Certain loss — 0 HP
+        </Text>
+      ) : null}
+      <Text style={styles.note}>
+        Your HP {hp} · {enemyName} hits for {range(hitMin, hitMax)}
+      </Text>
       {!canSkip ? <Text style={styles.note}>Not enough stamina to skip ({stamina}/{run.skipCost}).</Text> : null}
     </View>
   );
@@ -338,7 +382,7 @@ const LastFight = memo(function LastFight({ fight, onReplay }: { fight: FightRec
   const r = fight.rewards;
   const items = Object.entries(r.items);
   const lost = Object.entries(r.itemsLost);
-  const outcome = fight.won ? 'Victory' : isTimeout(fight) ? 'Defeat (out of time)' : 'Defeat';
+  const outcome = OUTCOME_LABELS[fight.endReason];
   const rewardText = fight.won
     ? [`+${r.heroXp} XP`, `+${r.gold} gold`, ...items.map(([id, n]) => `${itemIcon(id)} ${itemName(id)}${n > 1 ? ` ×${n}` : ''}`)].join(' · ')
     : 'No rewards';
@@ -447,5 +491,6 @@ const styles = StyleSheet.create({
   win: { color: colors.skill },
   loss: { color: colors.hp },
   rewards: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink, textAlign: 'center' },
+  danger: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.hp, textAlign: 'center' },
   lost: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.hp, textAlign: 'center' },
 });

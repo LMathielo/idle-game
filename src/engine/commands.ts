@@ -26,8 +26,12 @@ export type Command =
   | { id: string; type: 'START_ACTIVITY'; kind: 'dungeon'; dungeonId: DungeonId }
   /** Stops the activity. A dungeon run in progress is lost and gives nothing. */
   | { id: string; type: 'STOP_ACTIVITY' }
-  /** Spends ceil(remaining minutes) stamina to resolve the current run's fight now. Auto-repeat continues. */
-  | { id: string; type: 'SKIP_DUNGEON_RUN' }
+  /**
+   * Spends ceil(remaining minutes) stamina to resolve the current run's fight now. Auto-repeat continues.
+   * `run` is the run the player saw (DungeonRunView.run) and `maxCost` the cost the button showed: if that
+   * run already finished, or the real cost is higher, the skip fails with RUN_CHANGED and nothing changes.
+   */
+  | { id: string; type: 'SKIP_DUNGEON_RUN'; run: number; maxCost: number }
   | { id: string; type: 'DEBUG_SET_HERO_HP'; hp: number }
   /** Resolves the current run's fight now, for free. */
   | { id: string; type: 'DEBUG_FINISH_DUNGEON_RUN' }
@@ -45,6 +49,7 @@ export type CommandErrorCode =
   | 'UNKNOWN_DUNGEON'
   | 'NO_ACTIVE_ACTIVITY'
   | 'NO_DUNGEON_RUN'
+  | 'RUN_CHANGED'
   | 'INVALID_AMOUNT'
   | 'UNKNOWN_ATTRIBUTE'
   | 'NOT_ENOUGH_STAMINA'
@@ -119,8 +124,17 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
     case 'SKIP_DUNGEON_RUN': {
       const a = draft.activity;
       if (a?.kind !== 'dungeon') return fail('NO_DUNGEON_RUN', 'No dungeon run in progress');
-      const remainingMs = Math.max(0, runMsFor(draft.character.attributes) - a.progressMs);
-      const spent = spendStamina(draft, skipCost(remainingMs));
+      const { run, maxCost } = cmd;
+      if (typeof maxCost !== 'number' || !Number.isSafeInteger(maxCost) || maxCost <= 0) {
+        return fail('INVALID_AMOUNT', `Invalid maxCost ${String(maxCost)}`);
+      }
+      if (typeof run !== 'number' || !Number.isSafeInteger(run) || run <= 0) return fail('INVALID_COMMAND', `Invalid run ${String(run)}`);
+      // The run the player saw finished (simulating to now, or earlier): never resolve the next one instead.
+      if (run !== draft.dungeon.totals.runs + 1) return fail('RUN_CHANGED', 'That run already finished');
+      const remainingMs = Math.max(0, runMsFor(a.dungeonId, draft.character.attributes) - a.progressMs);
+      const cost = skipCost(remainingMs);
+      if (cost > maxCost) return fail('RUN_CHANGED', `Skipping now costs ${cost}, more than the ${maxCost} shown`);
+      const spent = spendStamina(draft, cost);
       if (!spent.ok) return fail(spent.error.code, spent.error.message);
       draft = spent.state;
       finishRunNow(draft, a.dungeonId, events);

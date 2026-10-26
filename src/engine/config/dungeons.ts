@@ -5,14 +5,14 @@ import type { DungeonId, EnemyId } from '../types';
 const SEC_MS = 1000;
 const MIN_MS = 60 * SEC_MS;
 
-/** runMs = max(minMs, baseMs − perDexterityMs × DEX). DEX 10 → 290 s (4:50). */
+/** Rules shared by every dungeon. Run timing is per dungeon (DungeonDef.run). */
 export const DUNGEON_RUN = {
-  baseMs: 5 * MIN_MS,
-  perDexterityMs: 1 * SEC_MS,
-  minMs: 1 * MIN_MS,
   /** Skip cost: `staminaPerStep` per started `stepMs` of the run left (rounded up, at least one step). */
   skip: { stepMs: 1 * MIN_MS, staminaPerStep: 1 },
 } as const;
+
+/** runMs = max(minMs, baseMs − perDexterityMs × DEX). */
+export type RunTiming = { baseMs: number; perDexterityMs: number; minMs: number };
 
 export const COMBAT = {
   /** dealt = max(minDamage, round(roll × K / (defense + K))). 13 defense blocks ~21%. */
@@ -41,6 +41,7 @@ export type DungeonDef = {
   level: number;
   icon: string;
   enemyId: EnemyId;
+  run: RunTiming;
   /** Win only. A loss gives nothing. Rolled in this order: gold, then each drop. */
   rewards: {
     heroXp: number;
@@ -56,6 +57,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     level: 1,
     icon: '💀',
     enemyId: 'rat',
+    run: { baseMs: 5 * MIN_MS, perDexterityMs: 1 * SEC_MS, minMs: 1 * MIN_MS }, // DEX 10 → 4:50
     rewards: { heroXp: 25, gold: { min: 2, max: 5 }, drops: [{ itemId: 'rat_skin', chance: 0.5 }] },
   },
 };

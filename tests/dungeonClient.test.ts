@@ -2,7 +2,7 @@
 // action log replaying to the same hashes.
 import { describe, expect, it } from 'vitest';
 import type { MemoryGameRepository } from '../src/client/memoryRepository';
-import { type GameState, hashState, replayLog, replayStep } from '../src/engine';
+import { dungeonRunView, type GameState, hashState, replayLog, replayStep } from '../src/engine';
 import { HOUR, MIN, SEC, T0, makeClient } from './helpers';
 
 async function verifyLog(repo: MemoryGameRepository): Promise<GameState> {
@@ -30,7 +30,9 @@ describe('dungeon through the client', () => {
     expect(client.getState().activity).toMatchObject({ kind: 'dungeon', progressMs: 70 * SEC });
 
     // 3:40 left → 4 stamina.
-    const skip = await client.dispatch({ type: 'SKIP_DUNGEON_RUN' });
+    const view = dungeonRunView(client.getState())!;
+    expect([view.run, view.skipCost]).toEqual([1, 4]);
+    const skip = await client.dispatch({ type: 'SKIP_DUNGEON_RUN', run: view.run, maxCost: view.skipCost });
     expect(skip.ok).toBe(true);
     expect(client.getState().stamina.current).toBe(96);
     expect(client.getState().dungeon.totals.runs).toBe(1);
@@ -60,10 +62,28 @@ describe('dungeon through the client', () => {
     await client.dispatch(START);
     await client.debug.spendStamina(97); // 3 left; a fresh run costs 5
     const before = client.getState();
-    const res = await client.dispatch({ type: 'SKIP_DUNGEON_RUN' });
+    const res = await client.dispatch({ type: 'SKIP_DUNGEON_RUN', run: 1, maxCost: 5 });
     expect(res).toMatchObject({ ok: false, error: { code: 'NOT_ENOUGH_STAMINA' } });
     expect(client.getState()).toBe(before);
     expect((await repo.getAllLog()).some((r) => r.type === 'SKIP_DUNGEON_RUN')).toBe(false);
+  });
+
+  it('a tap that lands after the shown run finished: RUN_CHANGED, nothing spent, no skip logged, log replays', async () => {
+    const { repo, clock, client } = makeClient({ prefix: 'race' });
+    await client.load();
+    await client.dispatch(START);
+    clock.advance(290 * SEC - 20 * SEC);
+    await client.tick();
+    const view = dungeonRunView(client.getState())!; // what the button shows: run 1, cost 1
+    expect([view.run, view.skipCost]).toEqual([1, 1]);
+    clock.advance(25 * SEC); // run 1 finishes before the tap is processed (the client simulates first)
+    const res = await client.dispatch({ type: 'SKIP_DUNGEON_RUN', run: view.run, maxCost: view.skipCost });
+    expect(res).toMatchObject({ ok: false, error: { code: 'RUN_CHANGED' } });
+    expect(client.getState().stamina.current).toBe(100);
+    expect(client.getState().dungeon.totals.runs).toBe(1); // only the run that finished on its own
+    await client.persist();
+    expect((await repo.getAllLog()).some((r) => r.type === 'SKIP_DUNGEON_RUN')).toBe(false);
+    expect(hashState(await verifyLog(repo))).toBe(hashState(client.getState()));
   });
 
   it('30 minutes away: ~6 runs in the away summary; HP consistent; log replays', async () => {
@@ -107,7 +127,7 @@ describe('replay of the new rows', () => {
     const state = replayLog([
       { type: 'NEW_GAME', payload: { seed: 5 }, clientTime: T0 },
       { type: 'START_ACTIVITY', payload: { id: 'a', ...START }, clientTime: T0 },
-      { type: 'SKIP_DUNGEON_RUN', payload: { id: 'b', type: 'SKIP_DUNGEON_RUN' }, clientTime: T0 + MIN },
+      { type: 'SKIP_DUNGEON_RUN', payload: { id: 'b', type: 'SKIP_DUNGEON_RUN', run: 1, maxCost: 4 }, clientTime: T0 + MIN },
       { type: 'DEBUG_SET_HERO_HP', payload: { id: 'c', type: 'DEBUG_SET_HERO_HP', hp: 1 }, clientTime: T0 + MIN },
       { type: 'DEBUG_FINISH_DUNGEON_RUN', payload: { id: 'd', type: 'DEBUG_FINISH_DUNGEON_RUN' }, clientTime: T0 + MIN },
       { type: 'RESUME', payload: {}, clientTime: T0 + MIN + 10 * MIN },
