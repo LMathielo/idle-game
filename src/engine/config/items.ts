@@ -1,6 +1,8 @@
 // Item catalog (data), keyed by item definition id. Stackable items are stored in the inventory with
-// id = definition id; every stored item carries `defId`. Combat stats live only here, never on item
-// instances, so changing a number here rebalances every save without a migration.
+// id = definition id; every stored item carries `defId`. BASE combat stats live only here, never on
+// item instances, so changing a number here rebalances every save without a migration. Rolled affixes
+// (M4 loot: "+3 damage", "+5% armor") will be stored on the instance because each drop differs; see
+// docs/ENGINE.md for where they enter the stat pipeline.
 import type { EquipmentSlot, ItemRarity } from '../types';
 
 export type ItemDef = {

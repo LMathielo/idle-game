@@ -19,12 +19,15 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 // Values here are frozen literals on purpose: a migration must give the same result forever,
 // even after config/newGame.ts or config/stamina.ts change.
 
-const V3_ATTRIBUTE_DEFAULT = 10;
+/** Owner decision 2026-10-26: migrated heroes get at least the new-hero baseline of 10. */
+const V3_ATTRIBUTE_MIN = 10;
 const V3_STAMINA = { current: 100, max: 100, progressMs: 0 } as const;
 
 type Doc = Record<string, unknown>;
 const isDoc = (v: unknown): v is Doc => !!v && typeof v === 'object' && !Array.isArray(v);
-const intOr = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isSafeInteger(v) ? v : fallback);
+/** max(old, 10); a missing or broken value counts as 10. */
+const atLeastBaseline = (v: unknown) =>
+  typeof v === 'number' && Number.isSafeInteger(v) ? Math.max(v, V3_ATTRIBUTE_MIN) : V3_ATTRIBUTE_MIN;
 
 /** v2 items had no defId. Stackables used the definition id as id; starting gear used `start-<defId>`. */
 function withDefId(item: unknown): unknown {
@@ -35,7 +38,7 @@ function withDefId(item: unknown): unknown {
 
 /**
  * - attributes: strength→strength, dexterity→dexterity, constitution→endurance, intelligence→intelligence
- *   (old values kept); agility and charisma are dropped.
+ *   each set to max(old value, 10) so old heroes match the new-hero baseline; agility and charisma are dropped.
  * - character.hp / maxHp dropped (derived now; current HP returns with combat).
  * - stamina added, full.
  * - every equipped and inventory item gets a defId.
@@ -45,10 +48,10 @@ function migrateV2toV3(doc: SaveDoc): SaveDoc {
   const { hp: _hp, maxHp: _maxHp, attributes: oldAttrs, equipment: oldEquipment, ...restCharacter } = character;
   const a = isDoc(oldAttrs) ? oldAttrs : {};
   const attributes = {
-    strength: intOr(a.strength, V3_ATTRIBUTE_DEFAULT),
-    dexterity: intOr(a.dexterity, V3_ATTRIBUTE_DEFAULT),
-    endurance: intOr(a.constitution, V3_ATTRIBUTE_DEFAULT),
-    intelligence: intOr(a.intelligence, V3_ATTRIBUTE_DEFAULT),
+    strength: atLeastBaseline(a.strength),
+    dexterity: atLeastBaseline(a.dexterity),
+    endurance: atLeastBaseline(a.constitution),
+    intelligence: atLeastBaseline(a.intelligence),
   };
   const equipment: Doc = {};
   if (isDoc(oldEquipment)) for (const [slot, item] of Object.entries(oldEquipment)) equipment[slot] = withDefId(item);

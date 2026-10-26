@@ -3,11 +3,13 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
+  ATTRIBUTE_KEYS,
   type AttributeKey,
   type Character,
   getDerivedStats,
   type RangePart,
   type Stamina,
+  STATS,
   staminaView,
   type ValuePart,
 } from '../engine';
@@ -15,12 +17,28 @@ import { colors, fonts } from '../theme';
 import { formatClock, formatHoursMinutes, formatNumber, itemName } from './format';
 import { Bar, Panel } from './Panel';
 
-const ATTRIBUTES: { key: AttributeKey; short: string; label: string; effect: string; active: boolean }[] = [
-  { key: 'strength', short: 'STR', label: 'Strength', effect: '+1 damage', active: true },
-  { key: 'endurance', short: 'END', label: 'Endurance', effect: '+1 defense', active: true },
-  { key: 'dexterity', short: 'DEX', label: 'Dexterity', effect: 'no effect yet', active: false },
-  { key: 'intelligence', short: 'INT', label: 'Intelligence', effect: 'no effect yet', active: false },
-];
+/** Display names. A Record, so adding an attribute to ATTRIBUTE_KEYS fails typecheck until it is named here. */
+export const ATTRIBUTE_NAMES: Record<AttributeKey, { short: string; label: string }> = {
+  strength: { short: 'STR', label: 'Strength' },
+  dexterity: { short: 'DEX', label: 'Dexterity' },
+  endurance: { short: 'END', label: 'Endurance' },
+  intelligence: { short: 'INT', label: 'Intelligence' },
+};
+
+/** What one point does, built from the engine coefficients so the text can't drift from the rules. */
+const ATTRIBUTE_EFFECTS: Record<AttributeKey, string | null> = {
+  strength: `+${STATS.damagePerStrength} damage`,
+  dexterity: null,
+  endurance: `+${STATS.defensePerEndurance} defense`,
+  intelligence: null,
+};
+
+const ATTRIBUTES = ATTRIBUTE_KEYS.map((key) => ({
+  key,
+  ...ATTRIBUTE_NAMES[key],
+  effect: ATTRIBUTE_EFFECTS[key] ?? 'no effect yet',
+  active: ATTRIBUTE_EFFECTS[key] !== null,
+}));
 
 type StatKey = 'damage' | 'defense' | 'maxHp' | 'maxMana';
 
@@ -33,8 +51,11 @@ function partLabel(p: RangePart | ValuePart): string {
       return p.defId ? itemName(p.defId) : p.source;
     case 'unarmed':
       return 'unarmed';
-    case 'percent':
-      return 'bonus';
+    case 'percent': {
+      // One rounded line; name each source so future buffs/affixes stay visible.
+      const sources = (p.bonuses ?? []).map((b) => `${b.source} ${b.bp >= 0 ? '+' : '−'}${Math.abs(b.bp) / 100}%`);
+      return sources.length > 0 ? `bonus (${sources.join(', ')})` : 'bonus';
+    }
     case 'strength':
       return 'STR';
     case 'endurance':
@@ -142,7 +163,7 @@ const StatRow = memo(function StatRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${label} ${value}`}
+      accessibilityLabel={open ? `${label} ${value} equals ${detail}` : `${label} ${value}`}
       accessibilityHint="Shows where this number comes from"
       accessibilityState={{ expanded: open }}
       style={styles.statRow}

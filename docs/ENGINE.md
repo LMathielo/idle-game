@@ -117,13 +117,14 @@ maxMana = 20 + 5 × (level − 1)
 
 - **Attribute points are flat FINAL bonuses**: percent bonuses scale only the base (gear) part, never the STR/END part (owner decision; tested).
 - **Unarmed** (no weapon, or a weapon `defId` the catalog does not know): 1–2.
-- **Percent bonuses** are integer basis points (`1000` = +10%) collected by `percentBonuses(state)`. The list is empty today; future upgrades plug in there. Rounding is integer half-up, `floor((base × (10000 + Σbp) + 5000) / 10000)`, with the factor floored at 0. No `Math.pow`.
+- **Gear bonuses (planned, M4).** Base item stats come from the catalog. Rolled affixes on dropped items will be stored on the item instance. Flat affixes ("+3 damage", "+2 armor") will add to the **base** part, before percent bonuses. Percent affixes ("+5% armor") join the percent list. Attribute points always stay last, unscaled. Confirm this order when loot ships.
+- **Percent bonuses** are integer basis points (`1000` = +10%) collected by `percentBonuses(state)`. The list is empty today; future upgrades plug in there. They are summed and rounded once, so the breakdown has a single `percent` line whose `bonuses` field lists every source and its bp. Rounding is integer half-up, `floor((base × (10000 + Σbp) + 5000) / 10000)`, with the factor floored at 0. No `Math.pow`.
 - New hero: damage 12–14 (2–4 Rusty Gladius + 10 STR), defense 13 (2 Linen Tunic + 1 Worn Sandals + 10 END), HP 50, mana 20.
 - **No current HP or mana yet.** With no combat the hero is always at full. `hp`/`maxHp` were removed from the save in v3; current HP/mana come back with combat (M4) as stored values clamped to the derived max.
 
 ### Item catalog
 
-Item combat stats (`damage`, `armor`) live only in the catalog `ITEMS` (`src/engine/config/items.ts`), keyed by definition id. Every stored item carries `defId`; stats are looked up through it and never copied onto the instance, so a balance change needs no save migration. A stored item with extra stat fields is ignored (tested).
+Base item combat stats (`damage`, `armor`) live only in the catalog `ITEMS` (`src/engine/config/items.ts`), keyed by definition id. Every stored item carries `defId`; stats are looked up through it and never copied onto the instance, so a balance change needs no save migration. Inventory stacks merge by `defId`. Rolled affixes (M4) are the exception: they differ per drop, so they will live on the instance. A stored item with extra stat fields is ignored (tested).
 
 | defId | Slot | Stats |
 | --- | --- | --- |
@@ -160,7 +161,7 @@ The repository talks to a small `SqlDatabase` interface. The app passes `expo-sq
 Current version: **3**.
 
 - v1 → v2 adds `flags.debugUsed` (set to `false` for old saves).
-- v2 → v3 (2026-10-26): attributes become strength→strength, dexterity→dexterity, constitution→endurance, intelligence→intelligence, keeping the old values (agility and charisma are dropped); `character.hp`/`maxHp` are dropped; `stamina` is added full (100/100); every equipped and inventory item gets a `defId` (stackables: their id; starting gear: `start-<defId>`). Literals in the migration are frozen on purpose, so later config changes cannot change what it produces.
+- v2 → v3 (2026-10-26): attributes become strength→strength, dexterity→dexterity, constitution→endurance, intelligence→intelligence, each set to **max(old value, 10)** so old heroes match the new-hero baseline (owner decision); agility and charisma are dropped; `character.hp`/`maxHp` are dropped; `stamina` is added full (100/100); every equipped and inventory item gets a `defId` (stackables: their id; starting gear: `start-<defId>`). Literals in the migration are frozen on purpose, so later config changes cannot change what it produces.
 
 Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests/fixtures/save-v2.json` (made with the 1.1.0 engine: hero Lv4, woodcutting Lv8, 3785 logs, banked progress).
 

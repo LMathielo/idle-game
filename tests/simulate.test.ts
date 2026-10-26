@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyCommand, hashState, newGame, simulate, type GameState } from '../src/engine';
+import { applyCommand, hashState, itemQuantity, newGame, simulate, type GameState } from '../src/engine';
 import { actionIntervalMs } from '../src/engine/activities';
 import { ACTIVITIES } from '../src/engine/config/activities';
 import { CLOCK_BACKWARD_TOLERANCE_MS, DEFAULT_OFFLINE_CAP_MS } from '../src/engine/config/time';
@@ -92,6 +92,19 @@ describe('woodcutting rules', () => {
     const r2 = simulate(withLogs, T0 + 10 * 3000);
     expect(qty(r2.state, 'oak_logs')).toBe(15);
     expect(r2.summary.itemsLost.oak_logs).toBeUndefined();
+
+    // Stacks are matched by defId, not by instance id.
+    const oddId: GameState = {
+      ...full,
+      inventory: {
+        capacity: 20,
+        items: [{ ...withLogs.inventory.items[0], id: 'logs-stack-1' }, ...full.inventory.items.slice(1)],
+      },
+    };
+    const r3 = simulate(oddId, T0 + 10 * 3000);
+    expect(r3.state.inventory.items[0]).toMatchObject({ id: 'logs-stack-1', defId: 'oak_logs', quantity: 15 });
+    expect(itemQuantity(r3.state, 'oak_logs')).toBe(15);
+    expect(r3.summary.itemsLost.oak_logs).toBeUndefined();
   });
 
   it('idle hero (no activity) only moves time', () => {

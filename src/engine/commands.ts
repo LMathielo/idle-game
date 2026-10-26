@@ -6,7 +6,7 @@ import { DEV_TOOLS_ENABLED } from './config/dev';
 import { markDebugUsed } from './flags';
 import { simulate } from './simulate';
 import { refillStamina, spendStamina } from './stamina';
-import type { ActivityKind, AttributeKey, GameEvent, GameState, SimulationSummary } from './types';
+import { type ActivityKind, ATTRIBUTE_KEYS, type AttributeKey, type GameEvent, type GameState, type SimulationSummary } from './types';
 
 export type Command =
   | { id: string; type: 'START_ACTIVITY'; kind: ActivityKind }
@@ -40,8 +40,6 @@ export const MAX_DEBUG_XP_GRANT = 1_000_000_000_000;
 /** Debug attribute grants: per command, and the highest value an attribute may reach that way. */
 export const MAX_DEBUG_ATTRIBUTE_GRANT = 1000;
 export const MAX_DEBUG_ATTRIBUTE_VALUE = 1_000_000;
-
-const ATTRIBUTE_KEYS: readonly AttributeKey[] = ['strength', 'dexterity', 'endurance', 'intelligence'];
 
 export function isAttributeKey(key: unknown): key is AttributeKey {
   return typeof key === 'string' && (ATTRIBUTE_KEYS as readonly string[]).includes(key);

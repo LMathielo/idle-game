@@ -2,20 +2,16 @@
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
-import type { AttributeKey } from '../engine';
+import { ATTRIBUTE_KEYS } from '../engine';
 import { formatDuration } from './format';
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
+import { ATTRIBUTE_NAMES } from './StatusPanel';
 import { colors, fonts } from '../theme';
 
 const HOUR = 3_600_000;
 
-const ATTRIBUTE_BUTTONS: { key: AttributeKey; label: string }[] = [
-  { key: 'strength', label: '+1 STR' },
-  { key: 'dexterity', label: '+1 DEX' },
-  { key: 'endurance', label: '+1 END' },
-  { key: 'intelligence', label: '+1 INT' },
-];
+const ATTRIBUTE_BUTTONS = ATTRIBUTE_KEYS.map((key) => ({ key, label: `+1 ${ATTRIBUTE_NAMES[key].short}` }));
 
 /** Debug commands that the engine refuses (e.g. not enough stamina) come back as `{ ok: false }`. */
 function isRejected(result: unknown): result is { ok: false; error: { message: string } } {

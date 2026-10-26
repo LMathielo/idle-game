@@ -64,11 +64,11 @@ describe('derived stats', () => {
     expect([d.damage.min, d.damage.max]).toEqual([13, 16]);
     expect(d.damage.breakdown).toEqual([
       { source: 'weapon', min: 2, max: 4, defId: 'rusty_gladius', slot: 'weapon' },
-      { source: 'percent', min: 1, max: 2 },
+      { source: 'percent', min: 1, max: 2, bonuses: [{ source: 'test', bp: 5000 }] },
       { source: 'strength', min: 10, max: 10 },
     ]);
     expect(d.defense.value).toBe(15);
-    expect(d.defense.breakdown.at(-2)).toEqual({ source: 'percent', value: 2 });
+    expect(d.defense.breakdown.at(-2)).toEqual({ source: 'percent', value: 2, bonuses: [{ source: 'test', bp: 5000 }] });
     expect(d.defense.breakdown.at(-1)).toEqual({ source: 'endurance', value: 10 });
 
     // The flat part stays exactly the attribute value, however large the bonus.
@@ -82,6 +82,10 @@ describe('derived stats', () => {
     const s = fresh();
     const two = getDerivedStats(s, { damage: [{ source: 'a', bp: 2500 }, { source: 'b', bp: 2500 }], defense: [] });
     expect([two.damage.min, two.damage.max]).toEqual([13, 16]);
+    // One rounded line, every source listed.
+    expect(two.damage.breakdown.filter((p) => p.source === 'percent')).toEqual([
+      { source: 'percent', min: 1, max: 2, bonuses: [{ source: 'a', bp: 2500 }, { source: 'b', bp: 2500 }] },
+    ]);
     const neg = getDerivedStats(s, { damage: [{ source: 'curse', bp: -20_000 }], defense: [{ source: 'curse', bp: -20_000 }] });
     expect([neg.damage.min, neg.damage.max, neg.defense.value]).toEqual([10, 10, 10]);
   });

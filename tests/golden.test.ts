@@ -73,7 +73,7 @@ describe('golden', () => {
     const s = loadSave(raw);
     expect(s.saveVersion).toBe(3);
     expect(s.flags).toEqual({ debugUsed: false });
-    expect(s.character.attributes).toEqual({ strength: 5, dexterity: 5, endurance: 5, intelligence: 5 });
+    expect(s.character.attributes).toEqual({ strength: 10, dexterity: 10, endurance: 10, intelligence: 10 });
     expect(s.stats.totalActions).toBe(2499);
     // Banked progress carries over: 60s plus the stored remainder, at the stored skill level's interval.
     const interval = actionIntervalMs(ACTIVITIES.woodcutting, s.character.skills.woodcutting.level);
@@ -110,8 +110,9 @@ describe('golden', () => {
       ['bird_nest', 'bird_nest', 20],
     ]);
 
-    // Shape changes.
-    expect(s.character.attributes).toEqual({ strength: 5, dexterity: 5, endurance: 5, intelligence: 5 });
+    // Shape changes. The fixture had 5 everywhere: raised to the new-hero baseline of 10.
+    expect(raw.character.attributes).toMatchObject({ strength: 5, dexterity: 5, constitution: 5, intelligence: 5 });
+    expect(s.character.attributes).toEqual({ strength: 10, dexterity: 10, endurance: 10, intelligence: 10 });
     expect(s.character).not.toHaveProperty('hp');
     expect(s.character).not.toHaveProperty('maxHp');
     expect(s.stamina).toEqual({ current: 100, max: 100, progressMs: 0 });
@@ -121,15 +122,18 @@ describe('golden', () => {
       ['start-worn_sandals', 'worn_sandals'],
     ]);
 
-    // Stats come from the catalog through the new defIds: 2–4 + 5 STR, 3 armor + 5 END, level 4 pools.
+    // Stats come from the catalog through the new defIds: 2–4 + 10 STR, 3 armor + 10 END, level 4 pools.
     const d = getDerivedStats(s);
-    expect([d.damage.min, d.damage.max, d.defense.value, d.maxHp.value, d.maxMana.value]).toEqual([7, 9, 8, 80, 35]);
+    expect([d.damage.min, d.damage.max, d.defense.value, d.maxHp.value, d.maxMana.value]).toEqual([12, 14, 13, 80, 35]);
 
     // Plays on: banked woodcutting progress carries over and actions run.
     const interval = actionIntervalMs(ACTIVITIES.woodcutting, s.character.skills.woodcutting.level);
     const next = simulate(s, s.time.lastSimulatedAt + MIN);
     expect(next.summary.actions).toBe(Math.floor((MIN + s.activity!.progressMs) / interval));
     expect(next.summary.actions).toBeGreaterThan(0);
+    // Logs keep stacking on the migrated stack (matched by defId).
+    expect(next.state.inventory.items.filter((i) => i.defId === 'oak_logs')).toHaveLength(1);
+    expect(next.state.inventory.items.find((i) => i.defId === 'oak_logs')?.quantity).toBe(3785 + next.summary.actions);
     // And commands work on the migrated save.
     const spent = applyCommand(next.state, { id: 'v2-spend', type: 'DEBUG_SPEND_STAMINA', amount: 10 }, s.time.lastSimulatedAt + MIN);
     expect(spent.ok && spent.state.stamina.current).toBe(90);

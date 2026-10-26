@@ -3,7 +3,10 @@
 // The whole GameState is one JSON document (see docs/ENGINE.md), so every
 // field must stay JSON-serializable: no Dates, Maps, classes or undefined values.
 
-export type AttributeKey = 'strength' | 'dexterity' | 'endurance' | 'intelligence';
+/** The hero's attributes, in display order. Single source: AttributeKey derives from it. */
+export const ATTRIBUTE_KEYS = ['strength', 'dexterity', 'endurance', 'intelligence'] as const;
+
+export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
 
 /** Plain integers. Raised later by Training (gold + time, M3); read by getDerivedStats(). */
 export type Attributes = Record<AttributeKey, number>;
@@ -16,8 +19,9 @@ export type Item = {
   /** Stackable items use their definition id (e.g. `oak_logs`); unique items use an instance id. */
   id: string;
   /**
-   * Item definition id (key of ITEMS in config/items.ts). Combat stats (damage, armor) are read from
-   * the catalog by this id and never stored on the instance, so balance changes need no save migration.
+   * Item definition id (key of ITEMS in config/items.ts). BASE combat stats (damage, armor) are read
+   * from the catalog by this id and never copied onto the instance, so balance changes need no save
+   * migration. Rolled affixes (M4 loot) will be stored on the instance, since they differ per drop.
    */
   defId: string;
   name: string;

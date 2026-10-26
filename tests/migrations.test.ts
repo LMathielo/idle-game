@@ -9,7 +9,7 @@ describe('save migrations', () => {
     expect(MIGRATIONS[1](v1)).toEqual({ ...v1, saveVersion: 2, flags: { debugUsed: false } });
   });
 
-  it('real v2 → v3: remaps attributes keeping values, drops hp, adds full stamina and item defIds', () => {
+  it('real v2 → v3: remaps attributes to max(old, 10), drops hp, adds full stamina and item defIds', () => {
     const v2 = {
       saveVersion: 2,
       rng: { seed: 9 },
@@ -38,7 +38,8 @@ describe('save migrations', () => {
     const v3 = MIGRATIONS[2](v2) as unknown as GameState;
     expect(v2).toEqual(frozenInput); // pure
     expect(v3.saveVersion).toBe(3);
-    expect(v3.character.attributes).toEqual({ strength: 21, dexterity: 13, endurance: 17, intelligence: 6 });
+    // Above 10 kept, below 10 raised to 10 (intelligence 6 → 10); agility and charisma dropped.
+    expect(v3.character.attributes).toEqual({ strength: 21, dexterity: 13, endurance: 17, intelligence: 10 });
     expect(v3.character).not.toHaveProperty('hp');
     expect(v3.character).not.toHaveProperty('maxHp');
     expect(v3.stamina).toEqual({ current: 100, max: 100, progressMs: 0 });

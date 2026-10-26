@@ -17,11 +17,17 @@ export type PercentBonuses = { damage: readonly PercentBonus[]; defense: readonl
 
 export type StatSource = 'weapon' | 'unarmed' | 'armor' | 'percent' | 'strength' | 'endurance' | 'base' | 'level';
 
+/**
+ * Extra detail on a breakdown line. `bonuses` is set on the 'percent' line only: the per-source bonuses
+ * that were summed before the single rounding, so a UI can list each buff/affix by name.
+ */
+type PartDetail = { defId?: string; slot?: EquipmentSlot; bonuses?: PercentBonus[] };
+
 /** One line of a damage breakdown. Parts add up to the final range. */
-export type RangePart = { source: StatSource; min: number; max: number; defId?: string; slot?: EquipmentSlot };
+export type RangePart = { source: StatSource; min: number; max: number } & PartDetail;
 
 /** One line of a scalar breakdown. Parts add up to the final value. */
-export type ValuePart = { source: StatSource; value: number; defId?: string; slot?: EquipmentSlot };
+export type ValuePart = { source: StatSource; value: number } & PartDetail;
 
 export type DerivedStats = {
   damage: { min: number; max: number; breakdown: RangePart[] };
@@ -38,7 +44,8 @@ const SLOT_ORDER: readonly EquipmentSlot[] = ['weapon', 'shield', 'helmet', 'arm
 
 /**
  * Percent bonuses that apply to this hero. None exist yet: future upgrades (buffs, item affixes,
- * village upgrades) plug in here, and they only ever scale the base part.
+ * village upgrades) plug in here, and they only ever scale the base part. They are summed and
+ * rounded once (one 'percent' breakdown line that lists every source in `bonuses`).
  */
 export function percentBonuses(_state: StatsInput): PercentBonuses {
   return { damage: [], defense: [] };
@@ -70,7 +77,12 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
   const scaledMin = applyPercent(baseDamage.min, bonuses.damage);
   const scaledMax = applyPercent(baseDamage.max, bonuses.damage);
   if (scaledMin !== baseDamage.min || scaledMax !== baseDamage.max) {
-    damageParts.push({ source: 'percent', min: scaledMin - baseDamage.min, max: scaledMax - baseDamage.max });
+    damageParts.push({
+      source: 'percent',
+      min: scaledMin - baseDamage.min,
+      max: scaledMax - baseDamage.max,
+      bonuses: bonuses.damage.map((b) => ({ ...b })),
+    });
   }
   const strFlat = attributes.strength * STATS.damagePerStrength;
   damageParts.push({ source: 'strength', min: strFlat, max: strFlat });
@@ -87,7 +99,9 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
     defenseParts.push({ source: 'armor', value: armor, defId: item.defId, slot });
   }
   const scaledDefense = applyPercent(baseDefense, bonuses.defense);
-  if (scaledDefense !== baseDefense) defenseParts.push({ source: 'percent', value: scaledDefense - baseDefense });
+  if (scaledDefense !== baseDefense) {
+    defenseParts.push({ source: 'percent', value: scaledDefense - baseDefense, bonuses: bonuses.defense.map((b) => ({ ...b })) });
+  }
   const endFlat = attributes.endurance * STATS.defensePerEndurance;
   defenseParts.push({ source: 'endurance', value: endFlat });
 
