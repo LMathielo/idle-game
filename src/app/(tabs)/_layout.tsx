@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BottomTabBar, type BottomTabBarProps, Tabs } from 'expo-router/js-tabs';
 import { StyleSheet, View } from 'react-native';
-import { ActivityStrip } from '../../components/ActivityStrip';
+import { ACTIVITY_STRIP_HEIGHT, ActivityStrip } from '../../components/ActivityStrip';
+import { UnlockBanner } from '../../components/UnlockBanner';
 import { colors, fonts } from '../../theme';
 
 /**
@@ -13,6 +14,8 @@ function TabBarWithStrip(props: BottomTabBarProps) {
     <View style={styles.tabBarWrap}>
       <BottomTabBar {...props} />
       <ActivityStrip />
+      {/* Sits above the strip's slot, whether or not an activity runs. */}
+      <UnlockBanner position={styles.banner} />
     </View>
   );
 }
@@ -56,4 +59,5 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   // Render over the screens (the strip sticks out above this view) and never clip it.
   tabBarWrap: { overflow: 'visible', zIndex: 1, elevation: 8 },
+  banner: { bottom: '100%', marginBottom: ACTIVITY_STRIP_HEIGHT + 8 },
 });

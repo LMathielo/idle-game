@@ -77,9 +77,10 @@ export type GatheringKind = 'woodcutting';
 /** Only one activity runs at a time: a gathering skill or auto-repeating dungeon runs. */
 export type ActivityKind = GatheringKind | 'dungeon';
 
-export type DungeonId = 'rat_cellar_1';
+/** Dungeon tiers 1–5, in order. Data lives in config/dungeons.ts. */
+export type DungeonId = 'rat_cellar' | 'bat_cave' | 'wolf_den' | 'forgotten_crypt' | 'troll_bridge';
 
-export type EnemyId = 'rat';
+export type EnemyId = 'rat' | 'bat' | 'wolf' | 'skeleton' | 'troll';
 
 type ActivityBase = {
   /** Engine time (epoch ms) the activity started. Informational only. */
@@ -141,10 +142,20 @@ export type FightRecord = {
   log: FightLogEntry[];
 };
 
+export type DungeonTotals = { runs: number; wins: number; losses: number };
+
 export type DungeonState = {
   lastFight: FightRecord | null;
-  /** Lifetime counters. */
-  totals: { runs: number; wins: number; losses: number };
+  /**
+   * Lifetime counters over every dungeon (always the sum of `byDungeon`). `runs + 1` numbers the run in
+   * progress, which a skip names, so it stays unique across dungeons.
+   */
+  totals: DungeonTotals;
+  /**
+   * Lifetime counters per dungeon (save v5). An entry appears with the dungeon's first run; a missing
+   * entry means 0/0/0. Wins only ever go up, so an unlock based on them is permanent.
+   */
+  byDungeon: Partial<Record<DungeonId, DungeonTotals>>;
 };
 
 export type GameStats = {
@@ -167,7 +178,7 @@ export type Stamina = {
 };
 
 export type GameState = {
-  saveVersion: 4;
+  saveVersion: 5;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -201,7 +212,9 @@ export type GameEvent =
   | { type: 'HERO_LEVEL_UP'; level: number }
   | { type: 'RARE_DROP'; itemId: string }
   | { type: 'DUNGEON_RUN_CANCELLED'; dungeonId: DungeonId }
-  | { type: 'FIGHT_RESOLVED'; dungeonId: DungeonId; won: boolean };
+  | { type: 'FIGHT_RESOLVED'; dungeonId: DungeonId; won: boolean }
+  /** A dungeon's unlock requirement was just met (a win, or the debug win grant). */
+  | { type: 'DUNGEON_UNLOCKED'; dungeonId: DungeonId };
 
 /** What happened during one simulate() call. Shown in the "While you were away" modal. */
 export type SimulationSummary = {
@@ -220,5 +233,7 @@ export type SimulationSummary = {
   goldGained: number;
   /** Dungeon runs resolved (won + lost). */
   dungeon: { runs: number; wins: number; losses: number };
+  /** Dungeons unlocked during this period, in the order they unlocked. */
+  dungeonsUnlocked: DungeonId[];
   anomalies: ClockAnomalyEvent[];
 };

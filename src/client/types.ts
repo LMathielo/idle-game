@@ -1,5 +1,5 @@
 // Contracts between the UI, the client and storage. No React, no Expo.
-import type { AttributeKey, Command, CommandError, GameState, LogType, SimulationSummary } from '../engine';
+import type { AttributeKey, Command, CommandError, DungeonId, GameState, LogType, SimulationSummary } from '../engine';
 
 /** Wall clock. The app uses SystemClock; tests use a fake. */
 export interface Clock {
@@ -55,6 +55,8 @@ export type GameSnapshot = {
   clockPaused: boolean;
   /** Pending "While you were away" summary, cleared by dismissAwaySummary(). */
   awaySummary: SimulationSummary | null;
+  /** Dungeons unlocked since the banner was last dismissed (dismissUnlocks()), in unlock order. */
+  unlockedDungeons: readonly DungeonId[];
   /** Debug clock offset in ms (0 in normal play). */
   clockOffsetMs: number;
 };
@@ -82,6 +84,8 @@ export interface GameClient {
   /** Persists unsaved progress (app going to background). */
   persist(): Promise<void>;
   dismissAwaySummary(): void;
+  /** Clears the "dungeon unlocked" banner. */
+  dismissUnlocks(): void;
   getUnsyncedLog(limit?: number): Promise<LogRow[]>;
   getRecentLog(limit: number): Promise<LogRow[]>;
   countLog(): Promise<{ total: number; unsynced: number }>;
@@ -97,6 +101,8 @@ export interface GameClient {
     setHeroHp(hp: number): Promise<DispatchResult>;
     /** Resolves the current dungeon run's fight now, for free. Logged as DEBUG_FINISH_DUNGEON_RUN. */
     finishDungeonRun(): Promise<DispatchResult>;
+    /** Adds wins to an unlocked dungeon's counters (default 10). Logged as DEBUG_ADD_DUNGEON_WINS. */
+    addDungeonWins(dungeonId: DungeonId, amount?: number): Promise<DispatchResult>;
     /** New game with a new seed and a real clock (offset 0). Logged, never deletes the log. */
     resetSave(): Promise<void>;
   };

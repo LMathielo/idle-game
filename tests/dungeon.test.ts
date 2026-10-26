@@ -18,7 +18,7 @@ import {
 } from '../src/engine';
 import { apply, HOUR, MIN, SEC, T0 } from './helpers';
 
-const RAT_CELLAR = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar_1' } as const;
+const RAT_CELLAR = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } as const;
 const RUN_MS = 290 * SEC; // DEX 10
 
 function withCharacter(s: GameState, patch: Partial<GameState['character']>): GameState {
@@ -48,8 +48,8 @@ function dungeonGame(seed = 7, tweak: (s: GameState) => GameState = (s) => s): G
 
 describe('run time', () => {
   it('runMs = max(60 s, 300 s − 1 s × DEX), from the dungeon timing in config', () => {
-    expect(DUNGEONS.rat_cellar_1.run).toEqual({ baseMs: 300_000, perDexterityMs: 1_000, minMs: 60_000 });
-    const rc = (dexterity: number) => runMsFor('rat_cellar_1', { dexterity });
+    expect(DUNGEONS.rat_cellar.run).toEqual({ baseMs: 300_000, perDexterityMs: 1_000, minMs: 60_000 });
+    const rc = (dexterity: number) => runMsFor('rat_cellar', { dexterity });
     expect(rc(10)).toBe(290_000); // 4:50
     expect(rc(0)).toBe(300_000);
     expect(rc(239)).toBe(61_000);
@@ -89,7 +89,7 @@ describe('skip', () => {
     expect(r.state.stamina.current).toBe(97);
     expect(r.state.dungeon.totals.runs).toBe(1);
     expect(r.state.dungeon.lastFight).not.toBeNull();
-    expect(r.events).toContainEqual({ type: 'FIGHT_RESOLVED', dungeonId: 'rat_cellar_1', won: r.state.dungeon.lastFight!.won });
+    expect(r.events).toContainEqual({ type: 'FIGHT_RESOLVED', dungeonId: 'rat_cellar', won: r.state.dungeon.lastFight!.won });
     expect(r.state.activity).toMatchObject({ kind: 'dungeon', progressMs: 0 });
     // Next run is a full one from the skip.
     expect(simulate(r.state, at + RUN_MS - 1).state.dungeon.totals.runs).toBe(1);
@@ -323,7 +323,8 @@ describe('rewards', () => {
   it('only the last fight is stored', () => {
     const s = simulate(dungeonGame(), T0 + 10 * RUN_MS).state;
     expect(s.dungeon.totals.runs).toBe(10);
-    expect(Object.keys(s.dungeon)).toEqual(['lastFight', 'totals']);
+    expect(Object.keys(s.dungeon).sort()).toEqual(['byDungeon', 'lastFight', 'totals']);
+    expect(s.dungeon.byDungeon).toEqual({ rat_cellar: s.dungeon.totals }); // counters only, no per-run log
     expect(s.dungeon.lastFight?.log.length).toBeLessThanOrEqual(2 * COMBAT.maxRounds);
   });
 });
@@ -457,7 +458,7 @@ describe('one activity at a time', () => {
     expect(r.state.dungeon).toEqual(s.dungeon);
     expect(r.state.character).toMatchObject({ xp: 0, gold: s.character.gold });
     expect(r.state.rng).toEqual(s.rng);
-    expect(r.events).toContainEqual({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: 'rat_cellar_1' });
+    expect(r.events).toContainEqual({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: 'rat_cellar' });
     expect(r.events).toContainEqual({ type: 'ACTIVITY_STOPPED', kind: 'dungeon' });
   });
 
@@ -470,14 +471,14 @@ describe('one activity at a time', () => {
     const r = applyCommand(dungeonGame(), { id: 's', type: 'STOP_ACTIVITY' }, T0 + 4 * MIN);
     expect(r.ok && r.state.activity).toBeNull();
     expect(r.ok && r.state.dungeon.totals.runs).toBe(0);
-    expect(r.ok && r.events).toContainEqual({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: 'rat_cellar_1' });
+    expect(r.ok && r.events).toContainEqual({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: 'rat_cellar' });
   });
 
   it('starting a dungeon stops woodcutting (logs gathered so far are kept)', () => {
     const wood = apply(newGame(1, T0), { type: 'START_ACTIVITY', kind: 'woodcutting' }, T0);
     const r = applyCommand(wood, { id: 'd', ...RAT_CELLAR }, T0 + 10 * SEC);
     if (!r.ok) throw new Error(r.error.message);
-    expect(r.state.activity).toEqual({ kind: 'dungeon', dungeonId: 'rat_cellar_1', startedAt: T0 + 10 * SEC, progressMs: 0 });
+    expect(r.state.activity).toEqual({ kind: 'dungeon', dungeonId: 'rat_cellar', startedAt: T0 + 10 * SEC, progressMs: 0 });
     expect(r.state.stats.totalActions).toBe(3);
   });
 

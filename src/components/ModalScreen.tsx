@@ -1,11 +1,12 @@
 // Shared shell for every village full-screen modal: header row (✕ + title + optional right slot),
 // safe-area padding, and the screen's own "While you were away" host. Every village modal route uses it.
 import { router } from 'expo-router';
-import type { ReactNode } from 'react';
+import { type ReactNode, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { type EdgeInsets, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '../theme';
 import { AwayModal } from './AwayModal';
+import { UnlockBanner } from './UnlockBanner';
 
 type Props = {
   title: string;
@@ -36,6 +37,7 @@ export function closeVillageModal() {
  */
 export function ModalScreen({ title, closeLabel, onClose = closeVillageModal, headerRight, headerBelow, children }: Props) {
   const insets = useModalInsets();
+  const bannerPosition = useMemo(() => ({ bottom: insets.bottom + PAD }), [insets.bottom]);
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top, paddingLeft: PAD + insets.left, paddingRight: PAD + insets.right }]}>
@@ -51,6 +53,8 @@ export function ModalScreen({ title, closeLabel, onClose = closeVillageModal, he
         {headerBelow}
       </View>
       <View style={[styles.body, { paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }]}>{children}</View>
+      {/* The tabs' banner is hidden under a full-screen modal, so each modal hosts its own. */}
+      <UnlockBanner position={bannerPosition} />
       {/* This screen's own host for "While you were away" (see RootAwayModal in app/_layout.tsx). */}
       <AwayModal />
     </View>

@@ -17,5 +17,15 @@ export * from './stats';
 export * from './stamina';
 export * from './hp';
 export { dealtDamage, resolveFight, strikeRange, type Combatant, type FightResult } from './combat';
-export { dungeonRunView, runMsFor, skipCost, type DungeonRunView } from './dungeon';
+export {
+  dungeonRunView,
+  dungeonTotals,
+  dungeonUnlockView,
+  isDungeonUnlocked,
+  runMsFor,
+  skipCost,
+  type DungeonRunView,
+  type DungeonUnlockView,
+} from './dungeon';
+export * from './danger';
 export * from './config';

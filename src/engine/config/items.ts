@@ -23,6 +23,10 @@ export const ITEMS = {
   bird_nest: { id: 'bird_nest', name: 'Bird Nest', icon: '🪺', rarity: 'rare', stackable: true },
   bread: { id: 'bread', name: 'Bread', icon: '🍞', rarity: 'common', stackable: true },
   rat_skin: { id: 'rat_skin', name: 'Rat Skin', icon: '🐾', rarity: 'common', stackable: true },
+  bat_wing: { id: 'bat_wing', name: 'Bat Wing', icon: '🪽', rarity: 'common', stackable: true },
+  wolf_pelt: { id: 'wolf_pelt', name: 'Wolf Pelt', icon: '🧥', rarity: 'common', stackable: true },
+  old_bone: { id: 'old_bone', name: 'Old Bone', icon: '🦴', rarity: 'common', stackable: true },
+  troll_hide: { id: 'troll_hide', name: 'Troll Hide', icon: '🟫', rarity: 'common', stackable: true },
   rusty_gladius: {
     id: 'rusty_gladius',
     name: 'Rusty Gladius',

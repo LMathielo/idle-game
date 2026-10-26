@@ -15,7 +15,7 @@ async function verifyLog(repo: MemoryGameRepository): Promise<GameState> {
   return state!;
 }
 
-const START = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar_1' } as const;
+const START = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } as const;
 
 describe('dungeon through the client', () => {
   it('start → live ticks → skip → debug HP 1 → finish run → switch to woodcutting; the log replays exactly', async () => {

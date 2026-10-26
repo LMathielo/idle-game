@@ -5,7 +5,7 @@ import { formatDuration, formatNumber, itemIcon, itemName } from './format';
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
 import { colors, fonts } from '../theme';
-import type { SimulationSummary, SkillKey } from '../engine';
+import { DUNGEONS, type SimulationSummary, type SkillKey } from '../engine';
 
 const SKILL_NAMES: Record<SkillKey, string> = {
   woodcutting: 'Woodcutting',
@@ -54,6 +54,9 @@ function SummaryBody({ summary, capHours }: { summary: SimulationSummary; capHou
           label="💀 Dungeon runs"
           value={`${formatNumber(summary.dungeon.runs)} (${formatNumber(summary.dungeon.wins)} won, ${formatNumber(summary.dungeon.losses)} lost)`}
         />
+      ) : null}
+      {summary.dungeonsUnlocked.length > 0 ? (
+        <Line label="🔓 Unlocked" value={summary.dungeonsUnlocked.map((id) => DUNGEONS[id].name).join(', ')} />
       ) : null}
       {summary.heroXpGained > 0 ? <Line label="✨ Hero XP" value={`+${formatNumber(summary.heroXpGained)}`} /> : null}
       {summary.goldGained > 0 ? <Line label="🪙 Gold" value={`+${formatNumber(summary.goldGained)}`} /> : null}

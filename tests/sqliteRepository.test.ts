@@ -5,7 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { FakeClock } from '../src/client/clock';
 import { LocalGameClient } from '../src/client/LocalGameClient';
 import { type SqlDatabase, SQLiteGameRepository } from '../src/client/sqliteRepository';
-import { hashState, newGame, replayLog } from '../src/engine';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { META_ENGINE_VERSION } from '../src/client/LocalGameClient';
+import { ENGINE_VERSION, type GameState, hashState, loadSave, newGame, replayLog, replayLogReport } from '../src/engine';
 import { HOUR, T0, idSource } from './helpers';
 
 type Param = string | number | null;
@@ -118,5 +121,30 @@ describe('SQLiteGameRepository (real SQL)', () => {
     const replayed = replayLog(rows.map((r) => ({ type: r.type, payload: r.payload, clientTime: r.clientTime })));
     expect(hashState(replayed)).toBe(rows.at(-1)!.stateHash);
     expect(hashState(replayed)).toBe(hashState(snap.state));
+  });
+
+  it('upgrade on real SQL: a stored v4 save gets a MIGRATE anchor in the same transaction, and the log replays', async () => {
+    const db = new DatabaseSync(':memory:');
+    const open = async () => nodeDb(db);
+    const v4 = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v4.json'), 'utf8'));
+    const legacy = new SQLiteGameRepository(open);
+    await legacy.init();
+    await legacy.commit([{ ...row('old'), engineVersion: '1.3.0' }], v4 as GameState, { [META_ENGINE_VERSION]: '1.3.0' });
+
+    const clock = new FakeClock(v4.time.lastSimulatedAt + 60_000);
+    const client = new LocalGameClient(new SQLiteGameRepository(open), clock, idSource('sql'));
+    await client.load();
+    clock.advance(HOUR);
+    await client.resume();
+
+    const repo = new SQLiteGameRepository(open);
+    await repo.init();
+    const rows = await repo.getAllLog();
+    const migrate = rows.find((r) => r.type === 'MIGRATE')!;
+    expect(migrate.stateHash).toBe(hashState(loadSave(v4)));
+    expect(await repo.getMeta(META_ENGINE_VERSION)).toBe(ENGINE_VERSION);
+    const report = replayLogReport(rows.map((r) => ({ ...r, stateHash: r.stateHash })));
+    expect(report).toMatchObject({ anchors: 1, verifiedUpToAnchor: 1 });
+    expect(hashState(report.state)).toBe(hashState(client.getState()));
   });
 });
