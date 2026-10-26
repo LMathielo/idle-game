@@ -18,16 +18,17 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - iOS + Android via Expo (SDK 58), tested through Expo Go. No web.
 - Single player for now; multiplayer later via a server that reuses the engine.
 
-## Current state (2026-10-25)
+## Current state (2026-10-26)
 
 - Two tabs: **Village** (pixel village hub with signs: Storage, Merchant, Dungeon, Training, Woodcutting) and **Hero** (HP/XP, 6 attributes, 9 equipment slots, 20-slot inventory, 4 skills).
-- **M1 in progress** (PR `feat/m1-core-engine`): deterministic engine (`src/engine`), `LocalGameClient`, on-device SQLite save with an action log. Woodcutting works from the Village sign (tap to start/stop), progresses live and offline (8h cap), and shows a "While you were away" summary. Hero tab reads real state. Debug panel on the Hero tab (clock offset, +10k hero XP, reset save).
+- **M1 done and on `main`:** deterministic engine (`src/engine`), `LocalGameClient`, on-device SQLite save with an action log. Woodcutting works from the Village sign (tap to start/stop), progresses live and offline (8h cap), and shows a "While you were away" summary. Hero tab reads real state. Debug panel on the Hero tab (clock offset, +10k hero XP, reset save).
 - Other village signs show "coming soon". No combat, training, merchant or storage yet.
 - Technical details: `docs/ENGINE.md`.
+- Delivery: PRs land on `dev` (test preview in Expo Go, EAS branch `dev`); the owner releases `dev` → `main` (EAS branch `main`) after testing.
 
 ## Roadmap (proposed, not yet committed by the owner)
 
-- **M1 — Core engine & save (in progress):** seeded RNG, `applyCommand` / `simulate`, `LocalGameClient`, versioned on-device save, Hero tab reading real state. Also pulls in M2's core: woodcutting start/stop, offline progress (capped) and the "while you were away" summary.
+- **M1 — Core engine & save (done, on `main`):** seeded RNG, `applyCommand` / `simulate`, `LocalGameClient`, versioned on-device save, Hero tab reading real state. Also pulls in M2's core: woodcutting start/stop, offline progress (capped) and the "while you were away" summary.
 - **M2 — First idle loop: Woodcutting.** Start/stop gathering, logs accumulate over time and offline (capped), skill XP and levels, "while you were away" summary.
 - **M3 — Training & Merchant.** Spend gold to raise attributes (scaling cost); sell logs/items, buy basics. First complete economy loop.
 - **M4 — Dungeon.** Automated combat resolved by the engine, combat log replayed in the UI, XP/gold/loot rewards, equip from loot.
@@ -49,10 +50,15 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 | 2026-10-25 | Hero XP comes from combat only; skills give skill XP + items | Keeps gathering and combat as separate progression tracks |
 | 2026-10-25 | "While you were away" opens only after ≥60 s of real time away (with at least one action) or on any clock anomaly | A quick app switch should not interrupt the player |
 | 2026-10-25 | Debug panel stays enabled for the POC; any DEBUG_* action permanently sets `flags.debugUsed` on the save | Owner tests on the phone; a future server can tell debugged saves apart. Debug log rows stay replayable in any build |
+| 2026-10-26 | Branch flow: `feat/*` / `fix/*` / `chore/*` → PR into `dev` (CI + 5-reviewer council) → owner tests the `dev` preview → owner opens and merges a release PR `dev` → `main` | `main` only receives code the owner tested himself; a manual publish from a feature branch had overwritten his `main` preview |
+| 2026-10-26 | Only the owner merges, into `dev` and into `main`; agents never merge or push to either | Owner keeps control of what reaches each preview |
+| 2026-10-26 | EAS Update branch = git branch: push to `dev` publishes EAS branch `dev`, push to `main` publishes EAS branch `main`; any other ref fails before publishing. No per-PR previews for now | Two stable previews in Expo Go (test vs approved) without builds or channels |
+| 2026-10-26 | Only `main` is protected, with a ruleset: PR required (0 approvals), `CI` check, merge commit only; `dev` is the default branch and stays unprotected | New PRs target `dev` by default; `main` cannot be pushed to directly; merge commits keep `dev` and `main` from drifting. Rulesets, not classic protection, because only rulesets can limit the merge method per branch |
+| 2026-10-26 | Publish job runs in GitHub environment `expo-publish`; moving `EXPO_TOKEN` there (deploy branches `main` + `dev`) is a one-time owner step | A workflow edited on a feature branch can never read the Expo token; the workflow keeps working before the move |
 
 ## Backlog (not scheduled)
 
-- Branch previews in Expo Go (publish EAS Updates for PR branches, not only `main`).
+- Per-PR Expo previews (not now): publish an EAS Update per open PR. Today only `dev` and `main` publish.
 - Pixel sprite set to replace emoji item icons.
 - Arena / PvP once a server exists.
 - Prestige / rebirth layer.

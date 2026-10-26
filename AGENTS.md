@@ -9,20 +9,31 @@ Mobile idle/incremental RPG inspired by Gladiatus. POC scope: two tabs. **Villag
 Visual style: medieval pixel art. Hard pixel bevels, no rounded corners. Fonts: Jacquard 12 (titles/signs) and Pixelify Sans (body). Colors and fonts live in `src/theme.ts`.
 
 The owner works mostly from a phone. Keep that in mind:
-- Commit directly to the GitHub repo; there is no "local copy" the owner can open.
-- Every change on `main` must build, because `main` publishes an EAS Update that the owner opens in Expo Go. That is how he tests.
+- Push your work to your own branch on GitHub and open a PR; there is no "local copy" the owner can open.
+- Every change on `dev` and `main` must build. A push to `dev` publishes the EAS Update branch `dev` (the owner's test preview); a push to `main` publishes EAS branch `main` (the last version he approved). He opens both in Expo Go. That is how he tests.
 - Mobile only (iOS + Android). Do not add a web target.
-- Experiments go on a branch (`exp/<name>` or `feat/<name>`) and are merged by PR.
+- All work goes on a branch (`feat/`, `fix/`, `chore/`, `exp/`) and reaches `dev` by PR. Feature branches never publish to Expo Go.
 - Keep PR descriptions short and readable on a phone screen.
 
 ## Workflow (how work gets done here)
 
 - The orchestrating assistant is the **product owner**: it turns requests into task briefs, keeps `docs/PRODUCT.md` current and does not write game code. See `.claude/skills/product-owner/SKILL.md`.
-- Coding is done by the **`game-engineer`** agent (`.claude/agents/game-engineer.md`) on a `feat/`, `fix/` or `chore/` branch, ending in a PR to `main`.
-- **Only the owner merges into `main`.** Agents work in their own git worktree, push only to their branch with an explicit ref, and never merge.
-- Every PR gets the **5-reviewer council** (`.claude/skills/pr-review-council/SKILL.md`, reviewers in `.claude/agents/code-reviewer.md`). Confirmed issues go back to the engineer; repeat until clean.
+- Coding is done by the **`game-engineer`** agent (`.claude/agents/game-engineer.md`) on a `feat/`, `fix/` or `chore/` branch cut from `origin/dev`, ending in a PR with **base `dev`**.
+- Every PR into `dev` gets the **5-reviewer council** (`.claude/skills/pr-review-council/SKILL.md`, reviewers in `.claude/agents/code-reviewer.md`). Confirmed issues go back to the engineer; repeat until clean.
+- **Only the owner merges, into `dev` and into `main`.** After he merges into `dev`, the `dev` preview publishes and he tests it in Expo Go. When he is happy, he opens and merges a release PR `dev` → `main`.
+- Agents work in their own git worktree, push only to their branch with an explicit ref, and never merge, never push to `dev` or `main`, and never open the release PR unless the owner asks.
 - Skills live in `.claude/skills/`: `idle-rpg-game-design` (game knowledge), `product-owner`, `pr-review-council`, plus vendored official Expo skills (MIT, see `EXPO-SKILLS-LICENSE`).
 - GitHub GraphQL is blocked in the agent environment: use `gh api` REST calls for PRs and comments.
+
+## Branching
+
+| Branch | Role | Publishes to Expo Go | Who merges |
+| --- | --- | --- | --- |
+| `main` | Stable: only code the owner tested on `dev`. Protected by a ruleset (PR + `CI` check, merge commit only). | EAS branch `main` | Owner only, via release PR `dev` → `main` |
+| `dev` | Integration and test preview. Default branch, so new PRs target it. | EAS branch `dev` | Owner only |
+| `feat/*`, `fix/*`, `chore/*`, `exp/*` | One task each, cut from `origin/dev`, PR into `dev` | Never | — |
+
+Flow: `feat/*` → PR into `dev` (CI + council) → owner merges → `dev` preview → owner tests in Expo Go → release PR `dev` → `main` → owner merges → `main` preview.
 
 ## Architecture rules
 

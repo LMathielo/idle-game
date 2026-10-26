@@ -1,8 +1,10 @@
 name: CI
 
-# Typecheck, tests and a full export on every pull request (the EAS publish workflow only runs on main).
+# Typecheck, tests and a full export on every pull request into dev or main
+# (publishing to Expo Go happens in eas-update.yml, only on pushes to dev and main).
 on:
   pull_request:
+    branches: [dev, main]
   workflow_dispatch:
 
 permissions:
@@ -14,11 +16,13 @@ concurrency:
 
 jobs:
   check:
+    # Check name `CI`: this is the required status check in main's branch protection rule.
+    name: CI
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # node:sqlite (used by the SQL repository tests) needs Node 22.13+.
           node-version: 22
