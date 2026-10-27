@@ -1,4 +1,4 @@
-// Dungeon tiers 1–5: config table, run times, win-based unlocks, DUNGEON_LOCKED, rewards per tier,
+// Dungeon tiers 1–5: config table, search times, win-based unlocks, DUNGEON_LOCKED, rewards per tier,
 // the debug win grant and the danger hint.
 import { describe, expect, it } from 'vitest';
 import {
@@ -19,7 +19,9 @@ import {
   hashState,
   isDungeonUnlocked,
   newGame,
-  runMsFor,
+  COMBAT,
+  type GameEvent,
+  searchMsFor,
   simulate,
 } from '../src/engine';
 import { formatClock } from '../src/components/format';
@@ -50,6 +52,20 @@ function startDungeon(s: GameState, dungeonId: DungeonId, at = T0) {
   return applyCommand(s, cmd({ type: 'START_ACTIVITY', kind: 'dungeon', dungeonId }), at);
 }
 
+/** Plays 1 s at a time until `pred` holds; returns the state and every event on the way (a run ends with its fight). */
+function playUntil(start: GameState, pred: (s: GameState) => boolean) {
+  let s = start;
+  const events: GameEvent[] = [];
+  const unlocked: DungeonId[] = [];
+  for (let i = 0; i < 100_000 && !pred(s); i++) {
+    const r = simulate(s, s.time.lastSimulatedAt + SEC);
+    s = r.state;
+    events.push(...r.events);
+    unlocked.push(...r.summary.dungeonsUnlocked);
+  }
+  return { state: s, events, unlocked };
+}
+
 function sumTotals(s: GameState) {
   const t = { runs: 0, wins: 0, losses: 0 };
   for (const v of Object.values(s.dungeon.byDungeon)) {
@@ -70,18 +86,19 @@ describe('tier table (config)', () => {
         d.tier,
         d.name,
         `${e.name} ${e.hp} · ${e.damage.min}–${e.damage.max} · ${e.defense}`,
-        d.run.baseMs / MIN,
+        d.search.baseMs / MIN,
+        `${e.attackIntervalMs} ms`,
         d.unlock ? `${d.unlock.wins} in ${d.unlock.dungeonId}` : '—',
         `${d.rewards.heroXp} · ${d.rewards.gold.min}–${d.rewards.gold.max}`,
         d.rewards.drops.map((x) => `${x.itemId} ${x.chance}`).join(),
       ];
     });
     expect(table).toEqual([
-      [1, 'Rat Cellar', 'Rat 30 · 3–5 · 2', 5, '—', '25 · 2–5', 'rat_skin 0.5'],
-      [2, 'Bat Cave', 'Bat 60 · 6–9 · 6', 7, '10 in rat_cellar', '60 · 6–12', 'bat_wing 0.4'],
-      [3, 'Wolf Den', 'Wolf 110 · 10–14 · 12', 9, '15 in bat_cave', '140 · 15–30', 'wolf_pelt 0.3'],
-      [4, 'Forgotten Crypt', 'Skeleton 180 · 15–20 · 20', 11, '25 in wolf_den', '300 · 35–60', 'old_bone 0.25'],
-      [5, 'Troll Bridge', 'Troll 300 · 22–30 · 30', 13, '40 in forgotten_crypt', '650 · 80–130', 'troll_hide 0.2'],
+      [1, 'Rat Cellar', 'Rat 30 · 3–5 · 2', 2, '1000 ms', '—', '35 · 2–5', 'rat_skin 0.5'],
+      [2, 'Bat Cave', 'Bat 60 · 6–9 · 6', 3, '1000 ms', '10 in rat_cellar', '60 · 6–12', 'bat_wing 0.4'],
+      [3, 'Wolf Den', 'Wolf 110 · 10–14 · 12', 5, '1000 ms', '15 in bat_cave', '140 · 15–30', 'wolf_pelt 0.3'],
+      [4, 'Forgotten Crypt', 'Skeleton 180 · 15–20 · 20', 8, '1000 ms', '25 in wolf_den', '300 · 35–60', 'old_bone 0.25'],
+      [5, 'Troll Bridge', 'Troll 300 · 22–30 · 30', 12, '1000 ms', '40 in forgotten_crypt', '650 · 80–130', 'troll_hide 0.2'],
     ]);
   });
 
@@ -93,28 +110,30 @@ describe('tier table (config)', () => {
   });
 });
 
-describe('run time per tier', () => {
-  it('DEX 10: 4:50, 6:50, 8:50, 10:50, 12:50', () => {
-    expect(DUNGEON_IDS.map((id) => formatClock(runMsFor(id, DEX10)))).toEqual(['4:50', '6:50', '8:50', '10:50', '12:50']);
+describe('search time per tier', () => {
+  it('DEX 10: 1:50, 2:50, 4:50, 7:50, 11:50', () => {
+    expect(DUNGEON_IDS.map((id) => formatClock(searchMsFor(id, DEX10)))).toEqual(['1:50', '2:50', '4:50', '7:50', '11:50']);
   });
 
   it('−1 s per DEX on every tier, never under 1:00', () => {
     for (const id of DUNGEON_IDS) {
-      const base = DUNGEONS[id].run.baseMs;
-      expect(runMsFor(id, { dexterity: 11 })).toBe(base - 11 * SEC);
-      expect(runMsFor(id, { dexterity: 10_000 })).toBe(MIN);
-      expect(runMsFor(id, { dexterity: (base - MIN) / SEC })).toBe(MIN); // exactly at the floor
-      expect(runMsFor(id, { dexterity: (base - MIN) / SEC - 1 })).toBe(MIN + SEC);
+      const base = DUNGEONS[id].search.baseMs;
+      expect(searchMsFor(id, { dexterity: 11 })).toBe(base - 11 * SEC);
+      expect(searchMsFor(id, { dexterity: 10_000 })).toBe(MIN);
+      expect(searchMsFor(id, { dexterity: (base - MIN) / SEC })).toBe(MIN); // exactly at the floor
+      expect(searchMsFor(id, { dexterity: (base - MIN) / SEC - 1 })).toBe(MIN + SEC);
     }
   });
 
-  it('a Bat Cave run completes at exactly 6:50 with DEX 10', () => {
+  it('a Bat Cave search ends at exactly 2:50 with DEX 10, then the fight starts', () => {
     const r = startDungeon(withCounters({ rat_cellar: { runs: 10, wins: 10, losses: 0 } }), 'bat_cave');
     if (!r.ok) throw new Error(r.error.message);
-    expect(dungeonTotals(simulate(r.state, T0 + 410 * SEC - 1).state, 'bat_cave').runs).toBe(0);
-    const done = simulate(r.state, T0 + 410 * SEC).state;
+    expect(dungeonRunView(simulate(r.state, T0 + 170 * SEC - 1).state)).toMatchObject({ phase: 'search', remainingMs: 1 });
+    const fight = simulate(r.state, T0 + 170 * SEC).state;
+    expect(dungeonRunView(fight)).toMatchObject({ dungeonId: 'bat_cave', run: 11, searchMs: 170 * SEC, phase: 'fight' });
+    expect(dungeonRunView(fight)?.fight).toMatchObject({ enemyId: 'bat', enemyHp: 60, elapsedMs: 0 });
+    const done = simulate(r.state, T0 + 170 * SEC + COMBAT.maxFightMs).state;
     expect(dungeonTotals(done, 'bat_cave').runs).toBe(1);
-    expect(dungeonRunView(done)).toMatchObject({ dungeonId: 'bat_cave', run: 12, runMs: 410 * SEC });
   });
 });
 
@@ -152,21 +171,20 @@ describe('unlocks', () => {
   it('the 10th real win unlocks Bat Cave and emits DUNGEON_UNLOCKED once; the 9th does not', () => {
     let s = withCounters({ rat_cellar: { runs: 8, wins: 8, losses: 0 } });
     s = apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0);
-    const run = runMsFor('rat_cellar', s.character.attributes);
-    const ninth = simulate(s, T0 + run);
+    const ninth = playUntil(s, (x) => dungeonTotals(x, 'rat_cellar').runs === 9);
     expect(ninth.state.dungeon.lastFight?.won).toBe(true);
     expect(dungeonTotals(ninth.state, 'rat_cellar').wins).toBe(9);
     expect(isDungeonUnlocked(ninth.state, 'bat_cave')).toBe(false);
     expect(ninth.events.some((e) => e.type === 'DUNGEON_UNLOCKED')).toBe(false);
 
-    const tenth = simulate(ninth.state, T0 + 2 * run);
+    const tenth = playUntil(ninth.state, (x) => dungeonTotals(x, 'rat_cellar').runs === 10);
     expect(tenth.state.dungeon.lastFight?.won).toBe(true);
     expect(isDungeonUnlocked(tenth.state, 'bat_cave')).toBe(true);
     expect(tenth.events.filter((e) => e.type === 'DUNGEON_UNLOCKED')).toEqual([{ type: 'DUNGEON_UNLOCKED', dungeonId: 'bat_cave' }]);
-    expect(tenth.summary.dungeonsUnlocked).toEqual(['bat_cave']);
+    expect(tenth.unlocked).toEqual(['bat_cave']);
 
     // The 11th win does not announce it again.
-    const eleventh = simulate(tenth.state, T0 + 3 * run);
+    const eleventh = playUntil(tenth.state, (x) => dungeonTotals(x, 'rat_cellar').runs === 11);
     expect(eleventh.events.some((e) => e.type === 'DUNGEON_UNLOCKED')).toBe(false);
   });
 
@@ -218,7 +236,7 @@ describe('determinism on higher tiers', () => {
     let s = withCounters({ rat_cellar: { runs: 10, wins: 10, losses: 0 }, bat_cave: { runs: 15, wins: 15, losses: 0 } }, 21);
     s = { ...s, character: { ...s.character, attributes: { ...s.character.attributes, strength: 40, endurance: 40 } } };
     s = apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den' }, T0);
-    const span = 3 * runMsFor('wolf_den', s.character.attributes) + 17 * SEC;
+    const span = 3 * searchMsFor('wolf_den', s.character.attributes) + 30 * SEC; // three 4:50 searches + three short fights
     let ticked = s;
     for (let t = SEC; t <= span; t += SEC) ticked = simulate(ticked, T0 + t).state;
     const once = simulate(s, T0 + span).state;
@@ -269,8 +287,8 @@ describe('rewards and loot per tier', () => {
     };
     s = apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: id }, T0);
     const before = dungeonTotals(s, id);
-    const r = simulate(s, T0 + 8 * HOUR); // 480 one-minute runs
-    const runs = 480;
+    const r = simulate(s, T0 + 8 * HOUR); // 1:00 searches + a one-strike fight (1 s) each
+    const runs = Math.floor((8 * HOUR) / (MIN + SEC)); // 472
     const d = DUNGEONS[id];
     expect(dungeonTotals(r.state, id)).toEqual({ runs: before.runs + runs, wins: before.wins + runs, losses: 0 });
     expect(r.summary.dungeon).toEqual({ runs, wins: runs, losses: 0 });
@@ -291,7 +309,7 @@ describe('rewards and loot per tier', () => {
     let s = withCounters({ rat_cellar: { runs: 10, wins: 10, losses: 0 } }, 4);
     s = { ...s, character: { ...s.character, attributes: { ...s.character.attributes, strength: 500, endurance: 500 } } };
     s = apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'bat_cave' }, T0);
-    const r = simulate(s, T0 + runMsFor('bat_cave', s.character.attributes)).state;
+    const r = simulate(s, T0 + searchMsFor('bat_cave', s.character.attributes) + COMBAT.maxFightMs).state;
     const f = r.dungeon.lastFight!;
     expect(f.won).toBe(true);
     expect(f.rewards.heroXp).toBe(60);
@@ -352,10 +370,11 @@ describe('danger hint', () => {
 
   it('fresh hero: Easy, Tough, Deadly, Deadly, Deadly', () => {
     expect(levels(fresh)).toEqual<DangerLevel[]>(['easy', 'tough', 'deadly', 'deadly', 'deadly']);
-    // Rat: 3 hits to kill (avg 11.7 vs 30 HP), the rat strikes twice for ~3 → 6 of 50 HP.
-    expect(dangerHint(fresh, 'rat_cellar')).toEqual({ level: 'easy', expectedHpLoss: 6, maxHp: 50, percent: 12, heroHits: 3 });
-    // Bat: 5 hits (avg 12 vs 60 HP), 4 bat strikes of 6 → 24 of 50 HP.
-    expect(dangerHint(fresh, 'bat_cave')).toEqual({ level: 'tough', expectedHpLoss: 24, maxHp: 50, percent: 48, heroHits: 5 });
+    // Rat: 3 hits to kill (avg 11.7 vs 30 HP), at 3 s; the rat lands 2 strikes before that (1 s, 2 s; the one at 3 s
+    // comes after the hero's killing blow) for ~3 → 6 of 50 HP.
+    expect(dangerHint(fresh, 'rat_cellar')).toEqual({ level: 'easy', expectedHpLoss: 6, maxHp: 50, percent: 12, heroHits: 3, enemyHits: 2, fightMs: 3000 });
+    // Bat: 5 hits (avg 12 vs 60 HP) at 5 s, 4 bat strikes of 6 → 24 of 50 HP.
+    expect(dangerHint(fresh, 'bat_cave')).toEqual({ level: 'tough', expectedHpLoss: 24, maxHp: 50, percent: 48, heroHits: 5, enemyHits: 4, fightMs: 5000 });
   });
 
   it('expected loss grows tier by tier for the same hero', () => {
@@ -369,11 +388,11 @@ describe('danger hint', () => {
     expect(hashState(fresh)).toBe(before);
   });
 
-  it('a strong hero sees every tier as Easy; a hero who cannot win within the round cap sees Deadly', () => {
+  it('a strong hero sees every tier as Easy; a hero who cannot win within the time limit sees Deadly', () => {
     const strong = { ...fresh, character: { ...fresh.character, attributes: { ...fresh.character.attributes, strength: 1000, endurance: 1000 } } };
     expect(levels(strong as GameState)).toEqual(['easy', 'easy', 'easy', 'easy', 'easy']);
     const weak = { ...fresh, character: { ...fresh.character, equipment: {}, attributes: { ...fresh.character.attributes, strength: 0, endurance: 10_000 } } };
-    // Unarmed 1–2 vs the troll's 300 HP: 300 hits > 50 rounds, even though the troll barely scratches.
+    // Unarmed 1–2 vs the troll's 300 HP: 300 hits = 300 s > 60 s, even though the troll barely scratches.
     expect(dangerHint(weak as GameState, 'troll_bridge')).toMatchObject({ level: 'deadly' });
   });
 

@@ -16,6 +16,11 @@ export const STATS = {
   mana: { base: 20, perLevel: 5 },
   /** Flat HP regen per minute = basePerMin + perEndurance × END. Runs always (idle, gathering, runs, offline). */
   hpRegen: { basePerMin: 5, perEndurance: 1 },
+  /**
+   * Hero attack interval (ms between two strikes; the first lands this long after the fight starts) =
+   * baseMs + Σ attackIntervalModMs of the equipped items, never below minMs. No item sets a modifier yet.
+   */
+  attackInterval: { baseMs: 1000, minMs: 200 },
 } as const;
 
 /** Percent bonuses are integers in basis points: 100 = +1%, 1000 = +10%, −500 = −5%. */

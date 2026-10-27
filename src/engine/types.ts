@@ -100,7 +100,10 @@ export type EnemyId = 'rat' | 'bat' | 'wolf' | 'skeleton' | 'troll';
 type ActivityBase = {
   /** Engine time (epoch ms) the activity started. Informational only. */
   startedAt: number;
-  /** Time banked into the current log (woodcutting) or the current run (dungeon), in ms. Never lost between resumes. */
+  /**
+   * Time banked into the current log (woodcutting) or the current search (dungeon, search phase; 0 during the
+   * fight, whose time is `fight.elapsedMs`), in ms. Never lost between resumes.
+   */
   progressMs: number;
 };
 
@@ -109,8 +112,45 @@ export type WoodcuttingActivity = ActivityBase & { kind: 'woodcutting'; treeId: 
 
 export type GatheringActivity = WoodcuttingActivity;
 
-/** Auto-repeat: runs follow each other back-to-back until stopped. Stopping loses the current run. */
-export type DungeonActivity = ActivityBase & { kind: 'dungeon'; dungeonId: DungeonId };
+/** A run is a search for an opponent, then a live fight. */
+export type DungeonPhase = 'search' | 'fight';
+
+/** One side's combat numbers, frozen when the fight starts (gear changed mid-fight counts from the next fight). */
+export type CombatSide = {
+  damage: { min: number; max: number };
+  defense: number;
+  /** ms between two strikes; the first strike lands this long after the fight starts. */
+  attackIntervalMs: number;
+};
+
+/**
+ * The fight in progress (save v9). It plays out in engine time inside simulate(): each strike happens at its
+ * exact time (strike n of a side at n × its interval; on a tie the hero strikes first), HP regenerates
+ * between strikes, and the outcome is applied when it ends. The hero's HP is `character.hp` throughout.
+ */
+export type ActiveFight = {
+  enemyId: EnemyId;
+  /** Engine time into the fight, ms. Never lost between resumes. */
+  elapsedMs: number;
+  heroHpStart: number;
+  /** Max HP when the fight started, for the bars. */
+  heroMaxHp: number;
+  enemyHp: number;
+  enemyMaxHp: number;
+  hero: CombatSide;
+  enemy: CombatSide;
+  /** Strikes each side has made so far. The next one is due at (strikes + 1) × attackIntervalMs. */
+  heroStrikes: number;
+  enemyStrikes: number;
+  /** Strikes that have landed so far, in time order. */
+  log: FightLogEntry[];
+};
+
+/**
+ * Auto-repeat: runs follow each other back-to-back until stopped. Stopping loses the current run (in either
+ * phase). `fight` is set exactly when `phase` is 'fight'.
+ */
+export type DungeonActivity = ActivityBase & { kind: 'dungeon'; dungeonId: DungeonId; phase: DungeonPhase; fight: ActiveFight | null };
 
 /**
  * Trains one attribute. Its progress lives in `state.training.attributes[attribute]`, not here, so pausing
@@ -140,10 +180,13 @@ export type TrainingState = {
 
 // ---------- Combat ----------
 
-/** One strike. The engine produces it; the UI only replays it. */
+/** One strike. The engine produces it; the UI only shows or replays it. */
 export type FightLogEntry = {
-  round: number;
+  /** Engine time into the fight when it landed, ms. */
+  atMs: number;
   actor: 'hero' | 'enemy';
+  /** 1-based: this side's n-th strike. */
+  strike: number;
   /** Raw damage roll, a whole number in [min, max]. */
   roll: number;
   /** Damage after the target's defense (at least 1). */
@@ -161,19 +204,19 @@ export type FightRewards = {
 };
 
 /**
- * Why a fight ended: the enemy or the hero reached 0 HP, the round cap was hit (a loss), or the hero
- * had no HP at the start (an immediate loss with no rolls).
+ * Why a fight ended: the enemy or the hero reached 0 HP, the fight time limit was reached (a loss), or the
+ * hero had no HP at the start (an immediate loss with no rolls).
  */
-export type FightEndReason = 'enemy_defeated' | 'hero_defeated' | 'round_cap' | 'no_hp';
+export type FightEndReason = 'enemy_defeated' | 'hero_defeated' | 'time_limit' | 'no_hp';
 
-/** The last fight only (saves stay small). Earlier fights live on as counters. */
+/** The last finished fight only (saves stay small). Earlier fights live on as counters. */
 export type FightRecord = {
   dungeonId: DungeonId;
   enemyId: EnemyId;
   won: boolean;
   endReason: FightEndReason;
-  /** Rounds started; a fight that starts at 0 HP has 0. */
-  rounds: number;
+  /** Engine time from the fight's start to its end, ms; 0 for a fight that starts at 0 HP. */
+  durationMs: number;
   heroHpStart: number;
   heroHpEnd: number;
   /** Max HP at the moment of the fight, for the replay bars. */
@@ -234,7 +277,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 8;
+  saveVersion: 9;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */

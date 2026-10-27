@@ -1,5 +1,6 @@
 // Visual-only replay of the engine's fight log: lines appear one by one while both HP bars animate.
-// Timing never changes anything; the outcome is already in the save.
+// Timing never changes anything; the outcome is already in the save. LogLine and AnimatedHpBar are shared
+// with the live fight (LiveFight.tsx).
 import { memo, useEffect, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -49,7 +50,7 @@ export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
     else heroHp = e.targetHpAfter;
   }
   const done = shown >= total;
-  if (done) heroHp = fight.heroHpEnd; // a round-cap loss ends at 0 even though no strike says so
+  if (done) heroHp = fight.heroHpEnd; // a time-limit loss ends at 0 even though no strike says so (and regen shows here)
   const result = OUTCOME_LABELS[fight.endReason];
 
   // Screen readers hear the result once, not every line as it appears.
@@ -81,11 +82,17 @@ export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
   );
 }
 
-const LogLine = memo(function LogLine({ entry, heroName, enemyName }: { entry: FightLogEntry; heroName: string; enemyName: string }) {
+/** "0:07": fight time when the strike landed, whole seconds rounded down. */
+export function strikeTime(atMs: number): string {
+  const s = Math.max(0, Math.floor(atMs / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+export const LogLine = memo(function LogLine({ entry, heroName, enemyName }: { entry: FightLogEntry; heroName: string; enemyName: string }) {
   const hero = entry.actor === 'hero';
   const attacker = hero ? heroName : enemyName;
   const target = hero ? enemyName : heroName;
-  const text = `R${entry.round} · ${attacker} hits ${target} for ${entry.dealt}${entry.dealt !== entry.roll ? ` (rolled ${entry.roll})` : ''} → ${entry.targetHpAfter} HP`;
+  const text = `${strikeTime(entry.atMs)} · ${attacker} hits ${target} for ${entry.dealt}${entry.dealt !== entry.roll ? ` (rolled ${entry.roll})` : ''} → ${entry.targetHpAfter} HP`;
   return (
     <Text style={[styles.line, hero ? styles.heroLine : styles.enemyLine]} accessibilityLabel={text}>
       {text}
@@ -93,7 +100,7 @@ const LogLine = memo(function LogLine({ entry, heroName, enemyName }: { entry: F
   );
 });
 
-const AnimatedHpBar = memo(function AnimatedHpBar({
+export const AnimatedHpBar = memo(function AnimatedHpBar({
   label,
   value,
   max,

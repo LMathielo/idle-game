@@ -76,7 +76,7 @@ describe('LocalGameClient', () => {
     clock.advance(SEC);
     const second = await client.dispatch({ id: 'xp-1', type: 'DEBUG_GRANT_HERO_XP', amount: 10_000 });
     expect(second).toMatchObject({ ok: true, duplicate: true });
-    expect(client.getState().character.level).toBe(3);
+    expect(client.getState().character.level).toBe(9); // 10k XP once (Lv10 needs 11,106), not twice
     expect((await repo.getAllLog()).filter((r) => r.commandId === 'xp-1')).toHaveLength(1);
   });
 
@@ -181,7 +181,7 @@ describe('LocalGameClient', () => {
     const { repo, client } = makeClient();
     await client.load();
     await client.debug.grantHeroXp(10_000);
-    expect(client.getState().character.level).toBe(3);
+    expect(client.getState().character.level).toBe(9);
     expect(repo.log.at(-1)?.type).toBe('DEBUG_GRANT_HERO_XP');
   });
 
@@ -265,9 +265,9 @@ describe('LocalGameClient', () => {
     await client.load();
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     clock.advance(4 * 110 * SEC); // four 1:50 Oak logs
-    await Promise.all([client.tick(), client.resume(), client.debug.grantHeroXp(100), client.persist(), client.tick()]);
+    await Promise.all([client.tick(), client.resume(), client.debug.grantHeroXp(60), client.persist(), client.tick()]);
     expect(client.getState().stats.totalActions).toBe(4);
-    expect(client.getState().character.xp).toBe(100);
+    expect(client.getState().character.xp).toBe(60);
   });
 
   describe('"While you were away" threshold (60s of real time or any anomaly)', () => {

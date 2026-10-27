@@ -4,6 +4,6 @@ import { COMBAT, type FightEndReason } from '../../engine';
 export const OUTCOME_LABELS: Record<FightEndReason, string> = {
   enemy_defeated: 'Victory',
   hero_defeated: 'Defeat',
-  round_cap: `Defeat (out of time, ${COMBAT.maxRounds} rounds)`,
+  time_limit: `Defeat (out of time, ${COMBAT.maxFightMs / 1000}s)`,
   no_hp: 'Defeat (no HP to fight)',
 };

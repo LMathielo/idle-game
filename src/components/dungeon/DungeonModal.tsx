@@ -1,5 +1,5 @@
 // Village → Dungeon: full-screen modal with the dungeon list and, inside the same modal, the detail
-// view (enemy, hero, danger hint, start / skip / stop, last fight + replay). Rules stay in the engine: this
+// view (enemy, hero, danger hint, start / skip / stop, the live fight, last fight + replay). Rules stay in the engine: this
 // file only reads selectors (dungeonRunView, dungeonUnlockView, dangerHint, hpView, staminaView,
 // getDerivedStats) and dispatches commands. Locked dungeons can't be opened; the engine refuses them too.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -8,6 +8,7 @@ import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
 import {
   type DangerLevel,
+  COMBAT,
   dangerHint,
   DEV_TOOLS_ENABLED,
   DUNGEON_IDS,
@@ -23,7 +24,7 @@ import {
   type GameState,
   getDerivedStats,
   hpView,
-  runMsFor,
+  searchMsFor,
   staminaView,
   strikeRange,
 } from '../../engine';
@@ -35,6 +36,7 @@ import { Bar, Panel } from '../Panel';
 import { PixelButton } from '../PixelButton';
 import { confirmCancelRun } from './confirmCancelRun';
 import { FightReplay } from './FightReplay';
+import { LiveFight } from './LiveFight';
 import { OUTCOME_LABELS } from './outcome';
 
 const range = (min: number, max: number) => (min === max ? `${min}` : `${min}–${max}`);
@@ -104,7 +106,7 @@ function requirementText(req: { dungeonId: DungeonId; wins: number }, progress: 
 }
 
 function DungeonList({ state, running, onPick }: { state: GameState; running: DungeonId | null; onPick: (id: DungeonId) => void }) {
-  const attributes = effectiveAttributes(state); // run time uses the trained DEX
+  const attributes = effectiveAttributes(state); // search time uses the trained DEX
   return (
     <View>
       {DUNGEON_IDS.map((id) => {
@@ -116,7 +118,7 @@ function DungeonList({ state, running, onPick }: { state: GameState; running: Du
           <DungeonCard
             key={id}
             id={id}
-            runMs={runMsFor(id, attributes)}
+            searchMs={searchMsFor(id, attributes)}
             wins={dungeonTotals(state, id).wins}
             running={running === id}
             onPick={onPick}
@@ -129,20 +131,20 @@ function DungeonList({ state, running, onPick }: { state: GameState; running: Du
 
 const DungeonCard = memo(function DungeonCard({
   id,
-  runMs,
+  searchMs,
   wins,
   running,
   onPick,
 }: {
   id: DungeonId;
-  runMs: number;
+  searchMs: number;
   wins: number;
   running: boolean;
   onPick: (id: DungeonId) => void;
 }) {
   const d = DUNGEONS[id];
   const enemy = ENEMIES[d.enemyId];
-  const line = `Tier ${d.tier} · ${enemy.name} · ${formatClock(runMs)} per run`;
+  const line = `Tier ${d.tier} · ${enemy.name} · ${formatClock(searchMs)} search`;
   return (
     <Pressable
       onPress={() => onPick(id)}
@@ -215,7 +217,7 @@ function DungeonDetail({
   const { training } = state;
   const stats = useMemo(() => getDerivedStats({ character: { level, attributes, equipment }, training }), [level, attributes, equipment, training]);
   const danger = useMemo(() => dangerHint({ character: { level, attributes, equipment }, training }, id), [level, attributes, equipment, training, id]);
-  const runMs = runMsFor(id, effectiveAttributes(state));
+  const searchMs = searchMsFor(id, effectiveAttributes(state));
   const unlock = dungeonUnlockView(state, id);
   const totals = dungeonTotals(state, id);
   const hp = hpView(state);
@@ -233,9 +235,9 @@ function DungeonDetail({
       client
         .dispatch(cmd)
         .then((res) => {
-          // RUN_CHANGED: the run (or its cost) changed under the player's finger. Nothing was spent; the
-          // screen already shows the new run and cost, so no alert.
-          if (!res.ok && res.error.code !== 'RUN_CHANGED') Alert.alert('Not possible', res.error.message);
+          // RUN_CHANGED / FIGHT_IN_PROGRESS: the search ended (or its cost changed) under the player's finger.
+          // Nothing was spent; the screen already shows the fight or the new cost, so no alert.
+          if (!res.ok && res.error.code !== 'RUN_CHANGED' && res.error.code !== 'FIGHT_IN_PROGRESS') Alert.alert('Not possible', res.error.message);
         })
         .catch(() => Alert.alert('Could not save', 'Try again.'))
         .finally(() => {
@@ -331,7 +333,9 @@ function DungeonDetail({
             paused={paused}
             stamina={state.stamina.current}
             hp={hp.hp}
+            heroName={state.character.name}
             enemyName={enemy.name}
+            enemyIcon={enemy.icon}
             hitMin={hits.min}
             hitMax={hits.max}
             onSkip={skip}
@@ -342,8 +346,8 @@ function DungeonDetail({
         ) : (
           <View style={styles.startBox}>
             <Text style={styles.note}>
-              Runs repeat on their own, also while the app is closed (up to {formatNumber(state.offline.capMs / 3_600_000)}h). Each run takes{' '}
-              {formatClock(runMs)} and ends in a fight. Waiting is free.
+              Runs repeat on their own, also while the app is closed (up to {formatNumber(state.offline.capMs / 3_600_000)}h). Each run is a{' '}
+              {formatClock(searchMs)} search for an opponent, then a live fight (up to {formatNumber(COMBAT.maxFightMs / 1000)}s). Waiting is free.
             </Text>
             {otherActivity === 'woodcutting' ? <Text style={styles.note}>Starting stops woodcutting (your logs are kept).</Text> : null}
             {otherActivity === 'training' ? <Text style={styles.note}>Starting pauses training (your training XP is kept).</Text> : null}
@@ -390,7 +394,9 @@ const RunControls = memo(function RunControls({
   paused,
   stamina,
   hp,
+  heroName,
   enemyName,
+  enemyIcon,
   hitMin,
   hitMax,
   onSkip,
@@ -400,29 +406,43 @@ const RunControls = memo(function RunControls({
   paused: boolean;
   stamina: number;
   hp: number;
+  heroName: string;
   enemyName: string;
+  enemyIcon: string;
   /** What one enemy strike deals to the hero after defense (engine strikeRange). */
   hitMin: number;
   hitMax: number;
   onSkip: (run: number, maxCost: number) => void;
   onStop: () => void;
 }) {
-  const canSkip = stamina >= run.skipCost;
+  if (run.fight) {
+    // Fight phase: plays live, no skip.
+    return (
+      <View style={styles.runBox}>
+        <LiveFight fight={run.fight} heroName={heroName} enemyName={enemyName} enemyIcon={enemyIcon} paused={paused} />
+        <View style={styles.buttons}>
+          <PixelButton label="Stop" onPress={onStop} accessibilityHint="Asks first: the current run will be lost" />
+        </View>
+      </View>
+    );
+  }
+  const cost = run.skipCost ?? 0;
+  const canSkip = run.skipCost !== null && stamina >= cost;
   const noHp = hp <= 0;
   return (
     <View style={styles.runBox}>
-      <View style={styles.runLine} accessible accessibilityLabel={`Current run, ${formatClock(run.remainingMs)} left`}>
-        <Text style={styles.runLabel}>Current run</Text>
+      <View style={styles.runLine} accessible accessibilityLabel={`Searching for an opponent, ${formatClock(run.remainingMs)} left`}>
+        <Text style={styles.runLabel}>Searching for opponent…</Text>
         <Text style={styles.runTime}>{formatClock(run.remainingMs)}</Text>
       </View>
       <LiveBar fraction={run.fraction} remainingMs={run.remainingMs} paused={paused} color={colors.hp} style={styles.runBar} />
       <View style={styles.buttons}>
         <PixelButton
-          label={`Skip (${run.skipCost} ⚡)`}
-          onPress={() => onSkip(run.run, run.skipCost)}
+          label={`Skip (${cost} ⚡)`}
+          onPress={() => onSkip(run.run, cost)}
           disabled={!canSkip}
-          accessibilityLabel={`Skip this run for ${run.skipCost} stamina${noHp ? '. Certain loss, 0 HP' : ''}`}
-          accessibilityHint={canSkip ? 'Fights now; the next run starts right after' : `Not enough stamina: you have ${stamina}`}
+          accessibilityLabel={`Skip the search for ${cost} stamina${noHp ? '. Certain loss, 0 HP' : ''}`}
+          accessibilityHint={canSkip ? 'The fight starts now and plays out live. No HP regen for the skipped time' : `Not enough stamina: you have ${stamina}`}
         />
         <PixelButton label="Stop" onPress={onStop} accessibilityHint="Asks first: the current run will be lost" />
       </View>
@@ -434,7 +454,8 @@ const RunControls = memo(function RunControls({
       <Text style={styles.note}>
         Your HP {hp} · {enemyName} hits for {range(hitMin, hitMax)}
       </Text>
-      {!canSkip ? <Text style={styles.note}>Not enough stamina to skip ({stamina}/{run.skipCost}).</Text> : null}
+      <Text style={styles.note}>Skipping the search gives no HP regen for the skipped time.</Text>
+      {!canSkip ? <Text style={styles.note}>Not enough stamina to skip ({stamina}/{cost}).</Text> : null}
     </View>
   );
 });
@@ -444,6 +465,7 @@ const LastFight = memo(function LastFight({ fight, onReplay }: { fight: FightRec
   const items = Object.entries(r.items);
   const lost = Object.entries(r.itemsLost);
   const outcome = OUTCOME_LABELS[fight.endReason];
+  const seconds = Math.floor(fight.durationMs / 1000);
   const rewardText = fight.won
     ? [`+${r.heroXp} XP`, `+${r.gold} gold`, ...items.map(([id, n]) => `${itemIcon(id)} ${itemName(id)}${n > 1 ? ` ×${n}` : ''}`)].join(' · ')
     : 'No rewards';
@@ -451,11 +473,11 @@ const LastFight = memo(function LastFight({ fight, onReplay }: { fight: FightRec
     <View style={styles.lastBox}>
       <View
         accessible
-        accessibilityLabel={`${outcome} in ${fight.rounds} rounds. HP ${fight.heroHpStart} to ${fight.heroHpEnd}. ${rewardText}`}
+        accessibilityLabel={`${outcome} after ${seconds} seconds. HP ${fight.heroHpStart} to ${fight.heroHpEnd}. ${rewardText}`}
       >
         <Text style={[styles.outcome, fight.won ? styles.win : styles.loss]}>{outcome}</Text>
         <Text style={styles.note}>
-          {fight.rounds} {fight.rounds === 1 ? 'round' : 'rounds'} · HP {fight.heroHpStart} → {fight.heroHpEnd}
+          {seconds}s · {fight.log.length} {fight.log.length === 1 ? 'strike' : 'strikes'} · HP {fight.heroHpStart} → {fight.heroHpEnd}
         </Text>
         <Text style={styles.rewards}>{rewardText}</Text>
         {lost.map(([id, n]) => (

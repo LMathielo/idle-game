@@ -3,10 +3,11 @@
 //
 //   heroAvg  = mean dealt per hero strike over every roll in [min, max] (after the enemy's defense)
 //   enemyAvg = mean dealt per enemy strike (after the hero's defense)
-//   heroHits = ceil(enemy HP / heroAvg)                 the hero strikes first, so the enemy gets
-//   expectedHpLoss = (heroHits − 1) × enemyAvg          one strike fewer than the hero
+//   heroHits = ceil(enemy HP / heroAvg);  killAt = heroHits × hero attack interval
+//   enemyHits = enemy strikes landing before killAt = ceil(killAt / enemy interval) − 1   (ties go to the hero)
+//   expectedHpLoss = enemyHits × enemyAvg   (regen during the fight is ignored: a hint, not a sim)
 //   percent  = expectedHpLoss / max HP
-//   Easy < toughAtPercent ≤ Tough < deadlyAtPercent ≤ Deadly; heroHits > maxRounds is always Deadly.
+//   Easy < toughAtPercent ≤ Tough < deadlyAtPercent ≤ Deadly; killAt > COMBAT.maxFightMs is always Deadly.
 import { COMBAT, DANGER, DUNGEONS, ENEMIES } from './config/dungeons';
 import { dealtDamage } from './combat';
 import { getDerivedStats, type StatsInput } from './stats';
@@ -24,6 +25,10 @@ export type DangerHint = {
   percent: number;
   /** Hero strikes expected to defeat the enemy. */
   heroHits: number;
+  /** Enemy strikes expected to land before that. */
+  enemyHits: number;
+  /** Expected fight length with average rolls, ms. */
+  fightMs: number;
 };
 
 /** Ranges wider than this are averaged from their two ends instead of every roll. */
@@ -46,10 +51,12 @@ export function dangerHint(state: StatsInput, dungeonId: DungeonId): DangerHint 
   const heroAvg = averageDealt(stats.damage, enemy.defense); // ≥ COMBAT.minDamage, so never 0
   const enemyAvg = averageDealt(enemy.damage, stats.defense.value);
   const heroHits = Math.ceil(enemy.hp / heroAvg);
-  const expectedHpLoss = Math.round((heroHits - 1) * enemyAvg);
+  const fightMs = heroHits * Math.max(1, stats.attackIntervalMs.value);
+  const enemyHits = Math.max(0, Math.ceil(fightMs / Math.max(1, enemy.attackIntervalMs)) - 1);
+  const expectedHpLoss = Math.round(enemyHits * enemyAvg);
   const percent = maxHp > 0 ? Math.round((expectedHpLoss * 100) / maxHp) : 100;
   let level: DangerLevel = 'easy';
-  if (heroHits > COMBAT.maxRounds || percent >= DANGER.deadlyAtPercent) level = 'deadly';
+  if (fightMs > COMBAT.maxFightMs || percent >= DANGER.deadlyAtPercent) level = 'deadly';
   else if (percent >= DANGER.toughAtPercent) level = 'tough';
-  return { level, expectedHpLoss, maxHp, percent, heroHits };
+  return { level, expectedHpLoss, maxHp, percent, heroHits, enemyHits, fightMs };
 }

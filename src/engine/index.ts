@@ -15,14 +15,17 @@ export { markDebugUsed } from './flags';
 export * from './stats';
 export * from './stamina';
 export * from './hp';
-export { dealtDamage, resolveFight, strikeRange, type Combatant, type FightResult } from './combat';
+export { dealtDamage, newFight, nextFightEvent, resolveFight, strikeRange, type Combatant, type FightEvent, type FightResult } from './combat';
 export {
   dungeonRunView,
   dungeonTotals,
   dungeonUnlockView,
+  enemyCombatSide,
+  heroCombatSide,
   isDungeonUnlocked,
-  runMsFor,
+  searchMsFor,
   skipCost,
+  type DungeonFightView,
   type DungeonRunView,
   type DungeonUnlockView,
 } from './dungeon';

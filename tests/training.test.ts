@@ -330,13 +330,13 @@ describe('one activity at a time', () => {
 
   it('dungeon → training: the run in progress is lost; training → dungeon: training stops, XP kept', () => {
     let s = apply(heroAtTier(1), { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0);
-    s = simulate(s, T0 + 3 * MIN).state;
-    const r = applyCommand(s, cmd({ type: 'START_ACTIVITY', kind: 'training', attribute: 'endurance' }), T0 + 3 * MIN);
+    s = simulate(s, T0 + MIN).state; // mid-search (1:50 at DEX 10)
+    const r = applyCommand(s, cmd({ type: 'START_ACTIVITY', kind: 'training', attribute: 'endurance' }), T0 + MIN);
     if (!r.ok) throw new Error(r.error.message);
     expect(r.events).toContainEqual({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: 'rat_cellar' });
     expect(r.state.dungeon.totals.runs).toBe(0); // no fight, no rewards
-    s = simulate(r.state, T0 + 10 * MIN).state;
-    s = apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0 + 10 * MIN);
+    s = simulate(r.state, T0 + 8 * MIN).state;
+    s = apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0 + 8 * MIN);
     expect(s.activity?.kind).toBe('dungeon');
     expect(s.training.attributes.endurance).toEqual({ level: 1, xp: 2, progressMs: 0 });
     s = simulate(s, T0 + 2 * HOUR).state;
@@ -355,17 +355,17 @@ describe('effective attributes feed every rule', () => {
     expect(d1.breakdown.find((p) => p.source === 'strength')).toMatchObject({ min: 11, max: 11 });
   });
 
-  it('END: defense and HP regen; DEX: dungeon run time', () => {
+  it('END: defense and HP regen; DEX: dungeon search time', () => {
     const base = heroAtTier(2);
     const trained = { ...base, training: { ...base.training, attributes: { ...base.training.attributes, endurance: { level: 7, xp: 0, progressMs: 0 }, dexterity: { level: 25, xp: 0, progressMs: 0 } } } };
     expect(getDerivedStats(trained).defense.value - getDerivedStats(base).defense.value).toBe(7);
     expect(hpRegenPerMinute(trained)).toBe(5 + 17);
-    const run = (s: GameState) => dungeonRunView(apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0))!.runMs;
-    expect(run(base)).toBe(290 * SEC);
-    expect(run(trained)).toBe(265 * SEC); // DEX 35
-    // The skip cost reads the same run time.
+    const search = (s: GameState) => dungeonRunView(apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0))!.searchMs;
+    expect(search(base)).toBe(110 * SEC);
+    expect(search(trained)).toBe(85 * SEC); // DEX 35
+    // The skip cost reads the same search time.
     const started = apply(trained, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0);
-    expect(dungeonRunView(started)!.skipCost).toBe(5); // 4:25 left → 5 started minutes
+    expect(dungeonRunView(started)!.skipCost).toBe(2); // 1:25 left → 2 started minutes
   });
 });
 

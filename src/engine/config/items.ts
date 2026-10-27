@@ -27,6 +27,11 @@ export type ItemDef = {
   woodcuttingStrength?: number;
   /** Usable consumables (USE_ITEM): HP restored, capped at max HP. Integer. */
   heal?: number;
+  /**
+   * Gear: ms added to the hero's attack interval while equipped (negative = faster strikes). Integer.
+   * No item sets one yet; see STATS.attackInterval for the base and the floor.
+   */
+  attackIntervalModMs?: number;
 };
 
 const log = (id: string, name: string, sellPrice: number, tree: string) =>

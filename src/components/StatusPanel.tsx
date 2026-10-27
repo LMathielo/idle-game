@@ -26,7 +26,7 @@ import { Bar, Panel } from './Panel';
 const ATTRIBUTE_EFFECTS: Record<AttributeKey, string | null> = {
   strength: `+${STATS.damagePerStrength} damage`,
   // Rat Cellar's timing; every tier uses the same −1 s per DEX today (config/dungeons.ts).
-  dexterity: `−${DUNGEONS.rat_cellar.run.perDexterityMs / 1000}s dungeon run`,
+  dexterity: `−${DUNGEONS.rat_cellar.search.perDexterityMs / 1000}s dungeon search`,
   endurance: `+${STATS.defensePerEndurance} defense, +${STATS.hpRegen.perEndurance} HP/min`,
   intelligence: null,
 };
@@ -38,7 +38,10 @@ const ATTRIBUTES = ATTRIBUTE_KEYS.map((key) => ({
   active: ATTRIBUTE_EFFECTS[key] !== null,
 }));
 
-type StatKey = 'damage' | 'defense' | 'maxHp' | 'maxMana';
+type StatKey = 'damage' | 'defense' | 'attackIntervalMs' | 'maxHp' | 'maxMana';
+
+/** 1000 → "1.0s", 750 → "0.75s". */
+const formatSeconds = (ms: number) => `${ms % 100 === 0 ? (ms / 1000).toFixed(1) : (ms / 1000).toFixed(2)}s`;
 
 const range = (min: number, max: number) => (min === max ? formatNumber(min) : `${formatNumber(min)}–${formatNumber(max)}`);
 
@@ -46,7 +49,10 @@ function partLabel(p: RangePart | ValuePart): string {
   switch (p.source) {
     case 'weapon':
     case 'armor':
+    case 'gear':
       return p.defId ? itemName(p.defId) : p.source;
+    case 'floor':
+      return 'minimum';
     case 'unarmed':
       return 'unarmed';
     case 'percent': {
@@ -125,6 +131,14 @@ export const StatusPanel = memo(function StatusPanel({ level, attributes, equipm
           value={formatNumber(stats.defense.value)}
           detail={describeValue(stats.defense.breakdown)}
           open={open === 'defense'}
+          onToggle={toggle}
+        />
+        <StatRow
+          statKey="attackIntervalMs"
+          label="Attacks"
+          value={`every ${formatSeconds(stats.attackIntervalMs.value)}`}
+          detail={`${formatNumber(stats.attackIntervalMs.value)} ms between strikes = ${describeValue(stats.attackIntervalMs.breakdown)} (ms).`}
+          open={open === 'attackIntervalMs'}
           onToggle={toggle}
         />
         <StatRow
