@@ -23,17 +23,18 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - Two tabs: **Village** (pixel village hub with signs: Storage, Merchant, Dungeon, Training, Woodcutting) and **Hero** (XP, Status panel with 4 attributes, derived damage/defense, current/max HP with regen, mana and stamina, 9 equipment slots, 20-slot inventory, 4 skills).
 - **M1 done and on `main`:** deterministic engine (`src/engine`), `LocalGameClient`, on-device SQLite save with an action log. Woodcutting works from the Village sign (tap to start/stop), progresses live and offline (8h cap), and shows a "While you were away" summary. Hero tab reads real state. Debug panel on the Hero tab (clock offset, +10k hero XP, stamina, attributes, hero HP → 1, finish run, reset save).
 - **M4 Dungeon in progress:** the Dungeon sign opens a full-screen modal with **5 dungeon tiers** (Rat Cellar, Bat Cave, Wolf Den, Forgotten Crypt, Troll Bridge), one enemy each. Each tier unlocks after a number of wins in the previous one (10 / 15 / 25 / 40); locked tiers show what opens them and their progress, and a banner announces a new unlock. Runs auto-repeat, live and offline; each run takes the tier's base time (5/7/9/11/13 min) − 1 s per DEX, or can be skipped with stamina, and ends in a deterministic fight that gives hero XP, gold and the tier's loot. A danger hint (Easy / Tough / Deadly) estimates the HP cost of a fight. Current HP persists and regenerates (5 + END per minute). Last-fight panel with a replay of the fight log. Only one activity runs at a time. Tiers 4–5 need Training.
-- Merchant, Storage and Training show "coming soon". No training, merchant, storage or equipping loot yet.
+- **M3 Training in progress:** the Training sign opens a full-screen modal. Gold buys training tiers (Tier 1 = 100 g, tier t = 100·t³, 10 tiers, each +20 max level for all four attributes); time trains one attribute at a time at 1 XP per minute, live and offline (8h cap). Effective attribute = base + training level, used by damage, defense, HP regen and the DEX run time. The Hero tab shows each attribute's base + trained split.
+- Merchant and Storage show "coming soon". No merchant, storage or equipping loot yet.
 - Technical details: `docs/ENGINE.md`.
 - Delivery: PRs land on `dev` (test preview in Expo Go, EAS branch `dev`); the owner releases `dev` → `main` (EAS branch `main`) after testing.
 
 ## Roadmap (proposed, not yet committed by the owner)
 
-**Next: M3 Training (gold + time)**, so attributes can grow and dungeon tiers 4–5 become beatable.
+**In progress: M3 Training (gold + time).** **Next: Merchant** (sell loot/logs, buy basics), which closes the first economy loop.
 
 - **M1 — Core engine & save (done, on `main`):** seeded RNG, `applyCommand` / `simulate`, `LocalGameClient`, versioned on-device save, Hero tab reading real state. Also pulls in M2's core: woodcutting start/stop, offline progress (capped) and the "while you were away" summary.
 - **M2 — First idle loop: Woodcutting.** Start/stop gathering, logs accumulate over time and offline (capped), skill XP and levels, "while you were away" summary.
-- **M3 — Training & Merchant.** Raise attributes at Training by paying gold **and waiting** (Gladiatus-style: a training session takes time, cost and duration scale with the current value); sell logs/items, buy basics. First complete economy loop. Attributes stay plain integers in the save, so training only has to add to them.
+- **M3 — Training & Merchant.** Training in progress: gold unlocks tiers, time raises attributes one at a time (see the 2026-10-26 decisions). Merchant comes next: sell logs/items, buy basics. First complete economy loop.
 - **M4 — Dungeon (in progress).** Automated combat resolved by the engine, combat log replayed in the UI, XP/gold/loot rewards, equip from loot. Done: village modal pattern, combat, persistent HP, auto-repeat runs, stamina skip, 5 tiers with win-based unlocks. Equipping loot comes later.
 - **M5 — Storage & polish.** Storage capacity, item comparison deltas, onboarding.
 
@@ -82,6 +83,15 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 | 2026-10-26 | Run times 5 / 7 / 9 / 11 / 13 min (−1 s per DEX, min 1:00), same skip, combat, regen and auto-repeat rules for every tier | Harder tiers take longer and pay more |
 | 2026-10-26 | Tiers 4–5 need Training to be beatable: sim says Crypt needs ~STR/END 20 (Lv 10: 98% wins), Troll ~STR/END 30 + Lv 20; at STR/END 10 both are 0%. Wolf Den is beatable from ~Lv 6–7 with base attributes | Gives Training (next milestone) a clear purpose |
 | 2026-10-26 | Danger hint before a run: expected HP lost per fight with average rolls vs max HP: < 40% Easy, < 100% **Tough**, otherwise Deadly. A hint only, never a simulation. "Tough", not "Risky": it measures HP cost, not the chance to lose | Readable risk at a glance on a phone |
+| 2026-10-26 | **Training tier 1 is paid: 100 gold.** A new hero is at tier 0 and can train nothing until he buys it | Training is the first gold sink; even the first step costs something |
+| 2026-10-26 | Training level time: **5 + 10 × (n − 1) minutes** to reach level n (Lv1 5 min, Lv20 195 min, Lv200 1,995 min); +10 levels from 0 = 500 min, +20 = 2,000 min | Early levels come fast; each level costs a little more |
+| 2026-10-26 | Tier price **100 × t³** gold: 100, 800, 2,700, 6,400, 12,500, 21,600, 34,300, 51,200, 72,900, 100,000. Bought in order, at any time (even before the current tier is maxed); not enough gold = typed error, gold never negative | Steep gold sink that scales with dungeon income |
+| 2026-10-26 | **10 tiers / 200 levels**: tier t allows training levels up to 20 × t | Long-term goal with clear steps |
+| 2026-10-26 | Tiers are **global**: one tier applies to all four attributes | One purchase, simple to read |
+| 2026-10-26 | Training is an activity: **one activity at a time** (starting it stops woodcutting or cancels the dungeon run; starting either stops training) | Same single-track idle model as gathering and dungeons |
+| 2026-10-26 | **Pause keeps XP**: stopping, switching attribute or starting another activity never loses training XP | Switching is a decision, never a punishment |
+| 2026-10-26 | **Auto-stop at the cap**: at 20 × tier, training stops by itself; no XP beyond the cap (the remainder is dropped); "Maxed — unlock Tier N+1" | No wasted time, no hidden bank of XP |
+| 2026-10-26 | **1 XP per trained minute**, with a rate-multiplier hook in config (does nothing yet; e.g. INT later). Same simulate() path and clock rules as woodcutting (8h cap, backward clock = pause). Save v6, engine 1.5.0 | Time is the cost; offline rules stay uniform |
 | 2026-10-26 | **Replay anchors:** a save migration or engine change writes a `MIGRATE` log row with the full migrated state, in the same transaction. Replay is valid within one engine-version span; anchors stitch spans together, and older-engine spans are skipped (`skippedOldEngine`) instead of being re-run on new rules. An anchor must chain to the row before it (`fromHash`, `fromEngine`) and be a real version change, and every row's engine label must be a released engine that never goes back along the log, so a forged anchor or a fake label is rejected. Residual gap, for any log: labels are client-written, so a forger can relabel everything as an older released engine back to `NEW_GAME`; this closes only with server re-simulation using archived engine builds. Every save-version bump also bumps the engine version. Save v5, engine 1.4.0 | A future server can validate every log across app updates; was overdue since save v3 |
 
 ## Stamina projection (2026-10-26, updated for the skip rule)
@@ -105,7 +115,7 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - Server-owned time: closes the repeated "clock forward 8h, open, repeat" offline-cap farm, which can't be detected on the device (see ENGINE.md exploit table).
 - Ordered SQL schema migrations keyed on `meta.schema_version`, before the first table change.
 - Woodcutting modal (same full-screen pattern as Dungeon; today it is still tap-to-toggle).
-- Modals for the other village signs (Merchant, Storage, Training).
+- Modals for the other village signs (Merchant, Storage).
 - More dungeon content: multi-enemy runs, bosses, unlock rules beyond wins (e.g. hero level).
 - Hit chance and crit using DEX.
 - HP potions.

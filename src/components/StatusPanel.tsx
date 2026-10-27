@@ -1,4 +1,5 @@
-// Hero "Status": the 4 attributes, derived combat stats (tap a row for its breakdown) and stamina.
+// Hero "Status": the 4 attributes (effective = base + trained; tap one for the split), derived combat stats
+// (tap a row for its breakdown) and stamina.
 // Derived stats come from the engine's read-only getDerivedStats(); nothing here computes rules.
 import { memo, useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -6,12 +7,14 @@ import {
   ATTRIBUTE_KEYS,
   type AttributeKey,
   type Character,
+  effectiveAttributes,
   getDerivedStats,
   hpView,
   type RangePart,
   type Stamina,
   STATS,
   staminaView,
+  type TrainingState,
   type ValuePart,
   DUNGEONS,
 } from '../engine';
@@ -79,25 +82,31 @@ type Props = {
   hp: number;
   hpRegenProgress: number;
   stamina: Stamina;
+  training: TrainingState;
 };
 
-export const StatusPanel = memo(function StatusPanel({ level, attributes, equipment, hp, hpRegenProgress, stamina }: Props) {
-  const stats = useMemo(() => getDerivedStats({ character: { level, attributes, equipment } }), [level, attributes, equipment]);
-  const hpNow = hpView({ character: { level, attributes, equipment, hp, hpRegenProgress } });
+export const StatusPanel = memo(function StatusPanel({ level, attributes, equipment, hp, hpRegenProgress, stamina, training }: Props) {
+  const stats = useMemo(() => getDerivedStats({ character: { level, attributes, equipment }, training }), [level, attributes, equipment, training]);
+  const effective = useMemo(() => effectiveAttributes({ character: { attributes }, training }), [attributes, training]);
+  const hpNow = hpView({ character: { level, attributes, equipment, hp, hpRegenProgress }, training });
   const [open, setOpen] = useState<StatKey | null>(null);
   const toggle = useCallback((k: StatKey) => setOpen((cur) => (cur === k ? null : k)), []);
+  const [openAttr, setOpenAttr] = useState<AttributeKey | null>(null);
+  const toggleAttr = useCallback((k: AttributeKey) => setOpenAttr((cur) => (cur === k ? null : k)), []);
 
   return (
     <Panel title="Status">
       <View style={styles.attrGrid}>
         {ATTRIBUTES.map((a) => (
-          <View key={a.key} style={styles.attrCell} accessible accessibilityLabel={`${a.label} ${attributes[a.key]}, ${a.effect}`}>
-            <View style={styles.attrTop}>
-              <Text style={styles.attrShort}>{a.short}</Text>
-              <Text style={styles.attrValue}>{formatNumber(attributes[a.key])}</Text>
-            </View>
-            <Text style={a.active ? styles.attrEffect : styles.attrEffectNone}>{a.effect}</Text>
-          </View>
+          <AttributeCell
+            key={a.key}
+            attr={a}
+            effective={effective[a.key]}
+            base={attributes[a.key]}
+            trained={training.attributes[a.key].level}
+            open={openAttr === a.key}
+            onToggle={toggleAttr}
+          />
         ))}
       </View>
 
@@ -139,6 +148,44 @@ export const StatusPanel = memo(function StatusPanel({ level, attributes, equipm
 
       <StaminaBar stamina={stamina} />
     </Panel>
+  );
+});
+
+const AttributeCell = memo(function AttributeCell({
+  attr,
+  effective,
+  base,
+  trained,
+  open,
+  onToggle,
+}: {
+  attr: (typeof ATTRIBUTES)[number];
+  effective: number;
+  base: number;
+  trained: number;
+  open: boolean;
+  onToggle: (k: AttributeKey) => void;
+}) {
+  const onPress = useCallback(() => onToggle(attr.key), [onToggle, attr.key]);
+  const split = `${formatNumber(base)} base + ${formatNumber(trained)} trained`;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={styles.attrCell}
+      accessibilityRole="button"
+      accessibilityLabel={`${attr.label} ${effective}, ${attr.effect}${open ? `. ${split}` : ''}`}
+      accessibilityHint="Shows base and trained points"
+      accessibilityState={{ expanded: open }}
+    >
+      <View style={styles.attrTop}>
+        <Text style={styles.attrShort}>
+          {open ? '▾' : '▸'} {attr.short}
+        </Text>
+        <Text style={styles.attrValue}>{formatNumber(effective)}</Text>
+      </View>
+      <Text style={attr.active ? styles.attrEffect : styles.attrEffectNone}>{attr.effect}</Text>
+      {open ? <Text style={styles.attrSplit}>{split}</Text> : null}
+    </Pressable>
   );
 });
 
@@ -205,6 +252,7 @@ const styles = StyleSheet.create({
   attrGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   attrCell: {
     width: '50%',
+    minHeight: 44,
     paddingVertical: 5,
     paddingRight: 12,
     borderBottomWidth: 1,
@@ -215,6 +263,7 @@ const styles = StyleSheet.create({
   attrValue: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
   attrEffect: { fontFamily: fonts.body, fontSize: 12, color: colors.skill },
   attrEffectNone: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft },
+  attrSplit: { fontFamily: fonts.body, fontSize: 12, color: colors.ink, marginTop: 2 },
 
   statList: { marginTop: 10 },
   statRow: {

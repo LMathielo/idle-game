@@ -1,10 +1,10 @@
-// Status strip shown above the tab bar while an activity runs (woodcutting or dungeon runs).
+// Status strip shown above the tab bar while an activity runs (woodcutting, dungeon runs or training).
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useGameSnapshot } from '../client/GameProvider';
 import { activityView, DUNGEONS, hpView, itemQuantity } from '../engine';
 import { colors, fonts } from '../theme';
-import { formatClock, formatNumber } from './format';
+import { ATTRIBUTE_NAMES, formatClock, formatNumber, formatTrainingLeft } from './format';
 import { LiveBar } from './LiveBar';
 
 const GATHERING_LABELS = { woodcutting: { icon: '🪓', label: 'Woodcutting' } } as const;
@@ -31,6 +31,22 @@ export function ActivityStrip() {
         remainingMs={view.remainingMs}
         paused={clockPaused}
         color={colors.hp}
+      />
+    );
+  }
+
+  if (view.kind === 'training') {
+    const names = ATTRIBUTE_NAMES[view.attribute];
+    const left = formatTrainingLeft(view.remainingMs);
+    return (
+      <StripView
+        title={`🏋️ Training ${names.short} · Lv ${view.trained} · ${left} to next`}
+        right={`${names.short} ${formatNumber(view.effective)}`}
+        a11y={`Training ${names.label}, level ${view.trained} of ${view.cap}, ${left} to the next level, ${names.label} ${view.effective}${clockPaused ? PAUSED_A11Y : ''}`}
+        fraction={view.fraction}
+        remainingMs={view.remainingMs}
+        paused={clockPaused}
+        color={colors.skill}
       />
     );
   }

@@ -10,10 +10,9 @@ import { type VillageAction, VillageScene } from '../../components/VillageScene'
 import { formatNumber } from '../../components/format';
 import { colors, fonts } from '../../theme';
 
-const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'dungeon'>, string> = {
+const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'dungeon' | 'training'>, string> = {
   storage: 'Storage',
   merchant: 'Merchant',
-  training: 'Training',
 };
 
 const TOAST_MS = 1600;
@@ -46,11 +45,12 @@ export default function VillageScreen() {
     if (inFlight.current) return;
     inFlight.current = true;
     const running = client.getState().activity?.kind === 'woodcutting';
+    const wasTraining = client.getState().activity?.kind === 'training';
     client
       .dispatch(running ? { type: 'STOP_ACTIVITY' } : { type: 'START_ACTIVITY', kind: 'woodcutting' })
       .then((res) => {
         if (!res.ok) showToast(res.error.message);
-        else if (!res.duplicate) showToast(running ? 'Stopped woodcutting' : 'Woodcutting started');
+        else if (!res.duplicate) showToast(running ? 'Stopped woodcutting' : wasTraining ? 'Woodcutting started (training paused)' : 'Woodcutting started');
       })
       .catch(() => showToast('Could not save. Try again.'))
       .finally(() => {
@@ -62,6 +62,10 @@ export default function VillageScreen() {
     (action: VillageAction) => {
       if (action === 'dungeon') {
         router.push('/dungeon');
+        return;
+      }
+      if (action === 'training') {
+        router.push('/training');
         return;
       }
       if (action !== 'woodcutting') {

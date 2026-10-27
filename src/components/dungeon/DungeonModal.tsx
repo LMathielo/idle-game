@@ -17,6 +17,7 @@ import {
   type DungeonRunView,
   dungeonTotals,
   dungeonUnlockView,
+  effectiveAttributes,
   ENEMIES,
   type FightRecord,
   type GameState,
@@ -103,6 +104,7 @@ function requirementText(req: { dungeonId: DungeonId; wins: number }, progress: 
 }
 
 function DungeonList({ state, running, onPick }: { state: GameState; running: DungeonId | null; onPick: (id: DungeonId) => void }) {
+  const attributes = effectiveAttributes(state); // run time uses the trained DEX
   return (
     <View>
       {DUNGEON_IDS.map((id) => {
@@ -114,7 +116,7 @@ function DungeonList({ state, running, onPick }: { state: GameState; running: Du
           <DungeonCard
             key={id}
             id={id}
-            runMs={runMsFor(id, state.character.attributes)}
+            runMs={runMsFor(id, attributes)}
             wins={dungeonTotals(state, id).wins}
             running={running === id}
             onPick={onPick}
@@ -210,8 +212,10 @@ function DungeonDetail({
   const d = DUNGEONS[id];
   const enemy = ENEMIES[d.enemyId];
   const { level, attributes, equipment } = state.character;
-  const stats = useMemo(() => getDerivedStats({ character: { level, attributes, equipment } }), [level, attributes, equipment]);
-  const danger = useMemo(() => dangerHint({ character: { level, attributes, equipment } }, id), [level, attributes, equipment, id]);
+  const { training } = state;
+  const stats = useMemo(() => getDerivedStats({ character: { level, attributes, equipment }, training }), [level, attributes, equipment, training]);
+  const danger = useMemo(() => dangerHint({ character: { level, attributes, equipment }, training }, id), [level, attributes, equipment, training, id]);
+  const runMs = runMsFor(id, effectiveAttributes(state));
   const unlock = dungeonUnlockView(state, id);
   const totals = dungeonTotals(state, id);
   const hp = hpView(state);
@@ -339,9 +343,10 @@ function DungeonDetail({
           <View style={styles.startBox}>
             <Text style={styles.note}>
               Runs repeat on their own, also while the app is closed (up to {formatNumber(state.offline.capMs / 3_600_000)}h). Each run takes{' '}
-              {formatClock(runMsFor(id, attributes))} and ends in a fight. Waiting is free.
+              {formatClock(runMs)} and ends in a fight. Waiting is free.
             </Text>
             {otherActivity === 'woodcutting' ? <Text style={styles.note}>Starting stops woodcutting (your logs are kept).</Text> : null}
+            {otherActivity === 'training' ? <Text style={styles.note}>Starting pauses training (your training XP is kept).</Text> : null}
             <PixelButton label="Start" icon="⚔️" onPress={start} accessibilityLabel={`Start ${d.name} runs`} />
           </View>
         )}

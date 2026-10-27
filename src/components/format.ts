@@ -35,6 +35,14 @@ export function formatHoursMinutes(ms: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+/** Time to the next training level: "12 min", "3h 05m" (rounded up to the minute), "—" when it can't progress. */
+export function formatTrainingLeft(ms: number): string {
+  if (!Number.isFinite(ms)) return '—';
+  const totalMin = Math.max(0, Math.ceil(ms / 60_000));
+  if (totalMin < 60) return `${totalMin} min`;
+  return `${Math.floor(totalMin / 60)}h ${String(totalMin % 60).padStart(2, '0')}m`;
+}
+
 export function itemName(id: string): string {
   return getItemDef(id)?.name ?? id;
 }

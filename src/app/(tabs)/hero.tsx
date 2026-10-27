@@ -46,7 +46,7 @@ const RARITY_COLORS: Record<ItemRarity, string> = {
 };
 
 export default function HeroScreen() {
-  const { character, inventory, stamina } = useGameState();
+  const { character, inventory, stamina, training } = useGameState();
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
@@ -59,6 +59,7 @@ export default function HeroScreen() {
           hp={character.hp}
           hpRegenProgress={character.hpRegenProgress}
           stamina={stamina}
+          training={training}
         />
         <EquipmentPanel equipment={character.equipment} />
         <InventoryPanel inventory={inventory} />
@@ -71,7 +72,8 @@ export default function HeroScreen() {
 
 // Each panel is memoized on the slice it shows. simulate() keeps untouched slices by reference,
 // so a woodcutting action re-renders Header, Inventory and Skills, not Equipment. Status re-renders
-// only when level, attributes, equipment, HP or stamina change (HP and stamina tick while they regenerate).
+// only when level, attributes, equipment, HP, stamina or training change (HP and stamina tick while they
+// regenerate, training while an attribute trains).
 
 const HeaderPanel = memo(function HeaderPanel({ character }: { character: Character }) {
   return (
