@@ -3,7 +3,7 @@ name: pr-review-council
 description: Run the 5-reviewer code review on an open pull request in this repo, score findings, post one consolidated review comment, and hand confirmed issues back to the coding agent. Use after every PR is opened, and again after fixes are pushed, until no confirmed issues remain.
 ---
 
-# PR review council (5 reviewers)
+# PR review council (2 or 5 reviewers, by risk)
 
 Adapted from Anthropic's official `code-review` plugin for this repo. GitHub GraphQL (and so most `gh pr ...` subcommands) is blocked in this environment, so **use the REST API via `gh api`**.
 
@@ -23,11 +23,16 @@ gh api repos/$R/issues/$N/comments -f body="$(cat review.md)"         # post the
 1. **Eligibility:** skip if the PR is closed or merged. Feature/fix/chore PRs must have base `dev`; if one targets `main`, flag it in the review (only the owner's release PR `dev` → `main` targets `main`, and the council does not review it unless asked).
 2. **Fetch once, before launching reviewers:** `git -C /home/claude/idle-game fetch -q -f origin dev pull/$N/head:pr-$N` (the `-f` makes re-reviews after a rebase or force-push see the new head). Each reviewer then reads the PR only from its own detached worktree of `pr-$N` (`/tmp/wt/review-$N-<lens>`, see `.claude/agents/code-reviewer.md`), never from the shared checkout.
 3. **Context:** in your own worktree (`git -C /home/claude/idle-game worktree add --detach /tmp/wt/review-$N-council pr-$N`), read `/tmp/wt/review-$N-council/AGENTS.md`, `/tmp/wt/review-$N-council/docs/PRODUCT.md`, the task brief in the PR description, and the full diff (`git -C /tmp/wt/review-$N-council diff origin/dev...HEAD`). The working directory and shell variables reset between tool calls, so a `cd` in one Bash call does not carry over to the next: give every command an absolute path (`git -C <dir> ...`, `npm --prefix <dir> ...`) or put `cd <dir> && <cmd>` in the same call.
-4. **Launch 5 reviewers in parallel** (`Agent` tool, `subagent_type: code-reviewer`). Each gets the PR number, the brief and ONE lens (the reviewer agent creates its own worktree):
+4. **Pick the review size by risk, then launch reviewers in parallel** (`Agent` tool, `subagent_type: code-reviewer`, `model: sonnet`, `effort: medium`). Each gets the PR number, the brief and its lens(es); the reviewer agent creates its own worktree.
+   - **High risk → 5 reviewers, one lens each.** Any change to save shape or migrations, `simulate`/time rules, combat or economy formulas, replay/action log/anti-cheat, or the publish/CI workflows.
+   - **Normal → 2 reviewers.** Everything else (UI screens, new content in config, docs, small fixes). Reviewer A: lenses 1 + 4 (engine, architecture, game logic). Reviewer B: lenses 2 + 3 + 5 (correctness, React Native/Expo, tests).
+   - When unsure, state the choice and the reason in the review comment; the owner can ask for the full council.
+
+   Lenses:
    1. **Architecture & AGENTS.md compliance:** engine purity (no React/IO/`Date.now`/`Math.random` in `src/engine`), commands-in/state-out, `GameClient` boundary, file layout, Expo Go compatibility, mobile-only.
    2. **Correctness bugs:** read the changed code itself; logic errors, null/undefined, off-by-one, state mutation, race conditions, broken hooks rules, wrong effect deps. Big bugs only.
    3. **React Native / Expo quality:** SDK 58 API usage (check the vendored Expo skills, don't trust memory), re-render cost, list virtualization, safe areas, both iOS and Android behavior, accessibility labels and tap targets.
-   4. **Game logic & balance:** apply `.claude/skills/idle-rpg-game-design` sections 3–5: determinism, seeded RNG persistence, exploits, overflow/NaN, offline cap, economy sources vs sinks, config vs hardcoded tunables.
+   4. **Game logic & balance:** apply `.claude/skills/idle-rpg-game-design` sections 3–5: determinism, seeded RNG persistence, exploits, overflow/NaN, offline cap, economy sources vs sinks, config vs hardcoded tunables. No balance simulations unless the owner asks.
    5. **Scalability, tests & maintainability:** types that will survive a server move, naming, duplication, missing engine tests for new rules, save-shape changes without `saveVersion` migration.
 5. Each reviewer returns a list: `{file, line, lens, issue, why it matters, suggested fix, confidence 0-100}` using this rubric:
    - 0: false positive / pre-existing.
@@ -36,5 +41,5 @@ gh api repos/$R/issues/$N/comments -f body="$(cat review.md)"         # post the
    - 75: verified, likely hit in practice, or directly required by AGENTS.md.
    - 100: certain, frequent, evidence confirms.
 6. **Filter:** keep issues with confidence ≥ 80. Drop: pre-existing issues, things `tsc` would catch, pedantic nitpicks, generic "add more tests" unless the change adds engine rules without tests.
-7. **Post one consolidated comment** on the PR (brief, no emojis, file:line references, grouped by lens). Also list "Enhancements (optional)" separately if any reviewer proposed a valuable improvement with confidence ≥ 80.
-8. **Iterate:** send the confirmed issues back to the coding agent (`SendMessage` to the same agent, so it keeps context). After it pushes fixes, re-run steps 2–7 on the new diff (fetch again with `-f`). Stop when a round produces no confirmed issues, then **signal the owner that the PR is approved by the agents and ready for his final review**. Never merge: only the owner merges, into `dev` and into `main`.
+7. **Post one consolidated comment** on the PR (brief, no emojis, file:line references, grouped by lens). List findings below 80 under "Optional" only; they are not sent to the engineer in this PR and go to a periodic cleanup PR instead.
+8. **Iterate:** send the confirmed issues back to the coding agent (`SendMessage` to the same agent, so it keeps context). After it pushes fixes, run **one** verification reviewer (Sonnet, medium) on the fix diff only (fetch again with `-f`), instead of the full set. Stop when a round produces no confirmed issues, then **signal the owner that the PR is approved by the agents and ready for his final review**. Never merge: only the owner merges, into `dev` and into `main`.
