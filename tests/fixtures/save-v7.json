@@ -1,0 +1,232 @@
+{
+  "saveVersion": 7,
+  "rng": {
+    "seed": 3964123133
+  },
+  "time": {
+    "lastSimulatedAt": 1792950420000,
+    "highestSeenAt": 1792950420000
+  },
+  "offline": {
+    "capMs": 28800000,
+    "efficiency": 1
+  },
+  "activity": {
+    "kind": "woodcutting",
+    "treeId": "oak",
+    "startedAt": 1792947600000,
+    "progressMs": 70000
+  },
+  "stamina": {
+    "current": 99,
+    "max": 100,
+    "progressMs": 120000
+  },
+  "dungeon": {
+    "lastFight": {
+      "dungeonId": "rat_cellar",
+      "enemyId": "rat",
+      "won": true,
+      "endReason": "enemy_defeated",
+      "rounds": 3,
+      "heroHpStart": 50,
+      "heroHpEnd": 45,
+      "heroMaxHp": 50,
+      "enemyMaxHp": 30,
+      "enemyHpEnd": 0,
+      "rewards": {
+        "heroXp": 25,
+        "gold": 5,
+        "items": {},
+        "itemsLost": {}
+      },
+      "log": [
+        {
+          "round": 1,
+          "actor": "hero",
+          "roll": 14,
+          "dealt": 13,
+          "targetHpAfter": 17
+        },
+        {
+          "round": 1,
+          "actor": "enemy",
+          "roll": 4,
+          "dealt": 3,
+          "targetHpAfter": 47
+        },
+        {
+          "round": 2,
+          "actor": "hero",
+          "roll": 13,
+          "dealt": 13,
+          "targetHpAfter": 4
+        },
+        {
+          "round": 2,
+          "actor": "enemy",
+          "roll": 3,
+          "dealt": 2,
+          "targetHpAfter": 45
+        },
+        {
+          "round": 3,
+          "actor": "hero",
+          "roll": 14,
+          "dealt": 13,
+          "targetHpAfter": 0
+        }
+      ]
+    },
+    "totals": {
+      "runs": 24,
+      "wins": 24,
+      "losses": 0
+    },
+    "byDungeon": {
+      "rat_cellar": {
+        "runs": 24,
+        "wins": 24,
+        "losses": 0
+      }
+    }
+  },
+  "training": {
+    "tier": 0,
+    "attributes": {
+      "strength": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "dexterity": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "endurance": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "intelligence": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      }
+    }
+  },
+  "stats": {
+    "totalActions": 123,
+    "itemsGathered": {
+      "oak_logs": 123
+    }
+  },
+  "flags": {
+    "debugUsed": true
+  },
+  "character": {
+    "name": "Lucius",
+    "title": "Novice Gladiator",
+    "level": 1,
+    "xp": 600,
+    "xpToNext": 1500,
+    "hp": 50,
+    "hpRegenProgress": 0,
+    "gold": 1120,
+    "attributes": {
+      "strength": 10,
+      "dexterity": 10,
+      "endurance": 10,
+      "intelligence": 10
+    },
+    "equipment": {
+      "weapon": {
+        "id": "start-rusty_gladius",
+        "defId": "rusty_gladius",
+        "name": "Rusty Gladius",
+        "icon": "🗡️",
+        "rarity": "common",
+        "slot": "weapon"
+      },
+      "armor": {
+        "id": "start-linen_tunic",
+        "defId": "linen_tunic",
+        "name": "Linen Tunic",
+        "icon": "🥋",
+        "rarity": "common",
+        "slot": "armor"
+      },
+      "boots": {
+        "id": "start-worn_sandals",
+        "defId": "worn_sandals",
+        "name": "Worn Sandals",
+        "icon": "👢",
+        "rarity": "common",
+        "slot": "boots"
+      },
+      "axe": {
+        "id": "start-wooden_axe",
+        "defId": "wooden_axe",
+        "name": "Wooden Axe",
+        "icon": "🪓",
+        "rarity": "common",
+        "slot": "axe"
+      }
+    },
+    "skills": {
+      "woodcutting": {
+        "level": 3,
+        "xp": 1161,
+        "xpToNext": 2598
+      },
+      "mining": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      },
+      "fishing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      },
+      "smithing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      }
+    }
+  },
+  "inventory": {
+    "capacity": 20,
+    "items": [
+      {
+        "id": "bread",
+        "defId": "bread",
+        "name": "Bread",
+        "icon": "🍞",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 3
+      },
+      {
+        "id": "oak_logs",
+        "defId": "oak_logs",
+        "name": "Oak Logs",
+        "icon": "🪵",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 123
+      },
+      {
+        "id": "rat_skin",
+        "defId": "rat_skin",
+        "name": "Rat Skin",
+        "icon": "🐾",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 12
+      }
+    ]
+  }
+}
