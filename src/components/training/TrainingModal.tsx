@@ -149,7 +149,7 @@ const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused
   const level = `${formatNumber(view.trained)}/${formatNumber(view.cap)}`;
   const maxedText = nextTier ? `Maxed — unlock Tier ${nextTier}` : 'Maxed';
   const status = locked
-    ? 'Locked'
+    ? 'Locked — unlock Tier 1'
     : view.maxed
       ? maxedText
       : `XP ${formatNumber(view.xp)}/${formatNumber(view.xpToNext)} · ${formatTrainingLeft(view.remainingMs)} to next`;
@@ -158,9 +158,9 @@ const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused
 
   return (
     <View style={[styles.row, view.active && styles.rowActive, (locked || view.maxed) && styles.rowDim]}>
-      <View style={styles.rowTop} accessible accessibilityLabel={`${names.label} ${view.effective}: ${view.base} base plus ${view.trained} trained. Training level ${view.trained} of ${view.cap}. ${status}${view.active ? '. Training now' : ''}`}>
+      <View style={styles.rowTop} accessible accessibilityLabel={`${names.label} ${view.effective}: ${view.base} base plus ${view.trained} trained. ${locked ? '' : `Training level ${view.trained} of ${view.cap}. `}${status}${view.active ? '. Training now' : ''}`}>
         <Text style={styles.rowValue}>{value}</Text>
-        <Text style={styles.rowLevel}>{level}</Text>
+        {locked ? null : <Text style={styles.rowLevel}>{level}</Text>}
       </View>
       <LiveBar fraction={view.fraction} remainingMs={view.remainingMs} paused={paused || !view.active} color={colors.skill} style={styles.bar} />
       <View style={styles.rowBottom}>
