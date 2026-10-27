@@ -26,6 +26,12 @@
 // gold rolls draw from a shifted RNG stream). The script gained a 1.6.0 segment: Oak (cancels the Rat Cellar
 // run), a bound SKIP_WOODCUT, DEBUG_ADD_WOODCUTTING_LEVEL ×4, switch to Birch (WS 106 ≥ 100), 2 h of Birch,
 // then STR training with SPEEDUP_TRAINING +10 min and "to next level".
+// 1.6.0 → 1.7.0 (2026-10-27): save v8 (merchant: refresh charges, stock, buy/sell; equip/unequip/use; item
+// quality is catalog-only, so instances lost their `rarity`). Every 1.6.0 outcome is unchanged (a golden test
+// pins the whole 1.6.0 script); the hash changed because of the new `merchant` / `nextItemSerial` fields and
+// the dropped `rarity`. The script gained a 1.7.0 segment: debug gold, buy 3 potions and the Iron Axe, equip it
+// (the Wooden Axe returns), HP debug + potion, sell logs and the Wooden Axe, refresh, 5 h of charge regen,
+// debug charge, and a buy while woodcutting runs.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -50,6 +56,8 @@ import { HOUR, MIN, SEC, T0 } from './helpers';
 
 /** End of the 1.5.0 script; the 1.6.0 segment starts here. */
 const B = T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC;
+/** End of the 1.6.0 script; the 1.7.0 segment starts here. */
+const C = B + 7 * SEC + 3 * HOUR + 30 * MIN;
 
 type Step = { at: number; cmd?: Command | ((s: GameState) => Command) };
 
@@ -105,7 +113,25 @@ const SCRIPT: Step[] = [
       return { id: 'w7', type: 'SPEEDUP_TRAINING', minutes: n, maxCost: n };
     },
   },
-  { at: B + 7 * SEC + 3 * HOUR + 30 * MIN }, // 30 min of STR training
+  { at: C }, // 30 min of STR training
+  // 1.7.0: merchant, equip, use. Not an activity: STR training keeps running through the trades.
+  { at: C + 1 * SEC, cmd: { id: 'm1', type: 'DEBUG_ADD_GOLD', amount: 1000 } },
+  { at: C + 2 * SEC, cmd: { id: 'm2', type: 'BUY_ITEM', slot: 0, defId: 'health_potion_t1', quantity: 3, maxUnitPrice: 12 } },
+  { at: C + 3 * SEC, cmd: { id: 'm3', type: 'BUY_ITEM', slot: 1, defId: 'iron_axe', quantity: 1, maxUnitPrice: 600 } },
+  { at: C + 4 * SEC, cmd: { id: 'm4', type: 'EQUIP_ITEM', itemId: 'iron_axe#1' } },
+  { at: C + 5 * SEC, cmd: { id: 'm5', type: 'DEBUG_SET_HERO_HP', hp: 60 } },
+  { at: C + 6 * SEC, cmd: { id: 'm6', type: 'USE_ITEM', itemId: 'health_potion_t1' } },
+  { at: C + 7 * SEC, cmd: { id: 'm7', type: 'SELL_ITEM', itemId: 'oak_logs', quantity: 100 } },
+  { at: C + 8 * SEC, cmd: { id: 'm8', type: 'SELL_ITEM', itemId: 'start-wooden_axe', quantity: 1 } },
+  { at: C + 9 * SEC, cmd: { id: 'm9', type: 'REFRESH_MERCHANT' } },
+  { at: C + 9 * SEC + 5 * HOUR }, // charges: 4 → 5 after 2 h, then full (no banked time)
+  { at: C + 10 * SEC + 5 * HOUR, cmd: { id: 'm10', type: 'REFRESH_MERCHANT' } },
+  { at: C + 11 * SEC + 5 * HOUR, cmd: { id: 'm11', type: 'REFRESH_MERCHANT' } },
+  { at: C + 12 * SEC + 5 * HOUR, cmd: { id: 'm12', type: 'DEBUG_ADD_MERCHANT_CHARGE' } },
+  { at: C + 13 * SEC + 5 * HOUR, cmd: { id: 'm13', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' } },
+  { at: C + 14 * SEC + 5 * HOUR, cmd: { id: 'm14', type: 'BUY_ITEM', slot: 3, defId: 'iron_helm', quantity: 1, maxUnitPrice: 400 } },
+  { at: C + 15 * SEC + 5 * HOUR, cmd: { id: 'm15', type: 'EQUIP_ITEM', itemId: 'iron_helm#2' } },
+  { at: C + 15 * SEC + 6 * HOUR }, // 1 h of Birch
 ];
 
 function runScript(steps: Step[] = SCRIPT) {
@@ -150,6 +176,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.4.0', 5],
       ['1.5.0', 6],
       ['1.6.0', 7],
+      ['1.7.0', 8],
     ]);
   });
 });
@@ -242,6 +269,37 @@ describe('golden', () => {
     expect(s.training).toEqual(newTrainingState());
   });
 
+  it('the 1.6.0 script (unchanged in 1.7.0)', () => {
+    const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'm1')));
+    expect(s.time.lastSimulatedAt).toBe(C);
+    expect({
+      actions: s.stats.totalActions,
+      activity: s.activity?.kind ?? null,
+      gold: s.character.gold,
+      hp: [s.character.hp, s.character.hpRegenProgress],
+      heroLevel: s.character.level,
+      stamina: s.stamina,
+      woodcutting: s.character.skills.woodcutting,
+      logs: Object.fromEntries(s.inventory.items.filter((i) => i.defId.endsWith('_logs')).map((i) => [i.defId, i.quantity])),
+      dungeon: s.dungeon,
+      training: s.training,
+      rng: s.rng,
+    }).toEqual({
+      actions: 515,
+      activity: 'training',
+      gold: 438,
+      hp: [150, 0],
+      heroLevel: 11,
+      stamina: { current: 91, max: 100, progressMs: 1000 },
+      woodcutting: expect.objectContaining({ level: 9, xp: 6619 }),
+      logs: { oak_logs: 491, birch_logs: 24 },
+      dungeon: expect.objectContaining({ totals: { runs: 77, wins: 77, losses: 0 } }),
+      training: expect.objectContaining({ tier: 2 }),
+      rng: expect.anything(),
+    });
+    expect(s.training.attributes.strength).toEqual({ level: 3, xp: 30, progressMs: 33000 });
+  });
+
   it('fixed seed + fixed script → fixed final state hash', () => {
     const s = runScript();
     expect({
@@ -264,11 +322,16 @@ describe('golden', () => {
       woodcuttingXp: s.character.skills.woodcutting.xp,
       logs: Object.fromEntries(s.inventory.items.filter((i) => i.defId.endsWith('_logs')).map((i) => [i.defId, i.quantity])),
       axe: s.character.equipment.axe?.defId,
+      helmet: s.character.equipment.helmet?.id,
+      merchant: { charges: s.merchant.charges, chargeProgressMs: s.merchant.chargeProgressMs, stock: s.merchant.stock.slice(0, 5) },
+      nextItemSerial: s.nextItemSerial,
+      potions: s.inventory.items.find((i) => i.defId === 'health_potion_t1')?.quantity,
+      woodenAxe: s.inventory.items.some((i) => i.defId === 'wooden_axe'),
     }).toMatchInlineSnapshot(`
       {
-        "actions": 515,
-        "activity": "training",
-        "axe": "wooden_axe",
+        "actions": 527,
+        "activity": "woodcutting",
+        "axe": "iron_axe",
         "batWings": 9,
         "byDungeon": {
           "bat_cave": {
@@ -287,9 +350,10 @@ describe('golden', () => {
           "runs": 77,
           "wins": 77,
         },
-        "engineVersion": "1.6.0",
-        "gold": 438,
-        "hash": "54c134ec",
+        "engineVersion": "1.7.0",
+        "gold": 503,
+        "hash": "0f4f5dec",
+        "helmet": "iron_helm#2",
         "heroLevel": 11,
         "hp": [
           150,
@@ -297,14 +361,39 @@ describe('golden', () => {
         ],
         "lastFightRounds": 2,
         "logs": {
-          "birch_logs": 24,
-          "oak_logs": 491,
+          "birch_logs": 36,
+          "oak_logs": 391,
+        },
+        "merchant": {
+          "chargeProgressMs": 3605000,
+          "charges": 4,
+          "stock": [
+            {
+              "defId": "health_potion_t1",
+              "quantity": 10,
+              "unitPrice": 12,
+            },
+            {
+              "defId": "iron_axe",
+              "quantity": 1,
+              "unitPrice": 600,
+            },
+            {
+              "defId": "iron_sword",
+              "quantity": 1,
+              "unitPrice": 500,
+            },
+            null,
+            null,
+          ],
         },
         "nests": undefined,
+        "nextItemSerial": 3,
+        "potions": 2,
         "stamina": {
-          "current": 91,
+          "current": 100,
           "max": 100,
-          "progressMs": 1000,
+          "progressMs": 0,
         },
         "strength": 13,
         "training": {
@@ -325,15 +414,16 @@ describe('golden', () => {
               "xp": 0,
             },
             "strength": {
-              "level": 3,
-              "progressMs": 33000,
-              "xp": 30,
+              "level": 8,
+              "progressMs": 46000,
+              "xp": 55,
             },
           },
           "tier": 2,
         },
         "woodcutting": 9,
-        "woodcuttingXp": 6619,
+        "woodcuttingXp": 8047,
+        "woodenAxe": false,
       }
     `);
   });
@@ -342,7 +432,7 @@ describe('golden', () => {
     const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v1.json'), 'utf8'));
     expect(raw.saveVersion).toBe(1);
     const s = loadSave(raw);
-    expect(s.saveVersion).toBe(7);
+    expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
     expect(s.flags).toEqual({ debugUsed: false });
     expect(s.character.attributes).toEqual({ strength: 10, dexterity: 10, endurance: 10, intelligence: 10 });
     expect(s.stats.totalActions).toBe(2499);
@@ -353,12 +443,12 @@ describe('golden', () => {
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // migration is deterministic
   });
 
-  it('frozen v2 save (tests/fixtures/save-v2.json) migrates to v7 without losing progress, and plays on', () => {
+  it('frozen v2 save (tests/fixtures/save-v2.json) migrates to the current save without losing progress, and plays on', () => {
     // Produced by the 1.1.0 engine (save v2): woodcutting ~3h, +20k hero XP via debug.
     const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v2.json'), 'utf8'));
     expect(raw.saveVersion).toBe(2);
     const s = loadSave(raw);
-    expect(s.saveVersion).toBe(7);
+    expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
 
     // Progress kept: level, XP, skills, woodcutting banked time, inventory, stats, rng, time, flags.
     expect(s.character.level).toBe(raw.character.level);
@@ -409,24 +499,35 @@ describe('golden', () => {
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // migration is deterministic
   });
 
-  it('frozen v3 save (tests/fixtures/save-v3.json) migrates to v7 (via v4: full HP) and plays on, dungeon included', () => {
+  it('frozen v3 save (tests/fixtures/save-v3.json) migrates to the current save (via v4: full HP) and plays on, dungeon included', () => {
     // Produced by the 1.2.0 engine (save v3), before the dungeon: woodcutting ~3h, +30k hero XP,
     // +5 DEX, +2 END and 40 stamina spent via debug.
     const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v3.json'), 'utf8'));
     expect(raw.saveVersion).toBe(3);
     expect(raw.character).not.toHaveProperty('hp');
     const s = loadSave(raw);
-    expect(s.saveVersion).toBe(7);
+    expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // deterministic
 
     // Everything from v3 survives as it was.
     const { hp, hpRegenProgress, equipment: { axe, ...equipment }, ...character } = s.character;
-    expect({ ...character, equipment }).toEqual(raw.character);
+    // v8 dropped the per-instance `rarity` (quality is catalog-only).
+    const noRarity = (i: Record<string, unknown>) => {
+      const { rarity: _r, ...x } = i;
+      return x;
+    };
+    expect({ ...character, equipment }).toEqual({
+      ...raw.character,
+      equipment: Object.fromEntries(Object.entries(raw.character.equipment).map(([k, v]) => [k, noRarity(v as Record<string, unknown>)])),
+    });
     expect(axe?.defId).toBe('wooden_axe');
-    const { dungeon, training, activity, character: _c, saveVersion: _v, ...rest } = s;
+    const { dungeon, training, activity, merchant, nextItemSerial, inventory, character: _c, saveVersion: _v, ...rest } = s;
+    expect(merchant.charges).toBe(5);
+    expect(nextItemSerial).toBe(1);
+    expect(inventory).toEqual({ ...raw.inventory, items: raw.inventory.items.map(noRarity) });
     expect(activity).toEqual({ ...raw.activity, treeId: 'oak', progressMs: 0 });
     expect(training).toEqual(newTrainingState());
-    const { character: _rc, saveVersion: _rv, activity: _ra, ...rawRest } = raw;
+    const { character: _rc, saveVersion: _rv, activity: _ra, inventory: _ri, ...rawRest } = raw;
     expect(rest).toEqual(rawRest);
 
     // New: full HP at level 5 (50 + 10 × 4), empty fight state.

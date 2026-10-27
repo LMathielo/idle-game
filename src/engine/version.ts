@@ -1,5 +1,5 @@
 /** Engine rules version, stored on every action_log row. Bump when rules change outcomes. */
-export const ENGINE_VERSION = '1.6.0';
+export const ENGINE_VERSION = '1.7.0';
 
 /**
  * Every engine version that ever shipped, oldest first, with the save version it wrote. Append a row on
@@ -15,6 +15,7 @@ export const RELEASED_ENGINES: readonly { engine: string; save: number }[] = [
   { engine: '1.4.0', save: 5 },
   { engine: '1.5.0', save: 6 },
   { engine: '1.6.0', save: 7 },
+  { engine: '1.7.0', save: 8 },
 ];
 
 /** Position of a released engine version in RELEASED_ENGINES, or -1 when it never shipped. */

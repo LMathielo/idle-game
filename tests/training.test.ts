@@ -117,7 +117,7 @@ describe('curve, caps and prices (config/training.ts)', () => {
 
   it('a new hero starts at tier 0 with every attribute untrained', () => {
     const s = newGame(1, T0);
-    expect(s.saveVersion).toBe(7);
+    expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
     expect(s.training).toEqual({
       tier: 0,
       attributes: Object.fromEntries(ATTRIBUTE_KEYS.map((k) => [k, { level: 0, xp: 0, progressMs: 0 }])),

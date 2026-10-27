@@ -5,6 +5,7 @@ import { DEFAULT_OFFLINE_CAP_MS, DEFAULT_OFFLINE_EFFICIENCY } from './config/tim
 import { HERO_XP_CURVE, SKILL_XP_CURVE } from './config/xpCurve';
 import { maxHpOf } from './hp';
 import { makeItem } from './inventory';
+import { newMerchantState } from './merchant';
 import { newProgress } from './progression';
 import { createRng } from './rng';
 import { newTrainingState } from './training';
@@ -40,6 +41,8 @@ export function newGame(seed: number, now: number): GameState {
     stamina: { current: STAMINA.startMax, max: STAMINA.startMax, progressMs: 0 },
     dungeon: { lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {} },
     training,
+    merchant: newMerchantState(INVENTORY_CAPACITY),
+    nextItemSerial: 1,
     stats: { totalActions: 0, itemsGathered: {} },
     flags: { debugUsed: false },
     character: {

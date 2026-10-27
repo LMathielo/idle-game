@@ -54,3 +54,20 @@ export function itemIcon(id: string): string {
 export function formatNumber(n: number): string {
   return n.toLocaleString('en-US');
 }
+
+/** Countdown as h:mm:ss (2:00:00, 0:04:07), rounded up to the next whole second. */
+export function formatHms(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/** Compact stack count for a 52px slot: 999, 1.2k, 45k, 1.2M. */
+export function formatQty(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 10_000) return `${(Math.floor(n / 100) / 10).toFixed(1)}k`;
+  if (n < 1_000_000) return `${Math.floor(n / 1000)}k`;
+  return `${(Math.floor(n / 100_000) / 10).toFixed(1)}M`;
+}

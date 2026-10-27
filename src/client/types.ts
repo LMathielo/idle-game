@@ -109,6 +109,8 @@ export interface GameClient {
     addGold(amount?: number): Promise<DispatchResult>;
     /** Adds woodcutting levels (default 1), to test tree unlocks. Logged as DEBUG_ADD_WOODCUTTING_LEVEL. */
     addWoodcuttingLevel(levels?: number): Promise<DispatchResult>;
+    /** +1 merchant refresh charge (never above max). Logged as DEBUG_ADD_MERCHANT_CHARGE. */
+    addMerchantCharge(): Promise<DispatchResult>;
     /** New game with a new seed and a real clock (offset 0). Logged, never deletes the log. */
     resetSave(): Promise<void>;
   };

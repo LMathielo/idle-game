@@ -35,6 +35,13 @@ export const LOG_TYPES = [
   'SKIP_WOODCUT',
   'SPEEDUP_TRAINING',
   'DEBUG_ADD_WOODCUTTING_LEVEL',
+  'EQUIP_ITEM',
+  'UNEQUIP_ITEM',
+  'USE_ITEM',
+  'REFRESH_MERCHANT',
+  'BUY_ITEM',
+  'SELL_ITEM',
+  'DEBUG_ADD_MERCHANT_CHARGE',
   'MIGRATE',
   'RESUME',
   'SIMULATE',
@@ -148,7 +155,14 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'DEBUG_ADD_GOLD':
     case 'SKIP_WOODCUT':
     case 'SPEEDUP_TRAINING':
-    case 'DEBUG_ADD_WOODCUTTING_LEVEL': {
+    case 'DEBUG_ADD_WOODCUTTING_LEVEL':
+    case 'EQUIP_ITEM':
+    case 'UNEQUIP_ITEM':
+    case 'USE_ITEM':
+    case 'REFRESH_MERCHANT':
+    case 'BUY_ITEM':
+    case 'SELL_ITEM':
+    case 'DEBUG_ADD_MERCHANT_CHARGE': {
       const res = applyCommand(state, payload as Command, clientTime, { allowDebug: true });
       if (!res.ok) throw new ReplayError(`${type} rejected on replay: ${res.error.code}`);
       return res.state;

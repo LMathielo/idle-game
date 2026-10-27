@@ -8,7 +8,9 @@ import { xpToNext } from './progression';
 import { DEV_TOOLS_ENABLED } from './config/dev';
 import { DUNGEONS, isDungeonId } from './config/dungeons';
 import { completeRun, isDungeonUnlocked, recordDungeonResults, runMsFor, skipCost } from './dungeon';
+import { equipItem, unequipItem, useItem } from './equipment';
 import { markDebugUsed } from './flags';
+import { addMerchantCharge, buyItem, type ItemError, type ItemErrorCode, refreshMerchant, sellItem } from './merchant';
 import { maxHpOf } from './hp';
 import { simulate } from './simulate';
 import { refillStamina, spendStamina } from './stamina';
@@ -20,6 +22,7 @@ import {
   ATTRIBUTE_KEYS,
   type AttributeKey,
   type DungeonId,
+  type EquipmentSlot,
   type GameEvent,
   type GameState,
   type SimulationSummary,
@@ -71,7 +74,24 @@ export type Command =
   | { id: string; type: 'DEBUG_ADD_ATTRIBUTE'; attribute: AttributeKey; amount: number }
   /** Adds training XP (= trained minutes at the base rate) to the attribute being trained. */
   | { id: string; type: 'DEBUG_ADD_TRAINING_XP'; xp: number }
-  | { id: string; type: 'DEBUG_ADD_GOLD'; amount: number };
+  | { id: string; type: 'DEBUG_ADD_GOLD'; amount: number }
+  /** Moves an inventory item into its slot; an item already there goes back to the inventory (a swap). */
+  | { id: string; type: 'EQUIP_ITEM'; itemId: string }
+  /** Moves the item in `slot` to the inventory. Fails with INVENTORY_FULL when there is no free slot. */
+  | { id: string; type: 'UNEQUIP_ITEM'; slot: EquipmentSlot }
+  /** Uses one unit of a consumable (Health Potion: +heal HP, capped at max; HP_FULL at max HP). */
+  | { id: string; type: 'USE_ITEM'; itemId: string }
+  /** Spends 1 refresh charge and restocks the merchant. */
+  | { id: string; type: 'REFRESH_MERCHANT' }
+  /**
+   * Buys `quantity` units from merchant stock slot `slot`. Bound to what the player saw: `defId` must still be
+   * in the slot (STOCK_CHANGED) and the unit price at most `maxUnitPrice` (PRICE_CHANGED).
+   */
+  | { id: string; type: 'BUY_ITEM'; slot: number; defId: string; quantity: number; maxUnitPrice: number }
+  /** Sells `quantity` of an inventory item (by item id) at its catalog sellPrice. Equipped items are refused. */
+  | { id: string; type: 'SELL_ITEM'; itemId: string; quantity: number }
+  /** +1 merchant refresh charge (never above max). */
+  | { id: string; type: 'DEBUG_ADD_MERCHANT_CHARGE' };
 
 export type CommandType = Command['type'];
 
@@ -98,6 +118,7 @@ export type CommandErrorCode =
   | 'TIER_NOT_NEXT'
   | 'MAX_TIER'
   | 'NOT_ENOUGH_GOLD'
+  | ItemErrorCode
   | 'DEBUG_DISABLED';
 
 export type CommandError = { code: CommandErrorCode; message: string };
@@ -386,6 +407,45 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       draft.character.gold = next;
       break;
     }
+    case 'EQUIP_ITEM': {
+      const e = equipItem(draft, cmd.itemId);
+      if (e) return fail(e.code, e.message);
+      stopWoodcuttingIfTooWeak(draft, events);
+      break;
+    }
+    case 'UNEQUIP_ITEM': {
+      const e = unequipItem(draft, cmd.slot);
+      if (e) return fail(e.code, e.message);
+      stopWoodcuttingIfTooWeak(draft, events);
+      break;
+    }
+    case 'USE_ITEM': {
+      const e = useItem(draft, cmd.itemId);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'REFRESH_MERCHANT': {
+      const e = refreshMerchant(draft);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'BUY_ITEM': {
+      const e = buyItem(draft, cmd.slot, cmd.defId, cmd.quantity, cmd.maxUnitPrice);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'SELL_ITEM': {
+      const e = sellItem(draft, cmd.itemId, cmd.quantity);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'DEBUG_ADD_MERCHANT_CHARGE': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const e: ItemError = addMerchantCharge(draft);
+      if (e) return fail(e.code, e.message);
+      draft = markDebugUsed(draft);
+      break;
+    }
     default: {
       const unknown = cmd as { type?: unknown };
       return fail('INVALID_COMMAND', `Unknown command type ${String(unknown.type)}`);
@@ -402,6 +462,17 @@ function stopActivity(draft: GameState, events: GameEvent[]) {
   if (a.kind === 'dungeon') events.push({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: a.dungeonId });
   events.push({ type: 'ACTIVITY_STOPPED', kind: a.kind });
   draft.activity = null;
+}
+
+/**
+ * Product rule (2026-10-27): woodcutting stops when an equipment change drops woodcutting strength below the
+ * current tree's requirement. Logs finished before the command are already banked (applyCommand simulated to
+ * `now` first); the log in progress is dropped like any stop. Only equipment changes WS in a command (selling
+ * an equipped item is refused; STR only goes up), so EQUIP_ITEM and UNEQUIP_ITEM call this.
+ */
+function stopWoodcuttingIfTooWeak(draft: GameState, events: GameEvent[]) {
+  const a = draft.activity;
+  if (a?.kind === 'woodcutting' && !treeCheck(draft, a.treeId).wsOk) stopActivity(draft, events);
 }
 
 /** Resolves the current run's fight at the current HP (draft is a full copy), then starts the next run. */

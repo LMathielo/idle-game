@@ -21,6 +21,19 @@ export const colors = {
   dangerEasy: '#2f6b2b',
   dangerTough: '#7a5c12',
   dangerDeadly: '#a3281c',
+  // Item sheets and the merchant grid sit on this dark panel; every quality color below passes 4.5:1 on it
+  // (tests/theme.test.ts).
+  sheet: '#3a2a1c',
+} as const;
+
+/** Item name colors by quality (catalog `quality`). Readable (≥ 4.5:1) on colors.sheet and colors.slot. */
+export const qualityColors = {
+  junk: '#b0a89c', // gray
+  common: '#f5efe2', // white
+  uncommon: '#6fcf62', // green
+  rare: '#6fb0ff', // blue
+  epic: '#c79bf2', // purple
+  legendary: '#e0b030', // dark yellow
 } as const;
 
 export const fonts = {

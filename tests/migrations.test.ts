@@ -143,8 +143,8 @@ describe('save migrations', () => {
       ...gear,
       axe: { id: 'start-wooden_axe', defId: 'wooden_axe', name: 'Wooden Axe', icon: '🪓', rarity: 'common', slot: 'axe' },
     });
-    // The frozen axe is exactly what a new v7 hero gets.
-    expect(v7.character.equipment.axe).toEqual(newGame(1, T0).character.equipment.axe);
+    // The frozen axe is exactly what a new hero gets, once v8 drops the per-instance rarity.
+    expect((MIGRATIONS[7](v7 as never) as unknown as GameState).character.equipment.axe).toEqual(newGame(1, T0).character.equipment.axe);
     expect(v7.character.skills).toEqual(v6.character.skills);
     expect(v7.inventory).toEqual(v6.inventory);
   });
@@ -160,10 +160,53 @@ describe('save migrations', () => {
     expect((MIGRATIONS[6]({ saveVersion: 6 }) as unknown as GameState).character.equipment.axe?.defId).toBe('wooden_axe');
   });
 
-  it('newest save loads unchanged; a new game is already v7', () => {
+  it('v7 → v8: merchant at 5/5 with the 4 listings in the first slots, item serial 1, instance rarity dropped; pure', () => {
+    const v7 = {
+      saveVersion: 7,
+      activity: { kind: 'dungeon', dungeonId: 'rat_cellar', startedAt: 1, progressMs: 9 },
+      character: {
+        gold: 77,
+        equipment: { axe: { id: 'start-wooden_axe', defId: 'wooden_axe', name: 'Wooden Axe', icon: '🪓', rarity: 'common', slot: 'axe' } },
+      },
+      inventory: { capacity: 6, items: [{ id: 'bird_nest', defId: 'bird_nest', name: 'Bird Nest', icon: '🪺', rarity: 'rare', stackable: true, quantity: 2 }] },
+    };
+    const frozenInput = JSON.parse(JSON.stringify(v7));
+    const v8 = MIGRATIONS[7](v7) as unknown as GameState;
+    expect(v7).toEqual(frozenInput);
+    expect(v8.saveVersion).toBe(8);
+    expect(v8.activity).toEqual(v7.activity);
+    expect(v8.merchant).toEqual({
+      charges: 5,
+      chargeProgressMs: 0,
+      stock: [
+        { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
+        { defId: 'iron_axe', quantity: 1, unitPrice: 600 },
+        { defId: 'iron_sword', quantity: 1, unitPrice: 500 },
+        { defId: 'iron_helm', quantity: 1, unitPrice: 400 },
+        null,
+        null,
+      ],
+    });
+    expect(v8.nextItemSerial).toBe(1);
+    expect(v8.character.gold).toBe(77);
+    expect(v8.character.equipment.axe).toEqual({ id: 'start-wooden_axe', defId: 'wooden_axe', name: 'Wooden Axe', icon: '🪓', slot: 'axe' });
+    expect(v8.inventory).toEqual({ capacity: 6, items: [{ id: 'bird_nest', defId: 'bird_nest', name: 'Bird Nest', icon: '🪺', stackable: true, quantity: 2 }] });
+    // Broken or missing parts: default capacity 20, nothing else invented.
+    const bare = MIGRATIONS[7]({ saveVersion: 7 }) as unknown as GameState;
+    expect(bare.merchant.stock).toEqual([
+      { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
+      { defId: 'iron_axe', quantity: 1, unitPrice: 600 },
+      { defId: 'iron_sword', quantity: 1, unitPrice: 500 },
+      { defId: 'iron_helm', quantity: 1, unitPrice: 400 },
+      ...Array.from({ length: 16 }, () => null),
+    ]);
+    expect(bare.inventory.items).toEqual([]);
+  });
+
+  it('newest save loads unchanged; a new game is already v8', () => {
     const s = newGame(77, T0);
-    expect(s.saveVersion).toBe(7);
-    expect(CURRENT_SAVE_VERSION).toBe(7);
+    expect(s.saveVersion).toBe(8);
+    expect(CURRENT_SAVE_VERSION).toBe(8);
     expect(loadSave(s)).toEqual(s);
   });
 

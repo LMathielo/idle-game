@@ -16,6 +16,8 @@ import {
   hashState,
   loadSave,
   logMsFor,
+  migrateDoc,
+  MIGRATIONS,
   type MigratePayload,
   newGame,
   type ReplayEntry,
@@ -85,9 +87,9 @@ describe('config: tree table and formulas', () => {
       [28, 18, 'yew_logs'],
       [42, 30, 'ironwood_logs'],
     ]);
-    for (const id of TREE_IDS) expect(getItemDef(TREES[id].logItemId)).toMatchObject({ stackable: true, rarity: 'common' });
+    for (const id of TREE_IDS) expect(getItemDef(TREES[id].logItemId)).toMatchObject({ stackable: true, quality: 'common' });
     expect(WOODCUTTING.rareDrops).toEqual([{ itemId: 'bird_nest', chance: 1 / 200 }]);
-    expect(getItemDef('wooden_axe')).toMatchObject({ slot: 'axe', rarity: 'common', woodcuttingStrength: 1 });
+    expect(getItemDef('wooden_axe')).toMatchObject({ slot: 'axe', quality: 'common', woodcuttingStrength: 1 });
   });
 });
 
@@ -373,7 +375,8 @@ describe('frozen v6 save (tests/fixtures/save-v6.json) → v7', () => {
 
   it('migrates: keeps WC level, XP and logs; equips the Wooden Axe; Oak from progress 0; pure', () => {
     const frozen = JSON.parse(JSON.stringify(V6_SAVE));
-    const s = loadSave(V6_SAVE);
+    // The v6 → v7 step only (v7 → v8 is tested from the v7 fixture in tests/merchant.test.ts).
+    const s = migrateDoc(V6_SAVE, MIGRATIONS, 7) as unknown as GameState;
     expect(V6_SAVE).toEqual(frozen);
     expect(s.saveVersion).toBe(7);
     expect(s.character.skills).toEqual(V6_SAVE.character.skills);
@@ -381,12 +384,12 @@ describe('frozen v6 save (tests/fixtures/save-v6.json) → v7', () => {
     expect(qty(s, 'oak_logs')).toBe(1338);
     expect(qty(s, 'bird_nest')).toBe(9);
     expect(s.activity).toEqual({ kind: 'woodcutting', treeId: 'oak', startedAt: V6_SAVE.activity.startedAt, progressMs: 0 });
-    expect(s.character.equipment.axe).toEqual(newGame(1, T0).character.equipment.axe);
+    expect(s.character.equipment.axe).toEqual({ id: 'start-wooden_axe', defId: 'wooden_axe', name: 'Wooden Axe', icon: '🪓', rarity: 'common', slot: 'axe' });
     const { equipment: { axe: _x, ...equipment }, ...character } = s.character;
     expect({ ...character, equipment }).toEqual(V6_SAVE.character);
     // WS: 10 × 5 + STR (10 + 4 trained) + 1 = 65.
     expect(woodcuttingStrength(s).value).toBe(65);
-    expect(hashState(loadSave(V6_SAVE))).toBe(hashState(s));
+    expect(hashState(migrateDoc(V6_SAVE, MIGRATIONS, 7))).toBe(hashState(s as never));
   });
 
   it('loading writes a MIGRATE anchor (save 6 → 7, engine 1.5.0 → 1.6.0), plays on, and the whole log replays', async () => {

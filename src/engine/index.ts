@@ -63,3 +63,14 @@ export {
   type WoodcuttingView,
   type WsInput,
 } from './woodcutting';
+export {
+  maxBuyable,
+  merchantView,
+  rollStock,
+  slotsNeeded,
+  type ItemError,
+  type ItemErrorCode,
+  type MerchantView,
+} from './merchant';
+export { isEquipmentSlot } from './equipment';
+export { freeSlots } from './inventory';

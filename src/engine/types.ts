@@ -17,7 +17,15 @@ export type Attributes = Record<AttributeKey, number>;
 
 export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots' | 'axe';
 
-export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic';
+/**
+ * Item quality (catalog only, by defId). `junk` is sell-only; `common` has a game use (gear, logs, potions);
+ * uncommon → legendary are rarity tiers (only the Bird Nest uses one for now).
+ */
+export const ITEM_QUALITIES = ['junk', 'common', 'uncommon', 'rare', 'epic', 'legendary'] as const;
+
+export type ItemQuality = (typeof ITEM_QUALITIES)[number];
+
+export const EQUIPMENT_SLOTS = ['helmet', 'amulet', 'armor', 'weapon', 'shield', 'gloves', 'ring1', 'ring2', 'boots', 'axe'] as const satisfies readonly EquipmentSlot[];
 
 export type Item = {
   /** Stackable items use their definition id (e.g. `oak_logs`); unique items use an instance id. */
@@ -25,12 +33,12 @@ export type Item = {
   /**
    * Item definition id (key of ITEMS in config/items.ts). BASE combat stats (damage, armor) are read
    * from the catalog by this id and never copied onto the instance, so balance changes need no save
-   * migration. Rolled affixes (M4 loot) will be stored on the instance, since they differ per drop.
+   * migration. Quality, description and prices are catalog-only too (save v8 dropped the old instance
+   * `rarity`). Rolled affixes (M4 loot) will be stored on the instance, since they differ per drop.
    */
   defId: string;
   name: string;
   icon: string; // placeholder glyph until we have pixel sprites
-  rarity: ItemRarity;
   slot?: EquipmentSlot; // equippable items only
   stackable?: boolean;
   quantity?: number;
@@ -211,8 +219,22 @@ export type Stamina = {
   progressMs: number;
 };
 
+// ---------- Merchant ----------
+
+/** One merchant stock slot: `quantity` left of `defId` at `unitPrice` gold each (fixed when the stock was rolled). */
+export type MerchantListing = { defId: string; quantity: number; unitPrice: number };
+
+export type MerchantState = {
+  /** Stored refresh charges, 0..MERCHANT.maxCharges. */
+  charges: number;
+  /** Time banked toward the next charge. Always 0 while charges are at max. */
+  chargeProgressMs: number;
+  /** Stock slots (as many as the inventory had when it was rolled); null = empty or bought out. */
+  stock: (MerchantListing | null)[];
+};
+
 export type GameState = {
-  saveVersion: 7;
+  saveVersion: 8;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -227,6 +249,10 @@ export type GameState = {
   dungeon: DungeonState;
   /** Save v6. Gold-bought tiers and per-attribute training progress. */
   training: TrainingState;
+  /** Save v8. Not an activity: buying and selling work while any activity runs. */
+  merchant: MerchantState;
+  /** Save v8. Serial for unique item instance ids (bought gear: `<defId>#<n>`). Only goes up. */
+  nextItemSerial: number;
   stats: GameStats;
   flags: GameFlags;
   character: Character;
