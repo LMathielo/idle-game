@@ -240,7 +240,7 @@ describe('determinism on higher tiers', () => {
 
 describe('DUNGEON_LOCKED', () => {
   it('starting a locked dungeon is refused with a typed error and changes nothing', () => {
-    const wood = apply(newGame(3, T0), { type: 'START_ACTIVITY', kind: 'woodcutting' }, T0);
+    const wood = apply(newGame(3, T0), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
     const frozen = JSON.parse(JSON.stringify(wood));
     for (const id of ['bat_cave', 'wolf_den', 'forgotten_crypt', 'troll_bridge'] as const) {
       const r = startDungeon(wood, id, T0 + MIN);

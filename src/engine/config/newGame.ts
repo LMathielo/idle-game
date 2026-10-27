@@ -12,7 +12,7 @@ export const STARTING_HERO = {
     intelligence: 10,
   } satisfies Attributes,
   /** Equipped item definition ids. */
-  equipment: ['rusty_gladius', 'linen_tunic', 'worn_sandals'],
+  equipment: ['rusty_gladius', 'linen_tunic', 'worn_sandals', 'wooden_axe'],
   /** Starting inventory stacks. */
   inventory: [{ itemId: 'bread', quantity: 3 }],
   skills: ['woodcutting', 'mining', 'fishing', 'smithing'] satisfies SkillKey[],

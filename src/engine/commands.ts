@@ -2,7 +2,9 @@
 import { grantHeroXp } from './activities';
 import { effectiveAttributes } from './attributes';
 import { cloneState } from './clone';
-import { ACTIVITIES, isGatheringKind } from './config/activities';
+import { isGatheringKind, isTreeId, TREES } from './config/woodcutting';
+import { SKILL_XP_CURVE } from './config/xpCurve';
+import { xpToNext } from './progression';
 import { DEV_TOOLS_ENABLED } from './config/dev';
 import { DUNGEONS, isDungeonId } from './config/dungeons';
 import { completeRun, isDungeonUnlocked, recordDungeonResults, runMsFor, skipCost } from './dungeon';
@@ -11,7 +13,8 @@ import { maxHpOf } from './hp';
 import { simulate } from './simulate';
 import { refillStamina, spendStamina } from './stamina';
 import { TRAINING } from './config/training';
-import { grantTrainingXp, trainingBlock, trainingCap, trainingTierPrice } from './training';
+import { grantTrainingMs, grantTrainingXp, speedupPlan, trainingBlock, trainingCap, trainingTierPrice } from './training';
+import { cutLog, logMsFor, treeCheck, woodcutSkipCost, woodcuttingStrength } from './woodcutting';
 import {
   type Activity,
   ATTRIBUTE_KEYS,
@@ -19,12 +22,13 @@ import {
   type DungeonId,
   type GameEvent,
   type GameState,
-  type GatheringKind,
   type SimulationSummary,
+  type TreeId,
 } from './types';
 
 export type Command =
-  | { id: string; type: 'START_ACTIVITY'; kind: GatheringKind }
+  /** Cuts logs from one tree back-to-back. Needs the tree's level and WS. Same tree again = no-op; another tree switches (the log in progress restarts). */
+  | { id: string; type: 'START_ACTIVITY'; kind: 'woodcutting'; treeId: TreeId }
   /** Starts auto-repeating runs. Only one activity at a time: a running one is stopped (a dungeon run in progress is lost). */
   | { id: string; type: 'START_ACTIVITY'; kind: 'dungeon'; dungeonId: DungeonId }
   /**
@@ -42,6 +46,20 @@ export type Command =
    * run already finished, or the real cost is higher, the skip fails with RUN_CHANGED and nothing changes.
    */
   | { id: string; type: 'SKIP_DUNGEON_RUN'; run: number; maxCost: number }
+  /**
+   * Spends ceil(remaining minutes) stamina to finish the current log now (exactly one log). `log` is the log
+   * the player saw (WoodcutActivityView.log) and `maxCost` the cost shown: if that log already finished, or the
+   * real cost is higher, it fails with LOG_CHANGED and nothing changes.
+   */
+  | { id: string; type: 'SKIP_WOODCUT'; log: number; maxCost: number }
+  /**
+   * Spends 1 stamina per minute to add that much training progress to the attribute being trained right away.
+   * Minutes beyond the tier cap are never charged (clamped). `maxCost` is the cost the button showed:
+   * a higher real cost fails with COST_CHANGED.
+   */
+  | { id: string; type: 'SPEEDUP_TRAINING'; minutes: number; maxCost: number }
+  /** Adds woodcutting levels (XP toward the next level is kept), so tree unlocks can be tested on a phone. */
+  | { id: string; type: 'DEBUG_ADD_WOODCUTTING_LEVEL'; levels: number }
   | { id: string; type: 'DEBUG_SET_HERO_HP'; hp: number }
   /** Adds wins (and runs) to an unlocked dungeon's lifetime counters, so unlocks can be tested on a phone. */
   | { id: string; type: 'DEBUG_ADD_DUNGEON_WINS'; dungeonId: DungeonId; amount: number }
@@ -62,6 +80,11 @@ export type CommandErrorCode =
   | 'INVALID_COMMAND'
   | 'UNKNOWN_ACTIVITY'
   | 'UNKNOWN_DUNGEON'
+  | 'UNKNOWN_TREE'
+  | 'TREE_LOCKED'
+  | 'NOT_WOODCUTTING'
+  | 'LOG_CHANGED'
+  | 'COST_CHANGED'
   | 'DUNGEON_LOCKED'
   | 'NO_ACTIVE_ACTIVITY'
   | 'NO_DUNGEON_RUN'
@@ -95,6 +118,10 @@ export const MAX_DEBUG_DUNGEON_WINS = 1000;
 
 /** Debug training XP grant per command (minutes at the base rate). */
 export const MAX_DEBUG_TRAINING_XP = 100_000;
+
+/** Debug woodcutting levels per command, and the highest level the debug grant may reach. */
+export const MAX_DEBUG_WOODCUTTING_LEVELS = 100;
+export const MAX_DEBUG_WOODCUTTING_LEVEL = 1000;
 
 /** Debug gold grant per command, and the most gold a save may reach that way. */
 export const MAX_DEBUG_GOLD_GRANT = 1_000_000;
@@ -152,8 +179,20 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
         next = { kind: 'dungeon', dungeonId: cmd.dungeonId, startedAt: now, progressMs: 0 };
       } else {
         if (!isGatheringKind(cmd.kind)) return fail('UNKNOWN_ACTIVITY', `Unknown activity ${String(cmd.kind)}`);
-        if (draft.activity?.kind === cmd.kind) break; // already running: keep its banked progress
-        next = { kind: cmd.kind, startedAt: now, progressMs: 0 };
+        const { treeId } = cmd;
+        if (!isTreeId(treeId)) return fail('UNKNOWN_TREE', `Unknown tree ${String(treeId)}`);
+        const check = treeCheck(draft, treeId);
+        if (!check.unlocked) {
+          const tree = TREES[treeId];
+          const missing = [
+            check.levelOk ? null : `woodcutting level ${tree.reqLevel}`,
+            check.wsOk ? null : `${tree.reqWs} woodcutting strength (you have ${woodcuttingStrength(draft).value})`,
+          ].filter(Boolean);
+          return fail('TREE_LOCKED', `${tree.name} needs ${missing.join(' and ')}`);
+        }
+        // Already cutting this tree: keep the log in progress.
+        if (draft.activity?.kind === 'woodcutting' && draft.activity.treeId === treeId) break;
+        next = { kind: 'woodcutting', treeId, startedAt: now, progressMs: 0 };
       }
       if (draft.activity) stopActivity(draft, events);
       draft.activity = next;
@@ -199,6 +238,61 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       if (!spent.ok) return fail(spent.error.code, spent.error.message);
       draft = spent.state;
       finishRunNow(draft, a.dungeonId, events);
+      break;
+    }
+    case 'SKIP_WOODCUT': {
+      const a = draft.activity;
+      if (a?.kind !== 'woodcutting') return fail('NOT_WOODCUTTING', 'No tree is being cut');
+      const { log, maxCost } = cmd;
+      if (typeof maxCost !== 'number' || !Number.isSafeInteger(maxCost) || maxCost <= 0) {
+        return fail('INVALID_AMOUNT', `Invalid maxCost ${String(maxCost)}`);
+      }
+      if (typeof log !== 'number' || !Number.isSafeInteger(log) || log <= 0) return fail('INVALID_COMMAND', `Invalid log ${String(log)}`);
+      // The log the player saw finished (simulating to now, or earlier): never finish the next one instead.
+      if (log !== draft.stats.totalActions + 1) return fail('LOG_CHANGED', 'That log already finished');
+      const remainingMs = Math.max(0, logMsFor(a.treeId, effectiveAttributes(draft)) - a.progressMs);
+      const cost = woodcutSkipCost(remainingMs);
+      if (cost > maxCost) return fail('LOG_CHANGED', `Skipping now costs ${cost}, more than the ${maxCost} shown`);
+      const spent = spendStamina(draft, cost);
+      if (!spent.ok) return fail(spent.error.code, spent.error.message);
+      draft = spent.state;
+      cutLog(draft, a.treeId, null, events);
+      if (draft.activity?.kind === 'woodcutting') draft.activity.progressMs = 0;
+      break;
+    }
+    case 'SPEEDUP_TRAINING': {
+      const { minutes, maxCost } = cmd;
+      if (typeof minutes !== 'number' || !Number.isSafeInteger(minutes) || minutes <= 0 || minutes > TRAINING.speedup.maxStepsPerCommand) {
+        return fail('INVALID_AMOUNT', `Invalid minutes ${String(minutes)}`);
+      }
+      if (typeof maxCost !== 'number' || !Number.isSafeInteger(maxCost) || maxCost <= 0) {
+        return fail('INVALID_AMOUNT', `Invalid maxCost ${String(maxCost)}`);
+      }
+      const a = draft.activity;
+      if (a?.kind !== 'training') return fail('NOT_TRAINING', 'No attribute is being trained');
+      const plan = speedupPlan(draft, a.attribute, minutes);
+      if (plan.minutes <= 0) return fail('TRAINING_MAXED', `${a.attribute} is at the Tier ${draft.training.tier} cap`);
+      if (plan.cost > maxCost) return fail('COST_CHANGED', `Speeding up now costs ${plan.cost}, more than the ${maxCost} shown`);
+      const spent = spendStamina(draft, plan.cost);
+      if (!spent.ok) return fail(spent.error.code, spent.error.message);
+      draft = spent.state;
+      grantTrainingMs(draft, a.attribute, plan.minutes * TRAINING.speedup.msPerStep, events);
+      break;
+    }
+    case 'DEBUG_ADD_WOODCUTTING_LEVEL': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const { levels } = cmd;
+      if (typeof levels !== 'number' || !Number.isSafeInteger(levels) || levels <= 0 || levels > MAX_DEBUG_WOODCUTTING_LEVELS) {
+        return fail('INVALID_AMOUNT', `Invalid level amount ${String(levels)}`);
+      }
+      const skill = draft.character.skills.woodcutting;
+      const level = skill.level + levels;
+      if (level > MAX_DEBUG_WOODCUTTING_LEVEL) return fail('INVALID_AMOUNT', `Woodcutting would exceed level ${MAX_DEBUG_WOODCUTTING_LEVEL}`);
+      draft = markDebugUsed(draft);
+      const next = xpToNext(SKILL_XP_CURVE, level);
+      // The curve only grows, so the XP already earned stays below the new level's requirement.
+      draft.character.skills.woodcutting = { level, xp: Math.min(skill.xp, next - 1), xpToNext: next };
+      events.push({ type: 'SKILL_LEVEL_UP', skill: 'woodcutting', level });
       break;
     }
     case 'DEBUG_SET_HERO_HP': {
@@ -315,6 +409,3 @@ function finishRunNow(draft: GameState, dungeonId: DungeonId, events: GameEvent[
   completeRun(draft, dungeonId, null, events);
   if (draft.activity?.kind === 'dungeon') draft.activity.progressMs = 0;
 }
-
-/** Gathering kinds, for UIs that list them. */
-export const GATHERING_KINDS = Object.keys(ACTIVITIES) as GatheringKind[];

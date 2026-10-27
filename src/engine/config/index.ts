@@ -1,4 +1,4 @@
-export * from './activities';
+export * from './woodcutting';
 export * from './dev';
 export * from './dungeons';
 export * from './items';

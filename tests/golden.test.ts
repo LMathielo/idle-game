@@ -19,15 +19,42 @@
 // new `training` field. The script gained a training segment: Tier 1 bought, STR trained 30 min, switch to
 // END, debug XP and gold, Tier 2 bought, 10 h capped training, debug XP to the cap (auto-stop), then a Rat
 // Cellar hour with the trained attributes.
+// 1.5.0 → 1.6.0 (2026-10-27): save v7 (woodcutting trees, woodcutting strength, axe slot with the Wooden Axe,
+// stamina speed-up for training). The old 3 s / 10 XP woodcutting rule is gone: the woodcutting segment now
+// cuts Oak (1:50 per log, 25 XP), so far fewer logs and nest rolls happen and the seeded RNG stream shifts. The
+// earlier pins were re-pinned: dungeon runs, wins, levels, HP and stamina are unchanged, gold differs (the
+// gold rolls draw from a shifted RNG stream). The script gained a 1.6.0 segment: Oak (cancels the Rat Cellar
+// run), a bound SKIP_WOODCUT, DEBUG_ADD_WOODCUTTING_LEVEL ×4, switch to Birch (WS 106 ≥ 100), 2 h of Birch,
+// then STR training with SPEEDUP_TRAINING +10 min and "to next level".
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { applyCommand, type Command, CURRENT_SAVE_VERSION, ENGINE_VERSION, RELEASED_ENGINES, getDerivedStats, hashState, loadSave, newGame, newTrainingState, simulate } from '../src/engine';
-import { actionIntervalMs, ACTIVITIES } from '../src/engine';
-import { HOUR, MIN, SEC, T0, progressMs } from './helpers';
+import {
+  applyCommand,
+  type Command,
+  CURRENT_SAVE_VERSION,
+  ENGINE_VERSION,
+  type GameState,
+  getDerivedStats,
+  hashState,
+  loadSave,
+  newGame,
+  newTrainingState,
+  RELEASED_ENGINES,
+  simulate,
+  trainingView,
+  woodcutActivityView,
+  woodcuttingView,
+} from '../src/engine';
+import { HOUR, MIN, SEC, T0 } from './helpers';
 
-const SCRIPT: { at: number; cmd?: Command }[] = [
-  { at: T0 + SEC, cmd: { id: 'g1', type: 'START_ACTIVITY', kind: 'woodcutting' } },
+/** End of the 1.5.0 script; the 1.6.0 segment starts here. */
+const B = T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC;
+
+type Step = { at: number; cmd?: Command | ((s: GameState) => Command) };
+
+const SCRIPT: Step[] = [
+  { at: T0 + SEC, cmd: { id: 'g1', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } },
   { at: T0 + 37 * MIN },
   { at: T0 + 5 * HOUR },
   { at: T0 + 5 * HOUR + 3 * SEC, cmd: { id: 'g2', type: 'DEBUG_GRANT_HERO_XP', amount: 250_000 } },
@@ -42,7 +69,7 @@ const SCRIPT: { at: number; cmd?: Command }[] = [
   { at: T0 + 31 * HOUR + 320 * SEC, cmd: { id: 'd2', type: 'SKIP_DUNGEON_RUN', run: 1, maxCost: 3 } }, // 2:50 left → 3 stamina
   { at: T0 + 31 * HOUR + 330 * SEC, cmd: { id: 'd3', type: 'DEBUG_SET_HERO_HP', hp: 1 } },
   { at: T0 + 34 * HOUR + 330 * SEC }, // 3h of runs, HP regen interleaved
-  { at: T0 + 34 * HOUR + 400 * SEC, cmd: { id: 'd4', type: 'START_ACTIVITY', kind: 'woodcutting' } }, // run lost
+  { at: T0 + 34 * HOUR + 400 * SEC, cmd: { id: 'd4', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } }, // run lost
   { at: T0 + 34 * HOUR + 401 * SEC, cmd: { id: 'd5', type: 'STOP_ACTIVITY' } },
   // 1.4.0: tiers. 38 Rat Cellar wins already unlock Bat Cave; +10 debug wins in Bat Cave (15 needed for Wolf Den).
   { at: T0 + 34 * HOUR + 402 * SEC, cmd: { id: 't1', type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId: 'bat_cave', amount: 10 } },
@@ -59,14 +86,34 @@ const SCRIPT: { at: number; cmd?: Command }[] = [
   { at: T0 + 46 * HOUR + 409 * SEC + 30 * MIN + 30 * SEC }, // 10 h away: capped at 8 h of END training
   { at: T0 + 46 * HOUR + 410 * SEC + 30 * MIN + 30 * SEC, cmd: { id: 'r7', type: 'DEBUG_ADD_TRAINING_XP', xp: 100_000 } }, // END → 40, stops
   { at: T0 + 46 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC, cmd: { id: 'r8', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } },
-  { at: T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC }, // 1 h of Rat Cellar with trained STR/END
+  { at: B }, // 1 h of Rat Cellar with trained STR/END
+  // 1.6.0: trees, woodcutting strength, axe, stamina speed-up. Woodcutting Oak cancels the Rat Cellar run.
+  { at: B + SEC, cmd: { id: 'w1', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } },
+  { at: B + SEC + HOUR }, // 1 h of Oak logs (1:50 each at DEX 10)
+  // Skip the log on screen, bound to its number and the cost shown (as the UI sends it).
+  { at: B + 2 * SEC + HOUR, cmd: (s) => ({ id: 'w2', type: 'SKIP_WOODCUT', log: s.stats.totalActions + 1, maxCost: woodcutActivityView(s)!.skipCost }) },
+  { at: B + 3 * SEC + HOUR, cmd: { id: 'w3', type: 'DEBUG_ADD_WOODCUTTING_LEVEL', levels: 4 } },
+  { at: B + 4 * SEC + HOUR, cmd: { id: 'w4', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' } }, // switch tree
+  { at: B + 4 * SEC + 3 * HOUR }, // 2 h of Birch logs (4:50 each)
+  // Training STR again stops woodcutting; 10 stamina buys 10 minutes, then the rest of the level.
+  { at: B + 5 * SEC + 3 * HOUR, cmd: { id: 'w5', type: 'START_ACTIVITY', kind: 'training', attribute: 'strength' } },
+  { at: B + 6 * SEC + 3 * HOUR, cmd: { id: 'w6', type: 'SPEEDUP_TRAINING', minutes: 10, maxCost: 10 } },
+  {
+    at: B + 7 * SEC + 3 * HOUR,
+    cmd: (s) => {
+      const n = trainingView(s).attributes.find((a) => a.attribute === 'strength')!.speedupToNextLevel;
+      return { id: 'w7', type: 'SPEEDUP_TRAINING', minutes: n, maxCost: n };
+    },
+  },
+  { at: B + 7 * SEC + 3 * HOUR + 30 * MIN }, // 30 min of STR training
 ];
 
-function runScript(steps = SCRIPT) {
+function runScript(steps: Step[] = SCRIPT) {
   let s = newGame(0xc0ffee, T0);
   for (const step of steps) {
     if (step.cmd) {
-      const r = applyCommand(s, step.cmd, step.at);
+      const c = typeof step.cmd === 'function' ? step.cmd(s) : step.cmd;
+      const r = applyCommand(s, c, step.at);
       if (!r.ok) throw new Error(r.error.message);
       s = r.state;
     } else {
@@ -102,13 +149,14 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.3.0', 4],
       ['1.4.0', 5],
       ['1.5.0', 6],
+      ['1.6.0', 7],
     ]);
   });
 });
 
 describe('golden', () => {
-  it('the 1.3.0 part of the script keeps its exact outcomes (Rat Cellar rules unchanged in 1.4.0)', () => {
-    const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => x.cmd?.id === 't1')));
+  it('the 1.3.0 part of the script (re-pinned in 1.6.0: the woodcutting segment now cuts Oak)', () => {
+    const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 't1')));
     expect({
       heroLevel: s.character.level,
       actions: s.stats.totalActions,
@@ -117,23 +165,35 @@ describe('golden', () => {
       gold: s.character.gold,
       dungeon: s.dungeon.totals,
       lastFightRounds: s.dungeon.lastFight?.rounds,
-    }).toEqual({
-      heroLevel: 11,
-      actions: 18670,
-      stamina: { current: 100, max: 100, progressMs: 0 },
-      hp: [150, 0],
-      gold: 162,
-      dungeon: { runs: 38, wins: 38, losses: 0 },
-      lastFightRounds: 2,
-    });
-    expect(s.dungeon.byDungeon).toEqual({ rat_cellar: { runs: 38, wins: 38, losses: 0 } });
+    }).toMatchInlineSnapshot(`
+      {
+        "actions": 458,
+        "dungeon": {
+          "losses": 0,
+          "runs": 38,
+          "wins": 38,
+        },
+        "gold": 158,
+        "heroLevel": 11,
+        "hp": [
+          150,
+          0,
+        ],
+        "lastFightRounds": 2,
+        "stamina": {
+          "current": 100,
+          "max": 100,
+          "progressMs": 0,
+        },
+      }
+    `);
     // A locked tier is refused at this point (Wolf Den needs 15 Bat Cave wins).
     const locked = applyCommand(s, { id: 'lk', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den' }, T0 + 34 * HOUR + 402 * SEC);
     expect(locked).toEqual({ ok: false, error: expect.objectContaining({ code: 'DUNGEON_LOCKED' }) });
   });
 
-  it('the 1.4.0 script keeps its exact outcomes (no 1.4.0 rule changed in 1.5.0)', () => {
-    const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => x.cmd?.id === 'r1')));
+  it('the 1.4.0 script (re-pinned in 1.6.0)', () => {
+    const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'r1')));
     expect({
       actions: s.stats.totalActions,
       batWings: s.inventory.items.find((i) => i.defId === 'bat_wing')?.quantity,
@@ -146,19 +206,39 @@ describe('golden', () => {
       stamina: s.stamina,
       strength: s.character.attributes.strength,
       woodcutting: s.character.skills.woodcutting.level,
-    }).toEqual({
-      actions: 18670,
-      batWings: 9,
-      byDungeon: { bat_cave: { runs: 27, wins: 27, losses: 0 }, rat_cellar: { runs: 38, wins: 38, losses: 0 } },
-      gold: 300,
-      heroLevel: 11,
-      hp: [150, 0],
-      lastFightRounds: 5,
-      nests: 113,
-      stamina: { current: 100, max: 100, progressMs: 0 },
-      strength: 13,
-      woodcutting: 15,
-    });
+    }).toMatchInlineSnapshot(`
+      {
+        "actions": 458,
+        "batWings": 9,
+        "byDungeon": {
+          "bat_cave": {
+            "losses": 0,
+            "runs": 27,
+            "wins": 27,
+          },
+          "rat_cellar": {
+            "losses": 0,
+            "runs": 38,
+            "wins": 38,
+          },
+        },
+        "gold": 295,
+        "heroLevel": 11,
+        "hp": [
+          150,
+          0,
+        ],
+        "lastFightRounds": 5,
+        "nests": undefined,
+        "stamina": {
+          "current": 100,
+          "max": 100,
+          "progressMs": 0,
+        },
+        "strength": 13,
+        "woodcutting": 5,
+      }
+    `);
     expect(s.training).toEqual(newTrainingState());
   });
 
@@ -181,10 +261,14 @@ describe('golden', () => {
       batWings: s.inventory.items.find((i) => i.defId === 'bat_wing')?.quantity,
       training: s.training,
       activity: s.activity?.kind ?? null,
+      woodcuttingXp: s.character.skills.woodcutting.xp,
+      logs: Object.fromEntries(s.inventory.items.filter((i) => i.defId.endsWith('_logs')).map((i) => [i.defId, i.quantity])),
+      axe: s.character.equipment.axe?.defId,
     }).toMatchInlineSnapshot(`
       {
-        "actions": 18670,
-        "activity": "dungeon",
+        "actions": 515,
+        "activity": "training",
+        "axe": "wooden_axe",
         "batWings": 9,
         "byDungeon": {
           "bat_cave": {
@@ -203,20 +287,24 @@ describe('golden', () => {
           "runs": 77,
           "wins": 77,
         },
-        "engineVersion": "1.5.0",
-        "gold": 446,
-        "hash": "50b2a7aa",
+        "engineVersion": "1.6.0",
+        "gold": 438,
+        "hash": "54c134ec",
         "heroLevel": 11,
         "hp": [
           150,
           0,
         ],
         "lastFightRounds": 2,
-        "nests": 113,
+        "logs": {
+          "birch_logs": 24,
+          "oak_logs": 491,
+        },
+        "nests": undefined,
         "stamina": {
-          "current": 100,
+          "current": 91,
           "max": 100,
-          "progressMs": 0,
+          "progressMs": 1000,
         },
         "strength": 13,
         "training": {
@@ -237,14 +325,15 @@ describe('golden', () => {
               "xp": 0,
             },
             "strength": {
-              "level": 2,
-              "progressMs": 31000,
-              "xp": 10,
+              "level": 3,
+              "progressMs": 33000,
+              "xp": 30,
             },
           },
           "tier": 2,
         },
-        "woodcutting": 15,
+        "woodcutting": 9,
+        "woodcuttingXp": 6619,
       }
     `);
   });
@@ -253,24 +342,23 @@ describe('golden', () => {
     const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v1.json'), 'utf8'));
     expect(raw.saveVersion).toBe(1);
     const s = loadSave(raw);
-    expect(s.saveVersion).toBe(6);
+    expect(s.saveVersion).toBe(7);
     expect(s.flags).toEqual({ debugUsed: false });
     expect(s.character.attributes).toEqual({ strength: 10, dexterity: 10, endurance: 10, intelligence: 10 });
     expect(s.stats.totalActions).toBe(2499);
-    // Banked progress carries over: 60s plus the stored remainder, at the stored skill level's interval.
-    const interval = actionIntervalMs(ACTIVITIES.woodcutting, s.character.skills.woodcutting.level);
-    const next = simulate(s, s.time.lastSimulatedAt + MIN);
-    expect(next.summary.actions).toBe(Math.floor((MIN + progressMs(s)!) / interval));
-    expect(next.summary.actions).toBeGreaterThan(0);
+    // v7: woodcutting becomes Oak from progress 0 (1:50 per log at DEX 10).
+    expect(s.activity).toMatchObject({ kind: 'woodcutting', treeId: 'oak', progressMs: 0 });
+    const next = simulate(s, s.time.lastSimulatedAt + 4 * MIN);
+    expect(next.summary.actions).toBe(2);
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // migration is deterministic
   });
 
-  it('frozen v2 save (tests/fixtures/save-v2.json) migrates to v6 without losing progress, and plays on', () => {
+  it('frozen v2 save (tests/fixtures/save-v2.json) migrates to v7 without losing progress, and plays on', () => {
     // Produced by the 1.1.0 engine (save v2): woodcutting ~3h, +20k hero XP via debug.
     const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v2.json'), 'utf8'));
     expect(raw.saveVersion).toBe(2);
     const s = loadSave(raw);
-    expect(s.saveVersion).toBe(6);
+    expect(s.saveVersion).toBe(7);
 
     // Progress kept: level, XP, skills, woodcutting banked time, inventory, stats, rng, time, flags.
     expect(s.character.level).toBe(raw.character.level);
@@ -279,7 +367,7 @@ describe('golden', () => {
     expect(s.character.gold).toBe(raw.character.gold);
     expect(s.character.skills).toEqual(raw.character.skills);
     expect(s.character.skills.woodcutting.level).toBe(8);
-    expect(s.activity).toEqual(raw.activity);
+    expect(s.activity).toEqual({ ...raw.activity, treeId: 'oak', progressMs: 0 }); // v7: Oak, from 0
     expect(s.stats).toEqual(raw.stats);
     expect(s.rng).toEqual(raw.rng);
     expect(s.time).toEqual(raw.time);
@@ -302,42 +390,43 @@ describe('golden', () => {
       ['start-rusty_gladius', 'rusty_gladius'],
       ['start-linen_tunic', 'linen_tunic'],
       ['start-worn_sandals', 'worn_sandals'],
+      ['start-wooden_axe', 'wooden_axe'],
     ]);
 
     // Stats come from the catalog through the new defIds: 2–4 + 10 STR, 3 armor + 10 END, level 4 pools.
     const d = getDerivedStats(s);
     expect([d.damage.min, d.damage.max, d.defense.value, d.maxHp.value, d.maxMana.value]).toEqual([12, 14, 13, 80, 35]);
 
-    // Plays on: banked woodcutting progress carries over and actions run.
-    const interval = actionIntervalMs(ACTIVITIES.woodcutting, s.character.skills.woodcutting.level);
-    const next = simulate(s, s.time.lastSimulatedAt + MIN);
-    expect(next.summary.actions).toBe(Math.floor((MIN + progressMs(s)!) / interval));
-    expect(next.summary.actions).toBeGreaterThan(0);
+    // Plays on: Oak logs every 1:50 at DEX 10.
+    const next = simulate(s, s.time.lastSimulatedAt + 4 * MIN);
+    expect(next.summary.actions).toBe(2);
     // Logs keep stacking on the migrated stack (matched by defId).
     expect(next.state.inventory.items.filter((i) => i.defId === 'oak_logs')).toHaveLength(1);
     expect(next.state.inventory.items.find((i) => i.defId === 'oak_logs')?.quantity).toBe(3785 + next.summary.actions);
     // And commands work on the migrated save.
-    const spent = applyCommand(next.state, { id: 'v2-spend', type: 'DEBUG_SPEND_STAMINA', amount: 10 }, s.time.lastSimulatedAt + MIN);
+    const spent = applyCommand(next.state, { id: 'v2-spend', type: 'DEBUG_SPEND_STAMINA', amount: 10 }, s.time.lastSimulatedAt + 4 * MIN);
     expect(spent.ok && spent.state.stamina.current).toBe(90);
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // migration is deterministic
   });
 
-  it('frozen v3 save (tests/fixtures/save-v3.json) migrates to v6 (via v4: full HP) and plays on, dungeon included', () => {
+  it('frozen v3 save (tests/fixtures/save-v3.json) migrates to v7 (via v4: full HP) and plays on, dungeon included', () => {
     // Produced by the 1.2.0 engine (save v3), before the dungeon: woodcutting ~3h, +30k hero XP,
     // +5 DEX, +2 END and 40 stamina spent via debug.
     const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v3.json'), 'utf8'));
     expect(raw.saveVersion).toBe(3);
     expect(raw.character).not.toHaveProperty('hp');
     const s = loadSave(raw);
-    expect(s.saveVersion).toBe(6);
+    expect(s.saveVersion).toBe(7);
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // deterministic
 
     // Everything from v3 survives as it was.
-    const { hp, hpRegenProgress, ...character } = s.character;
-    expect(character).toEqual(raw.character);
-    const { dungeon, training, character: _c, saveVersion: _v, ...rest } = s;
+    const { hp, hpRegenProgress, equipment: { axe, ...equipment }, ...character } = s.character;
+    expect({ ...character, equipment }).toEqual(raw.character);
+    expect(axe?.defId).toBe('wooden_axe');
+    const { dungeon, training, activity, character: _c, saveVersion: _v, ...rest } = s;
+    expect(activity).toEqual({ ...raw.activity, treeId: 'oak', progressMs: 0 });
     expect(training).toEqual(newTrainingState());
-    const { character: _rc, saveVersion: _rv, ...rawRest } = raw;
+    const { character: _rc, saveVersion: _rv, activity: _ra, ...rawRest } = raw;
     expect(rest).toEqual(rawRest);
 
     // New: full HP at level 5 (50 + 10 × 4), empty fight state.
@@ -346,10 +435,9 @@ describe('golden', () => {
     expect(dungeon).toEqual({ lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {} });
     expect(s.activity?.kind).toBe('woodcutting');
 
-    // Plays on: woodcutting banked progress carries over, then a dungeon with DEX 15 runs 4:45.
-    const interval = actionIntervalMs(ACTIVITIES.woodcutting, s.character.skills.woodcutting.level);
+    // Plays on: Oak with DEX 15 cuts a log every 1:45, then a dungeon with DEX 15 runs 4:45.
     const next = simulate(s, s.time.lastSimulatedAt + MIN);
-    expect(next.summary.actions).toBe(Math.floor((MIN + (progressMs(s) ?? 0)) / interval));
+    expect(simulate(s, s.time.lastSimulatedAt + 105 * SEC).summary.actions).toBe(1);
     const at = s.time.lastSimulatedAt + MIN;
     const d = applyCommand(next.state, { id: 'v3-d', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, at);
     if (!d.ok) throw new Error(d.error.message);

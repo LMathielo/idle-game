@@ -126,10 +126,44 @@ describe('save migrations', () => {
     });
   });
 
-  it('newest save loads unchanged; a new game is already v6', () => {
+  it('real v6 → v7: running woodcutting becomes Oak at progress 0, the Wooden Axe fills the new axe slot; pure', () => {
+    const gear = { weapon: { id: 'start-rusty_gladius', defId: 'rusty_gladius' } };
+    const v6 = {
+      saveVersion: 6,
+      activity: { kind: 'woodcutting', startedAt: 5, progressMs: 2400 },
+      character: { name: 'Lucius', equipment: gear, skills: { woodcutting: { level: 9, xp: 7, xpToNext: 13500 } } },
+      inventory: { capacity: 20, items: [{ id: 'oak_logs', defId: 'oak_logs', quantity: 12 }] },
+    };
+    const frozenInput = JSON.parse(JSON.stringify(v6));
+    const v7 = MIGRATIONS[6](v6) as unknown as GameState;
+    expect(v6).toEqual(frozenInput);
+    expect(v7.saveVersion).toBe(7);
+    expect(v7.activity).toEqual({ kind: 'woodcutting', treeId: 'oak', startedAt: 5, progressMs: 0 });
+    expect(v7.character.equipment).toEqual({
+      ...gear,
+      axe: { id: 'start-wooden_axe', defId: 'wooden_axe', name: 'Wooden Axe', icon: '🪓', rarity: 'common', slot: 'axe' },
+    });
+    // The frozen axe is exactly what a new v7 hero gets.
+    expect(v7.character.equipment.axe).toEqual(newGame(1, T0).character.equipment.axe);
+    expect(v7.character.skills).toEqual(v6.character.skills);
+    expect(v7.inventory).toEqual(v6.inventory);
+  });
+
+  it('v6 → v7 edge cases: other activities and no activity untouched; an existing axe is kept; no character', () => {
+    const dungeon = { kind: 'dungeon', dungeonId: 'bat_cave', startedAt: 1, progressMs: 9 };
+    expect((MIGRATIONS[6]({ saveVersion: 6, activity: dungeon }) as unknown as GameState).activity).toEqual(dungeon);
+    const training = { kind: 'training', attribute: 'strength', startedAt: 1 };
+    expect((MIGRATIONS[6]({ saveVersion: 6, activity: training }) as unknown as GameState).activity).toEqual(training);
+    expect((MIGRATIONS[6]({ saveVersion: 6, activity: null }) as unknown as GameState).activity).toBeNull();
+    const axe = { id: 'a1', defId: 'wooden_axe' };
+    expect((MIGRATIONS[6]({ saveVersion: 6, character: { equipment: { axe } } }) as unknown as GameState).character.equipment.axe).toEqual(axe);
+    expect((MIGRATIONS[6]({ saveVersion: 6 }) as unknown as GameState).character.equipment.axe?.defId).toBe('wooden_axe');
+  });
+
+  it('newest save loads unchanged; a new game is already v7', () => {
     const s = newGame(77, T0);
-    expect(s.saveVersion).toBe(6);
-    expect(CURRENT_SAVE_VERSION).toBe(6);
+    expect(s.saveVersion).toBe(7);
+    expect(CURRENT_SAVE_VERSION).toBe(7);
     expect(loadSave(s)).toEqual(s);
   });
 

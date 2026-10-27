@@ -3,9 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useGameClient, useGameState } from '../../client/GameProvider';
+import { useGameState } from '../../client/GameProvider';
 import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
-import { confirmCancelRun } from '../../components/dungeon/confirmCancelRun';
 import { type VillageAction, VillageScene } from '../../components/VillageScene';
 import { formatNumber } from '../../components/format';
 import { colors, fonts } from '../../theme';
@@ -18,7 +17,6 @@ const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'dungeon' | 'tr
 const TOAST_MS = 1600;
 
 export default function VillageScreen() {
-  const client = useGameClient();
   const { character, activity } = useGameState();
   const [toast, setToast] = useState<string | null>(null);
   /** Bottom edge of the top HUD (safe area included); signs are kept below it. */
@@ -28,8 +26,6 @@ export default function VillageScreen() {
     setHudBottom(y + height);
   }, []);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** True while a start/stop is being saved; extra taps are ignored so a double tap can't toggle twice. */
-  const inFlight = useRef(false);
 
   const showToast = useCallback((text: string) => {
     if (timer.current) clearTimeout(timer.current);
@@ -41,23 +37,6 @@ export default function VillageScreen() {
     if (timer.current) clearTimeout(timer.current);
   }, []);
 
-  const toggleWoodcutting = useCallback(() => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    const running = client.getState().activity?.kind === 'woodcutting';
-    const wasTraining = client.getState().activity?.kind === 'training';
-    client
-      .dispatch(running ? { type: 'STOP_ACTIVITY' } : { type: 'START_ACTIVITY', kind: 'woodcutting' })
-      .then((res) => {
-        if (!res.ok) showToast(res.error.message);
-        else if (!res.duplicate) showToast(running ? 'Stopped woodcutting' : wasTraining ? 'Woodcutting started (training paused)' : 'Woodcutting started');
-      })
-      .catch(() => showToast('Could not save. Try again.'))
-      .finally(() => {
-        inFlight.current = false;
-      });
-  }, [client, showToast]);
-
   const onAction = useCallback(
     (action: VillageAction) => {
       if (action === 'dungeon') {
@@ -68,15 +47,13 @@ export default function VillageScreen() {
         router.push('/training');
         return;
       }
-      if (action !== 'woodcutting') {
-        showToast(`${COMING_SOON[action]}: coming soon`);
+      if (action === 'woodcutting') {
+        router.push('/woodcutting');
         return;
       }
-      // One activity at a time: woodcutting would end the dungeon run in progress, so ask first.
-      if (client.getState().activity?.kind === 'dungeon') confirmCancelRun('Start woodcutting', toggleWoodcutting);
-      else toggleWoodcutting();
+      showToast(`${COMING_SOON[action]}: coming soon`);
     },
-    [client, showToast, toggleWoodcutting],
+    [showToast],
   );
 
   return (

@@ -12,10 +12,14 @@ type Props = {
   /** Spoken instead of `label` when the visible text is not enough. */
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  /** Smaller second line under the label (e.g. a cost). */
+  sublabel?: string;
+  /** Takes an equal share of a row (flex: 1) with centered text, for button rows that must not wrap. */
+  stretch?: boolean;
 };
 
 /** Wooden sign button with hard pixel bevels (no rounded corners). */
-export function PixelButton({ label, icon, onPress, active, disabled, accessibilityLabel, accessibilityHint }: Props) {
+export function PixelButton({ label, icon, onPress, active, disabled, accessibilityLabel, accessibilityHint, sublabel, stretch }: Props) {
   return (
     <Pressable
       onPress={onPress}
@@ -25,14 +29,28 @@ export function PixelButton({ label, icon, onPress, active, disabled, accessibil
       accessibilityHint={accessibilityHint}
       accessibilityState={{ selected: !!active, disabled: !!disabled }}
       hitSlop={6}
+      style={stretch ? styles.stretch : undefined}
     >
       {({ pressed }) => (
         <View style={[styles.outer, active && styles.outerActive, pressed && styles.outerPressed, disabled && styles.outerDisabled]}>
-          <View style={[styles.inner, active && styles.innerActive, pressed && styles.innerPressed, disabled && styles.innerDisabled]}>
+          <View
+            style={[
+              styles.inner,
+              (stretch || sublabel) && styles.innerStacked,
+              active && styles.innerActive,
+              pressed && styles.innerPressed,
+              disabled && styles.innerDisabled,
+            ]}
+          >
             {icon ? <Text style={styles.icon}>{icon}</Text> : null}
             <Text style={[styles.label, disabled && styles.labelDisabled]} numberOfLines={1}>
               {label}
             </Text>
+            {sublabel ? (
+              <Text style={[styles.sublabel, disabled && styles.labelDisabled]} numberOfLines={1}>
+                {sublabel}
+              </Text>
+            ) : null}
           </View>
         </View>
       )}
@@ -84,5 +102,8 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 0,
   },
+  stretch: { flex: 1 },
+  innerStacked: { flexDirection: 'column', justifyContent: 'center', gap: 0, paddingHorizontal: 4 },
+  sublabel: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.parchment },
   labelDisabled: { color: colors.parchmentDark, opacity: 0.6 },
 });

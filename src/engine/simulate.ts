@@ -1,12 +1,11 @@
 // Advances the game to `now`. The only place where time turns into rewards.
 // Same code path for live ticks (1s) and offline catch-up (up to the cap).
-import { currentActionIntervalMs, performAction } from './activities';
-import { cloneState } from './clone';
 import { advanceDungeon } from './dungeon';
 import { hpRegenPerMinute, maxHpOf, regenHp } from './hp';
 import { regenStamina } from './stamina';
 import { advanceTraining } from './training';
-import { CLOCK_BACKWARD_TOLERANCE_MS, MAX_ACTIONS_PER_SIMULATION } from './config/time';
+import { advanceWoodcutting } from './woodcutting';
+import { CLOCK_BACKWARD_TOLERANCE_MS } from './config/time';
 import { emptySummary } from './summary';
 import type { GameEvent, GameState, SimulationSummary } from './types';
 
@@ -88,29 +87,7 @@ export function simulate(state: GameState, now: number): SimulationResult {
     return { state: draft, events, summary };
   }
 
-  if (activity && grantedMs > 0) {
-    const kind = activity.kind;
-    activity.progressMs += grantedMs * draft.offline.efficiency;
-    let interval = currentActionIntervalMs(draft, kind);
-    let cloned = false;
-    let guard = 0;
-    // One action at a time so a level-up shortens the next interval immediately.
-    while (activity.progressMs >= interval && guard < MAX_ACTIONS_PER_SIMULATION) {
-      if (!cloned) {
-        // Actions mutate these: copy them once, never touch the caller's objects.
-        draft.rng = { ...state.rng };
-        draft.stats = cloneState(state.stats);
-        // Actions change hero level/xp and skills only; attributes and equipment keep their identity.
-        draft.character = { ...state.character, skills: cloneState(state.character.skills) };
-        draft.inventory = cloneState(state.inventory);
-        cloned = true;
-      }
-      activity.progressMs -= interval;
-      performAction(draft, kind, summary, events);
-      interval = currentActionIntervalMs(draft, kind);
-      guard += 1;
-    }
-  }
+  if (activity?.kind === 'woodcutting') advanceWoodcutting(draft, activity, grantedMs, summary, events);
 
   // Gathering never touches HP, so regen over the whole (uncapped) time is the same in any order.
   // Same object when nothing changed (full HP).

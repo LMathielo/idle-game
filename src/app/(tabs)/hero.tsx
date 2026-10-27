@@ -23,7 +23,7 @@ const EQUIPMENT_GRID: (EquipmentSlot | null)[][] = [
   [null, 'helmet', 'amulet'],
   ['weapon', 'armor', 'shield'],
   ['ring1', 'gloves', 'ring2'],
-  [null, 'boots', null],
+  ['axe', 'boots', null],
 ];
 
 const SLOT_LABELS: Record<EquipmentSlot, string> = {
@@ -36,6 +36,7 @@ const SLOT_LABELS: Record<EquipmentSlot, string> = {
   ring1: 'Ring',
   ring2: 'Ring',
   boots: 'Boots',
+  axe: 'Axe',
 };
 
 const RARITY_COLORS: Record<ItemRarity, string> = {

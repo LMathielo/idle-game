@@ -2,12 +2,10 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useGameSnapshot } from '../client/GameProvider';
-import { activityView, DUNGEONS, hpView, itemQuantity } from '../engine';
+import { activityView, DUNGEONS, hpView, itemQuantity, TREES } from '../engine';
 import { colors, fonts } from '../theme';
 import { ATTRIBUTE_NAMES, formatClock, formatNumber, formatTrainingLeft } from './format';
 import { LiveBar } from './LiveBar';
-
-const GATHERING_LABELS = { woodcutting: { icon: '🪓', label: 'Woodcutting' } } as const;
 
 /** Fixed height: the strip floats over the screen, so scrollable screens reserve this much at the bottom. */
 export const ACTIVITY_STRIP_HEIGHT = 44;
@@ -51,13 +49,13 @@ export function ActivityStrip() {
     );
   }
 
-  const meta = GATHERING_LABELS[view.kind];
-  const logs = itemQuantity(state, 'oak_logs');
+  const tree = TREES[view.treeId];
+  const logs = itemQuantity(state, tree.logItemId);
   return (
     <StripView
-      title={`${meta.icon} ${meta.label} · Lv ${view.skillLevel}`}
+      title={`🪓 ${tree.name} · ${formatClock(view.remainingMs)} · Lv ${view.skillLevel}`}
       right={`🪵 ${formatNumber(logs)}`}
-      a11y={`${meta.label} level ${view.skillLevel}, ${logs} logs${clockPaused ? PAUSED_A11Y : ''}`}
+      a11y={`Cutting ${tree.name}, ${formatClock(view.remainingMs)} to the next log, woodcutting level ${view.skillLevel}, ${logs} ${tree.name} logs${clockPaused ? PAUSED_A11Y : ''}`}
       fraction={view.fraction}
       remainingMs={view.remainingMs}
       paused={clockPaused}

@@ -251,6 +251,7 @@ export class LocalGameClient implements GameClient {
     addTrainingXp: (xp = 60): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_TRAINING_XP', xp }),
 
     addGold: (amount = 1000): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_GOLD', amount }),
+    addWoodcuttingLevel: (levels = 1): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_WOODCUTTING_LEVEL', levels }),
 
     resetSave: (): Promise<void> =>
       this.serial(async () => {

@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 6 as const;
+export const CURRENT_SAVE_VERSION = 7 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -16,6 +16,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   3: migrateV3toV4,
   4: migrateV4toV5,
   5: migrateV5toV6,
+  6: migrateV6toV7,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -131,6 +132,26 @@ function migrateV5toV6(doc: SaveDoc): SaveDoc {
   const attributes: Doc = {};
   for (const k of V6_ATTRIBUTE_KEYS) attributes[k] = { level: 0, xp: 0, progressMs: 0 };
   return { ...doc, saveVersion: 6, training: { tier: 0, attributes } };
+}
+
+// ---- v6 → v7 (2026-10-27): trees, woodcutting strength, axe slot ----
+// Frozen literals: the v7 first tree and the Wooden Axe exactly as a new v7 hero gets it, so a later change
+// to config/woodcutting.ts or config/items.ts cannot change what this migration produces.
+const V7_FIRST_TREE = 'oak';
+const V7_WOODEN_AXE = { id: 'start-wooden_axe', defId: 'wooden_axe', name: 'Wooden Axe', icon: '🪓', rarity: 'common', slot: 'axe' } as const;
+
+/**
+ * - a running woodcutting activity becomes Oak with progress 0 (the old 3 s interval has no tree; the banked
+ *   part of one old action is dropped). Any other activity is kept as is.
+ * - the `axe` equipment slot gets the Wooden Axe (v6 had no axe slot, so it is always empty).
+ * - woodcutting level, XP, logs, nests and everything else are kept.
+ */
+function migrateV6toV7(doc: SaveDoc): SaveDoc {
+  const activity = isDoc(doc.activity) && doc.activity.kind === 'woodcutting' ? { ...doc.activity, treeId: V7_FIRST_TREE, progressMs: 0 } : doc.activity;
+  const character = isDoc(doc.character) ? doc.character : {};
+  const equipment = isDoc(character.equipment) ? character.equipment : {};
+  const withAxe = isDoc(equipment.axe) ? equipment : { ...equipment, axe: { ...V7_WOODEN_AXE } };
+  return { ...doc, saveVersion: 7, activity, character: { ...character, equipment: withAxe } };
 }
 
 export class SaveVersionError extends Error {}

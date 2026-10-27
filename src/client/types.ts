@@ -107,6 +107,8 @@ export interface GameClient {
     addTrainingXp(xp?: number): Promise<DispatchResult>;
     /** Adds gold (default 1,000). Logged as DEBUG_ADD_GOLD. */
     addGold(amount?: number): Promise<DispatchResult>;
+    /** Adds woodcutting levels (default 1), to test tree unlocks. Logged as DEBUG_ADD_WOODCUTTING_LEVEL. */
+    addWoodcuttingLevel(levels?: number): Promise<DispatchResult>;
     /** New game with a new seed and a real clock (offset 0). Logged, never deletes the log. */
     resetSave(): Promise<void>;
   };

@@ -1,0 +1,164 @@
+{
+  "saveVersion": 6,
+  "rng": {
+    "seed": 1763148032
+  },
+  "time": {
+    "lastSimulatedAt": 1793102701500,
+    "highestSeenAt": 1793102701500
+  },
+  "offline": {
+    "capMs": 28800000,
+    "efficiency": 1
+  },
+  "activity": {
+    "kind": "woodcutting",
+    "startedAt": 1793101500000,
+    "progressMs": 540
+  },
+  "stamina": {
+    "current": 94,
+    "max": 100,
+    "progressMs": 1500
+  },
+  "dungeon": {
+    "lastFight": null,
+    "totals": {
+      "runs": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "byDungeon": {}
+  },
+  "training": {
+    "tier": 1,
+    "attributes": {
+      "strength": {
+        "level": 4,
+        "xp": 40,
+        "progressMs": 0
+      },
+      "dexterity": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "endurance": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "intelligence": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      }
+    }
+  },
+  "stats": {
+    "totalActions": 1338,
+    "itemsGathered": {
+      "oak_logs": 1338,
+      "bird_nest": 9
+    }
+  },
+  "flags": {
+    "debugUsed": true
+  },
+  "character": {
+    "name": "Lucius",
+    "title": "Novice Gladiator",
+    "level": 1,
+    "xp": 0,
+    "xpToNext": 1500,
+    "hp": 50,
+    "hpRegenProgress": 0,
+    "gold": 925,
+    "attributes": {
+      "strength": 10,
+      "dexterity": 10,
+      "endurance": 10,
+      "intelligence": 10
+    },
+    "equipment": {
+      "weapon": {
+        "id": "start-rusty_gladius",
+        "defId": "rusty_gladius",
+        "name": "Rusty Gladius",
+        "icon": "🗡️",
+        "rarity": "common",
+        "slot": "weapon"
+      },
+      "armor": {
+        "id": "start-linen_tunic",
+        "defId": "linen_tunic",
+        "name": "Linen Tunic",
+        "icon": "🥋",
+        "rarity": "common",
+        "slot": "armor"
+      },
+      "boots": {
+        "id": "start-worn_sandals",
+        "defId": "worn_sandals",
+        "name": "Worn Sandals",
+        "icon": "👢",
+        "rarity": "common",
+        "slot": "boots"
+      }
+    },
+    "skills": {
+      "woodcutting": {
+        "level": 5,
+        "xp": 4868,
+        "xpToNext": 5590
+      },
+      "mining": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      },
+      "fishing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      },
+      "smithing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      }
+    }
+  },
+  "inventory": {
+    "capacity": 20,
+    "items": [
+      {
+        "id": "bread",
+        "defId": "bread",
+        "name": "Bread",
+        "icon": "🍞",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 3
+      },
+      {
+        "id": "oak_logs",
+        "defId": "oak_logs",
+        "name": "Oak Logs",
+        "icon": "🪵",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 1338
+      },
+      {
+        "id": "bird_nest",
+        "defId": "bird_nest",
+        "name": "Bird Nest",
+        "icon": "🪺",
+        "rarity": "rare",
+        "stackable": true,
+        "quantity": 9
+      }
+    ]
+  }
+}

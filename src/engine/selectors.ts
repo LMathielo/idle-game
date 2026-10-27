@@ -1,19 +1,11 @@
 // Read-only helpers for UIs (pure).
-import { currentActionIntervalMs } from './activities';
-import { ACTIVITIES } from './config/activities';
 import { dungeonRunView, type DungeonRunView } from './dungeon';
 import { attributeTrainingView, type AttributeTrainingView } from './training';
-import type { GameState, GatheringKind } from './types';
+import type { GameState } from './types';
+import { woodcutActivityView, type WoodcutActivityView } from './woodcutting';
 
-export type GatheringView = {
-  kind: GatheringKind;
-  skillLevel: number;
-  intervalMs: number;
-  /** Progress of the current action, 0..1. */
-  fraction: number;
-  /** ms left until the next action completes. */
-  remainingMs: number;
-};
+/** The log being cut (woodcutting). */
+export type GatheringView = WoodcutActivityView;
 
 /** The attribute being trained (progress toward its next level). */
 export type TrainingActivityView = AttributeTrainingView & { kind: 'training' };
@@ -25,15 +17,7 @@ export function activityView(state: GameState): ActivityView | null {
   if (!a) return null;
   if (a.kind === 'dungeon') return dungeonRunView(state);
   if (a.kind === 'training') return { kind: 'training', ...attributeTrainingView(state, a.attribute) };
-  const intervalMs = currentActionIntervalMs(state, a.kind);
-  const progress = Math.min(a.progressMs, intervalMs);
-  return {
-    kind: a.kind,
-    skillLevel: state.character.skills[ACTIVITIES[a.kind].skill].level,
-    intervalMs,
-    fraction: intervalMs > 0 ? progress / intervalMs : 0,
-    remainingMs: Math.max(0, intervalMs - progress),
-  };
+  return woodcutActivityView(state);
 }
 
 /** Total quantity of an item definition across the inventory. */

@@ -73,6 +73,11 @@ export function DebugPanel() {
               onPress={run(() => client.debug.addTrainingXp(60))}
               accessibilityHint="Debug: adds 60 training XP to the attribute being trained"
             />
+            <PixelButton
+              label="+1 WC level"
+              onPress={run(() => client.debug.addWoodcuttingLevel(1))}
+              accessibilityHint="Debug: adds one woodcutting level, to test tree unlocks"
+            />
             <PixelButton label="+1,000 gold" onPress={run(() => client.debug.addGold(1000))} accessibilityHint="Debug: adds 1,000 gold" />
             {ATTRIBUTE_BUTTONS.map((a) => (
               <PixelButton key={a.key} label={a.label} onPress={run(() => client.debug.addAttribute(a.key))} />
