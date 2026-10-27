@@ -97,6 +97,7 @@ function BuyTab({ state }: { state: GameState }) {
     [view.stock],
   );
   const close = useCallback(() => setSelected(null), []);
+  const prices = useMemo(() => view.stock.map((l) => (l ? `${formatNumber(l.unitPrice)}g` : '')), [view.stock]);
 
   const refresh = () => {
     if (refreshing) return;
@@ -127,7 +128,7 @@ function BuyTab({ state }: { state: GameState }) {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={styles.caption}>The merchant's wares</Text>
-      <StockGrid slots={slots} prices={view.stock.map((l) => (l ? `${formatNumber(l.unitPrice)}g` : ''))} onPress={open} />
+      <StockGrid slots={slots} prices={prices} onPress={open} />
       <View style={styles.refreshRow}>
         <PixelButton
           label={`Refresh (${view.charges}/${view.maxCharges})`}

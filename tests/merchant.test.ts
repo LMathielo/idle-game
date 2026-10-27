@@ -37,6 +37,16 @@ const V7_LOG: LogRow[] = JSON.parse(readFileSync(join(FIXTURES, 'log-v7.json'), 
 
 const CHARGE_MS = MERCHANT.chargeIntervalMs;
 
+/** What the v7 → v8 migration writes (frozen literals): the 4 listings, then empty slots up to 20. */
+const FROZEN_V8_STOCK = [
+  { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
+  { defId: 'iron_axe', quantity: 1, unitPrice: 600 },
+  { defId: 'iron_sword', quantity: 1, unitPrice: 500 },
+  { defId: 'iron_helm', quantity: 1, unitPrice: 400 },
+  ...Array.from({ length: 16 }, () => null),
+];
+
+
 function run(state: GameState, c: CommandInput, now = state.time.lastSimulatedAt) {
   return applyCommand(state, cmd(c), now);
 }
@@ -316,6 +326,53 @@ describe('EQUIP_ITEM / UNEQUIP_ITEM', () => {
   });
 });
 
+describe('woodcutting stops when an equipment change drops WS below the tree requirement', () => {
+  /** Birch needs WC 5 and 100 WS. WC 5 + STR 10 + Iron Axe 40 = exactly 100. */
+  const birchWithIronAxe = () => {
+    let s = richHero();
+    s.character.skills.woodcutting = { ...s.character.skills.woodcutting, level: 5 };
+    s = apply(s, { type: 'BUY_ITEM', slot: 1, defId: 'iron_axe', quantity: 1, maxUnitPrice: 600 }, T0);
+    s = apply(s, { type: 'EQUIP_ITEM', itemId: 'iron_axe#1' }, T0);
+    expect(woodcuttingStrength(s).value).toBe(100);
+    return apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
+  };
+  const birchMs = 290 * SEC; // 5:00 − 10 s (DEX 10)
+
+  it('unequipping the axe stops it with ACTIVITY_STOPPED, after banking the logs already cut', () => {
+    const s = birchWithIronAxe();
+    const at = T0 + 2 * birchMs + MIN;
+    const r = applyCommand(s, cmd({ type: 'UNEQUIP_ITEM', slot: 'axe' }), at);
+    if (!r.ok) throw new Error(r.error.message);
+    expect(r.state.activity).toBeNull();
+    expect(r.events).toContainEqual({ type: 'ACTIVITY_STOPPED', kind: 'woodcutting' });
+    expect(qty(r.state, 'birch_logs')).toBe(2);
+    expect(r.state.inventory.items.some((i) => i.id === 'iron_axe#1')).toBe(true);
+  });
+
+  it('swapping to a weaker axe stops it too', () => {
+    const s = birchWithIronAxe();
+    const r = applyCommand(s, cmd({ type: 'EQUIP_ITEM', itemId: 'start-wooden_axe' }), T0 + MIN);
+    if (!r.ok) throw new Error(r.error.message);
+    expect(r.state.character.equipment.axe?.id).toBe('start-wooden_axe');
+    expect(r.state.activity).toBeNull();
+    expect(r.events).toContainEqual({ type: 'ACTIVITY_STOPPED', kind: 'woodcutting' });
+  });
+
+  it('staying at or above the requirement keeps it running, progress kept', () => {
+    // WC 9 + STR 10 + Wooden Axe 1 = 101; without the axe 100, still enough for Birch.
+    let s = newGame(1, T0);
+    s.character.skills.woodcutting = { ...s.character.skills.woodcutting, level: 9 };
+    s = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
+    const r = applyCommand(s, cmd({ type: 'UNEQUIP_ITEM', slot: 'axe' }), T0 + MIN);
+    if (!r.ok) throw new Error(r.error.message);
+    expect(r.state.activity).toMatchObject({ kind: 'woodcutting', treeId: 'birch', progressMs: MIN });
+    expect(r.events.some((e) => e.type === 'ACTIVITY_STOPPED')).toBe(false);
+    // Other activities are never stopped by an equipment change.
+    const d = apply(newGame(1, T0), { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0);
+    expect(apply(d, { type: 'UNEQUIP_ITEM', slot: 'axe' }, T0 + MIN).activity?.kind).toBe('dungeon');
+  });
+});
+
 describe('USE_ITEM', () => {
   const withPotions = (hp: number, n = 2) => {
     let s = richHero();
@@ -436,7 +493,7 @@ describe('frozen v7 save (tests/fixtures/save-v7.json) → v8', () => {
     const s = loadSave(V7_SAVE);
     expect(V7_SAVE).toEqual(frozen);
     expect(s.saveVersion).toBe(8);
-    expect(s.merchant).toEqual({ charges: 5, chargeProgressMs: 0, stock: rollStock(20) });
+    expect(s.merchant).toEqual({ charges: 5, chargeProgressMs: 0, stock: FROZEN_V8_STOCK });
     expect(s.nextItemSerial).toBe(1);
     expect(s.activity).toEqual(V7_SAVE.activity);
     expect(qty(s, 'oak_logs')).toBe(123);

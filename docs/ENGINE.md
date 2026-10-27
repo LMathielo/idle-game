@@ -196,6 +196,8 @@ Every buyable item sells for less than it costs (tested), so no buy→sell loop 
 | `USE_ITEM {itemId}` | potions: hp = min(max, hp + heal), −1 unit; at max the regen remainder is cleared | `NOT_IN_INVENTORY`, `NOT_USABLE`, `HP_FULL` |
 | `DEBUG_ADD_MERCHANT_CHARGE` | +1 charge, sets `debugUsed` | `CHARGES_FULL`, `DEBUG_DISABLED` |
 
+**Woodcutting stop rule:** after `EQUIP_ITEM` / `UNEQUIP_ITEM`, if woodcutting runs and WS is now below the tree's `reqWs`, the activity stops (`ACTIVITY_STOPPED`). Logs finished before the command are already banked (the command simulates to `now` first); the log in progress is dropped like any stop. WS cannot drop anywhere else (an equipped item can't be sold; STR only goes up), so `simulate()` needs no check.
+
 `BUY_ITEM` carries `defId` as well as `maxUnitPrice`, so a tap on a stale screen never buys a different item than the one shown. Derived stats, woodcutting strength and run times read the equipment, so they follow every equip/unequip at once.
 
 ## Stamina

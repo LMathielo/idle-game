@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type GameState, getDerivedStats, hashState, newGame, newTrainingState, rollStock } from '../src/engine';
+import { type GameState, getDerivedStats, hashState, newGame, newTrainingState } from '../src/engine';
 import { CURRENT_SAVE_VERSION, loadSave, migrateDoc, type Migration, MIGRATIONS, SaveVersionError } from '../src/engine/migrations';
 import { T0 } from './helpers';
 
@@ -187,15 +187,19 @@ describe('save migrations', () => {
         null,
       ],
     });
-    // The frozen stock is exactly what a refresh rolls today.
-    expect(v8.merchant.stock).toEqual(rollStock(6));
     expect(v8.nextItemSerial).toBe(1);
     expect(v8.character.gold).toBe(77);
     expect(v8.character.equipment.axe).toEqual({ id: 'start-wooden_axe', defId: 'wooden_axe', name: 'Wooden Axe', icon: '🪓', slot: 'axe' });
     expect(v8.inventory).toEqual({ capacity: 6, items: [{ id: 'bird_nest', defId: 'bird_nest', name: 'Bird Nest', icon: '🪺', stackable: true, quantity: 2 }] });
     // Broken or missing parts: default capacity 20, nothing else invented.
     const bare = MIGRATIONS[7]({ saveVersion: 7 }) as unknown as GameState;
-    expect(bare.merchant.stock).toHaveLength(20);
+    expect(bare.merchant.stock).toEqual([
+      { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
+      { defId: 'iron_axe', quantity: 1, unitPrice: 600 },
+      { defId: 'iron_sword', quantity: 1, unitPrice: 500 },
+      { defId: 'iron_helm', quantity: 1, unitPrice: 400 },
+      ...Array.from({ length: 16 }, () => null),
+    ]);
     expect(bare.inventory.items).toEqual([]);
   });
 

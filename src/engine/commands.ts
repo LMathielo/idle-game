@@ -410,11 +410,13 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
     case 'EQUIP_ITEM': {
       const e = equipItem(draft, cmd.itemId);
       if (e) return fail(e.code, e.message);
+      stopWoodcuttingIfTooWeak(draft, events);
       break;
     }
     case 'UNEQUIP_ITEM': {
       const e = unequipItem(draft, cmd.slot);
       if (e) return fail(e.code, e.message);
+      stopWoodcuttingIfTooWeak(draft, events);
       break;
     }
     case 'USE_ITEM': {
@@ -460,6 +462,17 @@ function stopActivity(draft: GameState, events: GameEvent[]) {
   if (a.kind === 'dungeon') events.push({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: a.dungeonId });
   events.push({ type: 'ACTIVITY_STOPPED', kind: a.kind });
   draft.activity = null;
+}
+
+/**
+ * Product rule (2026-10-27): woodcutting stops when an equipment change drops woodcutting strength below the
+ * current tree's requirement. Logs finished before the command are already banked (applyCommand simulated to
+ * `now` first); the log in progress is dropped like any stop. Only equipment changes WS in a command (selling
+ * an equipped item is refused; STR only goes up), so EQUIP_ITEM and UNEQUIP_ITEM call this.
+ */
+function stopWoodcuttingIfTooWeak(draft: GameState, events: GameEvent[]) {
+  const a = draft.activity;
+  if (a?.kind === 'woodcutting' && !treeCheck(draft, a.treeId).wsOk) stopActivity(draft, events);
 }
 
 /** Resolves the current run's fight at the current HP (draft is a full copy), then starts the next run. */

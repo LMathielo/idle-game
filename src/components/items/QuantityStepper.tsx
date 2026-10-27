@@ -1,6 +1,6 @@
 // Quantity picker shared by Buy and Sell: Min / −10 / −1 / value / +1 / +10 / Max, clamped to [1, max].
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { type AccessibilityActionEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts } from '../../theme';
 
 type Props = { value: number; max: number; onChange: (n: number) => void };
@@ -15,10 +15,24 @@ const STEPS = [
   { label: 'Max', to: (_v: number, max: number) => max },
 ] as const;
 
+const ACTIONS = [{ name: 'increment' }, { name: 'decrement' }] as const;
+
 export const QuantityStepper = memo(function QuantityStepper({ value, max, onChange }: Props) {
   const clamp = (n: number) => Math.max(1, Math.min(max, n));
+  const onAction = (e: AccessibilityActionEvent) => {
+    if (e.nativeEvent.actionName === 'increment') onChange(clamp(value + 1));
+    else if (e.nativeEvent.actionName === 'decrement') onChange(clamp(value - 1));
+  };
   return (
-    <View style={styles.row} accessibilityRole="adjustable" accessibilityLabel={`Quantity ${value} of ${max}`}>
+    <View
+      style={styles.row}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel="Quantity"
+      accessibilityValue={{ min: 1, max: Math.max(1, max), now: value }}
+      accessibilityActions={ACTIONS}
+      onAccessibilityAction={onAction}
+    >
       {STEPS.map((step, i) => {
         if (!step) {
           return (
