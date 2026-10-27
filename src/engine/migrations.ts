@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 8 as const;
+export const CURRENT_SAVE_VERSION = 9 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -18,6 +18,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   5: migrateV5toV6,
   6: migrateV6toV7,
   7: migrateV7toV8,
+  8: migrateV8toV9,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -198,6 +199,81 @@ function migrateV7toV8(doc: SaveDoc): SaveDoc {
     nextItemSerial: 1,
     character: { ...character, equipment },
     inventory: { ...inventory, items },
+  };
+}
+
+// ---- v8 → v9 (2026-10-27): live combat, hero XP curve base 1500 → 100 ----
+// Frozen literals: the v9 hero curve (base 100, L × √L, growth segments) and the v8 fight timing (one strike
+// per side per second, so v8 round n landed at n × 1000 ms; 50 rounds). A later change to config/xpCurve.ts
+// or config/dungeons.ts cannot change what this migration produces.
+const V9_HERO_XP_BASE = 100;
+const V9_HERO_XP_SEGMENTS: readonly { fromLevel: number; growth: number }[] = [
+  { fromLevel: 1, growth: 1.0 },
+  { fromLevel: 20, growth: 1.05 },
+  { fromLevel: 40, growth: 1.07 },
+  { fromLevel: 100, growth: 1.18 },
+];
+const V8_MS_PER_ROUND = 1000;
+
+/** xpToNext(level) on the v9 hero curve: round(100 × L × √L × Π growth(l < L)), clamped to MAX_SAFE_INTEGER. */
+function v9HeroXpToNext(level: number): number {
+  let multiplier = 1;
+  for (let l = 1; l < level; l++) {
+    let growth = 1;
+    for (const seg of V9_HERO_XP_SEGMENTS) if (l >= seg.fromLevel) growth = seg.growth;
+    multiplier *= growth;
+  }
+  const raw = Math.round(V9_HERO_XP_BASE * level * Math.sqrt(level) * multiplier);
+  return Number.isFinite(raw) && raw < Number.MAX_SAFE_INTEGER ? raw : Number.MAX_SAFE_INTEGER;
+}
+
+/** v8 fight log entry {round, actor, roll, dealt, targetHpAfter} → v9 {atMs, actor, strike, roll, dealt, targetHpAfter}. */
+function v9LogEntry(entry: unknown): unknown {
+  if (!isDoc(entry)) return entry;
+  const { round, ...rest } = entry;
+  const n = count(round);
+  return { atMs: n * V8_MS_PER_ROUND, actor: rest.actor, strike: n, roll: rest.roll, dealt: rest.dealt, targetHpAfter: rest.targetHpAfter };
+}
+
+/** The v8 last fight in v9 terms: same strikes, timed as they were (1 s per round); `round_cap` is `time_limit`. */
+function v9LastFight(fight: unknown): unknown {
+  if (!isDoc(fight)) return null;
+  const { rounds, log, endReason, ...rest } = fight;
+  return {
+    ...rest,
+    endReason: endReason === 'round_cap' ? 'time_limit' : endReason,
+    durationMs: count(rounds) * V8_MS_PER_ROUND,
+    log: Array.isArray(log) ? log.map(v9LogEntry) : [],
+  };
+}
+
+/**
+ * - hero XP: the level is kept; XP is clamped into progress toward the next level on the new curve
+ *   (xp = min(xp, xpToNext − 1)), and xpToNext is the new curve's value at that level. Nobody loses a level;
+ *   XP beyond the new requirement is dropped (it would have levelled the hero up under the new curve).
+ * - a dungeon run in progress becomes its SEARCH phase with the time already banked kept (`progressMs`), no fight.
+ *   When the kept time already covers the new, shorter search, the fight starts on the next simulate.
+ * - the last fight's log gets each strike's time (round n → n × 1000 ms) and number; `rounds` → `durationMs`;
+ *   `round_cap` → `time_limit`.
+ */
+function migrateV8toV9(doc: SaveDoc): SaveDoc {
+  const character = isDoc(doc.character) ? doc.character : {};
+  const lv = character.level;
+  const level = typeof lv === 'number' && Number.isSafeInteger(lv) && lv >= 1 ? lv : 1;
+  const xpToNext = v9HeroXpToNext(level);
+  const xp = Math.min(count(character.xp), xpToNext - 1);
+
+  const activity = isDoc(doc.activity) && doc.activity.kind === 'dungeon' ? { ...doc.activity, phase: 'search', fight: null } : doc.activity;
+
+  const dungeon = isDoc(doc.dungeon) ? doc.dungeon : {};
+  const lastFight = v9LastFight(dungeon.lastFight);
+
+  return {
+    ...doc,
+    saveVersion: 9,
+    activity,
+    character: { ...character, level, xp, xpToNext },
+    dungeon: { ...dungeon, lastFight },
   };
 }
 

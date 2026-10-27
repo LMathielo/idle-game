@@ -19,8 +19,11 @@ const SEGMENTS: readonly GrowthSegment[] = [
   { fromLevel: 100, growth: 1.18 },
 ];
 
-/** Hero: ~2 days of play to Lv20, more than a year to Lv100. No level cap. */
-export const HERO_XP_CURVE: XpCurveConfig = { base: 1500, power: 1.5, segments: SEGMENTS };
+/**
+ * Hero. Base 100 since engine 1.8.0 (was 1500): Lv5 needs 1,703 XP, about 49 Rat Cellar wins, so a new player
+ * gets there in the first minutes with the 100 starting stamina. No level cap.
+ */
+export const HERO_XP_CURVE: XpCurveConfig = { base: 100, power: 1.5, segments: SEGMENTS };
 
 /** Woodcutting and every other skill. */
 export const SKILL_XP_CURVE: XpCurveConfig = { base: 500, power: 1.5, segments: SEGMENTS };

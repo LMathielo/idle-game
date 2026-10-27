@@ -7,7 +7,7 @@ import { SKILL_XP_CURVE } from './config/xpCurve';
 import { xpToNext } from './progression';
 import { DEV_TOOLS_ENABLED } from './config/dev';
 import { DUNGEONS, isDungeonId } from './config/dungeons';
-import { completeRun, isDungeonUnlocked, recordDungeonResults, runMsFor, skipCost } from './dungeon';
+import { beginFight, forfeitFight, isDungeonUnlocked, recordDungeonResults, searchMsFor, skipCost } from './dungeon';
 import { equipItem, unequipItem, useItem } from './equipment';
 import { markDebugUsed } from './flags';
 import { addMerchantCharge, buyItem, type ItemError, type ItemErrorCode, refreshMerchant, sellItem } from './merchant';
@@ -44,9 +44,10 @@ export type Command =
   /** Stops the activity. A dungeon run in progress is lost and gives nothing; training keeps its XP (a pause). */
   | { id: string; type: 'STOP_ACTIVITY' }
   /**
-   * Spends ceil(remaining minutes) stamina to resolve the current run's fight now. Auto-repeat continues.
-   * `run` is the run the player saw (DungeonRunView.run) and `maxCost` the cost the button showed: if that
-   * run already finished, or the real cost is higher, the skip fails with RUN_CHANGED and nothing changes.
+   * Spends ceil(remaining minutes) stamina to end the current run's SEARCH now: the fight starts at once and
+   * plays live (it is never skipped; refused with FIGHT_IN_PROGRESS during the fight). No HP regen for the
+   * skipped time. `run` is the run the player saw (DungeonRunView.run) and `maxCost` the cost the button showed:
+   * if that run already finished, or the real cost is higher, the skip fails with RUN_CHANGED and nothing changes.
    */
   | { id: string; type: 'SKIP_DUNGEON_RUN'; run: number; maxCost: number }
   /**
@@ -66,7 +67,7 @@ export type Command =
   | { id: string; type: 'DEBUG_SET_HERO_HP'; hp: number }
   /** Adds wins (and runs) to an unlocked dungeon's lifetime counters, so unlocks can be tested on a phone. */
   | { id: string; type: 'DEBUG_ADD_DUNGEON_WINS'; dungeonId: DungeonId; amount: number }
-  /** Resolves the current run's fight now, for free. */
+  /** Ends the current run's search now, for free: the fight starts at once (refused during the fight). */
   | { id: string; type: 'DEBUG_FINISH_DUNGEON_RUN' }
   | { id: string; type: 'DEBUG_GRANT_HERO_XP'; amount: number }
   | { id: string; type: 'DEBUG_SPEND_STAMINA'; amount: number }
@@ -109,6 +110,7 @@ export type CommandErrorCode =
   | 'NO_ACTIVE_ACTIVITY'
   | 'NO_DUNGEON_RUN'
   | 'RUN_CHANGED'
+  | 'FIGHT_IN_PROGRESS'
   | 'INVALID_AMOUNT'
   | 'UNKNOWN_ATTRIBUTE'
   | 'NOT_ENOUGH_STAMINA'
@@ -197,7 +199,7 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
         if (!isDungeonUnlocked(draft, cmd.dungeonId)) return fail('DUNGEON_LOCKED', `${DUNGEONS[cmd.dungeonId].name} is locked`);
         // Already running this dungeon: keep the current run.
         if (draft.activity?.kind === 'dungeon' && draft.activity.dungeonId === cmd.dungeonId) break;
-        next = { kind: 'dungeon', dungeonId: cmd.dungeonId, startedAt: now, progressMs: 0 };
+        next = { kind: 'dungeon', dungeonId: cmd.dungeonId, startedAt: now, phase: 'search', progressMs: 0, fight: null };
       } else {
         if (!isGatheringKind(cmd.kind)) return fail('UNKNOWN_ACTIVITY', `Unknown activity ${String(cmd.kind)}`);
         const { treeId } = cmd;
@@ -252,13 +254,14 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       if (typeof run !== 'number' || !Number.isSafeInteger(run) || run <= 0) return fail('INVALID_COMMAND', `Invalid run ${String(run)}`);
       // The run the player saw finished (simulating to now, or earlier): never resolve the next one instead.
       if (run !== draft.dungeon.totals.runs + 1) return fail('RUN_CHANGED', 'That run already finished');
-      const remainingMs = Math.max(0, runMsFor(a.dungeonId, effectiveAttributes(draft)) - a.progressMs);
+      if (a.phase === 'fight') return fail('FIGHT_IN_PROGRESS', 'The fight has started: it plays out live and cannot be skipped');
+      const remainingMs = Math.max(0, searchMsFor(a.dungeonId, effectiveAttributes(draft)) - a.progressMs);
       const cost = skipCost(remainingMs);
       if (cost > maxCost) return fail('RUN_CHANGED', `Skipping now costs ${cost}, more than the ${maxCost} shown`);
       const spent = spendStamina(draft, cost);
       if (!spent.ok) return fail(spent.error.code, spent.error.message);
       draft = spent.state;
-      finishRunNow(draft, a.dungeonId, events);
+      startFightNow(draft, events);
       break;
     }
     case 'SKIP_WOODCUT': {
@@ -344,8 +347,9 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
       const a = draft.activity;
       if (a?.kind !== 'dungeon') return fail('NO_DUNGEON_RUN', 'No dungeon run in progress');
+      if (a.phase === 'fight') return fail('FIGHT_IN_PROGRESS', 'The fight has started: it plays out live');
       draft = markDebugUsed(draft);
-      finishRunNow(draft, a.dungeonId, events);
+      startFightNow(draft, events);
       break;
     }
     case 'DEBUG_GRANT_HERO_XP': {
@@ -455,11 +459,16 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
   return { ok: true, state: draft, events, summary: sim.summary };
 }
 
-/** Stops the running activity on a full draft copy. A dungeon run in progress is lost: no fight, no rewards. */
+/**
+ * Stops the running activity on a full draft copy. A dungeon run still searching is lost (no fight, no rewards);
+ * a dungeon fight in progress is forfeited (a loss: 0 HP, no rewards, counted).
+ */
 function stopActivity(draft: GameState, events: GameEvent[]) {
   const a = draft.activity;
   if (!a) return;
-  if (a.kind === 'dungeon') events.push({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: a.dungeonId });
+  // During the fight, leaving is a forfeit: the fight ends as a loss (FIGHT_RESOLVED). During the search, the run
+  // is just cancelled.
+  if (a.kind === 'dungeon' && !forfeitFight(draft, events)) events.push({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: a.dungeonId });
   events.push({ type: 'ACTIVITY_STOPPED', kind: a.kind });
   draft.activity = null;
 }
@@ -475,8 +484,10 @@ function stopWoodcuttingIfTooWeak(draft: GameState, events: GameEvent[]) {
   if (a?.kind === 'woodcutting' && !treeCheck(draft, a.treeId).wsOk) stopActivity(draft, events);
 }
 
-/** Resolves the current run's fight at the current HP (draft is a full copy), then starts the next run. */
-function finishRunNow(draft: GameState, dungeonId: DungeonId, events: GameEvent[]) {
-  completeRun(draft, dungeonId, null, events);
-  if (draft.activity?.kind === 'dungeon') draft.activity.progressMs = 0;
+/**
+ * Ends the current search now (draft is a full copy): the fight starts at the current HP and plays live from
+ * this moment. At 0 HP it is an immediate loss and the next search starts.
+ */
+function startFightNow(draft: GameState, events: GameEvent[]) {
+  if (draft.activity?.kind === 'dungeon') beginFight(draft, draft.activity, null, events);
 }

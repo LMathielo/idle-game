@@ -60,7 +60,8 @@ export function WoodcuttingModal() {
     (treeId: TreeId, name: string) => {
       const go = () => send({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId });
       // One activity at a time: woodcutting would end the dungeon run in progress, so ask first.
-      if (client.getState().activity?.kind === 'dungeon') confirmCancelRun(`Cut ${name}`, go);
+      const a = client.getState().activity;
+      if (a?.kind === 'dungeon') confirmCancelRun(`Cut ${name}`, go, a.phase === 'fight');
       else go();
     },
     [client, send],

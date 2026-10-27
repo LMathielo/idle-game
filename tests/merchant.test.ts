@@ -18,6 +18,8 @@ import {
   loadSave,
   maxBuyable,
   MERCHANT,
+  migrateDoc,
+  MIGRATIONS,
   merchantView,
   type MigratePayload,
   newGame,
@@ -490,7 +492,7 @@ describe('frozen v7 save (tests/fixtures/save-v7.json) → v8', () => {
 
   it('migrates: 5/5 charges, fresh first 4 slots, everything else kept (minus the instance rarity); pure', () => {
     const frozen = JSON.parse(JSON.stringify(V7_SAVE));
-    const s = loadSave(V7_SAVE);
+    const s = migrateDoc(V7_SAVE, MIGRATIONS, 8) as unknown as GameState; // the v7 → v8 step only (v9 has its own test)
     expect(V7_SAVE).toEqual(frozen);
     expect(s.saveVersion).toBe(8);
     expect(s.merchant).toEqual({ charges: 5, chargeProgressMs: 0, stock: FROZEN_V8_STOCK });
@@ -506,7 +508,8 @@ describe('frozen v7 save (tests/fixtures/save-v7.json) → v8', () => {
     const { saveVersion: _rv, character: rawCharacter, inventory: _ri, ...rawRest } = V7_SAVE;
     expect(rest).toEqual(rawRest);
     expect({ ...character, equipment: undefined }).toEqual({ ...rawCharacter, equipment: undefined });
-    expect(hashState(loadSave(V7_SAVE))).toBe(hashState(s));
+    expect(hashState(migrateDoc(V7_SAVE, MIGRATIONS, 8) as unknown as GameState)).toBe(hashState(s));
+    expect(loadSave(V7_SAVE).saveVersion).toBe(CURRENT_SAVE_VERSION); // and on through v9
   });
 
   it('loading writes a MIGRATE anchor (save 7 → 8, engine 1.6.0 → 1.7.0), trades work, and the whole log replays', async () => {

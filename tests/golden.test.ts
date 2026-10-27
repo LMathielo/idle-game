@@ -32,6 +32,13 @@
 // the dropped `rarity`. The script gained a 1.7.0 segment: debug gold, buy 3 potions and the Iron Axe, equip it
 // (the Wooden Axe returns), HP debug + potion, sell logs and the Wooden Axe, refresh, 5 h of charge regen,
 // debug charge, and a buy while woodcutting runs.
+// 1.7.0 → 1.8.0 (2026-10-27): save v9 (live combat: a run is a search, then a fight that plays out in engine
+// time; hero XP curve base 100; Rat XP 35; searches 2/3/5/8/12 min). Outcomes changed on purpose, so every pin
+// was re-pinned. The script's first skip now names the run and cost on screen mid-search (the old fixed
+// `run: 1, maxCost: 3` two minutes in would land after the 1:50 search), and the debug XP grant is 16k instead
+// of 250k so the hero stays around Lv11 on the new curve. The script gained a 1.8.0 segment: Rat
+// Cellar (cancels the Birch log), a search skip, a simulate boundary mid-fight, a debug HP change mid-fight, then
+// 1 h of search + fight runs.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -39,6 +46,7 @@ import {
   applyCommand,
   type Command,
   CURRENT_SAVE_VERSION,
+  dungeonRunView,
   ENGINE_VERSION,
   type GameState,
   getDerivedStats,
@@ -58,6 +66,14 @@ import { HOUR, MIN, SEC, T0 } from './helpers';
 const B = T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC;
 /** End of the 1.6.0 script; the 1.7.0 segment starts here. */
 const C = B + 7 * SEC + 3 * HOUR + 30 * MIN;
+/** End of the 1.7.0 script; the 1.8.0 segment starts here. */
+const D = C + 15 * SEC + 6 * HOUR;
+
+/** The search skip the UI would send for the run on screen. */
+const skipShown = (id: string) => (s: GameState): Command => {
+  const v = dungeonRunView(s)!;
+  return { id, type: 'SKIP_DUNGEON_RUN', run: v.run, maxCost: v.skipCost! };
+};
 
 type Step = { at: number; cmd?: Command | ((s: GameState) => Command) };
 
@@ -65,7 +81,7 @@ const SCRIPT: Step[] = [
   { at: T0 + SEC, cmd: { id: 'g1', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } },
   { at: T0 + 37 * MIN },
   { at: T0 + 5 * HOUR },
-  { at: T0 + 5 * HOUR + 3 * SEC, cmd: { id: 'g2', type: 'DEBUG_GRANT_HERO_XP', amount: 250_000 } },
+  { at: T0 + 5 * HOUR + 3 * SEC, cmd: { id: 'g2', type: 'DEBUG_GRANT_HERO_XP', amount: 16_000 } }, // 1.8.0: was 250k on the base-1500 curve; ~Lv11 either way
   { at: T0 + 5 * HOUR + 4 * SEC, cmd: { id: 'g4', type: 'DEBUG_SPEND_STAMINA', amount: 30 } },
   { at: T0 + 5 * HOUR + 5 * SEC, cmd: { id: 'g5', type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'strength', amount: 3 } },
   { at: T0 + 30 * HOUR }, // forward_capped (stamina refills: not bound by the 8h cap)
@@ -74,7 +90,7 @@ const SCRIPT: Step[] = [
   { at: T0 + 31 * HOUR, cmd: { id: 'g3', type: 'STOP_ACTIVITY' } }, // 1h past highestSeenAt: +12
   { at: T0 + 31 * HOUR + 123 * SEC }, // remainder banked
   { at: T0 + 31 * HOUR + 200 * SEC, cmd: { id: 'd1', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } },
-  { at: T0 + 31 * HOUR + 320 * SEC, cmd: { id: 'd2', type: 'SKIP_DUNGEON_RUN', run: 1, maxCost: 3 } }, // 2:50 left → 3 stamina
+  { at: T0 + 31 * HOUR + 260 * SEC, cmd: skipShown('d2') }, // 0:50 of the search left → 1 stamina; the fight plays live
   { at: T0 + 31 * HOUR + 330 * SEC, cmd: { id: 'd3', type: 'DEBUG_SET_HERO_HP', hp: 1 } },
   { at: T0 + 34 * HOUR + 330 * SEC }, // 3h of runs, HP regen interleaved
   { at: T0 + 34 * HOUR + 400 * SEC, cmd: { id: 'd4', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } }, // run lost
@@ -131,7 +147,13 @@ const SCRIPT: Step[] = [
   { at: C + 13 * SEC + 5 * HOUR, cmd: { id: 'm13', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' } },
   { at: C + 14 * SEC + 5 * HOUR, cmd: { id: 'm14', type: 'BUY_ITEM', slot: 3, defId: 'iron_helm', quantity: 1, maxUnitPrice: 400 } },
   { at: C + 15 * SEC + 5 * HOUR, cmd: { id: 'm15', type: 'EQUIP_ITEM', itemId: 'iron_helm#2' } },
-  { at: C + 15 * SEC + 6 * HOUR }, // 1 h of Birch
+  { at: D }, // 1 h of Birch
+  // 1.8.0: live combat. Rat Cellar cancels the Birch log; skip the search; a simulate boundary mid-fight.
+  { at: D + 1 * SEC, cmd: { id: 'l1', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } },
+  { at: D + 31 * SEC, cmd: skipShown('l2') }, // 1:20 left → 2 stamina
+  { at: D + 31 * SEC + 1500 }, // mid-fight: the first strikes have landed
+  { at: D + 31 * SEC + 1600, cmd: { id: 'l3', type: 'DEBUG_SET_HERO_HP', hp: 30 } }, // mid-fight HP change
+  { at: D + 31 * SEC + HOUR }, // 1 h of search + fight runs
 ];
 
 function runScript(steps: Step[] = SCRIPT) {
@@ -177,12 +199,13 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.5.0', 6],
       ['1.6.0', 7],
       ['1.7.0', 8],
+      ['1.8.0', 9],
     ]);
   });
 });
 
 describe('golden', () => {
-  it('the 1.3.0 part of the script (re-pinned in 1.6.0: the woodcutting segment now cuts Oak)', () => {
+  it('the 1.3.0 part of the script (re-pinned in 1.6.0 for Oak and in 1.8.0 for live combat)', () => {
     const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 't1')));
     expect({
       heroLevel: s.character.level,
@@ -191,22 +214,22 @@ describe('golden', () => {
       hp: [s.character.hp, s.character.hpRegenProgress],
       gold: s.character.gold,
       dungeon: s.dungeon.totals,
-      lastFightRounds: s.dungeon.lastFight?.rounds,
+      lastFightMs: s.dungeon.lastFight?.durationMs,
     }).toMatchInlineSnapshot(`
       {
         "actions": 458,
         "dungeon": {
           "losses": 0,
-          "runs": 38,
-          "wins": 38,
+          "runs": 98,
+          "wins": 98,
         },
-        "gold": 158,
-        "heroLevel": 11,
+        "gold": 368,
+        "heroLevel": 12,
         "hp": [
-          150,
+          160,
           0,
         ],
-        "lastFightRounds": 2,
+        "lastFightMs": 2000,
         "stamina": {
           "current": 100,
           "max": 100,
@@ -219,7 +242,7 @@ describe('golden', () => {
     expect(locked).toEqual({ ok: false, error: expect.objectContaining({ code: 'DUNGEON_LOCKED' }) });
   });
 
-  it('the 1.4.0 script (re-pinned in 1.6.0)', () => {
+  it('the 1.4.0 script (re-pinned in 1.6.0 and 1.8.0)', () => {
     const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'r1')));
     expect({
       actions: s.stats.totalActions,
@@ -228,7 +251,7 @@ describe('golden', () => {
       gold: s.character.gold,
       heroLevel: s.character.level,
       hp: [s.character.hp, s.character.hpRegenProgress],
-      lastFightRounds: s.dungeon.lastFight?.rounds,
+      lastFightMs: s.dungeon.lastFight?.durationMs,
       nests: s.stats.itemsGathered.bird_nest,
       stamina: s.stamina,
       strength: s.character.attributes.strength,
@@ -236,26 +259,26 @@ describe('golden', () => {
     }).toMatchInlineSnapshot(`
       {
         "actions": 458,
-        "batWings": 9,
+        "batWings": 12,
         "byDungeon": {
           "bat_cave": {
             "losses": 0,
-            "runs": 27,
-            "wins": 27,
+            "runs": 51,
+            "wins": 51,
           },
           "rat_cellar": {
             "losses": 0,
-            "runs": 38,
-            "wins": 38,
+            "runs": 98,
+            "wins": 98,
           },
         },
-        "gold": 295,
-        "heroLevel": 11,
+        "gold": 738,
+        "heroLevel": 12,
         "hp": [
-          150,
-          0,
+          141,
+          30000,
         ],
-        "lastFightRounds": 5,
+        "lastFightMs": 5000,
         "nests": undefined,
         "stamina": {
           "current": 100,
@@ -269,7 +292,7 @@ describe('golden', () => {
     expect(s.training).toEqual(newTrainingState());
   });
 
-  it('the 1.6.0 script (unchanged in 1.7.0)', () => {
+  it('the 1.6.0 script (unchanged in 1.7.0, re-pinned in 1.8.0)', () => {
     const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'm1')));
     expect(s.time.lastSimulatedAt).toBe(C);
     expect({
@@ -287,13 +310,13 @@ describe('golden', () => {
     }).toEqual({
       actions: 515,
       activity: 'training',
-      gold: 438,
-      hp: [150, 0],
-      heroLevel: 11,
+      gold: 947,
+      hp: [170, 0],
+      heroLevel: 13,
       stamina: { current: 91, max: 100, progressMs: 1000 },
       woodcutting: expect.objectContaining({ level: 9, xp: 6619 }),
       logs: { oak_logs: 491, birch_logs: 24 },
-      dungeon: expect.objectContaining({ totals: { runs: 77, wins: 77, losses: 0 } }),
+      dungeon: expect.objectContaining({ totals: { runs: 181, wins: 181, losses: 0 } }),
       training: expect.objectContaining({ tier: 2 }),
       rng: expect.anything(),
     });
@@ -315,7 +338,7 @@ describe('golden', () => {
       gold: s.character.gold,
       dungeon: s.dungeon.totals,
       byDungeon: s.dungeon.byDungeon,
-      lastFightRounds: s.dungeon.lastFight?.rounds,
+      lastFightMs: s.dungeon.lastFight?.durationMs,
       batWings: s.inventory.items.find((i) => i.defId === 'bat_wing')?.quantity,
       training: s.training,
       activity: s.activity?.kind ?? null,
@@ -330,43 +353,43 @@ describe('golden', () => {
     }).toMatchInlineSnapshot(`
       {
         "actions": 527,
-        "activity": "woodcutting",
+        "activity": "dungeon",
         "axe": "iron_axe",
-        "batWings": 9,
+        "batWings": 12,
         "byDungeon": {
           "bat_cave": {
             "losses": 0,
-            "runs": 27,
-            "wins": 27,
+            "runs": 51,
+            "wins": 51,
           },
           "rat_cellar": {
             "losses": 0,
-            "runs": 50,
-            "wins": 50,
+            "runs": 163,
+            "wins": 163,
           },
         },
         "dungeon": {
           "losses": 0,
-          "runs": 77,
-          "wins": 77,
+          "runs": 214,
+          "wins": 214,
         },
-        "engineVersion": "1.7.0",
-        "gold": 503,
-        "hash": "0f4f5dec",
+        "engineVersion": "1.8.0",
+        "gold": 1128,
+        "hash": "5fe43fcb",
         "helmet": "iron_helm#2",
-        "heroLevel": 11,
+        "heroLevel": 13,
         "hp": [
-          150,
+          170,
           0,
         ],
-        "lastFightRounds": 2,
+        "lastFightMs": 2000,
         "logs": {
           "birch_logs": 36,
           "oak_logs": 391,
         },
         "merchant": {
-          "chargeProgressMs": 3605000,
-          "charges": 4,
+          "chargeProgressMs": 0,
+          "charges": 5,
           "stock": [
             {
               "defId": "health_potion_t1",
@@ -387,7 +410,7 @@ describe('golden', () => {
             null,
           ],
         },
-        "nests": undefined,
+        "nests": 1,
         "nextItemSerial": 3,
         "potions": 2,
         "stamina": {
@@ -453,7 +476,9 @@ describe('golden', () => {
     // Progress kept: level, XP, skills, woodcutting banked time, inventory, stats, rng, time, flags.
     expect(s.character.level).toBe(raw.character.level);
     expect(s.character.level).toBe(4);
-    expect(s.character.xp).toBe(raw.character.xp);
+    // v9: XP clamped into progress toward Lv5 on the base-100 curve (Lv4 needs 800).
+    expect(raw.character.xp).toBeGreaterThan(799);
+    expect([s.character.xp, s.character.xpToNext]).toEqual([799, 800]);
     expect(s.character.gold).toBe(raw.character.gold);
     expect(s.character.skills).toEqual(raw.character.skills);
     expect(s.character.skills.woodcutting.level).toBe(8);
@@ -510,7 +535,9 @@ describe('golden', () => {
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // deterministic
 
     // Everything from v3 survives as it was.
-    const { hp, hpRegenProgress, equipment: { axe, ...equipment }, ...character } = s.character;
+    const { hp, hpRegenProgress, xp, xpToNext, equipment: { axe, ...equipment }, ...character } = s.character;
+    // v9: Lv5 kept, XP clamped into progress toward Lv6 on the base-100 curve (Lv5 needs 1118).
+    expect([raw.character.xp, xp, xpToNext]).toEqual([4463, 1117, 1118]);
     // v8 dropped the per-instance `rarity` (quality is catalog-only).
     const noRarity = (i: Record<string, unknown>) => {
       const { rarity: _r, ...x } = i;
@@ -518,6 +545,8 @@ describe('golden', () => {
     };
     expect({ ...character, equipment }).toEqual({
       ...raw.character,
+      xp: undefined,
+      xpToNext: undefined,
       equipment: Object.fromEntries(Object.entries(raw.character.equipment).map(([k, v]) => [k, noRarity(v as Record<string, unknown>)])),
     });
     expect(axe?.defId).toBe('wooden_axe');
@@ -536,14 +565,15 @@ describe('golden', () => {
     expect(dungeon).toEqual({ lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {} });
     expect(s.activity?.kind).toBe('woodcutting');
 
-    // Plays on: Oak with DEX 15 cuts a log every 1:45, then a dungeon with DEX 15 runs 4:45.
+    // Plays on: Oak with DEX 15 cuts a log every 1:45, then a dungeon with DEX 15 searches 1:45 and fights.
     const next = simulate(s, s.time.lastSimulatedAt + MIN);
     expect(simulate(s, s.time.lastSimulatedAt + 105 * SEC).summary.actions).toBe(1);
     const at = s.time.lastSimulatedAt + MIN;
     const d = applyCommand(next.state, { id: 'v3-d', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, at);
     if (!d.ok) throw new Error(d.error.message);
-    expect(simulate(d.state, at + 285 * SEC - 1).state.dungeon.totals.runs).toBe(0);
-    const run = simulate(d.state, at + 285 * SEC).state;
+    expect(simulate(d.state, at + 105 * SEC - 1).state.activity).toMatchObject({ phase: 'search' });
+    expect(simulate(d.state, at + 105 * SEC).state.activity).toMatchObject({ phase: 'fight' });
+    const run = simulate(d.state, at + 105 * SEC + 60 * SEC).state;
     expect(run.dungeon.totals.runs).toBe(1);
     expect(run.dungeon.lastFight?.heroMaxHp).toBe(90);
   });

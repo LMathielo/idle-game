@@ -3,6 +3,7 @@
 //   damage / defense: final = round(base × (1 + Σ percent)) + flat from attributes
 //   maxHp   = hp.base   + hp.perLevel   × (level − 1)
 //   maxMana = mana.base + mana.perLevel × (level − 1)
+//   attackIntervalMs = max(attackInterval.minMs, attackInterval.baseMs + Σ gear attackIntervalModMs)
 //
 // Integer math only: percent bonuses are basis points and rounding is half-up on integers,
 // so the phone (Hermes) and a future server (V8) always agree.
@@ -16,7 +17,7 @@ export type PercentBonus = { source: string; bp: number };
 
 export type PercentBonuses = { damage: readonly PercentBonus[]; defense: readonly PercentBonus[] };
 
-export type StatSource = 'weapon' | 'unarmed' | 'armor' | 'percent' | 'strength' | 'endurance' | 'base' | 'level';
+export type StatSource = 'weapon' | 'unarmed' | 'armor' | 'percent' | 'strength' | 'endurance' | 'base' | 'level' | 'gear' | 'floor';
 
 /**
  * Extra detail on a breakdown line. `bonuses` is set on the 'percent' line only: the per-source bonuses
@@ -35,6 +36,8 @@ export type DerivedStats = {
   defense: { value: number; breakdown: ValuePart[] };
   maxHp: { value: number; breakdown: ValuePart[] };
   maxMana: { value: number; breakdown: ValuePart[] };
+  /** Time between two hero strikes in a fight (ms). Lower is faster. */
+  attackIntervalMs: { value: number; breakdown: ValuePart[] };
 };
 
 /**
@@ -45,6 +48,9 @@ export type StatsInput = { character: Pick<Character, 'level' | 'attributes' | '
 
 /** Fixed order so breakdowns are stable. */
 const SLOT_ORDER: readonly EquipmentSlot[] = ['weapon', 'shield', 'helmet', 'armor', 'gloves', 'boots', 'amulet', 'ring1', 'ring2'];
+
+/** Every slot, for stats any equipped item may carry (attack interval). Same order as SLOT_ORDER, then the axe. */
+const ALL_SLOTS_ORDER: readonly EquipmentSlot[] = [...SLOT_ORDER, 'axe'];
 
 /**
  * Percent bonuses that apply to this hero. None exist yet: future upgrades (buffs, item affixes,
@@ -110,6 +116,22 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
   const endFlat = attributes.endurance * STATS.defensePerEndurance;
   defenseParts.push({ source: 'endurance', value: endFlat });
 
+  // ---- attack interval ----
+  const intervalParts: ValuePart[] = [{ source: 'base', value: STATS.attackInterval.baseMs }];
+  let interval: number = STATS.attackInterval.baseMs;
+  for (const slot of ALL_SLOTS_ORDER) {
+    const item = equipment[slot];
+    if (!item) continue;
+    const mod = getItemDef(item.defId)?.attackIntervalModMs;
+    if (!mod || !Number.isSafeInteger(mod)) continue;
+    interval += mod;
+    intervalParts.push({ source: 'gear', value: mod, defId: item.defId, slot });
+  }
+  if (interval < STATS.attackInterval.minMs) {
+    intervalParts.push({ source: 'floor', value: STATS.attackInterval.minMs - interval });
+    interval = STATS.attackInterval.minMs;
+  }
+
   // ---- pools ----
   const levelsAbove1 = Math.max(0, level - 1);
   const hpFromLevel = STATS.hp.perLevel * levelsAbove1;
@@ -132,5 +154,6 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
         { source: 'level', value: manaFromLevel },
       ],
     },
+    attackIntervalMs: { value: interval, breakdown: intervalParts },
   };
 }

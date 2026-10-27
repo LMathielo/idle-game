@@ -2,7 +2,7 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useGameSnapshot } from '../client/GameProvider';
-import { activityView, DUNGEONS, hpView, itemQuantity, TREES } from '../engine';
+import { activityView, DUNGEONS, ENEMIES, hpView, itemQuantity, TREES } from '../engine';
 import { colors, fonts } from '../theme';
 import { ATTRIBUTE_NAMES, formatClock, formatNumber, formatTrainingLeft } from './format';
 import { LiveBar } from './LiveBar';
@@ -20,11 +20,28 @@ export function ActivityStrip() {
   if (view.kind === 'dungeon') {
     const dungeon = DUNGEONS[view.dungeonId];
     const hp = hpView(state);
+    const fight = view.fight;
+    if (fight) {
+      // Fight phase: the bar shows the enemy's HP lost (snapped on every engine tick, never animated ahead).
+      const enemy = ENEMIES[fight.enemyId];
+      const lost = fight.enemyMaxHp > 0 ? 1 - fight.enemyHp / fight.enemyMaxHp : 1;
+      return (
+        <StripView
+          title={`⚔️ ${dungeon.name} · ${enemy.name} ${formatNumber(fight.enemyHp)}/${formatNumber(fight.enemyMaxHp)}`}
+          right={`HP ${formatNumber(hp.hp)}/${formatNumber(hp.maxHp)}`}
+          a11y={`${dungeon.name}, fighting ${enemy.name}, ${enemy.name} HP ${fight.enemyHp} of ${fight.enemyMaxHp}, your HP ${hp.hp} of ${hp.maxHp}${clockPaused ? PAUSED_A11Y : ''}`}
+          fraction={lost}
+          remainingMs={0}
+          paused
+          color={colors.hp}
+        />
+      );
+    }
     return (
       <StripView
-        title={`${dungeon.icon} ${dungeon.name} · ${formatClock(view.remainingMs)}`}
+        title={`${dungeon.icon} ${dungeon.name} · searching ${formatClock(view.remainingMs)}`}
         right={`HP ${formatNumber(hp.hp)}/${formatNumber(hp.maxHp)}`}
-        a11y={`${dungeon.name} run, ${formatClock(view.remainingMs)} left, HP ${hp.hp} of ${hp.maxHp}${clockPaused ? PAUSED_A11Y : ''}`}
+        a11y={`${dungeon.name}, searching for an opponent, ${formatClock(view.remainingMs)} left, HP ${hp.hp} of ${hp.maxHp}${clockPaused ? PAUSED_A11Y : ''}`}
         fraction={view.fraction}
         remainingMs={view.remainingMs}
         paused={clockPaused}
