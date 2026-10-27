@@ -1,0 +1,130 @@
+[
+  {
+    "commandId": "v8fx-2",
+    "type": "NEW_GAME",
+    "payload": {
+      "seed": 3554416254
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.7.0",
+    "stateHash": "35faccff",
+    "seq": 1,
+    "synced": false
+  },
+  {
+    "commandId": "v8fx-3",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "dungeon",
+      "dungeonId": "rat_cellar",
+      "id": "v8fx-3"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.7.0",
+    "stateHash": "bb6b92e6",
+    "seq": 2,
+    "synced": false
+  },
+  {
+    "commandId": "v8fx-4",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 10800000,
+        "grantedMs": 10800000,
+        "actions": 0,
+        "itemsGained": {
+          "rat_skin": 20
+        },
+        "itemsLost": {},
+        "skillXpGained": {},
+        "skillLevelsGained": {},
+        "heroXpGained": 925,
+        "heroLevelsGained": 0,
+        "goldGained": 136,
+        "dungeon": {
+          "runs": 37,
+          "wins": 37,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [
+          "bat_cave"
+        ],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792940400000,
+    "engineVersion": "1.7.0",
+    "stateHash": "65a3333c",
+    "seq": 3,
+    "synced": false
+  },
+  {
+    "commandId": "v8fx-5",
+    "type": "DEBUG_GRANT_HERO_XP",
+    "payload": {
+      "type": "DEBUG_GRANT_HERO_XP",
+      "amount": 6000,
+      "id": "v8fx-5"
+    },
+    "clientTime": 1792940400000,
+    "engineVersion": "1.7.0",
+    "stateHash": "44e59b46",
+    "seq": 4,
+    "synced": false
+  },
+  {
+    "commandId": "v8fx-6",
+    "type": "BUY_ITEM",
+    "payload": {
+      "type": "BUY_ITEM",
+      "slot": 0,
+      "defId": "health_potion_t1",
+      "quantity": 2,
+      "maxUnitPrice": 12,
+      "id": "v8fx-6"
+    },
+    "clientTime": 1792940400000,
+    "engineVersion": "1.7.0",
+    "stateHash": "332118af",
+    "seq": 5,
+    "synced": false
+  },
+  {
+    "commandId": "v8fx-7",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 137000,
+        "grantedMs": 137000,
+        "actions": 0,
+        "itemsGained": {},
+        "itemsLost": {},
+        "skillXpGained": {},
+        "skillLevelsGained": {},
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792940537000,
+    "engineVersion": "1.7.0",
+    "stateHash": "e2fa953b",
+    "seq": 6,
+    "synced": false
+  }
+]
