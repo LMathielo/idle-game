@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 5 as const;
+export const CURRENT_SAVE_VERSION = 6 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -15,6 +15,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   2: migrateV2toV3,
   3: migrateV3toV4,
   4: migrateV4toV5,
+  5: migrateV5toV6,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -115,6 +116,21 @@ function migrateV4toV5(doc: SaveDoc): SaveDoc {
   const activity = isDoc(doc.activity) && doc.activity.kind === 'dungeon' ? { ...doc.activity, dungeonId: renamedDungeon(doc.activity.dungeonId) } : doc.activity;
 
   return { ...doc, saveVersion: 5, activity, dungeon: { ...dungeon, lastFight, totals, byDungeon } };
+}
+
+// ---- v5 → v6 (2026-10-26): training ----
+// Frozen literals: the v6 attribute keys and an untrained hero (tier 0, level 0, no XP), so a later
+// change to ATTRIBUTE_KEYS or config/training.ts cannot change what this migration produces.
+const V6_ATTRIBUTE_KEYS = ['strength', 'dexterity', 'endurance', 'intelligence'] as const;
+
+/**
+ * - training = { tier: 0, every attribute at level 0, 0 XP, 0 ms }. Nothing is trainable until Tier 1 is bought.
+ * - everything else kept as is: v5 had no training activity, and stored attributes stay the base values.
+ */
+function migrateV5toV6(doc: SaveDoc): SaveDoc {
+  const attributes: Doc = {};
+  for (const k of V6_ATTRIBUTE_KEYS) attributes[k] = { level: 0, xp: 0, progressMs: 0 };
+  return { ...doc, saveVersion: 6, training: { tier: 0, attributes } };
 }
 
 export class SaveVersionError extends Error {}

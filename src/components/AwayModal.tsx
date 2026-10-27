@@ -1,11 +1,11 @@
 // "While you were away" summary, shown after a resume with at least one action or any clock anomaly.
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
-import { formatDuration, formatNumber, itemIcon, itemName } from './format';
+import { ATTRIBUTE_NAMES, formatDuration, formatNumber, itemIcon, itemName } from './format';
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
 import { colors, fonts } from '../theme';
-import { DUNGEONS, type SimulationSummary, type SkillKey } from '../engine';
+import { type AttributeKey, DUNGEONS, type SimulationSummary, type SkillKey, TRAINING, trainingXpTotal } from '../engine';
 
 const SKILL_NAMES: Record<SkillKey, string> = {
   woodcutting: 'Woodcutting',
@@ -24,7 +24,7 @@ export function AwayModal() {
         <View style={styles.card}>
           <Panel title="While you were away">
             <ScrollView style={styles.scroll}>
-              <SummaryBody summary={awaySummary} capHours={state.offline.capMs / 3_600_000} />
+              <SummaryBody summary={awaySummary} capHours={state.offline.capMs / 3_600_000} tier={state.training.tier} />
             </ScrollView>
             <View style={styles.actions}>
               <PixelButton label="Collect" onPress={() => client.dismissAwaySummary()} />
@@ -36,12 +36,15 @@ export function AwayModal() {
   );
 }
 
-function SummaryBody({ summary, capHours }: { summary: SimulationSummary; capHours: number }) {
+function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; capHours: number; tier: number }) {
   const backward = summary.anomalies.some((a) => a.kind === 'backward');
   const capped = summary.anomalies.some((a) => a.kind === 'forward_capped');
   const gained = Object.entries(summary.itemsGained);
   const lost = Object.entries(summary.itemsLost);
   const skills = Object.entries(summary.skillXpGained) as [SkillKey, number][];
+  const trained = Object.entries(summary.trainingXpGained) as [AttributeKey, number][];
+  const maxed = summary.trainingMaxed;
+  const nextTierText = tier < TRAINING.maxTier ? `unlock Tier ${tier + 1}` : 'max tier';
 
   return (
     <View style={styles.body}>
@@ -74,12 +77,29 @@ function SummaryBody({ summary, capHours }: { summary: SimulationSummary; capHou
         );
       })}
       {summary.heroLevelsGained > 0 ? <Line label="Hero levels" value={`+${summary.heroLevelsGained}`} /> : null}
+      {trained.map(([attribute, xp]) => {
+        const levels = summary.trainingLevelsGained[attribute] ?? 0;
+        return (
+          <Line
+            key={attribute}
+            label={`🏋️ ${ATTRIBUTE_NAMES[attribute].short} training`}
+            value={`+${formatNumber(xp)} XP${levels > 0 ? ` (+${levels} Lv)` : ''}`}
+          />
+        );
+      })}
+      {maxed.map((attribute) => (
+        <Text key={attribute} style={styles.warn}>
+          {ATTRIBUTE_NAMES[attribute].label} maxed — {nextTierText} to keep training
+        </Text>
+      ))}
       {lost.map(([id, n]) => (
         <Text key={id} style={styles.lost}>
           Inventory full: {formatNumber(n)} {itemName(id)} lost
         </Text>
       ))}
-      {summary.actions === 0 && summary.dungeon.runs === 0 && !backward ? <Text style={styles.muted}>Nothing was gathered.</Text> : null}
+      {summary.actions === 0 && summary.dungeon.runs === 0 && trainingXpTotal(summary) === 0 && !backward ? (
+        <Text style={styles.muted}>Nothing was gathered.</Text>
+      ) : null}
     </View>
   );
 }

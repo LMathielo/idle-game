@@ -99,7 +99,7 @@ Woodcutting: 10 skill XP per action, interval 3000 ms at Lv1, −1% of base per 
 
 ## Attributes & derived stats
 
-The hero has 4 attributes, stored as plain integers in `character.attributes`: `strength`, `dexterity`, `endurance`, `intelligence`. A new hero starts at 10 in each. They will be raised by Training (gold + time, M3).
+The hero has 4 attributes, stored as plain integers in `character.attributes`: `strength`, `dexterity`, `endurance`, `intelligence`. A new hero starts at 10 in each. That stored value is the **base**; Training adds its level on top (see "Training"). **Every rule reads the effective value, base + trained** (`effectiveAttributes()`), and the formulas below use it.
 
 | Attribute | Effect today |
 | --- | --- |
@@ -111,8 +111,8 @@ The hero has 4 attributes, stored as plain integers in `character.attributes`: `
 **Derived stats are computed, never stored.** `getDerivedStats(state)` (`src/engine/stats.ts`) returns `damage {min, max}`, `defense`, `maxHp` and `maxMana`, each with a `breakdown` whose parts add up to the final number (the Hero tab shows it on tap). Coefficients: `src/engine/config/stats.ts`.
 
 ```
-damage  = round(weapon.damage  × (1 + Σ percent)) + STR × 1        (each of min and max)
-defense = round(Σ equipped armor × (1 + Σ percent)) + END × 1
+damage  = round(weapon.damage  × (1 + Σ percent)) + STR × 1        (each of min and max; effective STR)
+defense = round(Σ equipped armor × (1 + Σ percent)) + END × 1        (effective END)
 maxHp   = 50 + 10 × (level − 1)
 maxMana = 20 + 5 × (level − 1)
 ```
@@ -194,12 +194,12 @@ Thresholds live in `DANGER`. It measures the HP a fight costs, not the chance to
 
 ### One activity at a time
 
-`state.activity` is either a gathering skill (`{kind: 'woodcutting'}`) or `{kind: 'dungeon', dungeonId}`. `START_ACTIVITY` with the other kind stops the running one first. **Stopping a dungeon (STOP_ACTIVITY, or starting woodcutting) cancels the run in progress: it is lost, with no fight and no rewards** (event `DUNGEON_RUN_CANCELLED`). Runs that already finished before the command are kept, because every command first simulates to `now`. The UI asks before either action.
+`state.activity` is a gathering skill (`{kind: 'woodcutting'}`), `{kind: 'dungeon', dungeonId}` or `{kind: 'training', attribute}` (see "Training"). `START_ACTIVITY` with the other kind stops the running one first. **Stopping a dungeon (STOP_ACTIVITY, or starting woodcutting) cancels the run in progress: it is lost, with no fight and no rewards** (event `DUNGEON_RUN_CANCELLED`). Runs that already finished before the command are kept, because every command first simulates to `now`. The UI asks before either action.
 
 ### Runs (auto-repeat)
 
 ```
-runMs = max(minMs, baseMs − perDexterityMs × DEX)  per dungeon (DungeonDef.run): runMsFor(dungeonId, attributes)
+runMs = max(minMs, baseMs − perDexterityMs × DEX)  per dungeon (DungeonDef.run): runMsFor(dungeonId, effectiveAttributes(state))
 Rat Cellar: max(60 000, 300 000 − 1 000 × DEX)      DEX 10 → 290 s (4:50)
 ```
 
@@ -214,7 +214,7 @@ The command is bound to what the player saw: `{ run, maxCost }`, where `run` is 
 ### Current HP and regen
 
 ```
-regen per minute = 5 + 1 × END                     END 10 → 15/min (1 HP every 4 s)
+regen per minute = 5 + 1 × END (effective)         END 10 → 15/min (1 HP every 4 s)
 ```
 
 - Flat and continuous: during runs, while woodcutting, idle and offline.
@@ -251,6 +251,85 @@ dealt = max(1, round(roll × K / (defense + K)))       K = 50; 13 defense blocks
 
 The engine produces the fight log (`{round, actor, roll, dealt, targetHpAfter}` per strike) and the UI only replays it. To keep saves small, **only the last fight is stored** (`state.dungeon.lastFight`, at most 100 entries), plus lifetime counters: `state.dungeon.totals = {runs, wins, losses}` over all dungeons and `state.dungeon.byDungeon[id]` per dungeon. No per-run log is kept; an offline catch-up of 99 runs keeps only the 99th. The "While you were away" summary carries the totals for the period (runs, wins, losses, hero XP, gold, loot).
 
+## Training
+
+Data: `src/engine/config/training.ts` (`TRAINING`). Rules: `src/engine/training.ts`; effective attributes: `src/engine/attributes.ts`. Owner-approved 2026-10-26, engine 1.5.0, save v6.
+
+The player spends **gold** to unlock training tiers and **time** to raise STR, DEX, END and INT, one attribute at a time. It is the first gold sink, and the way to make dungeon tiers 4–5 beatable.
+
+### Model
+
+```
+state.training = { tier: 0..10, attributes: { strength: { level, xp, progressMs }, dexterity: …, endurance: …, intelligence: … } }
+effective attribute = character.attributes[k] (base: 10 + debug points) + training.attributes[k].level
+```
+
+- **Effective attributes feed every rule**: damage (STR), defense and HP regen (END), dungeon run time and skip cost (DEX). `getDerivedStats`, `hpRegenPerMinute`, `hpView` and `dangerHint` take the `training` slice (required in `StatsInput`, so it can't be left out), and `runMsFor` is always called with `effectiveAttributes(state)`. The stored attribute stays the base value.
+- **Training XP: 1 XP per trained minute** at the base rate. `trained ms = granted ms × offline.efficiency × rateMultiplier`; `TRAINING.rateMultiplier` (1) is the hook for a later effect (e.g. INT) and does nothing today. It must stay a whole number: a fractional rate would need integer progress units, like HP regen. The remainder toward the next XP point is kept in `progressMs`, so no partial minute is lost between resumes.
+- **XP to reach training level n: `5 + 10 × (n − 1)`**, integer math. Level 1 = 5 min, level 20 = 195 min, level 200 = 1,995 min. From level 0: +10 levels = 500 min, +20 levels = 2,000 min, all 200 levels = 200,000 min.
+- **Tiers:** 10. Tier t allows training levels up to **20 × t** (200 in total). The tier is **global** (all four attributes). A new hero is at **tier 0: nothing is trainable**.
+- **Price of tier t: `100 × t³` gold** (computed as `100 × t × t × t`, no `Math.pow`). Tiers are bought in order; the next one can be bought at any time, even before the current one is maxed.
+
+| Tier | Price (gold) | Max level |
+| ---: | ---: | ---: |
+| 1 | 100 | 20 |
+| 2 | 800 | 40 |
+| 3 | 2,700 | 60 |
+| 4 | 6,400 | 80 |
+| 5 | 12,500 | 100 |
+| 6 | 21,600 | 120 |
+| 7 | 34,300 | 140 |
+| 8 | 51,200 | 160 |
+| 9 | 72,900 | 180 |
+| 10 | 100,000 | 200 |
+
+Tiers 1 and 2, per attribute (time at 1 XP per minute, while training that attribute):
+
+| Lv | XP (min) | Total from 0 | Time | Lv | XP (min) | Total from 0 | Time |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 5 | 5 | 0h 05m | 21 | 205 | 2,205 | 36h 45m |
+| 2 | 15 | 20 | 0h 20m | 22 | 215 | 2,420 | 40h 20m |
+| 3 | 25 | 45 | 0h 45m | 23 | 225 | 2,645 | 44h 05m |
+| 4 | 35 | 80 | 1h 20m | 24 | 235 | 2,880 | 48h 00m |
+| 5 | 45 | 125 | 2h 05m | 25 | 245 | 3,125 | 52h 05m |
+| 6 | 55 | 180 | 3h 00m | 26 | 255 | 3,380 | 56h 20m |
+| 7 | 65 | 245 | 4h 05m | 27 | 265 | 3,645 | 60h 45m |
+| 8 | 75 | 320 | 5h 20m | 28 | 275 | 3,920 | 65h 20m |
+| 9 | 85 | 405 | 6h 45m | 29 | 285 | 4,205 | 70h 05m |
+| 10 | 95 | 500 | 8h 20m | 30 | 295 | 4,500 | 75h 00m |
+| 11 | 105 | 605 | 10h 05m | 31 | 305 | 4,805 | 80h 05m |
+| 12 | 115 | 720 | 12h 00m | 32 | 315 | 5,120 | 85h 20m |
+| 13 | 125 | 845 | 14h 05m | 33 | 325 | 5,445 | 90h 45m |
+| 14 | 135 | 980 | 16h 20m | 34 | 335 | 5,780 | 96h 20m |
+| 15 | 145 | 1,125 | 18h 45m | 35 | 345 | 6,125 | 102h 05m |
+| 16 | 155 | 1,280 | 21h 20m | 36 | 355 | 6,480 | 108h 00m |
+| 17 | 165 | 1,445 | 24h 05m | 37 | 365 | 6,845 | 114h 05m |
+| 18 | 175 | 1,620 | 27h 00m | 38 | 375 | 7,220 | 120h 20m |
+| 19 | 185 | 1,805 | 30h 05m | 39 | 385 | 7,605 | 126h 45m |
+| 20 | 195 | 2,000 | 33h 20m | 40 | 395 | 8,000 | 133h 20m |
+
+### Commands
+
+| Command | Rule | Errors (nothing changes) |
+| --- | --- | --- |
+| `UNLOCK_TRAINING_TIER {tier}` | `tier` must be current + 1 (bound to what the player saw: a double tap never buys two). Pays the price; gold stays a whole number ≥ 0. Event `TRAINING_TIER_UNLOCKED`. | `TIER_NOT_NEXT`, `MAX_TIER`, `NOT_ENOUGH_GOLD` (message says how much is missing), `INVALID_COMMAND` |
+| `START_ACTIVITY {kind:'training', attribute}` | Same attribute again = no-op. Another attribute switches to it; every attribute keeps its XP. Stops any other activity first (a dungeon run in progress is lost). | `TRAINING_LOCKED` (tier 0), `TRAINING_MAXED` (at the tier cap), `UNKNOWN_ATTRIBUTE` |
+| `STOP_ACTIVITY` | Pauses training. Trained XP is always kept (pauses, switches, sessions). | `NO_ACTIVE_ACTIVITY` |
+
+### Time, cap and events
+
+- Training is an activity, so **one activity at a time**: starting it stops woodcutting or cancels the dungeon run in progress; starting woodcutting or a dungeon stops training, and its XP is kept.
+- It runs inside the same `simulate()` with the same clock rules as woodcutting: the **8 h offline cap** limits training time, a **backward clock pauses** it until real time catches up, invalid time is a no-op.
+- `advanceTraining()` walks the granted time **level by level**: HP regenerates at the rate of the moment, and a level-up applies at its exact instant (an END level raises HP regen from then on). So many 1 s ticks and one big resume give the same state, byte for byte (tested). Regen then continues over the rest of the uncapped time, like dungeon runs.
+- **Cap:** when the attribute reaches its tier's cap (20 × tier), training **stops by itself**: XP and `progressMs` are set to 0 (no XP beyond the cap, the remainder is dropped), the activity becomes null, and the engine emits `TRAINING_MAXED {attribute}` and `ACTIVITY_STOPPED`. Buying the next tier lets the player train it again (they press Train; it does not resume by itself).
+- `TRAINING_LEVEL_UP {attribute, level}` is emitted for **each** level, also when several come in one `simulate()` call (8 h from level 0 = 9 level-ups).
+- `SimulationSummary` gains `trainingXpGained`, `trainingLevelsGained` (per attribute) and `trainingMaxed` (attributes that hit the cap). Training XP or a cap counts as progress for "While you were away".
+- No RNG; integer math only. The engine guard test still bans `Math.pow`, `**` and `Math.random`.
+
+### UI selectors
+
+`trainingView(state)` → tier, cap, next tier (price, affordable, missing gold), the active attribute, and per attribute: base, trained, effective, cap, XP / XP to next, fraction (remainder included), time to the next level, maxed, active. `activityView()` returns the same per-attribute view with `kind: 'training'` for the activity strip.
+
 ## Storage: SQLite as a document store
 
 **Decision.** The owner prefers a MongoDB-style model because player attributes will keep growing. No MongoDB/Realm option runs in Expo Go (Realm and Atlas Device Sync are end-of-life), so we use **expo-sqlite** (bundled in Expo Go) as a document store:
@@ -265,17 +344,18 @@ The repository talks to a small `SqlDatabase` interface. The app passes `expo-sq
 
 `GameState.saveVersion` plus ordered pure migrations in `src/engine/migrations.ts` (`MIGRATIONS[n]` upgrades v`n` to v`n+1`). A save newer than the app is refused instead of being overwritten. To change the shape: bump `CURRENT_SAVE_VERSION`, add the migration and a frozen fixture of the old version under `tests/fixtures/`.
 
-Current version: **5**.
+Current version: **6**.
 
 - v1 → v2 adds `flags.debugUsed` (set to `false` for old saves).
 - v2 → v3 (2026-10-26): attributes become strength→strength, dexterity→dexterity, constitution→endurance, intelligence→intelligence, each set to **max(old value, 10)** so old heroes match the new-hero baseline (owner decision); agility and charisma are dropped; `character.hp`/`maxHp` are dropped; `stamina` is added full (100/100); every equipped and inventory item gets a `defId` (stackables: their id; starting gear: `start-<defId>`). Literals in the migration are frozen on purpose, so later config changes cannot change what it produces.
 
 - v3 → v4 (2026-10-26): `character.hp` = max HP at the hero's level (`50 + 10 × (level − 1)`, frozen literals), `character.hpRegenProgress = 0`, `dungeon = {lastFight: null, totals: 0/0/0}`. The activity is kept (v3 only had woodcutting, so no save is in a dungeon).
+- v5 → v6 (2026-10-26): training. Adds `training = {tier: 0, attributes: {each: {level: 0, xp: 0, progressMs: 0}}}` (frozen literals, including the four attribute keys). Nothing else changes: stored attributes stay the base values, and v5 had no training activity.
 - v4 → v5 (2026-10-26): dungeon tiers. The dungeon id `rat_cellar_1` becomes `rat_cellar` (running activity and last fight). Every v4 run was a Rat Cellar run, so `dungeon.byDungeon = {rat_cellar: totals}` (empty when there were no runs) and the old wins count toward the Bat Cave unlock. `totals` is kept. Frozen literals again.
 
-Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests/fixtures/save-v2.json` (made with the 1.1.0 engine: hero Lv4, woodcutting Lv8, 3785 logs, banked progress), `tests/fixtures/save-v3.json` (made with the 1.2.0 engine before the dungeon: hero Lv5, DEX 15, END 12, woodcutting running, 68 stamina), and `tests/fixtures/save-v4.json` + `log-v4.json` (made with the 1.3.0 engine before the tiers: hero Lv3, DEX 13, END 12, Rat Cellar running mid-run, 19 runs / 18 wins / 1 loss, plus the action log that produced it, all rows at engine 1.3.0).
+Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests/fixtures/save-v2.json` (made with the 1.1.0 engine: hero Lv4, woodcutting Lv8, 3785 logs, banked progress), `tests/fixtures/save-v3.json` (made with the 1.2.0 engine before the dungeon: hero Lv5, DEX 15, END 12, woodcutting running, 68 stamina), and `tests/fixtures/save-v4.json` + `log-v4.json` (made with the 1.3.0 engine before the tiers: hero Lv3, DEX 13, END 12, Rat Cellar running mid-run, 19 runs / 18 wins / 1 loss, plus the action log that produced it, all rows at engine 1.3.0), and `tests/fixtures/save-v5.json` + `log-v5.json` (made with the 1.4.0 engine before training: hero Lv4, 198 gold, DEX 12, END 13, Bat Cave running mid-run, Rat Cellar 25 wins, Bat Cave 8 wins, plus its 11-row action log, all at engine 1.4.0).
 
-**Rules version.** `ENGINE_VERSION` (`src/engine/version.ts`) is written on every log row. Bump it whenever rules change outcomes. **Every save-version bump also bumps `ENGINE_VERSION`** (`RELEASED_ENGINES` in `src/engine/version.ts`: save v1 → 1.0.0, v2 → 1.1.0, v3 → 1.2.0, v4 → 1.3.0, v5 → 1.4.0; a guard test in `tests/golden.test.ts` checks it), so a replay span never mixes two save shapes under one engine version. `tests/golden.test.ts` pins the final state hash of a fixed seed and script, so an unintended rules change fails CI. 1.1.0: XP curve uses `L × √L`, and `flags.debugUsed` was added. 1.2.0 (2026-10-26): save v3, stamina regen in `simulate()`, stamina/attribute debug commands; woodcutting outcomes unchanged (same actions, levels and drops in the golden script). The golden script now also spends stamina and adds STR, so the hash changed. 1.3.0 (2026-10-26): save v4, HP regen, dungeon runs and combat. Woodcutting outcomes unchanged (same actions, levels, nests and stamina in the golden script); the script gained a dungeon segment (start, skip, HP debug, 3 h of runs, woodcutting cancelling a run), so the hash changed. 1.4.0 (2026-10-26): save v5, dungeon tiers 1–5, per-dungeon counters, unlocks, `DEBUG_ADD_DUNGEON_WINS`, MIGRATE anchors. Rat Cellar outcomes unchanged (a golden test pins the 1.3.0 part of the script: same runs, gold, HP, stamina, level); the hash changed because of `byDungeon` and the id rename. The script gained a tier segment (debug wins, Bat Cave runs).
+**Rules version.** `ENGINE_VERSION` (`src/engine/version.ts`) is written on every log row. Bump it whenever rules change outcomes. **Every save-version bump also bumps `ENGINE_VERSION`** (`RELEASED_ENGINES` in `src/engine/version.ts`: save v1 → 1.0.0, v2 → 1.1.0, v3 → 1.2.0, v4 → 1.3.0, v5 → 1.4.0, v6 → 1.5.0; a guard test in `tests/golden.test.ts` checks it), so a replay span never mixes two save shapes under one engine version. `tests/golden.test.ts` pins the final state hash of a fixed seed and script, so an unintended rules change fails CI. 1.1.0: XP curve uses `L × √L`, and `flags.debugUsed` was added. 1.2.0 (2026-10-26): save v3, stamina regen in `simulate()`, stamina/attribute debug commands; woodcutting outcomes unchanged (same actions, levels and drops in the golden script). The golden script now also spends stamina and adds STR, so the hash changed. 1.3.0 (2026-10-26): save v4, HP regen, dungeon runs and combat. Woodcutting outcomes unchanged (same actions, levels, nests and stamina in the golden script); the script gained a dungeon segment (start, skip, HP debug, 3 h of runs, woodcutting cancelling a run), so the hash changed. 1.4.0 (2026-10-26): save v5, dungeon tiers 1–5, per-dungeon counters, unlocks, `DEBUG_ADD_DUNGEON_WINS`, MIGRATE anchors. Rat Cellar outcomes unchanged (a golden test pins the 1.3.0 part of the script: same runs, gold, HP, stamina, level); the hash changed because of `byDungeon` and the id rename. The script gained a tier segment (debug wins, Bat Cave runs). 1.5.0 (2026-10-26): save v6, training (tiers, per-attribute levels, effective attributes in every rule), `UNLOCK_TRAINING_TIER`, `DEBUG_ADD_TRAINING_XP`, `DEBUG_ADD_GOLD`. Every 1.4.0 outcome is unchanged (a golden test pins the whole 1.4.0 script: actions, runs, gold, HP, stamina, levels, loot); the hash changed because of the `training` field. The script gained a training segment (Tier 1, STR, switch to END, debug XP and gold, Tier 2, 10 h capped, debug XP to the cap, a Rat Cellar hour with trained attributes).
 
 **Known limit, still open:**
 - The SQL schema has only `schema_version = 1` in `meta` and `CREATE TABLE IF NOT EXISTS`. Add ordered SQL schema migrations keyed on `meta.schema_version` before the first table change.
@@ -287,7 +367,7 @@ Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests
 | type | When | Payload |
 | --- | --- | --- |
 | `NEW_GAME` | First launch, Reset save | `{ seed }` (`+ reason, debugUsed: true` after Reset save) |
-| `START_ACTIVITY`, `STOP_ACTIVITY`, `SKIP_DUNGEON_RUN`, `DEBUG_GRANT_HERO_XP`, `DEBUG_SPEND_STAMINA`, `DEBUG_REFILL_STAMINA`, `DEBUG_ADD_ATTRIBUTE`, `DEBUG_SET_HERO_HP`, `DEBUG_FINISH_DUNGEON_RUN`, `DEBUG_ADD_DUNGEON_WINS` | Player/debug commands; `command_id` = command id | the command |
+| `START_ACTIVITY`, `STOP_ACTIVITY`, `SKIP_DUNGEON_RUN`, `UNLOCK_TRAINING_TIER`, `DEBUG_ADD_TRAINING_XP`, `DEBUG_ADD_GOLD`, `DEBUG_GRANT_HERO_XP`, `DEBUG_SPEND_STAMINA`, `DEBUG_REFILL_STAMINA`, `DEBUG_ADD_ATTRIBUTE`, `DEBUG_SET_HERO_HP`, `DEBUG_FINISH_DUNGEON_RUN`, `DEBUG_ADD_DUNGEON_WINS` | Player/debug commands; `command_id` = command id | the command |
 | `MIGRATE` | `load()` found a save that needed a migration, or `meta.engine_version` ≠ `ENGINE_VERSION`. Written in the same transaction as the migrated state and the new `engine_version` | `{ fromSave, toSave, fromEngine, toEngine, snapshot }` (snapshot = full post-migration GameState) |
 | `RESUME` | App start, back from background, debug clock change. Skipped when no time passed and there was no anomaly | `{ summary }` |
 | `SIMULATE` | Live-play checkpoint: every 30 s while an activity runs (every 10 min when idle), before any other row, on background | `{ checkpoint: true }` or `{ summary }` |
@@ -322,10 +402,10 @@ Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests
 
 ## "While you were away"
 
-Shown after app start, a return from background or a debug clock change when **at least 60 s of real time passed and there was at least one gathering action or dungeon run** (`AWAY_SUMMARY_MIN_MS` in `config/time.ts`), or when there was **any clock anomaly**. A quick app switch is still simulated and logged, but opens no modal. It lists dungeon runs (won/lost), dungeons unlocked, hero XP, gold and loot next to gathering results.
+Shown after app start, a return from background or a debug clock change when **at least 60 s of real time passed and there was at least one gathering action, dungeon run, training XP point or training cap reached** (`AWAY_SUMMARY_MIN_MS` in `config/time.ts`), or when there was **any clock anomaly**. A quick app switch is still simulated and logged, but opens no modal. It lists dungeon runs (won/lost), dungeons unlocked, hero XP, gold and loot next to gathering results, plus training XP and levels per attribute and a "maxed — unlock Tier N" note for each attribute that hit its cap.
 
 The summary is an RN `<Modal>`. On iOS it presents from the view controller that owns it, and the root controller cannot present while a full-screen village modal is up, so each village modal route renders its own `<AwayModal />` and the root one hides on those routes (`RootAwayModal` in `src/app/_layout.tsx`).
 
 ## Debug tools
 
-`DEV_TOOLS_ENABLED` in `src/engine/config/dev.ts` shows a Debug panel on the Hero tab. It stays on for the POC. Any `DEBUG_*` action sets `state.flags.debugUsed = true` forever (it survives later play, Reset save and replay), so a future server can tell debugged saves apart. The clock buttons change a persisted **offset** on the client clock (`SystemClock.offsetMs`), then resume, so the engine sees exactly what a player who changed the phone clock would produce. "+10k hero XP" is a real logged command (`DEBUG_GRANT_HERO_XP`), and so are "Spend 10 stamina" (`DEBUG_SPEND_STAMINA`, refused with `NOT_ENOUGH_STAMINA` below 10), "Refill stamina" (`DEBUG_REFILL_STAMINA`), "+1 STR / DEX / END / INT" (`DEBUG_ADD_ATTRIBUTE`, 1–1000 per command, an attribute can reach at most 1,000,000), "Hero HP → 1" (`DEBUG_SET_HERO_HP`, 0..max, clears the regen remainder) and "Finish run now (free)" (`DEBUG_FINISH_DUNGEON_RUN`, resolves the current run's fight like a skip without stamina; refused with `NO_DUNGEON_RUN` when no dungeon runs). In a dungeon's detail view, "+10 wins (debug)" (`DEBUG_ADD_DUNGEON_WINS`, 1–1000 per command, unlocked dungeons only) adds wins and runs to that dungeon's counters with no fight and no rewards, so unlocks can be tested on the phone. "Reset save" logs `DEBUG_RESET_SAVE` + `NEW_GAME` and clears the offset; it never deletes log rows. None of them change engine rules.
+`DEV_TOOLS_ENABLED` in `src/engine/config/dev.ts` shows a Debug panel on the Hero tab. It stays on for the POC. Any `DEBUG_*` action sets `state.flags.debugUsed = true` forever (it survives later play, Reset save and replay), so a future server can tell debugged saves apart. The clock buttons change a persisted **offset** on the client clock (`SystemClock.offsetMs`), then resume, so the engine sees exactly what a player who changed the phone clock would produce. "+10k hero XP" is a real logged command (`DEBUG_GRANT_HERO_XP`), and so are "Spend 10 stamina" (`DEBUG_SPEND_STAMINA`, refused with `NOT_ENOUGH_STAMINA` below 10), "Refill stamina" (`DEBUG_REFILL_STAMINA`), "+1 STR / DEX / END / INT" (`DEBUG_ADD_ATTRIBUTE`, 1–1000 per command, an attribute can reach at most 1,000,000), "Hero HP → 1" (`DEBUG_SET_HERO_HP`, 0..max, clears the regen remainder) and "Finish run now (free)" (`DEBUG_FINISH_DUNGEON_RUN`, resolves the current run's fight like a skip without stamina; refused with `NO_DUNGEON_RUN` when no dungeon runs). In a dungeon's detail view, "+10 wins (debug)" (`DEBUG_ADD_DUNGEON_WINS`, 1–1000 per command, unlocked dungeons only) adds wins and runs to that dungeon's counters with no fight and no rewards, so unlocks can be tested on the phone. "+60 min training XP" (`DEBUG_ADD_TRAINING_XP {xp}`, 1–100,000 per command) adds training XP to the attribute being trained right away, with the same level-ups and cap rule as real time (refused with `NOT_TRAINING` when nothing trains); "+1,000 gold" (`DEBUG_ADD_GOLD {amount}`, 1–1,000,000 per command, gold at most 10¹²). "Reset save" logs `DEBUG_RESET_SAVE` + `NEW_GAME` and clears the offset; it never deletes log rows. None of them change engine rules.

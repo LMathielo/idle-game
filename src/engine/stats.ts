@@ -6,6 +6,7 @@
 //
 // Integer math only: percent bonuses are basis points and rounding is half-up on integers,
 // so the phone (Hermes) and a future server (V8) always agree.
+import { effectiveAttributes, type TrainingLevels } from './attributes';
 import { getItemDef } from './config/items';
 import { BASIS_POINTS, STATS } from './config/stats';
 import type { Character, EquipmentSlot } from './types';
@@ -36,8 +37,11 @@ export type DerivedStats = {
   maxMana: { value: number; breakdown: ValuePart[] };
 };
 
-/** What getDerivedStats reads. A GameState fits; UIs can pass just these slices. */
-export type StatsInput = { character: Pick<Character, 'level' | 'attributes' | 'equipment'> };
+/**
+ * What getDerivedStats reads. A GameState fits; UIs can pass just these slices. `training` is required:
+ * STR/END count with their training levels (effective attributes), so it can't be left out by mistake.
+ */
+export type StatsInput = { character: Pick<Character, 'level' | 'attributes' | 'equipment'>; training: TrainingLevels };
 
 /** Fixed order so breakdowns are stable. */
 const SLOT_ORDER: readonly EquipmentSlot[] = ['weapon', 'shield', 'helmet', 'armor', 'gloves', 'boots', 'amulet', 'ring1', 'ring2'];
@@ -63,7 +67,8 @@ export function applyPercent(base: number, bonuses: readonly PercentBonus[]): nu
 }
 
 export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = percentBonuses(state)): DerivedStats {
-  const { level, attributes, equipment } = state.character;
+  const { level, equipment } = state.character;
+  const attributes = effectiveAttributes(state);
 
   // ---- damage ----
   const weapon = equipment.weapon;

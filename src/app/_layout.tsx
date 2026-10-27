@@ -14,7 +14,7 @@ import { colors } from '../theme';
 export const unstable_settings = { anchor: '(tabs)' };
 
 /** Village modal routes. Each one renders its own <AwayModal /> (see RootAwayModal). */
-const VILLAGE_MODAL_PATHS: readonly string[] = ['/dungeon'];
+const VILLAGE_MODAL_PATHS: readonly string[] = ['/dungeon', '/training'];
 
 /**
  * iOS presents an RN <Modal> from the view controller that owns it. Mounted here it belongs to the
@@ -27,7 +27,7 @@ function RootAwayModal() {
 }
 
 /**
- * Root stack: the tabs group, plus one full-screen modal per village sign (only Dungeon today).
+ * Root stack: the tabs group, plus one full-screen modal per village sign (Dungeon and Training today).
  * fullScreenModal: iOS covers the whole screen with no swipe-to-dismiss (the modal's ✕ closes it);
  * Android has no such style and falls back to 'modal', so the slide-up is set explicitly to match
  * (a fade when the system asks to reduce motion).
@@ -44,6 +44,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: styles.content }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="dungeon" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
+        <Stack.Screen name="training" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
       </Stack>
       <RootAwayModal />
     </GameProvider>

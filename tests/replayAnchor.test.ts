@@ -17,6 +17,7 @@ import {
   loadSave,
   type MigratePayload,
   newGame,
+  newTrainingState,
   type ReplayEntry,
   ReplayError,
   replayLog,
@@ -57,9 +58,10 @@ describe('frozen v4 save (tests/fixtures/save-v4.json)', () => {
     expect(new Set(V4_LOG.map((r) => r.engineVersion))).toEqual(new Set(['1.3.0']));
   });
 
-  it('migrates to v5: Rat Cellar keeps its wins toward Bat Cave, the run continues, nothing else changes', () => {
+  it('migrates to v6 (via v5): Rat Cellar keeps its wins toward Bat Cave, the run continues, untrained hero', () => {
     const s = loadSave(V4_SAVE);
-    expect(s.saveVersion).toBe(5);
+    expect(s.saveVersion).toBe(6);
+    expect(s.training).toEqual(newTrainingState());
     expect(hashState(loadSave(V4_SAVE))).toBe(hashState(s)); // deterministic
     expect(s.dungeon.byDungeon).toEqual({ rat_cellar: { runs: 19, wins: 18, losses: 1 } });
     expect(s.dungeon.totals).toEqual(V4_SAVE.dungeon.totals);
@@ -67,7 +69,7 @@ describe('frozen v4 save (tests/fixtures/save-v4.json)', () => {
     expect(s.dungeon.lastFight).toEqual({ ...V4_SAVE.dungeon.lastFight, dungeonId: 'rat_cellar' });
     expect(isDungeonUnlocked(s, 'bat_cave')).toBe(true);
     expect(isDungeonUnlocked(s, 'wolf_den')).toBe(false);
-    const { dungeon: _d, activity: _a, saveVersion: _v, ...rest } = s;
+    const { dungeon: _d, activity: _a, saveVersion: _v, training: _t, ...rest } = s;
     const { dungeon: _rd, activity: _ra, saveVersion: _rv, ...rawRest } = V4_SAVE;
     expect(rest).toEqual(rawRest);
   });
@@ -249,7 +251,7 @@ describe('replay with anchors', () => {
       // toSave must equal both the snapshot's saveVersion and the save the target engine writes.
       const wrongTo = { ...rows[i], payload: { ...p, toSave: 4, snapshot: { ...(p.snapshot as GameState), saveVersion: 4 } } };
       wrongTo.stateHash = hashState(wrongTo.payload.snapshot);
-      expect(() => replayStep(null, wrongTo, rows[i - 1])).toThrow(/toSave 4 is not what engine 1\.4\.0 writes/);
+      expect(() => replayStep(null, wrongTo, rows[i - 1])).toThrow(new RegExp(`toSave 4 is not what engine ${ENGINE_VERSION} writes`));
     });
 
     it('fromEngine that is not the previous row\'s engine', async () => {
@@ -345,9 +347,9 @@ describe('replay with anchors', () => {
 
     it('a label newer than this engine is rejected (this engine is the last released one)', async () => {
       expect(RELEASED_ENGINES.at(-1)!.engine).toBe(ENGINE_VERSION);
-      expect(releasedEngineIndex('1.5.0')).toBe(-1);
+      expect(releasedEngineIndex('1.6.0')).toBe(-1);
       const { rows } = await currentLog();
-      expect(() => replayLogReport(rows.map((r) => ({ ...r, engineVersion: '1.5.0' })))).toThrow(/1\.5\.0, which never shipped/);
+      expect(() => replayLogReport(rows.map((r) => ({ ...r, engineVersion: '1.6.0' })))).toThrow(/1\.6\.0, which never shipped/);
     });
 
     it('labels never go back along the log: a 1.3.0 row after 1.4.0 rows is rejected', async () => {
@@ -356,13 +358,13 @@ describe('replay with anchors', () => {
       expect(() => replayLogReport([...relabelled, forgeAfter(relabelled)])).toThrow(/1\.3\.0, older than an earlier row/);
     });
 
-    it('relabelling only row 0 of a current log as 1.3.0, then a 1.4.0 → 1.4.0 save 4 → 5 anchor: rejected', async () => {
+    it('relabelling only row 0 of a current log as 1.3.0, then a current → current engine save 4 → current anchor: rejected', async () => {
       const { rows } = await currentLog();
       const relabelled = rows.map((r, k) => (k === 0 ? { ...r, engineVersion: '1.3.0' } : r));
-      const forged = forgeAfter(relabelled); // fromEngine 1.4.0 (the last row), toEngine 1.4.0, save 4 → 5
+      const forged = forgeAfter(relabelled); // fromEngine = current (the last row), toEngine = current, save 4 → current
       expect((forged.payload as MigratePayload).fromEngine).toBe(ENGINE_VERSION);
-      // The skipped span still holds 1.4.0 rows: a genuine log would have anchored before them.
-      expect(() => replayLogReport([...relabelled, forged])).toThrow(/1\.4\.0 inside an older-engine span/);
+      // The skipped span still holds current-engine rows: a genuine log would have anchored before them.
+      expect(() => replayLogReport([...relabelled, forged])).toThrow(new RegExp(`${ENGINE_VERSION} inside an older-engine span`));
       // And the anchor alone is refused too: same engine on both sides.
       expect(() => replayStep(null, forged, relabelled.at(-1))).toThrow(/same engine on both sides/);
     });

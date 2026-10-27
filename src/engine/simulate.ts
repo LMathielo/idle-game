@@ -5,6 +5,7 @@ import { cloneState } from './clone';
 import { advanceDungeon } from './dungeon';
 import { hpRegenPerMinute, maxHpOf, regenHp } from './hp';
 import { regenStamina } from './stamina';
+import { advanceTraining } from './training';
 import { CLOCK_BACKWARD_TOLERANCE_MS, MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { emptySummary } from './summary';
 import type { GameEvent, GameState, SimulationSummary } from './types';
@@ -24,8 +25,9 @@ export type SimulationResult = { state: GameState; events: GameEvent[]; summary:
  * Stamina and HP regenerate on the accepted elapsed time (rules b, c and e grant none), but NOT on the
  * capped time: their max already bounds them, so a long absence can fill both (docs/ENGINE.md).
  *
- * Gathering and dungeon runs share this path. Dungeon runs interleave with HP regen in time order
- * (advanceDungeon); otherwise HP simply regenerates over the whole elapsed time.
+ * Gathering, dungeon runs and training share this path. Dungeon runs and training level-ups interleave with
+ * HP regen in time order (advanceDungeon, advanceTraining); otherwise HP simply regenerates over the whole
+ * elapsed time.
  */
 export function simulate(state: GameState, now: number): SimulationResult {
   const summary = emptySummary();
@@ -80,6 +82,11 @@ export function simulate(state: GameState, now: number): SimulationResult {
     advanceDungeon(draft, activity, grantedMs, requestedMs, summary, events);
     return { state: draft, events, summary };
   }
+  if (activity?.kind === 'training') {
+    // Same clock rules as woodcutting: the 8h cap limits training time (grantedMs); regen uses requestedMs.
+    advanceTraining(draft, activity, grantedMs, requestedMs, summary, events);
+    return { state: draft, events, summary };
+  }
 
   if (activity && grantedMs > 0) {
     const kind = activity.kind;
@@ -107,7 +114,7 @@ export function simulate(state: GameState, now: number): SimulationResult {
 
   // Gathering never touches HP, so regen over the whole (uncapped) time is the same in any order.
   // Same object when nothing changed (full HP).
-  draft.character = regenHp(draft.character, maxHpOf(draft), hpRegenPerMinute(draft.character.attributes), requestedMs);
+  draft.character = regenHp(draft.character, maxHpOf(draft), hpRegenPerMinute(draft), requestedMs);
 
   return { state: draft, events, summary };
 }

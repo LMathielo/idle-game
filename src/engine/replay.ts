@@ -29,6 +29,9 @@ export const LOG_TYPES = [
   'DEBUG_SET_HERO_HP',
   'DEBUG_ADD_DUNGEON_WINS',
   'DEBUG_FINISH_DUNGEON_RUN',
+  'UNLOCK_TRAINING_TIER',
+  'DEBUG_ADD_TRAINING_XP',
+  'DEBUG_ADD_GOLD',
   'MIGRATE',
   'RESUME',
   'SIMULATE',
@@ -136,7 +139,10 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'DEBUG_GRANT_HERO_XP':
     case 'DEBUG_SPEND_STAMINA':
     case 'DEBUG_REFILL_STAMINA':
-    case 'DEBUG_ADD_ATTRIBUTE': {
+    case 'DEBUG_ADD_ATTRIBUTE':
+    case 'UNLOCK_TRAINING_TIER':
+    case 'DEBUG_ADD_TRAINING_XP':
+    case 'DEBUG_ADD_GOLD': {
       const res = applyCommand(state, payload as Command, clientTime, { allowDebug: true });
       if (!res.ok) throw new ReplayError(`${type} rejected on replay: ${res.error.code}`);
       return res.state;

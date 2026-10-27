@@ -7,3 +7,4 @@ export * from './stamina';
 export * from './stats';
 export * from './time';
 export * from './xpCurve';
+export * from './training';

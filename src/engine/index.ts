@@ -28,4 +28,20 @@ export {
   type DungeonUnlockView,
 } from './dungeon';
 export * from './danger';
+export * from './attributes';
+export {
+  advanceTraining,
+  attributeTrainingView,
+  newTrainingState,
+  trainingBlock,
+  trainingCap,
+  trainingRateMultiplier,
+  trainingTierPrice,
+  trainingView,
+  trainingXpToNext,
+  trainingXpToReach,
+  type AttributeTrainingView,
+  type TrainBlock,
+  type TrainingView,
+} from './training';
 export * from './config';
