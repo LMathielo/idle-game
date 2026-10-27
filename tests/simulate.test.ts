@@ -62,7 +62,7 @@ describe('woodcutting rules (Oak)', () => {
       ...base,
       inventory: {
         capacity: 20,
-        items: Array.from({ length: 20 }, (_, i) => ({ id: `junk-${i}`, defId: 'junk', name: 'Junk', icon: '?', rarity: 'common' as const })),
+        items: Array.from({ length: 20 }, (_, i) => ({ id: `junk-${i}`, defId: 'junk', name: 'Junk', icon: '?' })),
       },
     };
     const r = simulate(full, T0 + 10 * OAK_MS);
@@ -78,7 +78,7 @@ describe('woodcutting rules (Oak)', () => {
       ...full,
       inventory: {
         capacity: 20,
-        items: [{ id: 'oak_logs', defId: 'oak_logs', name: 'Oak Logs', icon: '🪵', rarity: 'common', stackable: true, quantity: 5 }, ...full.inventory.items.slice(1)],
+        items: [{ id: 'oak_logs', defId: 'oak_logs', name: 'Oak Logs', icon: '🪵', stackable: true, quantity: 5 }, ...full.inventory.items.slice(1)],
       },
     };
     const r2 = simulate(withLogs, T0 + 10 * OAK_MS);

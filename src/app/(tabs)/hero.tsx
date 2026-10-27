@@ -1,14 +1,19 @@
-import { memo } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useGameState } from '../../client/GameProvider';
+import { useGameClient, useGameState } from '../../client/GameProvider';
 import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
 import { DebugPanel } from '../../components/DebugPanel';
 import { formatNumber } from '../../components/format';
+import { defOf, SLOT_LABELS } from '../../components/items/itemInfo';
+import { ItemSheet, type SheetAction } from '../../components/items/ItemSheet';
+import { ItemSlot } from '../../components/items/ItemSlot';
 import { Bar, Panel } from '../../components/Panel';
 import { StatusPanel } from '../../components/StatusPanel';
+import { type CommandInput } from '../../client/types';
+import { freeSlots, hpView } from '../../engine';
 import { DEV_TOOLS_ENABLED } from '../../engine/config/dev';
-import type { Character, EquipmentSlot, Inventory, Item, ItemRarity, SkillKey } from '../../engine/types';
+import type { Character, EquipmentSlot, Inventory, Item, SkillKey } from '../../engine/types';
 import { colors, fonts } from '../../theme';
 
 const SKILL_LABELS: Record<SkillKey, { label: string; icon: string }> = {
@@ -26,28 +31,15 @@ const EQUIPMENT_GRID: (EquipmentSlot | null)[][] = [
   ['axe', 'boots', null],
 ];
 
-const SLOT_LABELS: Record<EquipmentSlot, string> = {
-  helmet: 'Helmet',
-  amulet: 'Amulet',
-  armor: 'Armor',
-  weapon: 'Weapon',
-  shield: 'Shield',
-  gloves: 'Gloves',
-  ring1: 'Ring',
-  ring2: 'Ring',
-  boots: 'Boots',
-  axe: 'Axe',
-};
-
-const RARITY_COLORS: Record<ItemRarity, string> = {
-  common: '#8c7a62',
-  uncommon: '#4f9a4a',
-  rare: '#3f8fd1',
-  epic: '#9b59b6',
-};
+/** What the item sheet shows: an inventory item (by id) or an equipment slot. */
+type Selection = { kind: 'inventory'; itemId: string } | { kind: 'equipment'; slot: EquipmentSlot } | null;
 
 export default function HeroScreen() {
   const { character, inventory, stamina, training } = useGameState();
+  const [selection, setSelection] = useState<Selection>(null);
+  const openInventory = useCallback((key: string | number) => setSelection({ kind: 'inventory', itemId: String(key) }), []);
+  const openEquipment = useCallback((key: string | number) => setSelection({ kind: 'equipment', slot: key as EquipmentSlot }), []);
+  const close = useCallback(() => setSelection(null), []);
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
@@ -62,11 +54,12 @@ export default function HeroScreen() {
           stamina={stamina}
           training={training}
         />
-        <EquipmentPanel equipment={character.equipment} />
-        <InventoryPanel inventory={inventory} />
+        <EquipmentPanel equipment={character.equipment} onPress={openEquipment} />
+        <InventoryPanel inventory={inventory} onPress={openInventory} />
         <SkillsPanel skills={character.skills} />
         {DEV_TOOLS_ENABLED ? <DebugPanel /> : null}
       </ScrollView>
+      <HeroItemSheet selection={selection} onClose={close} />
     </SafeAreaView>
   );
 }
@@ -104,7 +97,9 @@ const HeaderPanel = memo(function HeaderPanel({ character }: { character: Charac
   );
 });
 
-const EquipmentPanel = memo(function EquipmentPanel({ equipment }: { equipment: Character['equipment'] }) {
+type PressHandler = (key: string | number) => void;
+
+const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress }: { equipment: Character['equipment']; onPress: PressHandler }) {
   return (
     <Panel title="Equipment">
       {EQUIPMENT_GRID.map((row, r) => (
@@ -112,7 +107,7 @@ const EquipmentPanel = memo(function EquipmentPanel({ equipment }: { equipment: 
           {row.map((slot, c) =>
             slot ? (
               <View key={c} style={styles.equipCell}>
-                <SlotBox item={equipment[slot]} size={58} />
+                <ItemSlot item={equipment[slot]} size={58} pressKey={slot} onPress={onPress} />
                 <Text style={styles.slotLabel} numberOfLines={1}>
                   {equipment[slot]?.name ?? SLOT_LABELS[slot]}
                 </Text>
@@ -127,14 +122,14 @@ const EquipmentPanel = memo(function EquipmentPanel({ equipment }: { equipment: 
   );
 });
 
-const InventoryPanel = memo(function InventoryPanel({ inventory }: { inventory: Inventory }) {
+const InventoryPanel = memo(function InventoryPanel({ inventory, onPress }: { inventory: Inventory; onPress: PressHandler }) {
   const slots: (Item | undefined)[] = Array.from({ length: inventory.capacity }, (_, i) => inventory.items[i]);
   return (
     <Panel title={`Inventory  ${inventory.items.length}/${inventory.capacity}`}>
       <View style={styles.invGrid}>
         {slots.map((item, i) => (
           <View key={i} style={styles.invCell}>
-            <SlotBox item={item} size={52} />
+            <ItemSlot item={item} size={52} pressKey={item?.id} onPress={onPress} />
           </View>
         ))}
       </View>
@@ -160,25 +155,75 @@ const SkillsPanel = memo(function SkillsPanel({ skills }: { skills: Character['s
   );
 });
 
-const SlotBox = memo(function SlotBox({ item, size }: { item?: Item; size: number }) {
-  return (
-    <View
-      style={[styles.slot, size === 58 ? styles.slot58 : styles.slot52, item && { borderColor: RARITY_COLORS[item.rarity] }]}
-      accessible
-      accessibilityLabel={item ? `${item.name}${item.quantity ? ` x${item.quantity}` : ''}` : 'Empty slot'}
-    >
-      {item ? <Text style={size === 58 ? styles.icon58 : styles.icon52}>{item.icon}</Text> : null}
-      {item?.quantity ? <Text style={styles.qty}>{formatQty(item.quantity)}</Text> : null}
-    </View>
-  );
-});
+/**
+ * Item info sheet for the Hero tab: Equip for gear, Use for potions (inventory), Unequip (equipment).
+ * Reads the item from the live state, so it closes by itself when the item leaves that place.
+ */
+function HeroItemSheet({ selection, onClose }: { selection: Selection; onClose: () => void }) {
+  const state = useGameState();
+  const client = useGameClient();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-/** Compact stack count for a 52px slot: 999, 1.2k, 45k, 1.2M. */
-function formatQty(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 10_000) return `${(Math.floor(n / 100) / 10).toFixed(1)}k`;
-  if (n < 1_000_000) return `${Math.floor(n / 1000)}k`;
-  return `${(Math.floor(n / 100_000) / 10).toFixed(1)}M`;
+  const item: Item | undefined =
+    selection?.kind === 'inventory'
+      ? state.inventory.items.find((i) => i.id === selection.itemId)
+      : selection?.kind === 'equipment'
+        ? state.character.equipment[selection.slot]
+        : undefined;
+  const def = item ? defOf(item.defId, item) : null;
+
+  const close = () => {
+    setError(null);
+    onClose();
+  };
+
+  const send = (cmd: CommandInput, closeAfter: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    client
+      .dispatch(cmd)
+      .then((res) => {
+        if (!res.ok) setError(res.error.message);
+        else if (closeAfter) close();
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setBusy(false));
+  };
+
+  const actions: SheetAction[] = [];
+  let equipped: ReturnType<typeof defOf> | null | undefined;
+  if (item && def && selection?.kind === 'inventory') {
+    if (def.slot && !def.stackable) {
+      const current = state.character.equipment[def.slot];
+      equipped = current ? defOf(current.defId, current) : null;
+      actions.push({
+        label: 'Equip',
+        disabled: busy,
+        sublabel: current ? `swaps ${current.name}` : SLOT_LABELS[def.slot],
+        onPress: () => send({ type: 'EQUIP_ITEM', itemId: item.id }, true),
+      });
+    } else if (def.heal) {
+      const hp = hpView(state);
+      actions.push({
+        label: 'Use',
+        disabled: busy || hp.full,
+        sublabel: hp.full ? 'HP full' : `HP ${hp.hp}/${hp.maxHp}`,
+        onPress: () => send({ type: 'USE_ITEM', itemId: item.id }, false),
+      });
+    }
+  } else if (item && selection?.kind === 'equipment') {
+    const full = freeSlots(state.inventory) < 1;
+    actions.push({
+      label: 'Unequip',
+      disabled: busy || full,
+      sublabel: full ? 'Inventory full' : undefined,
+      onPress: () => send({ type: 'UNEQUIP_ITEM', slot: selection.slot }, true),
+    });
+  }
+
+  return <ItemSheet def={def} quantity={item?.quantity} equipped={equipped} actions={actions} error={error} onClose={close} />;
 }
 
 const styles = StyleSheet.create({
@@ -210,29 +255,6 @@ const styles = StyleSheet.create({
 
   invGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
   invCell: { padding: 3 },
-
-  slot58: { width: 58, height: 58 },
-  slot52: { width: 52, height: 52 },
-  icon58: { fontSize: 29 },
-  icon52: { fontSize: 26 },
-  slot: {
-    backgroundColor: colors.slot,
-    borderWidth: 3,
-    borderColor: colors.slotBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qty: {
-    position: 'absolute',
-    right: 2,
-    bottom: 0,
-    fontFamily: fonts.bodyBold,
-    fontSize: 11,
-    color: '#fff',
-    textShadowColor: '#000',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 0,
-  },
 
   skillRow: { marginBottom: 10, gap: 4 },
   skillName: { fontFamily: fonts.body, fontSize: 14, color: colors.ink },

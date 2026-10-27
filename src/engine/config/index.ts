@@ -8,3 +8,4 @@ export * from './stats';
 export * from './time';
 export * from './xpCurve';
 export * from './training';
+export * from './merchant';

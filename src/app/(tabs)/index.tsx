@@ -9,9 +9,8 @@ import { type VillageAction, VillageScene } from '../../components/VillageScene'
 import { formatNumber } from '../../components/format';
 import { colors, fonts } from '../../theme';
 
-const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'dungeon' | 'training'>, string> = {
+const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'dungeon' | 'training' | 'merchant'>, string> = {
   storage: 'Storage',
-  merchant: 'Merchant',
 };
 
 const TOAST_MS = 1600;
@@ -49,6 +48,10 @@ export default function VillageScreen() {
       }
       if (action === 'woodcutting') {
         router.push('/woodcutting');
+        return;
+      }
+      if (action === 'merchant') {
+        router.push('/merchant');
         return;
       }
       showToast(`${COMING_SOON[action]}: coming soon`);

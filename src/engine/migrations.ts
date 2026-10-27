@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 7 as const;
+export const CURRENT_SAVE_VERSION = 8 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -17,6 +17,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   4: migrateV4toV5,
   5: migrateV5toV6,
   6: migrateV6toV7,
+  7: migrateV7toV8,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -152,6 +153,52 @@ function migrateV6toV7(doc: SaveDoc): SaveDoc {
   const equipment = isDoc(character.equipment) ? character.equipment : {};
   const withAxe = isDoc(equipment.axe) ? equipment : { ...equipment, axe: { ...V7_WOODEN_AXE } };
   return { ...doc, saveVersion: 7, activity, character: { ...character, equipment: withAxe } };
+}
+
+// ---- v7 → v8 (2026-10-27): merchant, item quality ----
+// Frozen literals: the v8 merchant exactly as a refresh stocked it then (5/5 charges, these 4 listings at
+// these prices in the first slots), so a later change to config/merchant.ts or the catalog cannot change
+// what this migration produces.
+const V8_MAX_CHARGES = 5;
+const V8_STOCK = [
+  { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
+  { defId: 'iron_axe', quantity: 1, unitPrice: 600 },
+  { defId: 'iron_sword', quantity: 1, unitPrice: 500 },
+  { defId: 'iron_helm', quantity: 1, unitPrice: 400 },
+] as const;
+const V8_DEFAULT_CAPACITY = 20;
+
+/** v7 items copied the catalog rarity onto the instance; quality now lives only in the catalog. */
+function withoutRarity(item: unknown): unknown {
+  if (!isDoc(item) || !('rarity' in item)) return item;
+  const { rarity: _rarity, ...rest } = item;
+  return rest;
+}
+
+/**
+ * - merchant = 5/5 refresh charges, no banked time, a fresh stock: as many slots as the inventory, the 4
+ *   listings in the first slots, the rest empty.
+ * - nextItemSerial = 1 (v7 had no bought items; starting gear uses `start-<defId>` ids).
+ * - the stale per-instance `rarity` is dropped from every equipped and inventory item (quality is catalog-only).
+ */
+function migrateV7toV8(doc: SaveDoc): SaveDoc {
+  const character = isDoc(doc.character) ? doc.character : {};
+  const oldEquipment = isDoc(character.equipment) ? character.equipment : {};
+  const equipment: Doc = {};
+  for (const [slot, item] of Object.entries(oldEquipment)) equipment[slot] = withoutRarity(item);
+  const inventory = isDoc(doc.inventory) ? doc.inventory : {};
+  const items = Array.isArray(inventory.items) ? inventory.items.map(withoutRarity) : [];
+  const cap = inventory.capacity;
+  const capacity = typeof cap === 'number' && Number.isSafeInteger(cap) && cap >= 0 && cap <= 1000 ? cap : V8_DEFAULT_CAPACITY;
+  const stock: unknown[] = Array.from({ length: capacity }, (_, i) => (i < V8_STOCK.length ? { ...V8_STOCK[i] } : null));
+  return {
+    ...doc,
+    saveVersion: 8,
+    merchant: { charges: V8_MAX_CHARGES, chargeProgressMs: 0, stock },
+    nextItemSerial: 1,
+    character: { ...character, equipment },
+    inventory: { ...inventory, items },
+  };
 }
 
 export class SaveVersionError extends Error {}

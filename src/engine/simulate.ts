@@ -2,6 +2,7 @@
 // Same code path for live ticks (1s) and offline catch-up (up to the cap).
 import { advanceDungeon } from './dungeon';
 import { hpRegenPerMinute, maxHpOf, regenHp } from './hp';
+import { regenMerchantCharges } from './merchant';
 import { regenStamina } from './stamina';
 import { advanceTraining } from './training';
 import { advanceWoodcutting } from './woodcutting';
@@ -21,7 +22,7 @@ export type SimulationResult = { state: GameState; events: GameEvent[]; summary:
  *  e. non-finite now → no-op + ERROR event.
  *  f. highestSeenAt = max(highestSeenAt, now) whenever now is accepted.
  *
- * Stamina and HP regenerate on the accepted elapsed time (rules b, c and e grant none), but NOT on the
+ * Stamina, HP and merchant refresh charges regenerate on the accepted elapsed time (rules b, c and e grant none), but NOT on the
  * capped time: their max already bounds them, so a long absence can fill both (docs/ENGINE.md).
  *
  * Gathering, dungeon runs and training share this path. Dungeon runs and training level-ups interleave with
@@ -75,6 +76,8 @@ export function simulate(state: GameState, now: number): SimulationResult {
 
   // Uncapped on purpose: requestedMs, not grantedMs. Same object when nothing changed.
   draft.stamina = regenStamina(state.stamina, requestedMs);
+  // Merchant refresh charges follow the same rule: uncapped, bounded by their max.
+  draft.merchant = regenMerchantCharges(state.merchant, requestedMs);
 
   const activity = draft.activity;
   if (activity?.kind === 'dungeon') {
