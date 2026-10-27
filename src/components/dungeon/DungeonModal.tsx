@@ -252,6 +252,7 @@ function DungeonDetail({
   const skip = useCallback((runNumber: number, maxCost: number) => send({ type: 'SKIP_DUNGEON_RUN', run: runNumber, maxCost }), [send]);
   const hits = strikeRange(enemy.damage, stats.defense.value);
   const stop = useCallback(() => confirmCancelRun('Stop', () => send({ type: 'STOP_ACTIVITY' })), [send]);
+  const flee = useCallback(() => confirmCancelRun('Flee', () => send({ type: 'STOP_ACTIVITY' }), true), [send]);
   const otherActivity = state.activity && !running ? state.activity.kind : null;
   const addWins = useCallback(() => {
     if (inFlight.current) return;
@@ -340,6 +341,7 @@ function DungeonDetail({
             hitMax={hits.max}
             onSkip={skip}
             onStop={stop}
+            onFlee={flee}
           />
         ) : !unlock.unlocked && unlock.requirement ? (
           <Text style={styles.note}>🔒 Locked. {requirementText(unlock.requirement, unlock.progress)}.</Text>
@@ -401,6 +403,7 @@ const RunControls = memo(function RunControls({
   hitMax,
   onSkip,
   onStop,
+  onFlee,
 }: {
   run: DungeonRunView;
   paused: boolean;
@@ -414,6 +417,8 @@ const RunControls = memo(function RunControls({
   hitMax: number;
   onSkip: (run: number, maxCost: number) => void;
   onStop: () => void;
+  /** Stop during the fight: a forfeit (counts as a loss). */
+  onFlee: () => void;
 }) {
   if (run.fight) {
     // Fight phase: plays live, no skip.
@@ -421,7 +426,7 @@ const RunControls = memo(function RunControls({
       <View style={styles.runBox}>
         <LiveFight fight={run.fight} heroName={heroName} enemyName={enemyName} enemyIcon={enemyIcon} paused={paused} />
         <View style={styles.buttons}>
-          <PixelButton label="Stop" onPress={onStop} accessibilityHint="Asks first: the current run will be lost" />
+          <PixelButton label="Flee (counts as loss)" onPress={onFlee} accessibilityHint="Asks first: fleeing counts as a loss and drops your HP to 0" />
         </View>
       </View>
     );
@@ -444,7 +449,7 @@ const RunControls = memo(function RunControls({
           accessibilityLabel={`Skip the search for ${cost} stamina${noHp ? '. Certain loss, 0 HP' : ''}`}
           accessibilityHint={canSkip ? 'The fight starts now and plays out live. No HP regen for the skipped time' : `Not enough stamina: you have ${stamina}`}
         />
-        <PixelButton label="Stop" onPress={onStop} accessibilityHint="Asks first: the current run will be lost" />
+        <PixelButton label="Stop" onPress={onStop} accessibilityHint="Asks first: the current search will be lost" />
       </View>
       {noHp ? (
         <Text style={styles.danger} accessibilityRole="alert">

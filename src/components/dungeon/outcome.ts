@@ -6,4 +6,5 @@ export const OUTCOME_LABELS: Record<FightEndReason, string> = {
   hero_defeated: 'Defeat',
   time_limit: `Defeat (out of time, ${COMBAT.maxFightMs / 1000}s)`,
   no_hp: 'Defeat (no HP to fight)',
+  forfeit: 'Defeat (fled)',
 };

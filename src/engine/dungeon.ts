@@ -231,6 +231,19 @@ export function beginFight(draft: GameState, activity: DungeonActivity, summary:
 }
 
 /**
+ * The player leaves during the fight (STOP_ACTIVITY, or starting another activity): the fight ends now as a loss
+ * (`forfeit`) with the normal loss rules (0 HP, no rewards, a loss on the counters, `lastFight` recorded).
+ * Returns false (and changes nothing) when the run is still in its search: the caller then cancels it as before.
+ * Mutates `draft` (a full copy owned by the caller).
+ */
+export function forfeitFight(draft: GameState, events: GameEvent[]): boolean {
+  const a = draft.activity;
+  if (a?.kind !== 'dungeon' || a.phase !== 'fight' || !a.fight) return false;
+  finishFight(draft, a, outcomeOf(a.fight, 'forfeit', a.fight.elapsedMs), null, events);
+  return true;
+}
+
+/**
  * Applies one fight event at its time: a strike, or the time limit. Ends the fight when a side reaches 0 HP or
  * time is up. A hero whose HP dropped to 0 outside the fight's strikes (debug) loses at the next event.
  */

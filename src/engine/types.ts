@@ -204,10 +204,11 @@ export type FightRewards = {
 };
 
 /**
- * Why a fight ended: the enemy or the hero reached 0 HP, the fight time limit was reached (a loss), or the
- * hero had no HP at the start (an immediate loss with no rolls).
+ * Why a fight ended: the enemy or the hero reached 0 HP, the fight time limit was reached (a loss), the hero
+ * had no HP at the start (an immediate loss with no rolls), or the player stopped the dungeon (or started another
+ * activity) during the fight (`forfeit`, a loss).
  */
-export type FightEndReason = 'enemy_defeated' | 'hero_defeated' | 'time_limit' | 'no_hp';
+export type FightEndReason = 'enemy_defeated' | 'hero_defeated' | 'time_limit' | 'no_hp' | 'forfeit';
 
 /** The last finished fight only (saves stay small). Earlier fights live on as counters. */
 export type FightRecord = {

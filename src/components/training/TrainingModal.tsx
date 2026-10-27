@@ -43,7 +43,8 @@ export function TrainingModal() {
     (attribute: AttributeKey) => {
       const go = () => send({ type: 'START_ACTIVITY', kind: 'training', attribute });
       // One activity at a time: training would end the dungeon run in progress, so ask first.
-      if (client.getState().activity?.kind === 'dungeon') confirmCancelRun(`Train ${ATTRIBUTE_NAMES[attribute].short}`, go);
+      const a = client.getState().activity;
+      if (a?.kind === 'dungeon') confirmCancelRun(`Train ${ATTRIBUTE_NAMES[attribute].short}`, go, a.phase === 'fight');
       else go();
     },
     [client, send],

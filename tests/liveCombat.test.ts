@@ -267,20 +267,51 @@ describe('determinism across simulate boundaries', () => {
     }
   });
 
-  it('the 8 h cap pauses a fight mid-way like a search; the rest of the fight plays on the next resume', () => {
-    const s = rat();
-    const cap = simulate(s, T0 + 20 * HOUR).state;
-    expect(simulate(s, T0 + 8 * HOUR).state).toEqual({ ...cap, time: { lastSimulatedAt: T0 + 8 * HOUR, highestSeenAt: T0 + 8 * HOUR } });
-    // Find a cap that ends inside a fight and check the fight resumes where it stopped.
-    let inFight: GameState | null = null;
-    for (let t = T0 + SEARCH_MS + 500; t < T0 + 10 * MIN && !inFight; t += 500) {
-      const at = simulate(s, t).state;
-      if (fightOf(at) && fightOf(at)!.log.length > 0) inFight = at;
+  it('the 8 h cap can land mid-fight: the fight pauses there and continues exactly on the next resume', () => {
+    // Shift the timeline (initial search progress) until T0 + 8 h falls inside a fight with strikes already
+    // landed and at least one more second of fight to go.
+    const base = rat();
+    const at8h = (p: number) => {
+      const g = structuredClone(base);
+      if (g.activity?.kind === 'dungeon') g.activity.progressMs = p;
+      return { g, s: simulate(g, T0 + 8 * HOUR).state };
+    };
+    let pick: { g: GameState; s: GameState } | null = null;
+    for (let p = 0; p < SEARCH_MS && !pick; p += 250) {
+      const c = at8h(p);
+      const f = fightOf(c.s);
+      if (f && f.log.length >= 2 && f.elapsedMs % 1000 !== 0 && fightOf(simulate(c.s, T0 + 8 * HOUR + 1000).state)) pick = c;
     }
-    expect(inFight).not.toBeNull();
-    const f = fightOf(inFight!)!;
-    const resumed = simulate(inFight!, inFight!.time.lastSimulatedAt + 1000).state;
-    expect(fightOf(resumed) === null || fightOf(resumed)!.elapsedMs === f.elapsedMs + 1000).toBe(true);
+    if (!pick) throw new Error('no timeline with the cap inside a fight');
+    const uncapped = fightOf(pick.s)!;
+
+    // 20 h away: granted exactly 8 h, so play stops at the same point inside the same fight.
+    const capped = simulate(pick.g, T0 + 20 * HOUR);
+    expect(capped.summary).toMatchObject({ requestedMs: 20 * HOUR, grantedMs: 8 * HOUR });
+    const f = fightOf(capped.state)!;
+    expect(f.elapsedMs).toBe(uncapped.elapsedMs);
+    expect(f.log).toHaveLength(uncapped.log.length);
+    expect(f).toEqual(uncapped);
+    expect(capped.state.rng).toEqual(pick.s.rng);
+    expect(capped.state.dungeon).toEqual(pick.s.dungeon);
+
+    // Resume 1 s later: exactly 1 s more of the same fight, the strikes due in that second and nothing else,
+    // the same as a player who never hit the cap.
+    const resumed = simulate(capped.state, T0 + 20 * HOUR + 1000).state;
+    const expected = simulate(pick.s, T0 + 8 * HOUR + 1000).state;
+    const rf = fightOf(resumed)!;
+    expect(rf.elapsedMs).toBe(f.elapsedMs + 1000);
+    const due = (n: number, every: number) => Math.floor((f.elapsedMs + 1000) / every) - n;
+    expect(rf.log).toHaveLength(f.log.length + due(f.heroStrikes, f.hero.attackIntervalMs) + due(f.enemyStrikes, f.enemy.attackIntervalMs));
+    expect(rf.log.slice(0, f.log.length)).toEqual(f.log);
+    // Same strikes (times, rolls, damage), enemy HP and RNG as the player who never hit the cap. Only the hero's HP
+    // differs: HP regen is not capped (it ran over the whole 20 h, so the hero is full), by the regen rule.
+    const noHeroHp = (x: ActiveFight) => ({ ...x, log: x.log.map((e) => (e.actor === 'enemy' ? { ...e, targetHpAfter: 0 } : e)) });
+    expect(noHeroHp(rf)).toEqual(noHeroHp(fightOf(expected)!));
+    expect(resumed.rng).toEqual(expected.rng);
+    expect(capped.state.character.hp).toBe(getDerivedStats(capped.state).maxHp.value);
+    const lastHit = rf.log.filter((e) => e.actor === 'enemy').at(-1)!;
+    expect(lastHit.targetHpAfter).toBe(capped.state.character.hp - rf.log.filter((e) => e.actor === 'enemy' && e.atMs > f.elapsedMs).reduce((n, e) => n + e.dealt, 0));
   });
 
   it('closing the app mid-fight: the next launch catches up to the same state and the log replays', async () => {
@@ -335,16 +366,65 @@ describe('skip: search only', () => {
     expect(end.won).toBe(true);
   });
 
-  it('stopping mid-fight loses the run (no rewards, no counters); the HP already lost stays lost', () => {
-    const s = simulate(apply(runningIn('rat_cellar', 6), { type: 'SKIP_DUNGEON_RUN', run: 91, maxCost: 2 }, T0), T0 + 1000).state;
-    const hpMid = s.character.hp;
-    expect(hpMid).toBeLessThan(50);
-    const stop = applyCommand(s, { id: 'st', type: 'STOP_ACTIVITY' }, T0 + 1000);
+  it('stopping mid-fight is a forfeit: a loss with the normal loss rules (0 HP, no rewards, counted, lastFight)', () => {
+    const s = simulate(apply(runningIn('rat_cellar', 6), { type: 'SKIP_DUNGEON_RUN', run: 91, maxCost: 2 }, T0), T0 + 1500).state;
+    const fight = fightOf(s)!;
+    expect(fight.log).toHaveLength(2);
+    const stop = applyCommand(s, { id: 'st', type: 'STOP_ACTIVITY' }, T0 + 1500);
     if (!stop.ok) throw new Error(stop.error.message);
     expect(stop.state.activity).toBeNull();
-    expect(stop.state.dungeon).toEqual(s.dungeon);
-    expect(stop.state.character.hp).toBe(hpMid);
+    expect(stop.state.character).toMatchObject({ hp: 0, xp: s.character.xp, gold: s.character.gold });
+    expect(stop.state.dungeon.lastFight).toMatchObject({
+      won: false,
+      endReason: 'forfeit',
+      durationMs: 1500,
+      heroHpEnd: 0,
+      enemyHpEnd: fight.enemyHp,
+      rewards: { heroXp: 0, gold: 0, items: {}, itemsLost: {} },
+    });
+    expect(stop.state.dungeon.lastFight!.log).toEqual(fight.log);
+    expect(stop.state.dungeon.byDungeon.rat_cellar).toEqual({ runs: 11, wins: 10, losses: 1 });
+    expect(stop.state.dungeon.totals).toEqual({ runs: 91, wins: 90, losses: 1 });
+    expect(stop.events).toContainEqual({ type: 'FIGHT_RESOLVED', dungeonId: 'rat_cellar', won: false });
+    expect(stop.events).not.toContainEqual({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: 'rat_cellar' });
+    expect(stop.events).toContainEqual({ type: 'ACTIVITY_STOPPED', kind: 'dungeon' });
+  });
+
+  it('starting another activity mid-fight forfeits too; during the search it is still a plain cancel', () => {
+    const inFight = simulate(apply(runningIn('rat_cellar', 6), { type: 'SKIP_DUNGEON_RUN', run: 91, maxCost: 2 }, T0), T0 + 1500).state;
+    const wood = applyCommand(inFight, { id: 'w', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0 + 1500);
+    if (!wood.ok) throw new Error(wood.error.message);
+    expect(wood.state.activity).toMatchObject({ kind: 'woodcutting' });
+    expect(wood.state.dungeon.lastFight).toMatchObject({ endReason: 'forfeit', won: false });
+    expect(wood.state.dungeon.totals.losses).toBe(1);
+    expect(wood.state.character.hp).toBe(0);
+    // Another dungeon mid-fight: the same.
+    const other = applyCommand(inFight, { id: 'b', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'bat_cave' }, T0 + 1500);
+    expect(other.ok && [other.state.dungeon.lastFight?.endReason, other.state.activity?.kind === 'dungeon' && other.state.activity.dungeonId]).toEqual(['forfeit', 'bat_cave']);
+
+    // During the search: cancelled, nothing recorded, HP untouched.
+    const searching = simulate(runningIn('rat_cellar', 6), T0 + MIN).state;
+    const stop = applyCommand(searching, { id: 's', type: 'STOP_ACTIVITY' }, T0 + MIN);
+    if (!stop.ok) throw new Error(stop.error.message);
+    expect(stop.state.dungeon).toEqual(searching.dungeon);
+    expect(stop.state.character.hp).toBe(searching.character.hp);
     expect(stop.events).toContainEqual({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: 'rat_cellar' });
+    const train = applyCommand(searching, { id: 't', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0 + MIN);
+    expect(train.ok && train.state.dungeon).toEqual(searching.dungeon);
+  });
+
+  it('a forfeit through the client is logged as STOP_ACTIVITY and replays to the same hash', async () => {
+    const { repo, clock, client } = makeClient({ prefix: 'flee' });
+    await client.load();
+    await client.dispatch(RAT_CELLAR);
+    const v = dungeonRunView(client.getState())!;
+    await client.dispatch({ type: 'SKIP_DUNGEON_RUN', run: v.run, maxCost: v.skipCost! });
+    clock.advance(1500);
+    await client.tick();
+    expect((await client.dispatch({ type: 'STOP_ACTIVITY' })).ok).toBe(true);
+    expect(client.getState().dungeon.lastFight?.endReason).toBe('forfeit');
+    const report = replayLogReport(entries(await repo.getAllLog()));
+    expect(hashState(report.state)).toBe(hashState(client.getState()));
   });
 
   it('the run view: search shows the countdown and the skip cost; the fight shows HP and the strikes so far, no skip', () => {

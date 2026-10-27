@@ -7,7 +7,7 @@ import { SKILL_XP_CURVE } from './config/xpCurve';
 import { xpToNext } from './progression';
 import { DEV_TOOLS_ENABLED } from './config/dev';
 import { DUNGEONS, isDungeonId } from './config/dungeons';
-import { beginFight, isDungeonUnlocked, recordDungeonResults, searchMsFor, skipCost } from './dungeon';
+import { beginFight, forfeitFight, isDungeonUnlocked, recordDungeonResults, searchMsFor, skipCost } from './dungeon';
 import { equipItem, unequipItem, useItem } from './equipment';
 import { markDebugUsed } from './flags';
 import { addMerchantCharge, buyItem, type ItemError, type ItemErrorCode, refreshMerchant, sellItem } from './merchant';
@@ -459,11 +459,16 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
   return { ok: true, state: draft, events, summary: sim.summary };
 }
 
-/** Stops the running activity on a full draft copy. A dungeon run in progress is lost: no fight, no rewards. */
+/**
+ * Stops the running activity on a full draft copy. A dungeon run still searching is lost (no fight, no rewards);
+ * a dungeon fight in progress is forfeited (a loss: 0 HP, no rewards, counted).
+ */
 function stopActivity(draft: GameState, events: GameEvent[]) {
   const a = draft.activity;
   if (!a) return;
-  if (a.kind === 'dungeon') events.push({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: a.dungeonId });
+  // During the fight, leaving is a forfeit: the fight ends as a loss (FIGHT_RESOLVED). During the search, the run
+  // is just cancelled.
+  if (a.kind === 'dungeon' && !forfeitFight(draft, events)) events.push({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: a.dungeonId });
   events.push({ type: 'ACTIVITY_STOPPED', kind: a.kind });
   draft.activity = null;
 }
