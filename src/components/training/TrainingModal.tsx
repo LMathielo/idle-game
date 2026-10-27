@@ -1,6 +1,6 @@
 // Village → Training: full-screen modal. Buy training tiers with gold, then train one attribute at a time.
 // Rules stay in the engine: this file reads trainingView() and dispatches UNLOCK_TRAINING_TIER /
-// START_ACTIVITY {kind:'training'} / STOP_ACTIVITY. Locked and maxed attributes are refused by the engine too.
+// START_ACTIVITY {kind:'training'} / STOP_ACTIVITY / SPEEDUP_TRAINING. Locked and maxed attributes are refused by the engine too.
 import { memo, useCallback, useRef } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
@@ -49,6 +49,8 @@ export function TrainingModal() {
     [client, send],
   );
   const onPause = useCallback(() => send({ type: 'STOP_ACTIVITY' }), [send]);
+  /** Bound to the cost on the button: the engine refuses (COST_CHANGED) rather than charge more. */
+  const onSpeedup = useCallback((minutes: number, cost: number) => send({ type: 'SPEEDUP_TRAINING', minutes, maxCost: cost }), [send]);
   const onUnlock = useCallback(
     (tier: number, price: number, cap: number) =>
       Alert.alert(`Unlock Tier ${tier}?`, `Costs ${formatNumber(price)} gold. Attributes can then be trained up to level ${cap}.`, [
@@ -65,8 +67,8 @@ export function TrainingModal() {
       title="Training"
       closeLabel="Close training"
       headerRight={
-        <Text style={styles.gold} accessibilityLabel={`${formatNumber(character.gold)} gold`}>
-          🪙 {formatNumber(character.gold)}
+        <Text style={styles.gold} accessibilityLabel={`${formatNumber(character.gold)} gold, stamina ${state.stamina.current} of ${state.stamina.max}`}>
+          🪙 {formatNumber(character.gold)} <Text style={styles.stamina}>⚡ {state.stamina.current}</Text>
         </Text>
       }
     >
@@ -82,8 +84,10 @@ export function TrainingModal() {
               locked={view.tier === 0}
               nextTier={view.nextTier?.tier ?? null}
               paused={clockPaused}
+              stamina={state.stamina.current}
               onTrain={onTrain}
               onPause={onPause}
+              onSpeedup={onSpeedup}
             />
           ))}
           <Text style={styles.note}>
@@ -139,11 +143,14 @@ type RowProps = {
   /** Next tier to buy (null at the max tier). */
   nextTier: number | null;
   paused: boolean;
+  /** Current stamina, to grey out speed-ups it can't pay. */
+  stamina: number;
   onTrain: (a: AttributeKey) => void;
   onPause: () => void;
+  onSpeedup: (minutes: number, cost: number) => void;
 };
 
-const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused, onTrain, onPause }: RowProps) {
+const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused, stamina, onTrain, onPause, onSpeedup }: RowProps) {
   const names = ATTRIBUTE_NAMES[view.attribute];
   const value = `${names.short} ${formatNumber(view.effective)} (${formatNumber(view.base)} + ${formatNumber(view.trained)} trained)`;
   const level = `${formatNumber(view.trained)}/${formatNumber(view.cap)}`;
@@ -179,14 +186,44 @@ const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused
           />
         )}
       </View>
+      {view.active && !view.maxed ? <SpeedupButtons view={view} stamina={stamina} onSpeedup={onSpeedup} /> : null}
     </View>
   );
 });
+
+/** Stamina speed-up on the active row: 1 stamina per minute, never charged beyond the tier cap. */
+function SpeedupButtons({ view, stamina, onSpeedup }: { view: AttributeTrainingView; stamina: number; onSpeedup: (minutes: number, cost: number) => void }) {
+  const per = TRAINING.speedup.staminaPerStep;
+  const options = [
+    { key: '1', minutes: 1, label: '+1 min' },
+    { key: '10', minutes: 10, label: '+10 min' },
+    { key: 'next', minutes: view.speedupToNextLevel, label: 'To next level' },
+  ].map((o) => {
+    const minutes = Math.min(o.minutes, view.speedupToCap);
+    return { ...o, minutes, cost: minutes * per };
+  });
+  return (
+    <View style={styles.speedup}>
+      {options.map((o) => (
+        <PixelButton
+          key={o.key}
+          label={`${o.label} (${o.cost}⚡)`}
+          onPress={() => onSpeedup(o.minutes, o.cost)}
+          disabled={o.minutes <= 0 || stamina < o.cost}
+          accessibilityLabel={`${o.label} of training for ${o.cost} stamina`}
+          accessibilityHint={stamina < o.cost ? 'Not enough stamina' : 'Adds the training time right away'}
+        />
+      ))}
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   content: { padding: 12, paddingBottom: 32 },
   paused: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold, marginBottom: 10 },
   gold: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.gold },
+  stamina: { color: colors.stamina },
+  speedup: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 4 },
 
   tierBox: { alignItems: 'center', gap: 6, marginTop: 6 },
   missing: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.dangerDeadly },

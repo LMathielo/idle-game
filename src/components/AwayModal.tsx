@@ -63,6 +63,7 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       ) : null}
       {summary.heroXpGained > 0 ? <Line label="✨ Hero XP" value={`+${formatNumber(summary.heroXpGained)}`} /> : null}
       {summary.goldGained > 0 ? <Line label="🪙 Gold" value={`+${formatNumber(summary.goldGained)}`} /> : null}
+      {summary.actions > 0 ? <Line label="🪓 Logs cut" value={formatNumber(summary.actions)} /> : null}
       {gained.map(([id, n]) => (
         <Line key={id} label={`${itemIcon(id)} ${itemName(id)}`} value={`+${formatNumber(n)}`} />
       ))}
