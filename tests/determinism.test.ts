@@ -6,7 +6,7 @@ import { HOUR, MIN, SEC, T0 } from './helpers';
 type Step = { at: number; cmd?: Command };
 
 const SCRIPT: Step[] = [
-  { at: T0 + SEC, cmd: { id: 'c1', type: 'START_ACTIVITY', kind: 'woodcutting' } },
+  { at: T0 + SEC, cmd: { id: 'c1', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } },
   { at: T0 + 10 * MIN },
   { at: T0 + 3 * HOUR },
   { at: T0 + 3 * HOUR + 5 * SEC, cmd: { id: 'c2', type: 'DEBUG_GRANT_HERO_XP', amount: 10_000 } },
@@ -42,7 +42,7 @@ describe('determinism', () => {
   it('the RNG is actually used: the seed advances by exactly one draw per action', () => {
     const { state } = run(424242);
     const actions = state.stats.totalActions;
-    expect(actions).toBeGreaterThan(5000);
+    expect(actions).toBeGreaterThan(300);
     // One bird-nest roll per action; mulberry32 adds 0x6d2b79f5 to the seed per draw.
     expect(state.rng.seed).toBe((424242 + Math.imul(actions, 0x6d2b79f5)) >>> 0);
   });

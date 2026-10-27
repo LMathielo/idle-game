@@ -1,27 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, hashState, itemQuantity, newGame, simulate, type GameState } from '../src/engine';
-import { actionIntervalMs } from '../src/engine/activities';
-import { ACTIVITIES } from '../src/engine/config/activities';
 import { CLOCK_BACKWARD_TOLERANCE_MS, DEFAULT_OFFLINE_CAP_MS } from '../src/engine/config/time';
 import { HOUR, MIN, SEC, T0, apply, cmd, qty, woodcuttingGame, progressMs } from './helpers';
 
-const WC = ACTIVITIES.woodcutting;
+/** Oak at DEX 10: 2:00 − 10 s = 1:50 per log, 25 XP. */
+const OAK_MS = 110 * SEC;
 
-describe('woodcutting rules', () => {
-  it('interval: 3000ms at Lv1, −1% of base per level, floor 1200ms', () => {
-    expect(actionIntervalMs(WC, 1)).toBe(3000);
-    expect(actionIntervalMs(WC, 2)).toBe(2970);
-    expect(actionIntervalMs(WC, 11)).toBe(2700);
-    expect(actionIntervalMs(WC, 61)).toBe(1200);
-    expect(actionIntervalMs(WC, 99)).toBe(1200);
-  });
-
-  it('each action gives 1 Oak Logs and 10 woodcutting XP, no hero XP', () => {
+describe('woodcutting rules (Oak)', () => {
+  it('each log gives 1 Oak Logs and 25 woodcutting XP, no hero XP', () => {
     const s = woodcuttingGame();
-    const { state, summary } = simulate(s, T0 + 3 * 3000);
+    const { state, summary } = simulate(s, T0 + 3 * OAK_MS);
     expect(summary.actions).toBe(3);
     expect(qty(state, 'oak_logs')).toBe(3);
-    expect(state.character.skills.woodcutting.xp).toBe(30);
+    expect(state.character.skills.woodcutting.xp).toBe(75);
     expect(state.character.xp).toBe(0);
     expect(summary.heroXpGained).toBe(0);
     expect(state.stats.totalActions).toBe(3);
@@ -30,35 +21,36 @@ describe('woodcutting rules', () => {
 
   it('keeps the partial remainder between resumes', () => {
     const s = woodcuttingGame();
-    const a = simulate(s, T0 + 2000).state;
-    expect(progressMs(a)).toBe(2000);
+    const a = simulate(s, T0 + 100 * SEC).state;
+    expect(progressMs(a)).toBe(100 * SEC);
     expect(qty(a, 'oak_logs')).toBe(0);
-    const b = simulate(a, T0 + 3500).state;
+    const b = simulate(a, T0 + 115 * SEC).state;
     expect(qty(b, 'oak_logs')).toBe(1);
-    expect(progressMs(b)).toBe(500);
+    expect(progressMs(b)).toBe(5 * SEC);
   });
 
   it('bird nest drops at ~1/200 over a long run and rolls the seeded RNG', () => {
+    // Fastest logs (10 s floor) so the sample is large.
     let s = woodcuttingGame(7);
+    s = { ...s, character: { ...s.character, attributes: { ...s.character.attributes, dexterity: 500 } } };
     let actions = 0;
-    for (let i = 0; i < 10; i++) {
-      // 10 × 8h with a fresh empty inventory slot each time is not needed: logs stack.
+    for (let i = 0; i < 40; i++) {
       const r = simulate(s, s.time.lastSimulatedAt + DEFAULT_OFFLINE_CAP_MS);
       actions += r.summary.actions;
       s = r.state;
     }
     const nests = qty(s, 'bird_nest');
-    expect(actions).toBeGreaterThan(100_000);
+    expect(actions).toBe(40 * 2880);
     const expected = actions / 200;
     expect(Math.abs(nests - expected)).toBeLessThan(5 * Math.sqrt(expected));
     expect(s.rng.seed).not.toBe(woodcuttingGame(7).rng.seed);
   });
 
-  it('a level-up shortens the next interval immediately', () => {
+  it('a level-up never changes the cut time (it depends on DEX only)', () => {
     const s = woodcuttingGame();
-    // 50 actions × 10 XP = 500 XP = Lv2 exactly at action 50; afterwards 2970ms per action.
-    const r = simulate(s, T0 + 50 * 3000 + 2970);
-    expect(r.summary.actions).toBe(51);
+    // 20 logs × 25 XP = 500 XP = Lv2 exactly at log 20; log 21 still takes 1:50.
+    const r = simulate(s, T0 + 21 * OAK_MS);
+    expect(r.summary.actions).toBe(21);
     expect(r.summary.skillLevelsGained.woodcutting).toBe(1);
     expect(r.state.character.skills.woodcutting.level).toBe(2);
     expect(progressMs(r.state)).toBe(0);
@@ -73,13 +65,13 @@ describe('woodcutting rules', () => {
         items: Array.from({ length: 20 }, (_, i) => ({ id: `junk-${i}`, defId: 'junk', name: 'Junk', icon: '?', rarity: 'common' as const })),
       },
     };
-    const r = simulate(full, T0 + 10 * 3000);
+    const r = simulate(full, T0 + 10 * OAK_MS);
     expect(r.summary.actions).toBe(10);
     expect(r.summary.itemsLost.oak_logs).toBe(10);
     expect(r.summary.itemsGained.oak_logs).toBeUndefined();
     expect(r.state.inventory.items).toHaveLength(20);
     // skill XP still granted
-    expect(r.summary.skillXpGained.woodcutting).toBe(100);
+    expect(r.summary.skillXpGained.woodcutting).toBe(250);
 
     // With an existing logs stack, logs keep stacking even when every slot is taken.
     const withLogs: GameState = {
@@ -89,7 +81,7 @@ describe('woodcutting rules', () => {
         items: [{ id: 'oak_logs', defId: 'oak_logs', name: 'Oak Logs', icon: '🪵', rarity: 'common', stackable: true, quantity: 5 }, ...full.inventory.items.slice(1)],
       },
     };
-    const r2 = simulate(withLogs, T0 + 10 * 3000);
+    const r2 = simulate(withLogs, T0 + 10 * OAK_MS);
     expect(qty(r2.state, 'oak_logs')).toBe(15);
     expect(r2.summary.itemsLost.oak_logs).toBeUndefined();
 
@@ -101,7 +93,7 @@ describe('woodcutting rules', () => {
         items: [{ ...withLogs.inventory.items[0], id: 'logs-stack-1' }, ...full.inventory.items.slice(1)],
       },
     };
-    const r3 = simulate(oddId, T0 + 10 * 3000);
+    const r3 = simulate(oddId, T0 + 10 * OAK_MS);
     expect(r3.state.inventory.items[0]).toMatchObject({ id: 'logs-stack-1', defId: 'oak_logs', quantity: 15 });
     expect(itemQuantity(r3.state, 'oak_logs')).toBe(15);
     expect(r3.summary.itemsLost.oak_logs).toBeUndefined();
@@ -130,7 +122,7 @@ describe('time rules', () => {
     const r = simulate(s, T0 + 5 * MIN);
     expect(r.summary.requestedMs).toBe(5 * MIN);
     expect(r.summary.grantedMs).toBe(5 * MIN);
-    expect(r.summary.actions).toBe(100);
+    expect(r.summary.actions).toBe(2); // 2 × 1:50, 80 s banked
     expect(r.state.time.lastSimulatedAt).toBe(T0 + 5 * MIN);
   });
 
@@ -257,15 +249,12 @@ describe('time rules', () => {
     expect(qty(fwdAgain.state, 'oak_logs')).toBe(qty(fwd.state, 'oak_logs'));
   });
 
-  it('8h cap: worst-case loop (level 61+, 1.2s interval) stays bounded', () => {
+  it('8h cap: worst-case loop (10 s floor) stays bounded', () => {
     const s = woodcuttingGame();
-    const fast: GameState = {
-      ...s,
-      character: { ...s.character, skills: { ...s.character.skills, woodcutting: { level: 61, xp: 0, xpToNext: 1e15 } } },
-    };
+    const fast: GameState = { ...s, character: { ...s.character, attributes: { ...s.character.attributes, dexterity: 1_000_000 } } };
     const started = performance.now();
     const r = simulate(fast, T0 + 8 * HOUR);
-    expect(r.summary.actions).toBe(24_000);
+    expect(r.summary.actions).toBe(2880);
     expect(performance.now() - started).toBeLessThan(2000);
   });
 });
@@ -273,9 +262,9 @@ describe('time rules', () => {
 describe('commands', () => {
   it('START_ACTIVITY then STOP_ACTIVITY', () => {
     const s = newGame(1, T0);
-    const started = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting' }, T0);
-    expect(started.activity).toEqual({ kind: 'woodcutting', startedAt: T0, progressMs: 0 });
-    const stopped = apply(started, { type: 'STOP_ACTIVITY' }, T0 + 10 * SEC);
+    const started = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
+    expect(started.activity).toEqual({ kind: 'woodcutting', treeId: 'oak', startedAt: T0, progressMs: 0 });
+    const stopped = apply(started, { type: 'STOP_ACTIVITY' }, T0 + 3 * OAK_MS + 10 * SEC);
     expect(stopped.activity).toBeNull();
     // rewards up to the stop are kept
     expect(qty(stopped, 'oak_logs')).toBe(3);
@@ -283,7 +272,7 @@ describe('commands', () => {
 
   it('simulates up to now before applying (no reward lost or double-counted)', () => {
     const s = woodcuttingGame();
-    const res = applyCommand(s, cmd({ type: 'STOP_ACTIVITY' }), T0 + 30 * SEC);
+    const res = applyCommand(s, cmd({ type: 'STOP_ACTIVITY' }), T0 + 10 * OAK_MS + 30 * SEC);
     if (!res.ok) throw new Error();
     expect(res.summary.actions).toBe(10);
     expect(qty(res.state, 'oak_logs')).toBe(10);
@@ -293,13 +282,13 @@ describe('commands', () => {
 
   it('starting the running activity again keeps its banked progress', () => {
     const s = simulate(woodcuttingGame(), T0 + 2 * SEC).state;
-    const again = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting' }, T0 + 2 * SEC);
+    const again = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0 + 2 * SEC);
     expect(progressMs(again)).toBe(2000);
   });
 
   it('DEBUG_GRANT_HERO_XP sets flags.debugUsed; normal commands do not', () => {
     const s = newGame(1, T0);
-    const normal = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting' }, T0);
+    const normal = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
     expect(normal.flags.debugUsed).toBe(false);
     const debug = apply(normal, { type: 'DEBUG_GRANT_HERO_XP', amount: 1 }, T0);
     expect(debug.flags.debugUsed).toBe(true);
@@ -314,7 +303,7 @@ describe('commands', () => {
 
   it('typed errors, input untouched', () => {
     const s = newGame(1, T0);
-    const unknown = applyCommand(s, cmd({ type: 'START_ACTIVITY', kind: 'fishing' as 'woodcutting' }), T0);
+    const unknown = applyCommand(s, cmd({ type: 'START_ACTIVITY', kind: 'fishing' as 'woodcutting', treeId: 'oak' }), T0);
     expect(unknown).toEqual({ ok: false, error: expect.objectContaining({ code: 'UNKNOWN_ACTIVITY' }) });
     const stop = applyCommand(s, cmd({ type: 'STOP_ACTIVITY' }), T0);
     expect(stop).toEqual({ ok: false, error: expect.objectContaining({ code: 'NO_ACTIVE_ACTIVITY' }) });

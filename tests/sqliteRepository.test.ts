@@ -107,7 +107,7 @@ describe('SQLiteGameRepository (real SQL)', () => {
     const open = async () => nodeDb(db);
     const a = new LocalGameClient(new SQLiteGameRepository(open), clock, idSource('a'));
     await a.load();
-    await a.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting' });
+    await a.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     clock.advance(HOUR);
     await a.resume();
 

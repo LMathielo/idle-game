@@ -15,7 +15,7 @@ export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
  */
 export type Attributes = Record<AttributeKey, number>;
 
-export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots';
+export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots' | 'axe';
 
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic';
 
@@ -75,8 +75,11 @@ export type Inventory = {
 /** Seeded PRNG state (mulberry32). `seed` is a uint32 that advances on every draw. */
 export type RngState = { seed: number };
 
-/** Gathering skills: one action per interval (config/activities.ts). */
+/** Gathering skills (config/woodcutting.ts). */
 export type GatheringKind = 'woodcutting';
+
+/** Woodcutting trees 1–5, in order. Data lives in config/woodcutting.ts. */
+export type TreeId = 'oak' | 'birch' | 'maple' | 'yew' | 'ironwood';
 
 /** Only one activity runs at a time: a gathering skill, auto-repeating dungeon runs, or training one attribute. */
 export type ActivityKind = GatheringKind | 'dungeon' | 'training';
@@ -89,11 +92,14 @@ export type EnemyId = 'rat' | 'bat' | 'wolf' | 'skeleton' | 'troll';
 type ActivityBase = {
   /** Engine time (epoch ms) the activity started. Informational only. */
   startedAt: number;
-  /** Time banked towards the next action (gathering) or into the current run (dungeon), in ms. Never lost between resumes. */
+  /** Time banked into the current log (woodcutting) or the current run (dungeon), in ms. Never lost between resumes. */
   progressMs: number;
 };
 
-export type GatheringActivity = ActivityBase & { kind: GatheringKind };
+/** Cuts logs from one tree back-to-back until stopped. Switching tree starts a new log. */
+export type WoodcuttingActivity = ActivityBase & { kind: 'woodcutting'; treeId: TreeId };
+
+export type GatheringActivity = WoodcuttingActivity;
 
 /** Auto-repeat: runs follow each other back-to-back until stopped. Stopping loses the current run. */
 export type DungeonActivity = ActivityBase & { kind: 'dungeon'; dungeonId: DungeonId };
@@ -206,7 +212,7 @@ export type Stamina = {
 };
 
 export type GameState = {
-  saveVersion: 6;
+  saveVersion: 7;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -257,6 +263,7 @@ export type SimulationSummary = {
   requestedMs: number;
   /** Time actually credited (after the offline cap). */
   grantedMs: number;
+  /** Gathering actions (logs cut). Per log type: itemsGained / itemsLost under each tree's log item. */
   actions: number;
   itemsGained: Record<string, number>;
   /** Items that did not fit because the inventory had no free slot. */

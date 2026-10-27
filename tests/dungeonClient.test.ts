@@ -46,7 +46,7 @@ describe('dungeon through the client', () => {
     clock.advance(2 * MIN);
     await client.tick();
     expect(client.getState().character.hp).toBe(30); // 2 min × 15/min from 0
-    expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting' })).ok).toBe(true);
+    expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' })).ok).toBe(true);
     expect(client.getState().dungeon.totals.runs).toBe(2); // the run in progress was lost
     await client.persist();
 

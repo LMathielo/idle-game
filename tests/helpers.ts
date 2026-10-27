@@ -38,7 +38,7 @@ export function apply(state: GameState, c: CommandInput, now: number): GameState
 
 /** New game at T0 with woodcutting running. */
 export function woodcuttingGame(seed = 42): GameState {
-  return apply(newGame(seed, T0), { type: 'START_ACTIVITY', kind: 'woodcutting' }, T0);
+  return apply(newGame(seed, T0), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
 }
 
 export function qty(state: GameState, id: string): number {

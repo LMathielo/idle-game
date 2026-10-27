@@ -23,6 +23,8 @@ import {
   isNoteworthy,
   loadSave,
   type MigratePayload,
+  MIGRATIONS,
+  migrateDoc,
   newGame,
   newTrainingState,
   type ReplayEntry,
@@ -115,7 +117,7 @@ describe('curve, caps and prices (config/training.ts)', () => {
 
   it('a new hero starts at tier 0 with every attribute untrained', () => {
     const s = newGame(1, T0);
-    expect(s.saveVersion).toBe(6);
+    expect(s.saveVersion).toBe(7);
     expect(s.training).toEqual({
       tier: 0,
       attributes: Object.fromEntries(ATTRIBUTE_KEYS.map((k) => [k, { level: 0, xp: 0, progressMs: 0 }])),
@@ -311,7 +313,7 @@ describe('training time', () => {
 describe('one activity at a time', () => {
   it('training ↔ woodcutting: each stops the other; training XP is kept', () => {
     let s = simulate(train(heroAtTier(1), 'strength'), T0 + 2 * MIN).state;
-    const r = applyCommand(s, cmd({ type: 'START_ACTIVITY', kind: 'woodcutting' }), T0 + 2 * MIN);
+    const r = applyCommand(s, cmd({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }), T0 + 2 * MIN);
     if (!r.ok) throw new Error(r.error.message);
     expect(r.events).toEqual([
       { type: 'ACTIVITY_STOPPED', kind: 'training' },
@@ -476,14 +478,15 @@ describe('frozen v5 save (tests/fixtures/save-v5.json) → v6', () => {
 
   it('migrates: adds an untrained tier-0 training state and changes nothing else (pure, deterministic)', () => {
     const frozen = JSON.parse(JSON.stringify(V5_SAVE));
-    const s = loadSave(V5_SAVE);
+    // The v5 → v6 step only (v6 → v7 is tested from the v6 fixture).
+    const s = migrateDoc(V5_SAVE, MIGRATIONS, 6) as unknown as GameState;
     expect(V5_SAVE).toEqual(frozen);
     expect(s.saveVersion).toBe(6);
     expect(s.training).toEqual(newTrainingState());
     const { training: _t, saveVersion: _v, ...rest } = s;
     const { saveVersion: _rv, ...rawRest } = V5_SAVE;
     expect(rest).toEqual(rawRest);
-    expect(hashState(loadSave(V5_SAVE))).toBe(hashState(s));
+    expect(hashState(migrateDoc(V5_SAVE, MIGRATIONS, 6) as unknown as GameState)).toBe(hashState(s));
     // Derived stats are unchanged by the migration (no training yet): base attributes only.
     expect(effectiveAttributes(s)).toEqual(V5_SAVE.character.attributes);
   });

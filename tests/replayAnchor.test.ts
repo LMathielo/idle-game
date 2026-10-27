@@ -25,6 +25,8 @@ import {
   RELEASED_ENGINES,
   releasedEngineIndex,
   replayStep,
+  MIGRATIONS,
+  migrateDoc,
 } from '../src/engine';
 import { HOUR, makeClient, MIN, SEC, T0 } from './helpers';
 
@@ -59,10 +61,11 @@ describe('frozen v4 save (tests/fixtures/save-v4.json)', () => {
   });
 
   it('migrates to v6 (via v5): Rat Cellar keeps its wins toward Bat Cave, the run continues, untrained hero', () => {
-    const s = loadSave(V4_SAVE);
+    // The v6 shape (the v7 step, trees and the axe slot, is tested from the v6 fixture).
+    const s = migrateDoc(V4_SAVE, MIGRATIONS, 6) as unknown as GameState;
     expect(s.saveVersion).toBe(6);
     expect(s.training).toEqual(newTrainingState());
-    expect(hashState(loadSave(V4_SAVE))).toBe(hashState(s)); // deterministic
+    expect(hashState(migrateDoc(V4_SAVE, MIGRATIONS, 6) as unknown as GameState)).toBe(hashState(s)); // deterministic
     expect(s.dungeon.byDungeon).toEqual({ rat_cellar: { runs: 19, wins: 18, losses: 1 } });
     expect(s.dungeon.totals).toEqual(V4_SAVE.dungeon.totals);
     expect(s.activity).toEqual({ ...V4_SAVE.activity, dungeonId: 'rat_cellar' });
@@ -347,9 +350,9 @@ describe('replay with anchors', () => {
 
     it('a label newer than this engine is rejected (this engine is the last released one)', async () => {
       expect(RELEASED_ENGINES.at(-1)!.engine).toBe(ENGINE_VERSION);
-      expect(releasedEngineIndex('1.6.0')).toBe(-1);
+      expect(releasedEngineIndex('1.7.0')).toBe(-1);
       const { rows } = await currentLog();
-      expect(() => replayLogReport(rows.map((r) => ({ ...r, engineVersion: '1.6.0' })))).toThrow(/1\.6\.0, which never shipped/);
+      expect(() => replayLogReport(rows.map((r) => ({ ...r, engineVersion: '1.7.0' })))).toThrow(/1\.7\.0, which never shipped/);
     });
 
     it('labels never go back along the log: a 1.3.0 row after 1.4.0 rows is rejected', async () => {

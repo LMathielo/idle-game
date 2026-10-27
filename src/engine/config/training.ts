@@ -18,4 +18,10 @@ export const TRAINING = {
   levelsPerTier: 20,
   /** Price of tier t in gold: tierPriceBase × t³ (100, 800, 2,700, … 100,000). Tier 1 is paid too. */
   tierPriceBase: 100,
+  /**
+   * Stamina speed-up (SPEEDUP_TRAINING): each step adds msPerStep of training progress at once for
+   * staminaPerStep stamina (1 stamina = 1 minute). Steps beyond the tier cap are never charged.
+   * maxStepsPerCommand bounds one command's input.
+   */
+  speedup: { msPerStep: 60_000, staminaPerStep: 1, maxStepsPerCommand: 100_000 },
 } as const;

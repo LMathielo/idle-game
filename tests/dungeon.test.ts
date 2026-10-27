@@ -360,10 +360,10 @@ describe('HP regen', () => {
   });
 
   it('runs while woodcutting and while idle', () => {
-    const wood = apply(hurt(10), { type: 'START_ACTIVITY', kind: 'woodcutting' }, T0);
-    const r = simulate(wood, T0 + MIN).state;
-    expect(r.character.hp).toBe(25);
-    expect(r.stats.totalActions).toBe(20);
+    const wood = apply(hurt(10), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
+    const r = simulate(wood, T0 + 2 * MIN).state;
+    expect(r.character.hp).toBe(40);
+    expect(r.stats.totalActions).toBe(1);
   });
 
   it('clock moved back: no regen until real time passes the highest time seen', () => {
@@ -452,7 +452,7 @@ describe('offline catch-up', () => {
 describe('one activity at a time', () => {
   it('starting woodcutting cancels the run in progress: no fight, no rewards', () => {
     const s = dungeonGame();
-    const r = applyCommand(s, { id: 'w', type: 'START_ACTIVITY', kind: 'woodcutting' }, T0 + 4 * MIN);
+    const r = applyCommand(s, { id: 'w', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0 + 4 * MIN);
     if (!r.ok) throw new Error(r.error.message);
     expect(r.state.activity).toMatchObject({ kind: 'woodcutting', progressMs: 0 });
     expect(r.state.dungeon).toEqual(s.dungeon);
@@ -463,7 +463,7 @@ describe('one activity at a time', () => {
   });
 
   it('runs that finished before the switch are kept; only the current one is lost', () => {
-    const r = applyCommand(dungeonGame(), { id: 'w', type: 'START_ACTIVITY', kind: 'woodcutting' }, T0 + RUN_MS + 3 * MIN);
+    const r = applyCommand(dungeonGame(), { id: 'w', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0 + RUN_MS + 3 * MIN);
     expect(r.ok && r.state.dungeon.totals.runs).toBe(1);
   });
 
@@ -475,10 +475,10 @@ describe('one activity at a time', () => {
   });
 
   it('starting a dungeon stops woodcutting (logs gathered so far are kept)', () => {
-    const wood = apply(newGame(1, T0), { type: 'START_ACTIVITY', kind: 'woodcutting' }, T0);
-    const r = applyCommand(wood, { id: 'd', ...RAT_CELLAR }, T0 + 10 * SEC);
+    const wood = apply(newGame(1, T0), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
+    const r = applyCommand(wood, { id: 'd', ...RAT_CELLAR }, T0 + 340 * SEC);
     if (!r.ok) throw new Error(r.error.message);
-    expect(r.state.activity).toEqual({ kind: 'dungeon', dungeonId: 'rat_cellar', startedAt: T0 + 10 * SEC, progressMs: 0 });
+    expect(r.state.activity).toEqual({ kind: 'dungeon', dungeonId: 'rat_cellar', startedAt: T0 + 340 * SEC, progressMs: 0 });
     expect(r.state.stats.totalActions).toBe(3);
   });
 

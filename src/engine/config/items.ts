@@ -16,10 +16,16 @@ export type ItemDef = {
   damage?: { min: number; max: number };
   /** Armor value added to base defense while equipped. Integer. */
   armor?: number;
+  /** Axes: woodcutting strength added while equipped. Integer. */
+  woodcuttingStrength?: number;
 };
 
 export const ITEMS = {
   oak_logs: { id: 'oak_logs', name: 'Oak Logs', icon: '🪵', rarity: 'common', stackable: true },
+  birch_logs: { id: 'birch_logs', name: 'Birch Logs', icon: '🪵', rarity: 'common', stackable: true },
+  maple_logs: { id: 'maple_logs', name: 'Maple Logs', icon: '🪵', rarity: 'common', stackable: true },
+  yew_logs: { id: 'yew_logs', name: 'Yew Logs', icon: '🪵', rarity: 'common', stackable: true },
+  ironwood_logs: { id: 'ironwood_logs', name: 'Ironwood Logs', icon: '🪵', rarity: 'common', stackable: true },
   bird_nest: { id: 'bird_nest', name: 'Bird Nest', icon: '🪺', rarity: 'rare', stackable: true },
   bread: { id: 'bread', name: 'Bread', icon: '🍞', rarity: 'common', stackable: true },
   rat_skin: { id: 'rat_skin', name: 'Rat Skin', icon: '🐾', rarity: 'common', stackable: true },
@@ -38,6 +44,7 @@ export const ITEMS = {
   },
   linen_tunic: { id: 'linen_tunic', name: 'Linen Tunic', icon: '🥋', rarity: 'common', stackable: false, slot: 'armor', armor: 2 },
   worn_sandals: { id: 'worn_sandals', name: 'Worn Sandals', icon: '👢', rarity: 'common', stackable: false, slot: 'boots', armor: 1 },
+  wooden_axe: { id: 'wooden_axe', name: 'Wooden Axe', icon: '🪓', rarity: 'common', stackable: false, slot: 'axe', woodcuttingStrength: 1 },
 } as const satisfies Record<string, ItemDef>;
 
 export type ItemId = keyof typeof ITEMS;

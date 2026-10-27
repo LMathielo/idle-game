@@ -32,6 +32,9 @@ export const LOG_TYPES = [
   'UNLOCK_TRAINING_TIER',
   'DEBUG_ADD_TRAINING_XP',
   'DEBUG_ADD_GOLD',
+  'SKIP_WOODCUT',
+  'SPEEDUP_TRAINING',
+  'DEBUG_ADD_WOODCUTTING_LEVEL',
   'MIGRATE',
   'RESUME',
   'SIMULATE',
@@ -142,7 +145,10 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'DEBUG_ADD_ATTRIBUTE':
     case 'UNLOCK_TRAINING_TIER':
     case 'DEBUG_ADD_TRAINING_XP':
-    case 'DEBUG_ADD_GOLD': {
+    case 'DEBUG_ADD_GOLD':
+    case 'SKIP_WOODCUT':
+    case 'SPEEDUP_TRAINING':
+    case 'DEBUG_ADD_WOODCUTTING_LEVEL': {
       const res = applyCommand(state, payload as Command, clientTime, { allowDebug: true });
       if (!res.ok) throw new ReplayError(`${type} rejected on replay: ${res.error.code}`);
       return res.state;

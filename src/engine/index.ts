@@ -9,7 +9,6 @@ export * from './newGame';
 export * from './migrations';
 export * from './summary';
 export * from './selectors';
-export { actionIntervalMs, currentActionIntervalMs } from './activities';
 export { ENGINE_VERSION, RELEASED_ENGINES, releasedEngineIndex } from './version';
 export * from './replay';
 export { markDebugUsed } from './flags';
@@ -33,8 +32,11 @@ export {
   advanceTraining,
   attributeTrainingView,
   newTrainingState,
+  speedupPlan,
+  speedupStepsToCap,
   trainingBlock,
   trainingCap,
+  trainingMsToCap,
   trainingRateMultiplier,
   trainingTierPrice,
   trainingView,
@@ -45,3 +47,19 @@ export {
   type TrainingView,
 } from './training';
 export * from './config';
+export {
+  axeBonus,
+  logMsFor,
+  treeCheck,
+  treeView,
+  woodcutActivityView,
+  woodcutSkipCost,
+  woodcuttingStrength,
+  woodcuttingView,
+  type TreeCheck,
+  type TreeView,
+  type WoodcutActivityView,
+  type WoodcuttingStrength,
+  type WoodcuttingView,
+  type WsInput,
+} from './woodcutting';
