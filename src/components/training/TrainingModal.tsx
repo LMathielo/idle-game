@@ -195,9 +195,9 @@ const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused
 function SpeedupButtons({ view, stamina, onSpeedup }: { view: AttributeTrainingView; stamina: number; onSpeedup: (minutes: number, cost: number) => void }) {
   const per = TRAINING.speedup.staminaPerStep;
   const options = [
-    { key: '1', minutes: 1, label: '+1 min' },
-    { key: '10', minutes: 10, label: '+10 min' },
-    { key: 'next', minutes: view.speedupToNextLevel, label: 'To next level' },
+    { key: '1', minutes: 1, label: '+1m', spoken: '1 minute' },
+    { key: '10', minutes: 10, label: '+10m', spoken: '10 minutes' },
+    { key: 'next', minutes: view.speedupToNextLevel, label: 'Next Lv', spoken: 'To the next level' },
   ].map((o) => {
     const minutes = Math.min(o.minutes, view.speedupToCap);
     return { ...o, minutes, cost: minutes * per };
@@ -207,10 +207,12 @@ function SpeedupButtons({ view, stamina, onSpeedup }: { view: AttributeTrainingV
       {options.map((o) => (
         <PixelButton
           key={o.key}
-          label={`${o.label} (${o.cost}⚡)`}
+          label={o.label}
+          sublabel={`${o.cost}⚡`}
+          stretch
           onPress={() => onSpeedup(o.minutes, o.cost)}
           disabled={o.minutes <= 0 || stamina < o.cost}
-          accessibilityLabel={`${o.label} of training for ${o.cost} stamina`}
+          accessibilityLabel={`Speed up training: ${o.spoken}${o.key === 'next' ? ` (${o.minutes} minutes)` : ''}, costs ${o.cost} stamina`}
           accessibilityHint={stamina < o.cost ? 'Not enough stamina' : 'Adds the training time right away'}
         />
       ))}
@@ -223,7 +225,7 @@ const styles = StyleSheet.create({
   paused: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold, marginBottom: 10 },
   gold: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.gold },
   stamina: { color: colors.stamina },
-  speedup: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 4 },
+  speedup: { flexDirection: 'row', flexWrap: 'nowrap', gap: 8, marginTop: 4 },
 
   tierBox: { alignItems: 'center', gap: 6, marginTop: 6 },
   missing: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.dangerDeadly },
