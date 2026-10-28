@@ -77,3 +77,31 @@ export {
 } from './merchant';
 export { isEquipmentSlot } from './equipment';
 export { freeSlots } from './inventory';
+export {
+  advanceMining,
+  mineActivityView,
+  mineSkipCost,
+  miningStrength,
+  miningView,
+  oreMsFor,
+  pickaxeBonus,
+  rockCheck,
+  rockView,
+  type MineActivityView,
+  type MiningStrength,
+  type MiningView,
+  type MsInput,
+  type RockCheck,
+  type RockView,
+} from './mining';
+export {
+  buildingForActivity,
+  buildingLevel,
+  buildingsView,
+  buildingView,
+  isBuilt,
+  newBuildingsState,
+  requirementViews,
+  type BuildingView,
+  type RequirementView,
+} from './buildings';

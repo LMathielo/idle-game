@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, hashState, itemQuantity, newGame, simulate, type GameState } from '../src/engine';
 import { CLOCK_BACKWARD_TOLERANCE_MS, DEFAULT_OFFLINE_CAP_MS } from '../src/engine/config/time';
-import { HOUR, MIN, SEC, T0, apply, cmd, qty, woodcuttingGame, progressMs } from './helpers';
+import { HOUR, MIN, SEC, T0, apply, cmd, qty, woodcuttingGame, progressMs, builtGame } from './helpers';
 
 /** Oak at DEX 10: 2:00 − 10 s = 1:50 per log, 25 XP. */
 const OAK_MS = 110 * SEC;
@@ -100,7 +100,7 @@ describe('woodcutting rules (Oak)', () => {
   });
 
   it('idle hero (no activity) only moves time', () => {
-    const s = newGame(1, T0);
+    const s = builtGame(1, T0);
     const r = simulate(s, T0 + HOUR);
     expect(r.summary.actions).toBe(0);
     expect(r.state.time.lastSimulatedAt).toBe(T0 + HOUR);
@@ -261,7 +261,7 @@ describe('time rules', () => {
 
 describe('commands', () => {
   it('START_ACTIVITY then STOP_ACTIVITY', () => {
-    const s = newGame(1, T0);
+    const s = builtGame(1, T0);
     const started = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
     expect(started.activity).toEqual({ kind: 'woodcutting', treeId: 'oak', startedAt: T0, progressMs: 0 });
     const stopped = apply(started, { type: 'STOP_ACTIVITY' }, T0 + 3 * OAK_MS + 10 * SEC);
@@ -287,7 +287,7 @@ describe('commands', () => {
   });
 
   it('DEBUG_GRANT_HERO_XP sets flags.debugUsed; normal commands do not', () => {
-    const s = newGame(1, T0);
+    const s = builtGame(1, T0);
     const normal = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
     expect(normal.flags.debugUsed).toBe(false);
     const debug = apply(normal, { type: 'DEBUG_GRANT_HERO_XP', amount: 1 }, T0);
@@ -297,12 +297,12 @@ describe('commands', () => {
   });
 
   it('allowDebug: false rejects DEBUG_* commands with a typed error', () => {
-    const res = applyCommand(newGame(1, T0), cmd({ type: 'DEBUG_GRANT_HERO_XP', amount: 1 }), T0, { allowDebug: false });
+    const res = applyCommand(builtGame(1, T0), cmd({ type: 'DEBUG_GRANT_HERO_XP', amount: 1 }), T0, { allowDebug: false });
     expect(res).toEqual({ ok: false, error: expect.objectContaining({ code: 'DEBUG_DISABLED' }) });
   });
 
   it('typed errors, input untouched', () => {
-    const s = newGame(1, T0);
+    const s = builtGame(1, T0);
     const unknown = applyCommand(s, cmd({ type: 'START_ACTIVITY', kind: 'fishing' as 'woodcutting', treeId: 'oak' }), T0);
     expect(unknown).toEqual({ ok: false, error: expect.objectContaining({ code: 'UNKNOWN_ACTIVITY' }) });
     const stop = applyCommand(s, cmd({ type: 'STOP_ACTIVITY' }), T0);

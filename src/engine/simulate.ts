@@ -1,6 +1,7 @@
 // Advances the game to `now`. The only place where time turns into rewards.
 // Same code path for live ticks (1s) and offline catch-up (up to the cap).
 import { advanceDungeon } from './dungeon';
+import { advanceMining } from './mining';
 import { hpRegenPerMinute, maxHpOf, regenHp } from './hp';
 import { regenMerchantCharges } from './merchant';
 import { regenStamina } from './stamina';
@@ -25,7 +26,7 @@ export type SimulationResult = { state: GameState; events: GameEvent[]; summary:
  * Stamina, HP and merchant refresh charges regenerate on the accepted elapsed time (rules b, c and e grant none), but NOT on the
  * capped time: their max already bounds them, so a long absence can fill both (docs/ENGINE.md).
  *
- * Gathering, dungeon runs and training share this path. Dungeon runs and training level-ups interleave with
+ * Gathering (woodcutting, mining), dungeon runs and training share this path. Dungeon runs and training level-ups interleave with
  * HP regen in time order (advanceDungeon, advanceTraining); otherwise HP simply regenerates over the whole
  * elapsed time.
  */
@@ -91,6 +92,7 @@ export function simulate(state: GameState, now: number): SimulationResult {
   }
 
   if (activity?.kind === 'woodcutting') advanceWoodcutting(draft, activity, grantedMs, summary, events);
+  if (activity?.kind === 'mining') advanceMining(draft, activity, grantedMs, summary, events);
 
   // Gathering never touches HP, so regen over the whole (uncapped) time is the same in any order.
   // Same object when nothing changed (full HP).

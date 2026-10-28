@@ -39,6 +39,15 @@
 // of 250k so the hero stays around Lv11 on the new curve. The script gained a 1.8.0 segment: Rat
 // Cellar (cancels the Birch log), a search skip, a simulate boundary mid-fight, a debug HP change mid-fight, then
 // 1 h of search + fight runs.
+// 1.8.0 → 1.9.0 (2026-10-28): save v10 (buildings: Woodcutting, Mine Shaft, Town Hall and Training Grounds start
+// locked; mining and the pickaxe slot; a fight in progress at the offline cap is finished). The script builds
+// Woodcutting with DEBUG_BUILD before its first log, and builds the Training Grounds with DEBUG_BUILD instead of
+// buying Tier 1 (the building comes with Tier 1), so every later gold value is 100 higher; nothing else in the
+// earlier script changed (same actions, runs, wins, levels, HP, stamina, loot, training). The merchant now stocks
+// the Iron Pickaxe after the Iron Axe, so the Iron Helm buy names slot 4. The script gained a 1.9.0 segment: a real
+// BUILD of the Mine Shaft, 1 h of Stone, a bound SKIP_MINE, debug mining levels, the Iron Pickaxe bought and
+// equipped for Copper, the Wooden Pickaxe re-equipped (Copper stops: MS too low), a real BUILD of the Town Hall
+// (logs, stone and gold consumed), then the Rat Cellar and 20 h away (capped).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -56,11 +65,12 @@ import {
   newTrainingState,
   RELEASED_ENGINES,
   simulate,
+  mineActivityView,
   trainingView,
   woodcutActivityView,
   woodcuttingView,
 } from '../src/engine';
-import { HOUR, MIN, SEC, T0 } from './helpers';
+import { HOUR, MIN, SEC, T0, withBuilt } from './helpers';
 
 /** End of the 1.5.0 script; the 1.6.0 segment starts here. */
 const B = T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC;
@@ -77,7 +87,11 @@ const skipShown = (id: string) => (s: GameState): Command => {
 
 type Step = { at: number; cmd?: Command | ((s: GameState) => Command) };
 
+/** End of the 1.8.0 script; the 1.9.0 segment starts here. */
+const E = D + 31 * SEC + HOUR;
+
 const SCRIPT: Step[] = [
+  { at: T0, cmd: { id: 'b0', type: 'DEBUG_BUILD', buildingId: 'woodcutting' } }, // 1.9.0: Woodcutting starts locked
   { at: T0 + SEC, cmd: { id: 'g1', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } },
   { at: T0 + 37 * MIN },
   { at: T0 + 5 * HOUR },
@@ -99,8 +113,9 @@ const SCRIPT: Step[] = [
   { at: T0 + 34 * HOUR + 402 * SEC, cmd: { id: 't1', type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId: 'bat_cave', amount: 10 } },
   { at: T0 + 34 * HOUR + 403 * SEC, cmd: { id: 't2', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'bat_cave' } },
   { at: T0 + 36 * HOUR + 403 * SEC }, // 2h of Bat Cave runs (DEX 10 → 6:50 each)
-  // 1.5.0: training. 300 gold → Tier 1 (100). Training STR cancels the Bat Cave run in progress.
-  { at: T0 + 36 * HOUR + 404 * SEC, cmd: { id: 'r1', type: 'UNLOCK_TRAINING_TIER', tier: 1 } },
+  // 1.5.0: training. 1.9.0: the Training Grounds (debug-built) come with Tier 1, which this row used to buy for 100 gold.
+  // Training STR cancels the Bat Cave run in progress.
+  { at: T0 + 36 * HOUR + 404 * SEC, cmd: { id: 'r1', type: 'DEBUG_BUILD', buildingId: 'training_grounds' } },
   { at: T0 + 36 * HOUR + 405 * SEC, cmd: { id: 'r2', type: 'START_ACTIVITY', kind: 'training', attribute: 'strength' } },
   { at: T0 + 36 * HOUR + 405 * SEC + 30 * MIN + 30 * SEC }, // STR Lv2 (5 + 15 min), 10 XP + 30 s toward Lv3
   { at: T0 + 36 * HOUR + 406 * SEC + 30 * MIN + 30 * SEC, cmd: { id: 'r3', type: 'START_ACTIVITY', kind: 'training', attribute: 'endurance' } },
@@ -145,7 +160,7 @@ const SCRIPT: Step[] = [
   { at: C + 11 * SEC + 5 * HOUR, cmd: { id: 'm11', type: 'REFRESH_MERCHANT' } },
   { at: C + 12 * SEC + 5 * HOUR, cmd: { id: 'm12', type: 'DEBUG_ADD_MERCHANT_CHARGE' } },
   { at: C + 13 * SEC + 5 * HOUR, cmd: { id: 'm13', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' } },
-  { at: C + 14 * SEC + 5 * HOUR, cmd: { id: 'm14', type: 'BUY_ITEM', slot: 3, defId: 'iron_helm', quantity: 1, maxUnitPrice: 400 } },
+  { at: C + 14 * SEC + 5 * HOUR, cmd: { id: 'm14', type: 'BUY_ITEM', slot: 4, defId: 'iron_helm', quantity: 1, maxUnitPrice: 400 } },
   { at: C + 15 * SEC + 5 * HOUR, cmd: { id: 'm15', type: 'EQUIP_ITEM', itemId: 'iron_helm#2' } },
   { at: D }, // 1 h of Birch
   // 1.8.0: live combat. Rat Cellar cancels the Birch log; skip the search; a simulate boundary mid-fight.
@@ -153,7 +168,21 @@ const SCRIPT: Step[] = [
   { at: D + 31 * SEC, cmd: skipShown('l2') }, // 1:20 left → 2 stamina
   { at: D + 31 * SEC + 1500 }, // mid-fight: the first strikes have landed
   { at: D + 31 * SEC + 1600, cmd: { id: 'l3', type: 'DEBUG_SET_HERO_HP', hp: 30 } }, // mid-fight HP change
-  { at: D + 31 * SEC + HOUR }, // 1 h of search + fight runs
+  { at: E }, // 1 h of search + fight runs
+  // 1.9.0: buildings and mining. A real BUILD pays 50 gold for the Mine Shaft; Stone cancels the Rat Cellar run.
+  { at: E + 1 * SEC, cmd: { id: 'n1', type: 'BUILD', buildingId: 'mine_shaft' } },
+  { at: E + 2 * SEC, cmd: { id: 'n2', type: 'START_ACTIVITY', kind: 'mining', rockId: 'stone' } },
+  { at: E + 2 * SEC + HOUR }, // 1 h of Stone (1:50 per ore at DEX 10)
+  { at: E + 3 * SEC + HOUR, cmd: (s) => ({ id: 'n3', type: 'SKIP_MINE', ore: s.stats.totalActions + 1, maxCost: mineActivityView(s)!.skipCost }) },
+  { at: E + 4 * SEC + HOUR, cmd: { id: 'n4', type: 'DEBUG_ADD_MINING_LEVEL', levels: 4 } },
+  { at: E + 5 * SEC + HOUR, cmd: { id: 'n5', type: 'BUY_ITEM', slot: 2, defId: 'iron_pickaxe', quantity: 1, maxUnitPrice: 600 } },
+  { at: E + 6 * SEC + HOUR, cmd: { id: 'n6', type: 'EQUIP_ITEM', itemId: 'iron_pickaxe#3' } },
+  { at: E + 7 * SEC + HOUR, cmd: { id: 'n7', type: 'START_ACTIVITY', kind: 'mining', rockId: 'copper' } }, // MS ≥ 100
+  { at: E + 7 * SEC + 2 * HOUR }, // 1 h of Copper (4:50 per ore)
+  { at: E + 8 * SEC + 2 * HOUR, cmd: { id: 'n8', type: 'EQUIP_ITEM', itemId: 'start-wooden_pickaxe' } }, // MS < 100: Copper stops
+  { at: E + 9 * SEC + 2 * HOUR, cmd: { id: 'n9', type: 'BUILD', buildingId: 'town_hall' } }, // 20 Oak Logs, 20 Stone, 100 gold
+  { at: E + 10 * SEC + 2 * HOUR, cmd: { id: 'n10', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } },
+  { at: E + 10 * SEC + 22 * HOUR }, // 20 h away: 8 h of runs (a fight in progress at the cap would be finished)
 ];
 
 function runScript(steps: Step[] = SCRIPT) {
@@ -200,6 +229,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.6.0', 7],
       ['1.7.0', 8],
       ['1.8.0', 9],
+      ['1.9.0', 10],
     ]);
   });
 });
@@ -292,7 +322,7 @@ describe('golden', () => {
     expect(s.training).toEqual(newTrainingState());
   });
 
-  it('the 1.6.0 script (unchanged in 1.7.0, re-pinned in 1.8.0)', () => {
+  it('the 1.6.0 script (unchanged in 1.7.0, re-pinned in 1.8.0; 1.9.0: +100 gold, Tier 1 came free)', () => {
     const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'm1')));
     expect(s.time.lastSimulatedAt).toBe(C);
     expect({
@@ -310,7 +340,7 @@ describe('golden', () => {
     }).toEqual({
       actions: 515,
       activity: 'training',
-      gold: 947,
+      gold: 1047, // 1.9.0: was 947; the Training Grounds gave Tier 1 instead of selling it for 100
       hp: [170, 0],
       heroLevel: 13,
       stamina: { current: 91, max: 100, progressMs: 1000 },
@@ -321,6 +351,30 @@ describe('golden', () => {
       rng: expect.anything(),
     });
     expect(s.training.attributes.strength).toEqual({ level: 3, xp: 30, progressMs: 33000 });
+  });
+
+  it('the 1.8.0 script is unchanged in 1.9.0 but for +100 gold (Tier 1 came with the Training Grounds)', () => {
+    const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'n1')));
+    expect(s.time.lastSimulatedAt).toBe(E);
+    expect({
+      actions: s.stats.totalActions,
+      gold: s.character.gold,
+      heroLevel: s.character.level,
+      hp: [s.character.hp, s.character.hpRegenProgress],
+      dungeon: s.dungeon.totals,
+      nests: s.stats.itemsGathered.bird_nest,
+      logs: Object.fromEntries(s.inventory.items.filter((i) => i.defId.endsWith('_logs')).map((i) => [i.defId, i.quantity])),
+      tier: s.training.tier,
+    }).toEqual({
+      actions: 527,
+      gold: 1228, // 1.8.0: 1128
+      heroLevel: 13,
+      hp: [170, 0],
+      dungeon: { runs: 214, wins: 214, losses: 0 },
+      nests: 1,
+      logs: { oak_logs: 391, birch_logs: 36 },
+      tier: 2,
+    });
   });
 
   it('fixed seed + fixed script → fixed final state hash', () => {
@@ -350,12 +404,36 @@ describe('golden', () => {
       nextItemSerial: s.nextItemSerial,
       potions: s.inventory.items.find((i) => i.defId === 'health_potion_t1')?.quantity,
       woodenAxe: s.inventory.items.some((i) => i.defId === 'wooden_axe'),
+      buildings: s.buildings,
+      mining: s.character.skills.mining,
+      pickaxe: s.character.equipment.pickaxe?.id,
+      ores: Object.fromEntries(s.inventory.items.filter((i) => ['stone', 'copper_ore', 'geode'].includes(i.defId)).map((i) => [i.defId, i.quantity])),
+      lastFight: s.dungeon.lastFight && { won: s.dungeon.lastFight.won, endReason: s.dungeon.lastFight.endReason },
+      dungeonActivity: s.activity?.kind === 'dungeon' ? { phase: s.activity.phase, progressMs: s.activity.progressMs } : null,
     }).toMatchInlineSnapshot(`
       {
-        "actions": 527,
+        "actions": 572,
         "activity": "dungeon",
         "axe": "iron_axe",
         "batWings": 12,
+        "buildings": {
+          "mine_shaft": {
+            "level": 1,
+            "state": "built",
+          },
+          "town_hall": {
+            "level": 1,
+            "state": "built",
+          },
+          "training_grounds": {
+            "level": 1,
+            "state": "built",
+          },
+          "woodcutting": {
+            "level": 1,
+            "state": "built",
+          },
+        },
         "byDungeon": {
           "bat_cave": {
             "losses": 0,
@@ -364,28 +442,36 @@ describe('golden', () => {
           },
           "rat_cellar": {
             "losses": 0,
-            "runs": 163,
-            "wins": 163,
+            "runs": 420,
+            "wins": 420,
           },
         },
         "dungeon": {
           "losses": 0,
-          "runs": 214,
-          "wins": 214,
+          "runs": 471,
+          "wins": 471,
         },
-        "engineVersion": "1.8.0",
-        "gold": 1128,
-        "hash": "5fe43fcb",
+        "dungeonActivity": {
+          "phase": "search",
+          "progressMs": 16000,
+        },
+        "engineVersion": "1.9.0",
+        "gold": 1370,
+        "hash": "4f740730",
         "helmet": "iron_helm#2",
-        "heroLevel": 13,
+        "heroLevel": 15,
         "hp": [
-          170,
+          190,
           0,
         ],
+        "lastFight": {
+          "endReason": "enemy_defeated",
+          "won": true,
+        },
         "lastFightMs": 2000,
         "logs": {
           "birch_logs": 36,
-          "oak_logs": 391,
+          "oak_logs": 371,
         },
         "merchant": {
           "chargeProgressMs": 0,
@@ -401,17 +487,27 @@ describe('golden', () => {
               "quantity": 1,
               "unitPrice": 600,
             },
+            null,
             {
               "defId": "iron_sword",
               "quantity": 1,
               "unitPrice": 500,
             },
             null,
-            null,
           ],
         },
+        "mining": {
+          "level": 6,
+          "xp": 1753,
+          "xpToNext": 7348,
+        },
         "nests": 1,
-        "nextItemSerial": 3,
+        "nextItemSerial": 4,
+        "ores": {
+          "copper_ore": 12,
+          "stone": 13,
+        },
+        "pickaxe": "start-wooden_pickaxe",
         "potions": 2,
         "stamina": {
           "current": 100,
@@ -459,10 +555,13 @@ describe('golden', () => {
     expect(s.flags).toEqual({ debugUsed: false });
     expect(s.character.attributes).toEqual({ strength: 10, dexterity: 10, endurance: 10, intelligence: 10 });
     expect(s.stats.totalActions).toBe(2499);
-    // v7: woodcutting becomes Oak from progress 0 (1:50 per log at DEX 10).
-    expect(s.activity).toMatchObject({ kind: 'woodcutting', treeId: 'oak', progressMs: 0 });
-    const next = simulate(s, s.time.lastSimulatedAt + 4 * MIN);
-    expect(next.summary.actions).toBe(2);
+    // v10: woodcutting stops (the Woodcutting building starts locked). Built again, Oak cuts every 1:50 at DEX 10.
+    expect(s.activity).toBeNull();
+    expect(s.buildings.woodcutting).toEqual({ state: 'locked', level: 0 });
+    const at = s.time.lastSimulatedAt;
+    const oak = applyCommand(withBuilt(s, ['woodcutting']), { id: 'v1-oak', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, at);
+    if (!oak.ok) throw new Error(oak.error.message);
+    expect(simulate(oak.state, at + 4 * MIN).summary.actions).toBe(2);
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // migration is deterministic
   });
 
@@ -482,7 +581,7 @@ describe('golden', () => {
     expect(s.character.gold).toBe(raw.character.gold);
     expect(s.character.skills).toEqual(raw.character.skills);
     expect(s.character.skills.woodcutting.level).toBe(8);
-    expect(s.activity).toEqual({ ...raw.activity, treeId: 'oak', progressMs: 0 }); // v7: Oak, from 0
+    expect(s.activity).toBeNull(); // v10: woodcutting stops (its building starts locked)
     expect(s.stats).toEqual(raw.stats);
     expect(s.rng).toEqual(raw.rng);
     expect(s.time).toEqual(raw.time);
@@ -506,14 +605,17 @@ describe('golden', () => {
       ['start-linen_tunic', 'linen_tunic'],
       ['start-worn_sandals', 'worn_sandals'],
       ['start-wooden_axe', 'wooden_axe'],
+      ['start-wooden_pickaxe', 'wooden_pickaxe'], // v10
     ]);
 
     // Stats come from the catalog through the new defIds: 2–4 + 10 STR, 3 armor + 10 END, level 4 pools.
     const d = getDerivedStats(s);
     expect([d.damage.min, d.damage.max, d.defense.value, d.maxHp.value, d.maxMana.value]).toEqual([12, 14, 13, 80, 35]);
 
-    // Plays on: Oak logs every 1:50 at DEX 10.
-    const next = simulate(s, s.time.lastSimulatedAt + 4 * MIN);
+    // Plays on: with Woodcutting built again, Oak logs every 1:50 at DEX 10.
+    const oak = applyCommand(withBuilt(s, ['woodcutting']), { id: 'v2-oak', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, s.time.lastSimulatedAt);
+    if (!oak.ok) throw new Error(oak.error.message);
+    const next = simulate(oak.state, s.time.lastSimulatedAt + 4 * MIN);
     expect(next.summary.actions).toBe(2);
     // Logs keep stacking on the migrated stack (matched by defId).
     expect(next.state.inventory.items.filter((i) => i.defId === 'oak_logs')).toHaveLength(1);
@@ -535,7 +637,7 @@ describe('golden', () => {
     expect(hashState(loadSave(raw))).toBe(hashState(s)); // deterministic
 
     // Everything from v3 survives as it was.
-    const { hp, hpRegenProgress, xp, xpToNext, equipment: { axe, ...equipment }, ...character } = s.character;
+    const { hp, hpRegenProgress, xp, xpToNext, equipment: { axe, pickaxe, ...equipment }, ...character } = s.character;
     // v9: Lv5 kept, XP clamped into progress toward Lv6 on the base-100 curve (Lv5 needs 1118).
     expect([raw.character.xp, xp, xpToNext]).toEqual([4463, 1117, 1118]);
     // v8 dropped the per-instance `rarity` (quality is catalog-only).
@@ -550,11 +652,12 @@ describe('golden', () => {
       equipment: Object.fromEntries(Object.entries(raw.character.equipment).map(([k, v]) => [k, noRarity(v as Record<string, unknown>)])),
     });
     expect(axe?.defId).toBe('wooden_axe');
-    const { dungeon, training, activity, merchant, nextItemSerial, inventory, character: _c, saveVersion: _v, ...rest } = s;
+    expect(pickaxe?.defId).toBe('wooden_pickaxe');
+    const { dungeon, training, activity, merchant, nextItemSerial, inventory, buildings: _b, character: _c, saveVersion: _v, ...rest } = s;
     expect(merchant.charges).toBe(5);
     expect(nextItemSerial).toBe(1);
     expect(inventory).toEqual({ ...raw.inventory, items: raw.inventory.items.map(noRarity) });
-    expect(activity).toEqual({ ...raw.activity, treeId: 'oak', progressMs: 0 });
+    expect(activity).toBeNull(); // v10: woodcutting stops (its building starts locked)
     expect(training).toEqual(newTrainingState());
     const { character: _rc, saveVersion: _rv, activity: _ra, inventory: _ri, ...rawRest } = raw;
     expect(rest).toEqual(rawRest);
@@ -563,11 +666,13 @@ describe('golden', () => {
     expect(s.character.level).toBe(5);
     expect([hp, hpRegenProgress]).toEqual([90, 0]);
     expect(dungeon).toEqual({ lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {} });
-    expect(s.activity?.kind).toBe('woodcutting');
 
-    // Plays on: Oak with DEX 15 cuts a log every 1:45, then a dungeon with DEX 15 searches 1:45 and fights.
-    const next = simulate(s, s.time.lastSimulatedAt + MIN);
-    expect(simulate(s, s.time.lastSimulatedAt + 105 * SEC).summary.actions).toBe(1);
+    // Plays on: Oak (Woodcutting built again) with DEX 15 cuts a log every 1:45, then a dungeon with DEX 15
+    // searches 1:45 and fights.
+    const oak = applyCommand(withBuilt(s, ['woodcutting']), { id: 'v3-oak', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, s.time.lastSimulatedAt);
+    if (!oak.ok) throw new Error(oak.error.message);
+    const next = simulate(oak.state, s.time.lastSimulatedAt + MIN);
+    expect(simulate(oak.state, s.time.lastSimulatedAt + 105 * SEC).summary.actions).toBe(1);
     const at = s.time.lastSimulatedAt + MIN;
     const d = applyCommand(next.state, { id: 'v3-d', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, at);
     if (!d.ok) throw new Error(d.error.message);

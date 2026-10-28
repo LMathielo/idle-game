@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 9 as const;
+export const CURRENT_SAVE_VERSION = 10 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -19,6 +19,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   6: migrateV6toV7,
   7: migrateV7toV8,
   8: migrateV8toV9,
+  9: migrateV9toV10,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -274,6 +275,61 @@ function migrateV8toV9(doc: SaveDoc): SaveDoc {
     activity,
     character: { ...character, level, xp, xpToNext },
     dungeon: { ...dungeon, lastFight },
+  };
+}
+
+// ---- v9 → v10 (2026-10-28): buildings, Mine Shaft (mining), pickaxe slot ----
+// Frozen literals: the v10 building ids (all locked, as on a new save), the Wooden Pickaxe exactly as a new v10
+// hero gets it, a fresh mining skill on the v10 skill curve, and the Iron Pickaxe listing at its v10 price. A later
+// change to config/buildings.ts, config/items.ts, config/merchant.ts or the XP curve cannot change what this
+// migration produces.
+const V10_BUILDING_IDS = ['woodcutting', 'mine_shaft', 'town_hall', 'training_grounds'] as const;
+const V10_WOODEN_PICKAXE = { id: 'start-wooden_pickaxe', defId: 'wooden_pickaxe', name: 'Wooden Pickaxe', icon: '⛏️', slot: 'pickaxe' } as const;
+const V10_MINING_SKILL = { level: 1, xp: 0, xpToNext: 500 } as const;
+/** The 5th merchant listing (the pool grew from 4 to 5); it goes in stock slot 4 when that slot is empty. */
+const V10_PICKAXE_LISTING = { defId: 'iron_pickaxe', quantity: 1, unitPrice: 600 } as const;
+const V10_PICKAXE_STOCK_SLOT = 4;
+/** Activities whose building starts locked: they stop. Training XP lives per attribute and is kept. */
+const V10_STOPPED_ACTIVITIES: readonly string[] = ['woodcutting', 'training'];
+
+/**
+ * Owner decision (2026-10-28, wiping was fine): existing saves get buildings exactly like a new save.
+ * - buildings: Woodcutting, Mine Shaft, Town Hall and Training Grounds all locked (level 0).
+ * - a running woodcutting or training activity stops cleanly (activity = null): logs already cut and training
+ *   XP are kept, the log in progress is dropped like any stop. A dungeon run is kept (the dungeon is always built).
+ * - the `pickaxe` equipment slot gets the Wooden Pickaxe (v9 had no pickaxe slot, so it is always empty).
+ * - character.skills.mining is added at Lv1 when missing (saves from v1 never had it); an existing one is kept.
+ * - merchant: the Iron Pickaxe listing goes in stock slot 4 when that slot exists and is empty (v9 stocked 4
+ *   listings), so it can be bought before the next refresh.
+ * - everything else is kept, including the training tier already bought.
+ */
+function migrateV9toV10(doc: SaveDoc): SaveDoc {
+  const buildings: Doc = {};
+  for (const id of V10_BUILDING_IDS) buildings[id] = { state: 'locked', level: 0 };
+
+  const stop = isDoc(doc.activity) && V10_STOPPED_ACTIVITIES.includes(String(doc.activity.kind));
+  const activity = stop ? null : doc.activity;
+
+  const character = isDoc(doc.character) ? doc.character : {};
+  const equipment = isDoc(character.equipment) ? character.equipment : {};
+  const withPickaxe = isDoc(equipment.pickaxe) ? equipment : { ...equipment, pickaxe: { ...V10_WOODEN_PICKAXE } };
+  const skills = isDoc(character.skills) ? character.skills : {};
+  const withMining = isDoc(skills.mining) ? skills : { ...skills, mining: { ...V10_MINING_SKILL } };
+
+  let merchant = doc.merchant;
+  if (isDoc(merchant) && Array.isArray(merchant.stock) && merchant.stock.length > V10_PICKAXE_STOCK_SLOT && merchant.stock[V10_PICKAXE_STOCK_SLOT] === null) {
+    const stock = [...merchant.stock];
+    stock[V10_PICKAXE_STOCK_SLOT] = { ...V10_PICKAXE_LISTING };
+    merchant = { ...merchant, stock };
+  }
+
+  return {
+    ...doc,
+    saveVersion: 10,
+    activity,
+    buildings,
+    merchant,
+    character: { ...character, equipment: withPickaxe, skills: withMining },
   };
 }
 

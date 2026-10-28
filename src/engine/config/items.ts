@@ -25,6 +25,8 @@ export type ItemDef = {
   armor?: number;
   /** Axes: woodcutting strength added while equipped. Integer. */
   woodcuttingStrength?: number;
+  /** Pickaxes: mining strength added while equipped. Integer. */
+  miningStrength?: number;
   /** Usable consumables (USE_ITEM): HP restored, capped at max HP. Integer. */
   heal?: number;
   /**
@@ -36,6 +38,9 @@ export type ItemDef = {
 
 const log = (id: string, name: string, sellPrice: number, tree: string) =>
   ({ id, name, icon: '🪵', quality: 'common', description: `Logs cut from ${tree} trees. Used for crafting.`, sellPrice, stackable: true }) as const;
+
+const ore = (id: string, name: string, icon: string, sellPrice: number, description: string) =>
+  ({ id, name, icon, quality: 'common', description, sellPrice, stackable: true }) as const;
 
 const junk = (id: string, name: string, icon: string, sellPrice: number, description: string) =>
   ({ id, name, icon, quality: 'junk', description, sellPrice, stackable: true }) as const;
@@ -52,6 +57,20 @@ export const ITEMS = {
     icon: '🪺',
     quality: 'uncommon',
     description: 'Sometimes falls from a tree you cut. Worth a fair price.',
+    sellPrice: 30,
+    stackable: true,
+  },
+  stone: ore('stone', 'Stone', '🪨', 1, 'Rough stone from the Mine Shaft. Used for building.'),
+  copper_ore: ore('copper_ore', 'Copper Ore', '🟠', 3, 'Copper ore from the Mine Shaft. Used for crafting.'),
+  iron_ore: ore('iron_ore', 'Iron Ore', '⚫', 8, 'Iron ore from the Mine Shaft. Used for crafting.'),
+  silver_ore: ore('silver_ore', 'Silver Ore', '⚪', 20, 'Silver ore from the Mine Shaft. Used for crafting.'),
+  gold_ore: ore('gold_ore', 'Gold Ore', '🟡', 50, 'Gold ore from the Mine Shaft. Used for crafting.'),
+  geode: {
+    id: 'geode',
+    name: 'Geode',
+    icon: '🔮',
+    quality: 'uncommon',
+    description: 'Sometimes found in a rock you mine. Worth a fair price.',
     sellPrice: 30,
     stackable: true,
   },
@@ -127,6 +146,29 @@ export const ITEMS = {
     stackable: false,
     slot: 'axe',
     woodcuttingStrength: 40,
+  },
+  wooden_pickaxe: {
+    id: 'wooden_pickaxe',
+    name: 'Wooden Pickaxe',
+    icon: '⛏️',
+    quality: 'common',
+    description: 'A blunt beginner pickaxe.',
+    sellPrice: 1,
+    stackable: false,
+    slot: 'pickaxe',
+    miningStrength: 1,
+  },
+  iron_pickaxe: {
+    id: 'iron_pickaxe',
+    name: 'Iron Pickaxe',
+    icon: '⛏️',
+    quality: 'common',
+    description: 'A heavy iron head. Cracks the hardest rock.',
+    sellPrice: 180,
+    buyPrice: 600,
+    stackable: false,
+    slot: 'pickaxe',
+    miningStrength: 40,
   },
   iron_sword: {
     id: 'iron_sword',

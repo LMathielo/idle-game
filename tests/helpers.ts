@@ -2,7 +2,7 @@ import { FakeClock } from '../src/client/clock';
 import { LocalGameClient } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import type { CommandInput } from '../src/client/types';
-import { applyCommand, type Command, ENGINE_VERSION, type GameState, newGame, type ReplayEntry } from '../src/engine';
+import { applyCommand, BUILDING_IDS, type BuildingId, type Command, ENGINE_VERSION, type GameState, newGame, type ReplayEntry } from '../src/engine';
 
 export const T0 = Date.UTC(2026, 9, 25, 12, 0, 0); // fixed epoch for deterministic tests
 export const SEC = 1000;
@@ -36,9 +36,35 @@ export function apply(state: GameState, c: CommandInput, now: number): GameState
   return res.state;
 }
 
-/** New game at T0 with woodcutting running. */
+/**
+ * The state with buildings marked built, nothing else changed (no gold or items spent, no Training Tier granted).
+ * For engine tests of the rules inside a building; BUILD itself is tested in tests/buildings.test.ts.
+ */
+export function withBuilt(state: GameState, ids: readonly BuildingId[] = BUILDING_IDS): GameState {
+  const buildings = { ...state.buildings };
+  for (const id of ids) buildings[id] = { state: 'built', level: 1 };
+  return { ...state, buildings };
+}
+
+/** newGame() with every building already built (see withBuilt). Training stays at tier 0. */
+export function builtGame(seed: number, now: number): GameState {
+  return withBuilt(newGame(seed, now));
+}
+
+/**
+ * Builds buildings through the client with logged DEBUG_BUILD rows, so the log still replays. Sets debugUsed;
+ * the Training Grounds also grant Training Tier 1. Default: Woodcutting and Mine Shaft.
+ */
+export async function debugBuild(client: LocalGameClient, ids: readonly BuildingId[] = ['woodcutting', 'mine_shaft']) {
+  for (const id of ids) {
+    const r = await client.debug.build(id);
+    if (!r.ok) throw new Error(`${r.error.code}: ${r.error.message}`);
+  }
+}
+
+/** New game at T0 (buildings built) with woodcutting running. */
 export function woodcuttingGame(seed = 42): GameState {
-  return apply(newGame(seed, T0), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
+  return apply(builtGame(seed, T0), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
 }
 
 export function qty(state: GameState, id: string): number {

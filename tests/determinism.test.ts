@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, type Command, hashState, newGame, simulate } from '../src/engine';
 import { canonicalJson, fnv1a32 } from '../src/engine/hash';
-import { HOUR, MIN, SEC, T0 } from './helpers';
+import { HOUR, MIN, SEC, T0, builtGame } from './helpers';
 
 type Step = { at: number; cmd?: Command };
 
@@ -16,7 +16,7 @@ const SCRIPT: Step[] = [
 ];
 
 function run(seed: number) {
-  let s = newGame(seed, T0);
+  let s = builtGame(seed, T0);
   const hashes: string[] = [];
   for (const step of SCRIPT) {
     if (step.cmd) {
@@ -59,8 +59,8 @@ describe('determinism', () => {
   });
 
   it('newGame is a pure function of (seed, now)', () => {
-    expect(hashState(newGame(9, T0))).toBe(hashState(newGame(9, T0)));
-    expect(hashState(newGame(9, T0))).not.toBe(hashState(newGame(9, T0 + 1)));
+    expect(hashState(builtGame(9, T0))).toBe(hashState(builtGame(9, T0)));
+    expect(hashState(builtGame(9, T0))).not.toBe(hashState(builtGame(9, T0 + 1)));
   });
 });
 

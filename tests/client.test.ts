@@ -4,7 +4,7 @@ import { CHECKPOINT_INTERVAL_MS, IDLE_CHECKPOINT_INTERVAL_MS, LocalGameClient } 
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import { NoopSyncTransport } from '../src/client/types';
 import { ENGINE_VERSION, hashState, replayLog, replayStep, simulate, type GameState } from '../src/engine';
-import { HOUR, MIN, SEC, T0, idSource, makeClient, qty } from './helpers';
+import { HOUR, MIN, SEC, T0, idSource, makeClient, qty, debugBuild } from './helpers';
 
 /** Replays the stored log and checks every row's state_hash. Returns the final state. */
 async function verifyLog(repo: MemoryGameRepository): Promise<GameState> {
@@ -44,6 +44,7 @@ describe('LocalGameClient', () => {
     const clock = new FakeClock(T0);
     const a = new LocalGameClient(repo, clock, idSource('a'));
     await a.load();
+    await debugBuild(a);
     await a.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     const started = a.getState();
     await tickFor(a, clock, 10); // live ticks, not yet checkpointed
@@ -93,6 +94,7 @@ describe('LocalGameClient', () => {
   it('a failed commit rolls memory back to the stored state', async () => {
     const { repo, client } = makeClient();
     await client.load();
+    await debugBuild(client);
     repo.failNextCommit = new Error('disk full');
     await expect(client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' })).rejects.toThrow('disk full');
     expect(client.getState().activity).toBeNull();
@@ -111,6 +113,7 @@ describe('LocalGameClient', () => {
   it('live ticks use the same path as offline (identical hash) and checkpoint every 30s', async () => {
     const { repo, client, clock } = makeClient();
     await client.load();
+    await debugBuild(client);
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     const started = client.getState();
     await tickFor(client, clock, 95);
@@ -126,6 +129,7 @@ describe('LocalGameClient', () => {
   it('debug +24h: capped at 8h, anomaly logged, summary flags it', async () => {
     const { repo, client } = makeClient();
     await client.load();
+    await debugBuild(client);
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     const summary = await client.debug.shiftClock(24 * HOUR);
     expect(summary.grantedMs).toBe(8 * HOUR);
@@ -142,6 +146,7 @@ describe('LocalGameClient', () => {
   it('debug clock −2h: anomaly, paused, no rewards until time catches up; logged once', async () => {
     const { repo, client, clock } = makeClient();
     await client.load();
+    await debugBuild(client);
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     await tickFor(client, clock, 30);
     const logsBefore = qty(client.getState(), 'oak_logs');
@@ -202,6 +207,7 @@ describe('LocalGameClient', () => {
   it('every row has a state hash, engine version and unique command id; replay matches', async () => {
     const { repo, client, clock } = makeClient();
     await client.load();
+    await debugBuild(client);
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     await tickFor(client, clock, 40);
     await client.debug.grantHeroXp(10_000);
@@ -225,6 +231,7 @@ describe('LocalGameClient', () => {
   it('a long JS suspension without a background event is handled as a resume', async () => {
     const { repo, client, clock } = makeClient();
     await client.load();
+    await debugBuild(client);
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     const started = client.getState();
     clock.advance(HOUR);
@@ -238,17 +245,19 @@ describe('LocalGameClient', () => {
   it('sync outbox: unsynced rows are exposed; Noop transport acknowledges nothing', async () => {
     const { client } = makeClient();
     await client.load();
+    await debugBuild(client);
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     const unsynced = await client.getUnsyncedLog();
-    expect(unsynced.map((r) => r.type)).toEqual(['NEW_GAME', 'START_ACTIVITY']);
+    expect(unsynced.map((r) => r.type)).toEqual(['NEW_GAME', 'DEBUG_BUILD', 'DEBUG_BUILD', 'START_ACTIVITY']);
     expect(await client.syncOnce(new NoopSyncTransport())).toBe(0);
     expect(await client.syncOnce({ pushLog: async (rows) => [rows[0].seq, 999] })).toBe(1);
-    expect((await client.getUnsyncedLog()).map((r) => r.type)).toEqual(['START_ACTIVITY']);
+    expect((await client.getUnsyncedLog()).map((r) => r.type)).toEqual(['DEBUG_BUILD', 'DEBUG_BUILD', 'START_ACTIVITY']);
   });
 
   it('notifies subscribers only when the snapshot changes', async () => {
     const { client, clock } = makeClient();
     await client.load();
+    await debugBuild(client);
     let calls = 0;
     client.subscribe(() => calls++);
     await client.tick(); // no time passed, idle hero
@@ -263,6 +272,7 @@ describe('LocalGameClient', () => {
   it('concurrent calls are serialized (no lost update)', async () => {
     const { client, clock } = makeClient();
     await client.load();
+    await debugBuild(client);
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     clock.advance(4 * 110 * SEC); // four 1:50 Oak logs
     await Promise.all([client.tick(), client.resume(), client.debug.grantHeroXp(60), client.persist(), client.tick()]);
@@ -274,6 +284,7 @@ describe('LocalGameClient', () => {
     it('a quick app switch (a few seconds) does not open the modal but is still simulated', async () => {
       const { client, clock } = makeClient();
       await client.load();
+      await debugBuild(client);
       await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
       clock.advance(105 * SEC); // 105 s into the first 1:50 log, no log yet: no modal
       await client.resume();
@@ -288,6 +299,7 @@ describe('LocalGameClient', () => {
     it('59s away: no modal; 60s away: modal', async () => {
       const a = makeClient();
       await a.client.load();
+      await debugBuild(a.client);
       await a.client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
       a.clock.advance(100 * SEC); // banks 100 s of the first 1:50 log (no log: no modal)
       await a.client.resume();
@@ -298,6 +310,7 @@ describe('LocalGameClient', () => {
 
       const b = makeClient();
       await b.client.load();
+      await debugBuild(b.client);
       await b.client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
       b.clock.advance(100 * SEC);
       await b.client.resume();
@@ -357,6 +370,11 @@ describe('LocalGameClient', () => {
     it('stays false in normal play', async () => {
       const { client, clock } = makeClient();
       await client.load();
+      // Normal play to the first building: an hour of Rat Cellar pays for Woodcutting (50 gold).
+      await client.dispatch({ type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' });
+      clock.advance(HOUR);
+      await client.resume();
+      expect((await client.dispatch({ type: 'BUILD', buildingId: 'woodcutting' })).ok).toBe(true);
       await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
       clock.advance(HOUR);
       await client.resume();

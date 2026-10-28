@@ -16,7 +16,7 @@ import {
   simulate,
   skipCost,
 } from '../src/engine';
-import { apply, HOUR, MIN, SEC, T0, progressMs } from './helpers';
+import { apply, HOUR, MIN, SEC, T0, progressMs, builtGame } from './helpers';
 
 const RAT_CELLAR = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } as const;
 const SEARCH_MS = 110 * SEC; // Rat Cellar at DEX 10
@@ -45,7 +45,7 @@ function skipAny(s: GameState, id = 'skip') {
 
 /** New game at T0 with Rat Cellar running. */
 function dungeonGame(seed = 7, tweak: (s: GameState) => GameState = (s) => s): GameState {
-  return apply(tweak(newGame(seed, T0)), RAT_CELLAR, T0);
+  return apply(tweak(builtGame(seed, T0)), RAT_CELLAR, T0);
 }
 
 /** The first run of a dungeonGame, played to its end (search + fight; the next search has just begun or is under way). */
@@ -132,7 +132,7 @@ describe('skip (search only)', () => {
     expect(r).toMatchObject({ ok: false, error: { code: 'NOT_ENOUGH_STAMINA' } });
     expect(s.dungeon.totals.runs).toBe(0);
     expect(s.stamina.current).toBe(1);
-    const idle = applyCommand(newGame(1, T0), { id: 'y', type: 'SKIP_DUNGEON_RUN', run: 1, maxCost: 5 }, T0);
+    const idle = applyCommand(builtGame(1, T0), { id: 'y', type: 'SKIP_DUNGEON_RUN', run: 1, maxCost: 5 }, T0);
     expect(idle).toMatchObject({ ok: false, error: { code: 'NO_DUNGEON_RUN' } });
   });
 
@@ -316,10 +316,10 @@ describe('rewards', () => {
 });
 
 describe('HP regen', () => {
-  const hurt = (hp: number, tweak: (s: GameState) => GameState = (s) => s) => tweak(withCharacter(newGame(5, T0), { hp }));
+  const hurt = (hp: number, tweak: (s: GameState) => GameState = (s) => s) => tweak(withCharacter(builtGame(5, T0), { hp }));
 
   it('flat 5 + END per minute: 15/min at END 10, remainder kept', () => {
-    expect(hpView(newGame(1, T0))).toMatchObject({ hp: 50, maxHp: 50, regenPerMin: 15, full: true });
+    expect(hpView(builtGame(1, T0))).toMatchObject({ hp: 50, maxHp: 50, regenPerMin: 15, full: true });
     const s = hurt(10);
     expect(simulate(s, T0 + MIN).state.character).toMatchObject({ hp: 25, hpRegenProgress: 0 });
     expect(simulate(s, T0 + 4 * SEC).state.character.hp).toBe(11); // 1 HP every 4 s
@@ -341,7 +341,7 @@ describe('HP regen', () => {
   it('caps at max HP with no banked remainder; full HP keeps its character object', () => {
     const full = simulate(hurt(49), T0 + HOUR).state;
     expect(full.character).toMatchObject({ hp: 50, hpRegenProgress: 0 });
-    const s = newGame(1, T0);
+    const s = builtGame(1, T0);
     expect(simulate(s, T0 + HOUR).state.character).toBe(s.character);
   });
 
@@ -475,7 +475,7 @@ describe('one activity at a time', () => {
   });
 
   it('starting a dungeon stops woodcutting (logs gathered so far are kept)', () => {
-    const wood = apply(newGame(1, T0), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
+    const wood = apply(builtGame(1, T0), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
     const r = applyCommand(wood, { id: 'd', ...RAT_CELLAR }, T0 + 340 * SEC);
     if (!r.ok) throw new Error(r.error.message);
     expect(r.state.activity).toEqual({ kind: 'dungeon', dungeonId: 'rat_cellar', startedAt: T0 + 340 * SEC, phase: 'search', progressMs: 0, fight: null });
@@ -500,7 +500,7 @@ describe('one activity at a time', () => {
 
 describe('debug commands', () => {
   it('DEBUG_SET_HERO_HP sets HP (0..max), resets the regen remainder and flags the save', () => {
-    const s = simulate(withCharacter(newGame(1, T0), { hp: 10 }), T0 + 3 * SEC).state; // progress banked
+    const s = simulate(withCharacter(builtGame(1, T0), { hp: 10 }), T0 + 3 * SEC).state; // progress banked
     const r = applyCommand(s, { id: 'h', type: 'DEBUG_SET_HERO_HP', hp: 1 }, T0 + 3 * SEC);
     expect(r.ok && r.state.character).toMatchObject({ hp: 1, hpRegenProgress: 0 });
     expect(r.ok && r.state.flags.debugUsed).toBe(true);
@@ -518,7 +518,7 @@ describe('debug commands', () => {
     expect(r.state.flags.debugUsed).toBe(true);
     // During the fight it is refused, like the skip.
     expect(applyCommand(r.state, { id: 'f2', type: 'DEBUG_FINISH_DUNGEON_RUN' }, T0 + MIN)).toMatchObject({ ok: false, error: { code: 'FIGHT_IN_PROGRESS' } });
-    expect(applyCommand(newGame(1, T0), { id: 'g', type: 'DEBUG_FINISH_DUNGEON_RUN' }, T0)).toMatchObject({
+    expect(applyCommand(builtGame(1, T0), { id: 'g', type: 'DEBUG_FINISH_DUNGEON_RUN' }, T0)).toMatchObject({
       ok: false,
       error: { code: 'NO_DUNGEON_RUN' },
     });
