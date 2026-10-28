@@ -11,6 +11,8 @@ import { getItemDef } from './config/items';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { TREE_IDS, TREES, WOODCUTTING } from './config/woodcutting';
 import { SKILL_XP_CURVE } from './config/xpCurve';
+import { yieldMultiplierBp } from './bonuses';
+import { rollYield, yieldBp } from './gathering';
 import { addStackable } from './inventory';
 import { addXp } from './progression';
 import { chance } from './rng';
@@ -84,8 +86,9 @@ function bump(map: Record<string, number>, key: string, by: number) {
  */
 export function cutLog(draft: GameState, treeId: TreeId, summary: SimulationSummary | null, events: GameEvent[]): void {
   const tree = TREES[treeId];
-  const gain = (itemId: string) => {
-    const { added, lost } = addStackable(draft.inventory, itemId, 1);
+  const gain = (itemId: string, quantity = 1) => {
+    if (quantity <= 0) return;
+    const { added, lost } = addStackable(draft.inventory, itemId, quantity);
     if (summary) {
       bump(summary.itemsGained, itemId, added);
       bump(summary.itemsLost, itemId, lost);
@@ -93,7 +96,10 @@ export function cutLog(draft: GameState, treeId: TreeId, summary: SimulationSumm
     bump(draft.stats.itemsGathered, itemId, added);
   };
 
-  gain(tree.logItemId);
+  // Power-based yield (1.10.0): power ÷ requirement × bonus multiplier; the fraction is the chance of one more.
+  const y = rollYield(draft.rng, yieldBp(woodcuttingStrength(draft).value, tree.reqWs, yieldMultiplierBp(draft, 'woodcutting')));
+  draft.rng = y.rng;
+  gain(tree.logItemId, y.count);
   for (const drop of WOODCUTTING.rareDrops) {
     const roll = chance(draft.rng, drop.chance);
     draft.rng = roll.rng;
@@ -157,6 +163,8 @@ export type TreeView = TreeCheck & {
   logItemId: string;
   /** Rare drops per log, with their chance (0..1). */
   rareDrops: readonly { itemId: string; chance: number }[];
+  /** Expected items per action for this hero right now, in basis points (10 000 = 1 item; power ÷ requirement × bonus). */
+  yieldBp: number;
   /** This tree is being cut right now. */
   active: boolean;
 };
@@ -203,6 +211,7 @@ export function treeView(state: GameState, treeId: TreeId): TreeView {
     xpPerLog: tree.xpPerLog,
     logItemId: tree.logItemId,
     rareDrops: WOODCUTTING.rareDrops,
+    yieldBp: yieldBp(woodcuttingStrength(state).value, tree.reqWs, yieldMultiplierBp(state, 'woodcutting')),
     active: state.activity?.kind === 'woodcutting' && state.activity.treeId === treeId,
   };
 }

@@ -253,13 +253,13 @@ describe('golden', () => {
           "runs": 98,
           "wins": 98,
         },
-        "gold": 368,
+        "gold": 373,
         "heroLevel": 12,
         "hp": [
           160,
           0,
         ],
-        "lastFightMs": 2000,
+        "lastFightMs": 3000,
         "stamina": {
           "current": 100,
           "max": 100,
@@ -302,14 +302,14 @@ describe('golden', () => {
             "wins": 98,
           },
         },
-        "gold": 738,
+        "gold": 734,
         "heroLevel": 12,
         "hp": [
-          141,
-          30000,
+          143,
+          15000,
         ],
         "lastFightMs": 5000,
-        "nests": undefined,
+        "nests": 2,
         "stamina": {
           "current": 100,
           "max": 100,
@@ -337,19 +337,123 @@ describe('golden', () => {
       dungeon: s.dungeon,
       training: s.training,
       rng: s.rng,
-    }).toEqual({
-      actions: 515,
-      activity: 'training',
-      gold: 1047, // 1.9.0: was 947; the Training Grounds gave Tier 1 instead of selling it for 100
-      hp: [170, 0],
-      heroLevel: 13,
-      stamina: { current: 91, max: 100, progressMs: 1000 },
-      woodcutting: expect.objectContaining({ level: 9, xp: 6619 }),
-      logs: { oak_logs: 491, birch_logs: 24 },
-      dungeon: expect.objectContaining({ totals: { runs: 181, wins: 181, losses: 0 } }),
-      training: expect.objectContaining({ tier: 2 }),
-      rng: expect.anything(),
-    });
+    }).toMatchInlineSnapshot(`
+      {
+        "actions": 515,
+        "activity": "training",
+        "dungeon": {
+          "byDungeon": {
+            "bat_cave": {
+              "losses": 0,
+              "runs": 51,
+              "wins": 51,
+            },
+            "rat_cellar": {
+              "losses": 0,
+              "runs": 130,
+              "wins": 130,
+            },
+          },
+          "lastFight": {
+            "dungeonId": "rat_cellar",
+            "durationMs": 2000,
+            "endReason": "enemy_defeated",
+            "enemyHpEnd": 0,
+            "enemyId": "rat",
+            "enemyMaxHp": 30,
+            "heroHpEnd": 168,
+            "heroHpStart": 170,
+            "heroMaxHp": 170,
+            "log": [
+              {
+                "actor": "hero",
+                "atMs": 1000,
+                "dealt": 16,
+                "roll": 17,
+                "strike": 1,
+                "targetHpAfter": 14,
+              },
+              {
+                "actor": "enemy",
+                "atMs": 1000,
+                "dealt": 2,
+                "roll": 5,
+                "strike": 1,
+                "targetHpAfter": 168,
+              },
+              {
+                "actor": "hero",
+                "atMs": 2000,
+                "dealt": 16,
+                "roll": 17,
+                "strike": 2,
+                "targetHpAfter": 0,
+              },
+            ],
+            "rewards": {
+              "gold": 4,
+              "heroXp": 35,
+              "items": {},
+              "itemsLost": {},
+            },
+            "won": true,
+          },
+          "totals": {
+            "losses": 0,
+            "runs": 181,
+            "wins": 181,
+          },
+        },
+        "gold": 1041,
+        "heroLevel": 13,
+        "hp": [
+          170,
+          0,
+        ],
+        "logs": {
+          "birch_logs": 25,
+          "oak_logs": 1251,
+        },
+        "rng": {
+          "seed": 3241514865,
+        },
+        "stamina": {
+          "current": 91,
+          "max": 100,
+          "progressMs": 1000,
+        },
+        "training": {
+          "attributes": {
+            "dexterity": {
+              "level": 0,
+              "progressMs": 0,
+              "xp": 0,
+            },
+            "endurance": {
+              "level": 40,
+              "progressMs": 0,
+              "xp": 0,
+            },
+            "intelligence": {
+              "level": 0,
+              "progressMs": 0,
+              "xp": 0,
+            },
+            "strength": {
+              "level": 3,
+              "progressMs": 33000,
+              "xp": 30,
+            },
+          },
+          "tier": 2,
+        },
+        "woodcutting": {
+          "level": 9,
+          "xp": 6619,
+          "xpToNext": 13500,
+        },
+      }
+    `);
     expect(s.training.attributes.strength).toEqual({ level: 3, xp: 30, progressMs: 33000 });
   });
 
@@ -370,33 +474,98 @@ describe('golden', () => {
       seed: s.rng.seed,
       nextItemSerial: s.nextItemSerial,
       inventory: s.inventory,
-    }).toEqual({
-      // Values from running the 1.8.0 script on dev (engine 1.8.0, 2026-10-28); only gold differs.
-      actions: 527,
-      gold: 1228, // 1.8.0: 1128
-      heroLevel: 13,
-      hp: [170, 0],
-      dungeon: { runs: 214, wins: 214, losses: 0 },
-      nests: 1,
-      logs: { oak_logs: 391, birch_logs: 36 },
-      tier: 2,
-      xp: 2092,
-      stamina: { current: 100, max: 100, progressMs: 0 },
-      seed: 2143607419,
-      nextItemSerial: 3,
-      inventory: {
-        capacity: 20,
-        items: [
-          { id: 'bread', defId: 'bread', name: 'Bread', icon: '🍞', stackable: true, quantity: 3 },
-          { id: 'oak_logs', defId: 'oak_logs', name: 'Oak Logs', icon: '🪵', stackable: true, quantity: 391 },
-          { id: 'rat_skin', defId: 'rat_skin', name: 'Rat Skin', icon: '🐾', stackable: true, quantity: 75 },
-          { id: 'bat_wing', defId: 'bat_wing', name: 'Bat Wing', icon: '🪽', stackable: true, quantity: 12 },
-          { id: 'bird_nest', defId: 'bird_nest', name: 'Bird Nest', icon: '🪺', stackable: true, quantity: 1 },
-          { id: 'birch_logs', defId: 'birch_logs', name: 'Birch Logs', icon: '🪵', stackable: true, quantity: 36 },
-          { id: 'health_potion_t1', defId: 'health_potion_t1', name: 'Health Potion (T1)', icon: '🧪', stackable: true, quantity: 2 },
+      // 1.10.0: re-pinned (power-based yield: more logs per cut, one more RNG draw per cut).
+    }).toMatchInlineSnapshot(`
+      {
+        "actions": 527,
+        "dungeon": {
+          "losses": 0,
+          "runs": 214,
+          "wins": 214,
+        },
+        "gold": 1222,
+        "heroLevel": 13,
+        "hp": [
+          170,
+          0,
         ],
-      },
-    });
+        "inventory": {
+          "capacity": 20,
+          "items": [
+            {
+              "defId": "bread",
+              "icon": "🍞",
+              "id": "bread",
+              "name": "Bread",
+              "quantity": 3,
+              "stackable": true,
+            },
+            {
+              "defId": "oak_logs",
+              "icon": "🪵",
+              "id": "oak_logs",
+              "name": "Oak Logs",
+              "quantity": 1151,
+              "stackable": true,
+            },
+            {
+              "defId": "bird_nest",
+              "icon": "🪺",
+              "id": "bird_nest",
+              "name": "Bird Nest",
+              "quantity": 2,
+              "stackable": true,
+            },
+            {
+              "defId": "rat_skin",
+              "icon": "🐾",
+              "id": "rat_skin",
+              "name": "Rat Skin",
+              "quantity": 80,
+              "stackable": true,
+            },
+            {
+              "defId": "bat_wing",
+              "icon": "🪽",
+              "id": "bat_wing",
+              "name": "Bat Wing",
+              "quantity": 12,
+              "stackable": true,
+            },
+            {
+              "defId": "birch_logs",
+              "icon": "🪵",
+              "id": "birch_logs",
+              "name": "Birch Logs",
+              "quantity": 45,
+              "stackable": true,
+            },
+            {
+              "defId": "health_potion_t1",
+              "icon": "🧪",
+              "id": "health_potion_t1",
+              "name": "Health Potion (T1)",
+              "quantity": 2,
+              "stackable": true,
+            },
+          ],
+        },
+        "logs": {
+          "birch_logs": 45,
+          "oak_logs": 1151,
+        },
+        "nests": 2,
+        "nextItemSerial": 3,
+        "seed": 1515102546,
+        "stamina": {
+          "current": 100,
+          "max": 100,
+          "progressMs": 0,
+        },
+        "tier": 2,
+        "xp": 2092,
+      }
+    `);
   });
 
   it('fixed seed + fixed script → fixed final state hash', () => {
@@ -478,8 +647,8 @@ describe('golden', () => {
           "progressMs": 16000,
         },
         "engineVersion": "1.9.0",
-        "gold": 1370,
-        "hash": "4f740730",
+        "gold": 1367,
+        "hash": "9d13ab88",
         "helmet": "iron_helm#2",
         "heroLevel": 15,
         "hp": [
@@ -492,8 +661,8 @@ describe('golden', () => {
         },
         "lastFightMs": 2000,
         "logs": {
-          "birch_logs": 36,
-          "oak_logs": 371,
+          "birch_logs": 45,
+          "oak_logs": 1131,
         },
         "merchant": {
           "chargeProgressMs": 0,
@@ -523,11 +692,11 @@ describe('golden', () => {
           "xp": 1753,
           "xpToNext": 7348,
         },
-        "nests": 1,
+        "nests": 2,
         "nextItemSerial": 4,
         "ores": {
-          "copper_ore": 12,
-          "stone": 13,
+          "copper_ore": 14,
+          "stone": 39,
         },
         "pickaxe": "start-wooden_pickaxe",
         "potions": 2,
@@ -641,7 +810,9 @@ describe('golden', () => {
     expect(next.summary.actions).toBe(2);
     // Logs keep stacking on the migrated stack (matched by defId).
     expect(next.state.inventory.items.filter((i) => i.defId === 'oak_logs')).toHaveLength(1);
-    expect(next.state.inventory.items.find((i) => i.defId === 'oak_logs')?.quantity).toBe(3785 + next.summary.actions);
+    // WC Lv8: WS 91 on Oak (20) = 4.55 logs per cut (1.10.0 yield), so 2 cuts give 9 or 10.
+    expect(next.summary.itemsGained.oak_logs).toBeGreaterThanOrEqual(9);
+    expect(next.state.inventory.items.find((i) => i.defId === 'oak_logs')?.quantity).toBe(3785 + (next.summary.itemsGained.oak_logs ?? 0));
     // And commands work on the migrated save.
     const spent = applyCommand(next.state, { id: 'v2-spend', type: 'DEBUG_SPEND_STAMINA', amount: 10 }, s.time.lastSimulatedAt + 4 * MIN);
     expect(spent.ok && spent.state.stamina.current).toBe(90);

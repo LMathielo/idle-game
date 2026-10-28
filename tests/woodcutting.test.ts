@@ -61,13 +61,12 @@ function run(s: GameState, c: CommandInput, at: number) {
 }
 
 describe('config: tree table and formulas', () => {
-  it('required WS = max(0, 35 × reqLevel − 75) for every tree but Oak (0): 100, 450, 905, 1395', () => {
-    const { reqWsPerLevel, reqWsOffset } = WOODCUTTING.formula;
-    expect(TREES.oak.reqWs).toBe(0);
-    for (const id of TREE_IDS.filter((t) => t !== 'oak')) {
-      expect(TREES[id].reqWs).toBe(Math.max(0, reqWsPerLevel * TREES[id].reqLevel - reqWsOffset));
+  it('required WS = max(20, 35 × reqLevel − 75): 20, 100, 450, 905, 1395 (Oak 0 → 20 in 1.10.0: it is the yield divisor)', () => {
+    const { reqWsFloor, reqWsPerLevel, reqWsOffset } = WOODCUTTING.formula;
+    for (const id of TREE_IDS) {
+      expect(TREES[id].reqWs).toBe(Math.max(reqWsFloor, reqWsPerLevel * TREES[id].reqLevel - reqWsOffset));
     }
-    expect(TREE_IDS.map((id) => TREES[id].reqWs)).toEqual([0, 100, 450, 905, 1395]);
+    expect(TREE_IDS.map((id) => TREES[id].reqWs)).toEqual([20, 100, 450, 905, 1395]);
   });
 
   it('XP per log = round(12.5 × base minutes × reqLevel^0.4): 25 / 119 / 369 / 853 / 1672', () => {

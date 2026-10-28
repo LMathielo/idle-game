@@ -47,13 +47,12 @@ function miningGame(seed = 42): GameState {
 }
 
 describe('config: rock table and formulas (own config, same numbers as the trees today)', () => {
-  it('required MS = max(0, 35 × reqLevel − 75) for every rock but Stone (0): 100, 450, 905, 1395', () => {
-    const { reqMsPerLevel, reqMsOffset } = MINING.formula;
-    expect(ROCKS.stone.reqMs).toBe(0);
-    for (const id of ROCK_IDS.filter((r) => r !== 'stone')) {
-      expect(ROCKS[id].reqMs).toBe(Math.max(0, reqMsPerLevel * ROCKS[id].reqLevel - reqMsOffset));
+  it('required MS = max(20, 35 × reqLevel − 75): 20, 100, 450, 905, 1395 (Stone 0 → 20 in 1.10.0: it is the yield divisor)', () => {
+    const { reqMsFloor, reqMsPerLevel, reqMsOffset } = MINING.formula;
+    for (const id of ROCK_IDS) {
+      expect(ROCKS[id].reqMs).toBe(Math.max(reqMsFloor, reqMsPerLevel * ROCKS[id].reqLevel - reqMsOffset));
     }
-    expect(ROCK_IDS.map((id) => ROCKS[id].reqMs)).toEqual([0, 100, 450, 905, 1395]);
+    expect(ROCK_IDS.map((id) => ROCKS[id].reqMs)).toEqual([20, 100, 450, 905, 1395]);
   });
 
   it('XP per ore = round(12.5 × base minutes × reqLevel^0.4): 25 / 119 / 369 / 853 / 1672', () => {

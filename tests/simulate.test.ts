@@ -275,7 +275,10 @@ describe('commands', () => {
     const res = applyCommand(s, cmd({ type: 'STOP_ACTIVITY' }), T0 + 10 * OAK_MS + 30 * SEC);
     if (!res.ok) throw new Error();
     expect(res.summary.actions).toBe(10);
-    expect(qty(res.state, 'oak_logs')).toBe(10);
+    // WS 21 on Oak (20): 1 log per cut plus a 5% chance of a second.
+    expect(qty(res.state, 'oak_logs')).toBe(res.summary.itemsGained.oak_logs);
+    expect(qty(res.state, 'oak_logs')).toBeGreaterThanOrEqual(10);
+    expect(qty(res.state, 'oak_logs')).toBeLessThanOrEqual(20);
     // a later simulate grants nothing for the stopped activity
     expect(simulate(res.state, T0 + HOUR).summary.actions).toBe(0);
   });

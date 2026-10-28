@@ -12,6 +12,8 @@ import { getItemDef } from './config/items';
 import { MINING, ROCK_IDS, ROCKS } from './config/mining';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { SKILL_XP_CURVE } from './config/xpCurve';
+import { yieldMultiplierBp } from './bonuses';
+import { rollYield, yieldBp } from './gathering';
 import { addStackable } from './inventory';
 import { addXp } from './progression';
 import { chance } from './rng';
@@ -85,8 +87,9 @@ function bump(map: Record<string, number>, key: string, by: number) {
  */
 export function mineOre(draft: GameState, rockId: RockId, summary: SimulationSummary | null, events: GameEvent[]): void {
   const rock = ROCKS[rockId];
-  const gain = (itemId: string) => {
-    const { added, lost } = addStackable(draft.inventory, itemId, 1);
+  const gain = (itemId: string, quantity = 1) => {
+    if (quantity <= 0) return;
+    const { added, lost } = addStackable(draft.inventory, itemId, quantity);
     if (summary) {
       bump(summary.itemsGained, itemId, added);
       bump(summary.itemsLost, itemId, lost);
@@ -94,7 +97,10 @@ export function mineOre(draft: GameState, rockId: RockId, summary: SimulationSum
     bump(draft.stats.itemsGathered, itemId, added);
   };
 
-  gain(rock.oreItemId);
+  // Power-based yield (1.10.0): power ÷ requirement × bonus multiplier; the fraction is the chance of one more.
+  const y = rollYield(draft.rng, yieldBp(miningStrength(draft).value, rock.reqMs, yieldMultiplierBp(draft, 'mining')));
+  draft.rng = y.rng;
+  gain(rock.oreItemId, y.count);
   for (const drop of MINING.rareDrops) {
     const roll = chance(draft.rng, drop.chance);
     draft.rng = roll.rng;
@@ -159,6 +165,8 @@ export type RockView = RockCheck & {
   oreItemId: string;
   /** Rare drops per ore, with their chance (0..1). */
   rareDrops: readonly { itemId: string; chance: number }[];
+  /** Expected items per action for this hero right now, in basis points (10 000 = 1 item; power ÷ requirement × bonus). */
+  yieldBp: number;
   /** This rock is being mined right now. */
   active: boolean;
 };
@@ -205,6 +213,7 @@ export function rockView(state: GameState, rockId: RockId): RockView {
     xpPerOre: rock.xpPerOre,
     oreItemId: rock.oreItemId,
     rareDrops: MINING.rareDrops,
+    yieldBp: yieldBp(miningStrength(state).value, rock.reqMs, yieldMultiplierBp(state, 'mining')),
     active: state.activity?.kind === 'mining' && state.activity.rockId === rockId,
   };
 }
