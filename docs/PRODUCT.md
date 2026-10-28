@@ -18,9 +18,11 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - iOS + Android via Expo (SDK 58), tested through Expo Go. No web.
 - Single player for now; multiplayer later via a server that reuses the engine.
 
-## Current state (2026-10-26)
+## Current state (2026-10-28)
 
-- Two tabs: **Village** (pixel village hub with signs: Storage, Merchant, Dungeon, Training, Woodcutting) and **Hero** (XP, Status panel with 4 attributes, derived damage/defense, current/max HP with regen, mana and stamina, 10 equipment slots (incl. the axe), 20-slot inventory, 4 skills).
+- Two tabs: **Village** (pixel village hub with signs: Storage, Merchant, Dungeon, Training, Woodcutting, Mine Shaft, Town Hall) and **Hero** (XP, Status panel with 4 attributes, derived damage/defense, current/max HP with regen, mana and stamina, 11 equipment slots (incl. the axe and the pickaxe), 20-slot inventory, 4 skills).
+- **Buildings (2026-10-28):** Woodcutting, Mine Shaft, Town Hall and Training Grounds start **locked** (greyed sign with 🔒); tapping one opens a Build sheet with each requirement (have / need) and a Build button. Dungeon, Merchant and Storage are always built. The built Town Hall shows "Coming soon: automated workers and building upgrades". Table below.
+- **Mine Shaft (2026-10-28):** mining mirrors woodcutting with its own config: 5 rocks (Stone, Copper, Iron, Silver, Gold), mining strength (MS = 10 × level + STR + pickaxe), Wooden Pickaxe for everyone, Iron Pickaxe at the Merchant, Geode 1/200. Table below.
 - **M1 done and on `main`:** deterministic engine (`src/engine`), `LocalGameClient`, on-device SQLite save with an action log. Woodcutting works from the Village sign (tap to start/stop), progresses live and offline (8h cap), and shows a "While you were away" summary. Hero tab reads real state. Debug panel on the Hero tab (clock offset, +10k hero XP, stamina, attributes, hero HP → 1, finish run, reset save).
 - **M4 Dungeon in progress:** the Dungeon sign opens a full-screen modal with **5 dungeon tiers** (Rat Cellar, Bat Cave, Wolf Den, Forgotten Crypt, Troll Bridge), one enemy each. Each tier unlocks after a number of wins in the previous one (10 / 15 / 25 / 40); locked tiers show what opens them and their progress, and a banner announces a new unlock. Runs auto-repeat, live and offline. **Since 2026-10-27 a run is a search for an opponent (2/3/5/8/12 min − 1 s per DEX), then a live fight** that plays out strike by strike in engine time (each side on its own attack timer, 60 s limit) and gives hero XP, gold and the tier's loot; stamina skips the search only. A danger hint (Easy / Tough / Deadly) estimates the HP cost of a fight. Current HP persists and regenerates (5 + END per minute). Last-fight panel with a replay of the fight log. Only one activity runs at a time. Tiers 4–5 need Training.
 - **M3 Training in progress:** the Training sign opens a full-screen modal. Gold buys training tiers (Tier 1 = 100 g, tier t = 100·t³, 10 tiers, each +20 max level for all four attributes); time trains one attribute at a time at 1 XP per minute, live and offline (8h cap). Effective attribute = base + training level, used by damage, defense, HP regen and the DEX run time. The Hero tab shows each attribute's base + trained split.
@@ -29,6 +31,28 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - Storage shows "coming soon". No storage, crafting or item affixes yet.
 - Technical details: `docs/ENGINE.md`.
 - Delivery: PRs land on `dev` (test preview in Expo Go, EAS branch `dev`); the owner releases `dev` → `main` (EAS branch `main`) after testing.
+
+## Buildings (2026-10-28)
+
+| Building | State on a new save | Requirements | Gives |
+| --- | --- | --- | --- |
+| Dungeon, Merchant, Storage | always built | — | — |
+| Woodcutting | locked | 50 gold | woodcutting |
+| Mine Shaft | locked | 50 gold | mining |
+| Town Hall | locked | hero Lv5, 20 Oak Logs, 20 Stone, 100 gold | level 1; placeholder for workers and upgrades |
+| Training Grounds | locked | hero Lv10, Town Hall Lv1, 50 Oak Logs, 50 Stone, 250 gold | training, with Tier 1 included |
+
+## Mine Shaft rocks (2026-10-28)
+
+| Rock | Mining level | MS | Min / item (DEX 10) | XP / item | Item (sell) |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Stone | 1 | 0 | 2 (1:50) | 25 | Stone (1) |
+| Copper | 5 | 100 | 5 (4:50) | 119 | Copper Ore (3) |
+| Iron | 15 | 450 | 10 (9:50) | 369 | Iron Ore (8) |
+| Silver | 28 | 905 | 18 (17:50) | 853 | Silver Ore (20) |
+| Gold | 42 | 1395 | 30 (29:50) | 1672 | Gold Ore (50) |
+
+Geode: 1/200 per item on every rock (uncommon, sell 30). Pickaxes: Wooden +1 MS (sell 1), Iron +40 MS (buy 600, sell 180).
 
 ## Roadmap (proposed, not yet committed by the owner)
 
@@ -117,6 +141,13 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 | 2026-10-27 | Engineering choices in the live fight (engineer, flagged for the owner): hero stats (damage, defense, interval) are **frozen at the fight start**, so swapping gear mid-fight counts from the next fight; the hero's **HP stays live**, so a potion drunk mid-fight counts; **stopping or switching activity mid-fight is a forfeit** (see next row) | One source of truth for HP; no mid-fight gear exploits |
 | 2026-10-27 | **Fleeing = forfeit:** Stop (or starting another activity) during the fight ends it as a loss (`forfeit`) with the normal loss rules: HP → 0, no rewards, the loss counts, it shows as the last fight. The button says "Flee (counts as loss)". During the search, Stop is still a plain cancel | Leaving a losing fight must not dodge the loss (HP → 0) |
 | 2026-10-27 | Save v9, engine 1.8.0: existing heroes **keep their level**; XP is clamped to just under the next level on the new curve (`min(xp, xpToNext − 1)`); a run in progress becomes its search with its progress kept; the last fight keeps its log, timed 1 s per old round | Nobody loses a level; nothing in progress is lost |
+| 2026-10-28 | **Fight at the offline cap:** when the 8 h cap is reached during a fight, that fight is finished (strikes keep landing past the cap until it ends, at most 60 s, never past the real time away); nothing else progresses. A search still pauses at the cap. Deterministic: same strikes and RNG as live play | Coming back to a paused fight at full HP was a quirk |
+| 2026-10-28 | **Mining skill and Mine Shaft**, mirroring woodcutting with **its own config** (no shared constants) so the skills can get different bonuses later: MS = 10 × mining level + effective STR + pickaxe; 5 rocks with the trees' levels / strength / minutes (table above); −1 s per DEX (min 10 s); stamina skip of the current item; Geode 1/200; one activity at a time; stops when MS drops below the rock's requirement after an equip change | A second gathering loop that feeds buildings |
+| 2026-10-28 | New **`pickaxe`** equipment slot; new saves start with the Wooden Pickaxe (+1 MS). Merchant stocks the **Iron Pickaxe** (+40 MS, 600 g) right after the Iron Axe; the stock has 5 listings | Mirrors the axe |
+| 2026-10-28 | **Buildings and construction:** buildings are `locked` or `built` (Town Hall also has a level, 1 once built); requirements are data. `BUILD` checks every requirement, consumes gold and items atomically, builds at once, is logged and replayable (`ALREADY_BUILT`, `REQUIREMENTS_NOT_MET`). Locked buildings can't be used (`BUILDING_LOCKED` on woodcutting, mining and training). Building table above | A first construction goal that uses gathered materials |
+| 2026-10-28 | **Training Grounds come with Tier 1** (no extra 100 g); Tier 2+ is paid as before. Engineer choice: buying a tier is also refused while the Training Grounds are locked | Building is the price of Tier 1 |
+| 2026-10-28 | **Village:** mine entrance under the left mountain, Town Hall in the town centre; locked signs greyed with 🔒 open a Build sheet (have / need, met / unmet, Build enabled only when all are met); the built Town Hall shows "Coming soon: automated workers and building upgrades" | Every building visible from day one, with its next goal |
+| 2026-10-28 | Save v10, engine 1.9.0: existing saves get buildings **like a new save** (all four locked; owner said wiping was fine); a running woodcutting or training activity stops; Wooden Pickaxe and mining Lv1 added; the Iron Pickaxe listing fills merchant slot 4; everything else (gold, items, training tier, levels) kept | Same start for everyone without losing progress |
 | 2026-10-26 | Review council sized by risk: 2 reviewers normally, 5 for high-risk PRs; reviewers on Sonnet (medium reasoning); only findings ≥ 80 are fixed in the PR, one verification reviewer after fixes, lower findings batched into cleanup PRs | Token cost: the 5-reviewer council on every PR cost about as much as the coding itself |
 
 ## Stamina projection (2026-10-27, search-only skip)
