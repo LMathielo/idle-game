@@ -5,7 +5,7 @@ import { memo, useCallback, useRef } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
-import { type AttributeKey, type AttributeTrainingView, TRAINING, type TrainingView, trainingView } from '../../engine';
+import { type AttributeKey, type AttributeTrainingView, buildingLevel, TRAINING, type TrainingView, trainingView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { confirmCancelRun } from '../dungeon/confirmCancelRun';
 import { ATTRIBUTE_NAMES, formatNumber, formatTrainingLeft } from '../format';
@@ -93,8 +93,8 @@ export function TrainingModal() {
             />
           ))}
           <Text style={styles.note}>
-            One attribute at a time, 1 XP per minute, also while the app is closed (up to {formatNumber(offline.capMs / 3_600_000)}h). Pausing keeps
-            your XP.
+            One attribute at a time, {view.xpPerMinute} XP per minute (Training Grounds Lv {buildingLevel(state, 'training_grounds')}), also while the app
+            is closed (up to {formatNumber(offline.capMs / 3_600_000)}h). Pausing keeps your XP.
           </Text>
           {otherActivity === 'woodcutting' ? <Text style={styles.note}>Training stops woodcutting (your logs are kept).</Text> : null}
           {otherActivity === 'dungeon' ? <Text style={styles.note}>Training stops the dungeon: the run in progress is lost.</Text> : null}
@@ -162,7 +162,7 @@ const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused
     ? 'Locked — unlock Tier 1'
     : view.maxed
       ? maxedText
-      : `XP ${formatNumber(view.xp)}/${formatNumber(view.xpToNext)} · ${formatTrainingLeft(view.remainingMs)} to next`;
+      : `XP ${formatNumber(view.xp)}/${formatNumber(view.xpToNext)} · ${view.xpPerMinute} XP/min · ${formatTrainingLeft(view.remainingMs)} to next`;
   const train = useCallback(() => onTrain(view.attribute), [onTrain, view.attribute]);
   const canTrain = !locked && !view.maxed;
 
@@ -194,7 +194,7 @@ const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused
   );
 });
 
-/** Stamina speed-up on the active row: 1 stamina per minute, never charged beyond the tier cap. */
+/** Stamina speed-up on the active row: 1 stamina per minute (worth the current XP/min), never charged beyond the tier cap. */
 function SpeedupButtons({ view, stamina, onSpeedup }: { view: AttributeTrainingView; stamina: number; onSpeedup: (minutes: number, cost: number) => void }) {
   const per = TRAINING.speedup.staminaPerStep;
   const options = [
@@ -216,7 +216,7 @@ function SpeedupButtons({ view, stamina, onSpeedup }: { view: AttributeTrainingV
           onPress={() => onSpeedup(o.minutes, o.cost)}
           disabled={o.minutes <= 0 || stamina < o.cost}
           accessibilityLabel={`Speed up training: ${o.spoken}${o.key === 'next' ? ` (${o.minutes} minutes)` : ''}, costs ${o.cost} stamina`}
-          accessibilityHint={stamina < o.cost ? 'Not enough stamina' : 'Adds the training time right away'}
+          accessibilityHint={stamina < o.cost ? 'Not enough stamina' : `Adds the training time right away, ${view.xpPerMinute} XP per minute`}
         />
       ))}
     </View>

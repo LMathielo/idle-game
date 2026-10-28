@@ -133,7 +133,7 @@ export function upgradeCost(buildingId: BuildingId, level: number): UpgradeCost 
 
 /**
  * Data-driven: a level is only worth building when its bonus data says what it gives. A building whose next level has
- * no bonus (an empty LevelBonuses) can't be upgraded to it (Training Grounds today, until it gets a bonus).
+ * no bonus (an empty LevelBonuses) can't be upgraded to it (none today: the Training Grounds got theirs in 1.11.0).
  */
 export function hasLevelBonuses(buildingId: BuildingId, level: number): boolean {
   return Object.keys(bonusesAt(buildingId, level)).length > 0;

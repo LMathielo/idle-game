@@ -98,6 +98,8 @@ type Step = { at: number; cmd?: Command | ((s: GameState) => Command) };
 const E = D + 31 * SEC + HOUR;
 /** End of the 1.9.0 script; the 1.10.0 segment starts here. */
 const F = E + 10 * SEC + 22 * HOUR;
+/** End of the 1.10.0 script; the 1.11.0 segment starts here. */
+const G = F + 10 * SEC + 12 * HOUR;
 
 const SCRIPT: Step[] = [
   { at: T0, cmd: { id: 'b0', type: 'DEBUG_BUILD', buildingId: 'woodcutting' } }, // 1.9.0: Woodcutting starts locked
@@ -207,7 +209,16 @@ const SCRIPT: Step[] = [
   { at: F + 7 * SEC + 2 * HOUR + 20 * MIN + 500 }, // a simulate boundary mid-upgrade
   { at: F + 8 * SEC + 2 * HOUR + 20 * MIN + 500, cmd: { id: 'o8', type: 'HIRE_WORKER', maxCost: 400 } },
   { at: F + 9 * SEC + 2 * HOUR + 20 * MIN + 500, cmd: { id: 'o9', type: 'ASSIGN_WORKER', workerId: 'w3', node: 'oak' } },
-  { at: F + 10 * SEC + 12 * HOUR }, // ~10 h away (capped at 8 h): the upgrade completes, +20% yield after it
+  { at: G }, // ~10 h away (capped at 8 h): the upgrade completes, +20% yield after it
+  // 1.11.0: Training Grounds upgrades. A real upgrade to Lv2 (15 min), STR training started while it builds, a simulate
+  // boundary mid-build, the upgrade completing mid-training (1 → 2 XP/min from that instant), a speed-up at 2 XP/min.
+  { at: G + 1 * SEC, cmd: { id: 'p1', type: 'DEBUG_ADD_GOLD', amount: 2000 } },
+  { at: G + 2 * SEC, cmd: { id: 'p2', type: 'UPGRADE_BUILDING', buildingId: 'training_grounds', level: 2 } }, // 250 g, 25 Oak, 25 Stone
+  { at: G + 3 * SEC, cmd: { id: 'p3', type: 'START_ACTIVITY', kind: 'training', attribute: 'strength' } },
+  { at: G + 3 * SEC + 5 * MIN + 250 }, // mid-build: still 1 XP/min
+  { at: G + 3 * SEC + 40 * MIN }, // Lv2 since G + 2 s + 15 min: 2 XP/min after it
+  { at: G + 4 * SEC + 40 * MIN, cmd: { id: 'p4', type: 'SPEEDUP_TRAINING', minutes: 10, maxCost: 10 } }, // 10 stamina = 20 XP
+  { at: G + 4 * SEC + 2 * HOUR }, // more training at 2 XP/min
 ];
 
 function runScript(steps: Step[] = SCRIPT) {
@@ -256,6 +267,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.8.0', 9],
       ['1.9.0', 10],
       ['1.10.0', 11],
+      ['1.11.0', 11],
     ]);
   });
 });
@@ -594,6 +606,33 @@ describe('golden', () => {
     `);
   });
 
+  it('the 1.10.0 script is unchanged in 1.11.0 (its Training Grounds stay Lv1: 1 XP/min as before)', () => {
+    const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'p1')));
+    expect(s.time.lastSimulatedAt).toBe(G);
+    expect(hashState(s)).toBe('1aed0f53'); // the 1.10.0 final pin
+  });
+
+  it('the 1.11.0 segment: Training Grounds Lv2 completes mid-training (1 → 2 XP/min at that instant), speed-up at 2 XP/min', () => {
+    const at = (id: string) => runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === id)));
+    const before = at('p3');
+    expect(before.construction).toMatchObject({ buildingId: 'training_grounds', level: 2, durationMs: 15 * MIN });
+    const str0 = before.training.attributes.strength;
+    const s = runScript();
+    expect(s.buildings.training_grounds).toEqual({ state: 'built', level: 2 });
+    expect(s.construction).toBeNull();
+    expect(trainingView(s).xpPerMinute).toBe(2);
+    // Trained time from G + 3 s: 1 XP/min until the upgrade completes at G + 2 s + 15 min, then 2 XP/min until
+    // G + 4 s + 2 h, plus the 10-minute speed-up at 2 XP/min.
+    const xpOf = (t: { level: number; xp: number; progressMs: number }) => {
+      let total = 0;
+      for (let l = 0; l < t.level; l += 1) total += 5 + 10 * l;
+      return total * 60_000 + t.xp * 60_000 + t.progressMs;
+    };
+    const trainedMs = xpOf(s.training.attributes.strength) - xpOf(str0);
+    expect(trainedMs).toBe((15 * MIN - SEC) * 1 + (2 * HOUR + 2 * SEC - 15 * MIN) * 2 + 10 * MIN * 2);
+    expect(s.activity).toEqual(expect.objectContaining({ kind: 'training', attribute: 'strength' }));
+  });
+
   it('fixed seed + fixed script → fixed final state hash', () => {
     const s = runScript();
     expect({
@@ -632,7 +671,7 @@ describe('golden', () => {
     }).toMatchInlineSnapshot(`
       {
         "actions": 877,
-        "activity": "woodcutting",
+        "activity": "training",
         "axe": "iron_axe",
         "batWings": 12,
         "buildings": {
@@ -649,7 +688,7 @@ describe('golden', () => {
             "state": "built",
           },
           "training_grounds": {
-            "level": 1,
+            "level": 2,
             "state": "built",
           },
           "woodcutting": {
@@ -676,10 +715,10 @@ describe('golden', () => {
           "wins": 503,
         },
         "dungeonActivity": null,
-        "engineVersion": "1.10.0",
+        "engineVersion": "1.11.0",
         "gloves": "iron_gloves#2",
-        "gold": 0,
-        "hash": "1aed0f53",
+        "gold": 1387,
+        "hash": "ee921fce",
         "heroLevel": 15,
         "hp": [
           190,
@@ -692,7 +731,7 @@ describe('golden', () => {
         "lastFightMs": 2000,
         "logs": {
           "birch_logs": 41,
-          "oak_logs": 4856,
+          "oak_logs": 5125,
         },
         "merchant": {
           "chargeProgressMs": 0,
@@ -726,7 +765,7 @@ describe('golden', () => {
         "nextItemSerial": 4,
         "ores": {
           "copper_ore": 13,
-          "stone": 295,
+          "stone": 345,
         },
         "pickaxe": "start-wooden_pickaxe",
         "potions": 2,
@@ -754,9 +793,9 @@ describe('golden', () => {
               "xp": 0,
             },
             "strength": {
-              "level": 8,
-              "progressMs": 46000,
-              "xp": 55,
+              "level": 11,
+              "progressMs": 49000,
+              "xp": 15,
             },
           },
           "tier": 2,
@@ -768,13 +807,13 @@ describe('golden', () => {
           "crews": {
             "oak": {
               "idle": false,
-              "progressMs": 0,
-              "workMs": 0,
+              "progressMs": 3000,
+              "workMs": 6000,
             },
             "stone": {
               "idle": false,
-              "progressMs": 119000,
-              "workMs": 119000,
+              "progressMs": 2000,
+              "workMs": 2000,
             },
           },
           "list": [
@@ -791,10 +830,10 @@ describe('golden', () => {
               "node": "oak",
             },
           ],
-          "minuteLeftMs": 0,
+          "minuteLeftMs": 57000,
           "nextSerial": 4,
           "paidPerMin": 3,
-          "paused": true,
+          "paused": false,
         },
       }
     `);

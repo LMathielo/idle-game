@@ -18,11 +18,12 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - iOS + Android via Expo (SDK 58), tested through Expo Go. No web.
 - Single player for now; multiplayer later via a server that reuses the engine.
 
-## Current state (2026-10-28, engine 1.10.0)
+## Current state (2026-10-28, engine 1.11.0)
 
 - Two tabs: **Village** (pixel village hub with signs: Storage, Merchant, Dungeon, Training, Woodcutting, Mine Shaft, Town Hall) and **Hero** (XP, Status panel with 4 attributes, derived damage/defense, current/max HP with regen, mana and stamina, 11 equipment slots (incl. the axe and the pickaxe), 20-slot inventory, 4 skills).
 - **Buildings (2026-10-28):** Woodcutting, Mine Shaft, Town Hall and Training Grounds start **locked** (greyed sign with 🔒); tapping one opens a Build sheet with each requirement (have / need) and a Build button. Dungeon, Merchant and Storage are always built. Table below.
 - **Town Hall, upgrades and workers (2026-10-28, engine 1.10.0):** every building upgrades to Lv5 (never above the Town Hall) with **one builder**, paid up front, timed, live and offline; the sign shows "Upgrading 12:34". Bonuses per level (yield, sell prices, worker slots, merchant stock slots). The Town Hall hires **workers** who gather on any tree or rock the hero can work, at 25% of the hero's power each, for upkeep per minute. **Gathering yield is power-based**: power ÷ requirement items per action (Oak and Stone need 20 now). The Merchant rolls a **random stock** from a 12-item pool on each refresh. Tables below.
+- **Training Grounds upgrades (2026-10-28, engine 1.11.0):** the Training Grounds upgrade to Lv5 like every other building (Town Hall cap, half the Town Hall's cost); each level gives **+1 training XP per minute** (Lv1 = 1, Lv5 = 5), live, offline and for the stamina speed-up.
 - **Mine Shaft (2026-10-28):** mining mirrors woodcutting with its own config: 5 rocks (Stone, Copper, Iron, Silver, Gold), mining strength (MS = 10 × level + STR + pickaxe), Wooden Pickaxe for everyone, Iron Pickaxe at the Merchant, Geode 1/200. Table below.
 - **M1 done and on `main`:** deterministic engine (`src/engine`), `LocalGameClient`, on-device SQLite save with an action log. Woodcutting works from the Village sign (tap to start/stop), progresses live and offline (8h cap), and shows a "While you were away" summary. Hero tab reads real state. Debug panel on the Hero tab (clock offset, +10k hero XP, stamina, attributes, hero HP → 1, finish run, reset save).
 - **M4 Dungeon in progress:** the Dungeon sign opens a full-screen modal with **5 dungeon tiers** (Rat Cellar, Bat Cave, Wolf Den, Forgotten Crypt, Troll Bridge), one enemy each. Each tier unlocks after a number of wins in the previous one (10 / 15 / 25 / 40); locked tiers show what opens them and their progress, and a banner announces a new unlock. Runs auto-repeat, live and offline. **Since 2026-10-27 a run is a search for an opponent (2/3/5/8/12 min − 1 s per DEX), then a live fight** that plays out strike by strike in engine time (each side on its own attack timer, 60 s limit) and gives hero XP, gold and the tier's loot; stamina skips the search only. A danger hint (Easy / Tough / Deadly) estimates the HP cost of a fight. Current HP persists and regenerates (5 + END per minute). Last-fight panel with a replay of the fight log. Only one activity runs at a time. Tiers 4–5 need Training.
@@ -42,11 +43,11 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 | Woodcutting | locked | 50 gold | woodcutting |
 | Mine Shaft | locked | 50 gold | mining |
 | Town Hall | locked | hero Lv5, 20 Oak Logs, 20 Stone, 100 gold | workers; caps every other building's level |
-| Training Grounds | locked | hero Lv10, Town Hall Lv1, 50 Oak Logs, 50 Stone, 250 gold | training, with Tier 1 included |
+| Training Grounds | locked | hero Lv10, Town Hall Lv1, 50 Oak Logs, 50 Stone, 250 gold | training, with Tier 1 included; XP/min by level |
 
 ## Building upgrades (2026-10-28, engine 1.10.0)
 
-One builder: one upgrade at a time, paid up front (gold + items), timed on engine time (live and offline, 8 h cap), never blocks the hero. No cancel. No building above the Town Hall's level; max Lv5. A level with no bonus data can't be built (`NOT_UPGRADABLE`): the Training Grounds stay at Lv1 until they get a bonus. Dungeon and Storage are not upgradable.
+One builder: one upgrade at a time, paid up front (gold + items), timed on engine time (live and offline, 8 h cap), never blocks the hero. No cancel. No building above the Town Hall's level; max Lv5. A level with no bonus data can't be built (`NOT_UPGRADABLE`; no building is in that case since 1.11.0). Dungeon and Storage are not upgradable.
 
 | To level | Town Hall | Every other building (half, rounded up) |
 | ---: | --- | --- |
@@ -63,7 +64,7 @@ One builder: one upgrade at a time, paid up front (gold + items), timed on engin
 | Woodcutting | — | +20% log yield | +40% | +60% | +80% |
 | Mine Shaft | — | +20% stone/ore yield | +40% | +60% | +80% |
 | Merchant | 5 stock slots | 7 | 9 | 11 | 13 |
-| Training Grounds | — | not upgradable yet | | | |
+| Training Grounds | 1 training XP/min | 2 XP/min | 3 | 4 | 5 |
 
 Yield multiplier = 1 + Town Hall bonus + the skill's building bonus (hero and workers). Sell price = floor(catalog × 1.2) at Town Hall Lv2+.
 
@@ -208,8 +209,10 @@ Items per action = MS ÷ the rock's MS × bonus (whole part + the fraction as a 
 | 2026-10-28 | **Merchant random stock pool:** slot 1 Health Potion ×10, the rest rolled per refresh from a 12-item pool without duplicates (seeded). New items: Iron Chestplate, Shield, Gloves, Boots, Greater Health Potion ×5, Steel Axe, Pickaxe, Sword (sell 30% of buy, floor). Existing saves keep their stock until the next refresh | Something new to look for on each refresh |
 | 2026-10-28 | **Workers** (Town Hall): hire 100 × 2^owned, dismiss without refund; assign to any node the hero can work; crew power = 25% × hero's current power × workers; yield as the hero's on the node's base time; no XP / rare drops; idle (free, still assigned) when the hero no longer qualifies; upkeep 1/5/15/40/100 gold per worker per started minute by tier; can't pay → every crew pauses until gold covers it; live and offline under the same time rules | Idle income that scales with the hero and costs gold to run |
 | 2026-10-28 | Engineering choices for workers (engineer, flagged for the owner): (1) a crew's yield follows the **average** crew size over the action (worker·ms), so moving workers just before an action ends gains nothing; a crew keeps its progress when workers join or leave, and loses it when its last worker leaves. (2) Upkeep per **started minute** is paid at the start of each minute for every working worker; a worker joining mid-minute pays its minute at once (no refund when one leaves). (3) Order within one instant: the hero's events (incl. dungeon gold) → an upgrade completing → crew actions → next minute's upkeep, so dungeon gold earned at a minute boundary counts before that minute is charged. (4) A new save's merchant stock is fixed (not rolled), so a new hero always finds the iron tools. (5) A Merchant upgrade fills its new stock slots at once. (6) Dungeon and Storage are not upgradable (no building in the engine; **owner confirmed**). (7) With no activity, the activity strip shows the builder's job | Determinism, no exploits, readable UI |
-| 2026-10-28 | Owner answers on PR #16: **Dungeon and Storage stay non-upgradable**; **the Training Grounds can't be upgraded until they have a bonus** (data-driven: a level with no bonus data is unreachable, `NOT_UPGRADABLE`; the Upgrade entry is hidden); crew status in the Town Hall and on the node cards is enough (no toast) | Upgrades always give something |
+| 2026-10-28 | Owner answers on PR #16: **Dungeon and Storage stay non-upgradable**; **the Training Grounds can't be upgraded until they have a bonus** (data-driven: a level with no bonus data is unreachable, `NOT_UPGRADABLE`; the Upgrade entry is hidden); crew status in the Town Hall and on the node cards is enough (no toast). **Training Grounds part superseded 2026-10-28 (1.11.0): they now give XP/min per level** | Upgrades always give something |
 | 2026-10-28 | Save v11, engine 1.10.0: buildings keep their levels, the Merchant becomes a stored building (built, Lv1), the builder is idle, no workers, the merchant stock is kept | Old saves keep everything |
+| 2026-10-28 | **Training Grounds upgrades** (owner-approved): Lv1–5, capped by the Town Hall, standard cost (half the Town Hall's); **+1 training XP per minute per level** (Lv1 = 1 … Lv5 = 5), read when the XP is credited, so an upgrade finishing mid-training counts from that instant; the stamina speed-up still buys 1 minute per stamina, worth the current XP/min. The Training modal shows the rate and the time to level at it; the Upgrade sheet shows "+1 XP/min per level". Engine 1.11.0, save v11 unchanged (engine-only bump). `NOT_UPGRADABLE` stays for any level without bonus data | Supersedes "the Training Grounds can't be upgraded until they have a bonus"; gives Training a long-term upgrade path |
+| 2026-10-28 | Engineering choice (engineer, flagged): above 1 XP/min a level-up can land a fraction of a wall millisecond past the level; that sub-ms of trained time (less than the XP/min in ms) is carried into the next level instead of dropped. Speed-up "Next Lv" = ceil(XP left ÷ XP/min) stamina | Nothing lost; still split-invariant |
 | 2026-10-26 | Review council sized by risk: 2 reviewers normally, 5 for high-risk PRs; reviewers on Sonnet (medium reasoning); only findings ≥ 80 are fixed in the PR, one verification reviewer after fixes, lower findings batched into cleanup PRs | Token cost: the 5-reviewer council on every PR cost about as much as the coding itself |
 
 ## Stamina projection (2026-10-27, search-only skip)
@@ -233,7 +236,7 @@ Items per action = MS ÷ the rock's MS × bonus (whole part + the fraction as a 
 - Server-owned time: closes the repeated "clock forward 8h, open, repeat" offline-cap farm, which can't be detected on the device (see ENGINE.md exploit table).
 - Ordered SQL schema migrations keyed on `meta.schema_version`, before the first table change.
 - Selling logs in bulk; crafting with ores and logs.
-- Cancel an upgrade; a second builder; passive bonuses for Town Hall Lv3–5 and the Training Grounds.
+- Cancel an upgrade; a second builder; passive bonuses for Town Hall Lv3–5.
 - Modals for the other village signs (Merchant, Storage).
 - More dungeon content: multi-enemy runs, bosses, unlock rules beyond wins (e.g. hero level).
 - Hit chance and crit using DEX.

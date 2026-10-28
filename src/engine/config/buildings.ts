@@ -22,6 +22,8 @@ export type LevelBonuses = {
   workerCap?: number;
   /** Merchant stock slots per refresh. */
   stockSlots?: number;
+  /** Training XP per trained minute (Training Grounds; 1 without it). */
+  trainingXpPerMin?: number;
 };
 
 /** Town Hall: Lv2+ gives +20% wood/stone/ore yield and +20% sell prices; Lv3–5 only raise the worker cap (for now). */
@@ -39,8 +41,14 @@ const gatheringLevels = (kind: GatheringKind): readonly LevelBonuses[] => [{}, {
 /** Merchant: stock slots = 5 + 2 × (level − 1). */
 const MERCHANT_LEVELS: readonly LevelBonuses[] = [{ stockSlots: 5 }, { stockSlots: 7 }, { stockSlots: 9 }, { stockSlots: 11 }, { stockSlots: 13 }];
 
-/** No passive bonus yet (the data shape is ready for one). A level with no bonus can't be upgraded to (buildings.ts). */
-const NO_BONUS_LEVELS: readonly LevelBonuses[] = [{}, {}, {}, {}, {}];
+/** Training Grounds: +1 training XP per minute per level (Lv1 = 1 XP/min, Lv5 = 5; owner-approved 2026-10-28, 1.11.0). */
+const TRAINING_GROUNDS_LEVELS: readonly LevelBonuses[] = [
+  { trainingXpPerMin: 1 },
+  { trainingXpPerMin: 2 },
+  { trainingXpPerMin: 3 },
+  { trainingXpPerMin: 4 },
+  { trainingXpPerMin: 5 },
+];
 
 /** What one upgrade costs, paid up front when it starts, and how long the builder takes. */
 export type UpgradeCost = {
@@ -165,7 +173,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     grantsTrainingTier: 1,
     upgrades: BUILDING_UPGRADES,
     cappedByTownHall: true,
-    levels: NO_BONUS_LEVELS,
+    levels: TRAINING_GROUNDS_LEVELS,
   },
   merchant: {
     id: 'merchant',

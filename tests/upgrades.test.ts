@@ -120,19 +120,33 @@ describe('UPGRADE_BUILDING', () => {
     }
   });
 
-  it('a building whose next level has no bonus data is not upgradable (Training Grounds): NOT_UPGRADABLE, nothing paid', async () => {
+  it('every building with bonus data reaches every level (Training Grounds since 1.11.0)', async () => {
     const { hasLevelBonuses } = await import('../src/engine');
-    // Data-driven: every level of every building with bonus data is reachable; the Training Grounds have none.
     for (const id of BUILDING_IDS) {
-      for (let l = 2; l <= BUILDING_MAX_LEVEL; l += 1) expect(hasLevelBonuses(id, l)).toBe(id !== 'training_grounds');
+      for (let l = 2; l <= BUILDING_MAX_LEVEL; l += 1) expect(hasLevelBonuses(id, l)).toBe(true);
     }
-    let s = rich();
-    for (let l = 2; l <= 5; l += 1) s = upgraded(s, 'town_hall');
-    const r = run(s, { type: 'UPGRADE_BUILDING', buildingId: 'training_grounds', level: 2 }, s.time.lastSimulatedAt);
-    expect(r).toMatchObject({ ok: false, error: { code: 'NOT_UPGRADABLE' } });
-    expect(upgradeView(s, 'training_grounds')).toMatchObject({ nextLevel: 2, block: 'not_upgradable' });
-    // The other buildings still upgrade with the same Town Hall.
-    expect(run(s, { type: 'UPGRADE_BUILDING', buildingId: 'merchant', level: 2 }, s.time.lastSimulatedAt).ok).toBe(true);
+  });
+
+  it('a building whose next level has no bonus data is still not upgradable: NOT_UPGRADABLE, nothing paid', async () => {
+    const { hasLevelBonuses } = await import('../src/engine');
+    // Data-driven rule kept from 1.10.0: strip the Training Grounds' Lv3+ data for this test only.
+    const def = BUILDINGS.training_grounds as { levels: (typeof BUILDINGS)['training_grounds']['levels'] };
+    const real = def.levels;
+    def.levels = [real[0], real[1], {}, {}, {}];
+    try {
+      expect([2, 3, 4, 5].map((l) => hasLevelBonuses('training_grounds', l))).toEqual([true, false, false, false]);
+      let s = rich();
+      for (let l = 2; l <= 5; l += 1) s = upgraded(s, 'town_hall');
+      s = upgraded(s, 'training_grounds'); // Lv2 still has data
+      expect(s.buildings.training_grounds.level).toBe(2);
+      const r = run(s, { type: 'UPGRADE_BUILDING', buildingId: 'training_grounds', level: 3 }, s.time.lastSimulatedAt);
+      expect(r).toMatchObject({ ok: false, error: { code: 'NOT_UPGRADABLE' } });
+      expect(upgradeView(s, 'training_grounds')).toMatchObject({ nextLevel: 3, block: 'not_upgradable' });
+      // The other buildings still upgrade with the same Town Hall.
+      expect(run(s, { type: 'UPGRADE_BUILDING', buildingId: 'merchant', level: 2 }, s.time.lastSimulatedAt).ok).toBe(true);
+    } finally {
+      def.levels = real;
+    }
   });
 
   it('one builder: a second upgrade is refused while one runs (BUILDER_BUSY), nothing paid', () => {
