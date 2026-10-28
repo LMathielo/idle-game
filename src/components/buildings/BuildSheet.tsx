@@ -2,7 +2,7 @@
 // Build button enabled only when everything is met. Reads buildingView() through the game state and dispatches
 // BUILD; the engine re-checks every requirement (REQUIREMENTS_NOT_MET / ALREADY_BUILT change nothing).
 // An RN <Modal> owned by the Village screen. Hidden while a "While you were away" summary is pending.
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
@@ -41,7 +41,10 @@ export function BuildSheet({ buildingId, onClose, onBuilt }: Props) {
   const { state, awaySummary } = useGameSnapshot();
   const insets = useSafeAreaInsets();
   const [error, setError] = useState<string | null>(null);
+  /** Styling only (greys the buttons while a build is in flight). */
   const [busy, setBusy] = useState(false);
+  /** One command at a time: a ref, so two taps in the same frame never send two (state updates land too late). */
+  const inFlight = useRef(false);
   const view = buildingId ? buildingView(state, buildingId) : null;
 
   const close = useCallback(() => {
@@ -51,7 +54,8 @@ export function BuildSheet({ buildingId, onClose, onBuilt }: Props) {
 
   const send = useCallback(
     (debug: boolean) => {
-      if (!buildingId || busy) return;
+      if (!buildingId || inFlight.current) return;
+      inFlight.current = true;
       setBusy(true);
       const name = BUILDINGS[buildingId].name;
       const run = debug ? client.debug.build(buildingId) : client.dispatch({ type: 'BUILD', buildingId });
@@ -65,9 +69,12 @@ export function BuildSheet({ buildingId, onClose, onBuilt }: Props) {
           }
         })
         .catch(() => setError('Could not save. Try again.'))
-        .finally(() => setBusy(false));
+        .finally(() => {
+          inFlight.current = false;
+          setBusy(false);
+        });
     },
-    [buildingId, busy, client, onBuilt],
+    [buildingId, client, onBuilt],
   );
 
   return (

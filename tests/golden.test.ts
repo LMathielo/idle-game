@@ -365,7 +365,13 @@ describe('golden', () => {
       nests: s.stats.itemsGathered.bird_nest,
       logs: Object.fromEntries(s.inventory.items.filter((i) => i.defId.endsWith('_logs')).map((i) => [i.defId, i.quantity])),
       tier: s.training.tier,
+      xp: s.character.xp,
+      stamina: s.stamina,
+      seed: s.rng.seed,
+      nextItemSerial: s.nextItemSerial,
+      inventory: s.inventory,
     }).toEqual({
+      // Values from running the 1.8.0 script on dev (engine 1.8.0, 2026-10-28); only gold differs.
       actions: 527,
       gold: 1228, // 1.8.0: 1128
       heroLevel: 13,
@@ -374,6 +380,22 @@ describe('golden', () => {
       nests: 1,
       logs: { oak_logs: 391, birch_logs: 36 },
       tier: 2,
+      xp: 2092,
+      stamina: { current: 100, max: 100, progressMs: 0 },
+      seed: 2143607419,
+      nextItemSerial: 3,
+      inventory: {
+        capacity: 20,
+        items: [
+          { id: 'bread', defId: 'bread', name: 'Bread', icon: '🍞', stackable: true, quantity: 3 },
+          { id: 'oak_logs', defId: 'oak_logs', name: 'Oak Logs', icon: '🪵', stackable: true, quantity: 391 },
+          { id: 'rat_skin', defId: 'rat_skin', name: 'Rat Skin', icon: '🐾', stackable: true, quantity: 75 },
+          { id: 'bat_wing', defId: 'bat_wing', name: 'Bat Wing', icon: '🪽', stackable: true, quantity: 12 },
+          { id: 'bird_nest', defId: 'bird_nest', name: 'Bird Nest', icon: '🪺', stackable: true, quantity: 1 },
+          { id: 'birch_logs', defId: 'birch_logs', name: 'Birch Logs', icon: '🪵', stackable: true, quantity: 36 },
+          { id: 'health_potion_t1', defId: 'health_potion_t1', name: 'Health Potion (T1)', icon: '🧪', stackable: true, quantity: 2 },
+        ],
+      },
     });
   });
 

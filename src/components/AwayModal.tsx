@@ -71,6 +71,7 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       {summary.heroXpGained > 0 ? <Line label="✨ Hero XP" value={`+${formatNumber(summary.heroXpGained)}`} /> : null}
       {summary.goldGained > 0 ? <Line label="🪙 Gold" value={`+${formatNumber(summary.goldGained)}`} /> : null}
       {summary.actions > 0 ? <Line label="🪓 Logs cut" value={formatNumber(summary.actions)} /> : null}
+      {summary.oresMined > 0 ? <Line label="⛏️ Ores mined" value={formatNumber(summary.oresMined)} /> : null}
       {gained.map(([id, n]) => (
         <Line key={id} label={`${itemIcon(id)} ${itemName(id)}`} value={`+${formatNumber(n)}`} />
       ))}
@@ -105,7 +106,7 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
           Inventory full: {formatNumber(n)} {itemName(id)} lost
         </Text>
       ))}
-      {summary.actions === 0 && summary.dungeon.runs === 0 && trainingXpTotal(summary) === 0 && !backward ? (
+      {summary.actions === 0 && summary.oresMined === 0 && summary.dungeon.runs === 0 && trainingXpTotal(summary) === 0 && !backward ? (
         <Text style={styles.muted}>Nothing was gathered.</Text>
       ) : null}
     </View>

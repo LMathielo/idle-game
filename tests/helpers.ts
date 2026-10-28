@@ -2,7 +2,7 @@ import { FakeClock } from '../src/client/clock';
 import { LocalGameClient } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import type { CommandInput } from '../src/client/types';
-import { applyCommand, BUILDING_IDS, type BuildingId, type Command, ENGINE_VERSION, type GameState, newGame, type ReplayEntry } from '../src/engine';
+import { applyCommand, BUILDING_IDS, BUILDINGS, type BuildingId, type Command, ENGINE_VERSION, type GameState, newGame, type ReplayEntry } from '../src/engine';
 
 export const T0 = Date.UTC(2026, 9, 25, 12, 0, 0); // fixed epoch for deterministic tests
 export const SEC = 1000;
@@ -37,16 +37,22 @@ export function apply(state: GameState, c: CommandInput, now: number): GameState
 }
 
 /**
- * The state with buildings marked built, nothing else changed (no gold or items spent, no Training Tier granted).
- * For engine tests of the rules inside a building; BUILD itself is tested in tests/buildings.test.ts.
+ * The state with buildings marked built and their build effects applied (the Training Grounds raise the training
+ * tier to at least 1), as a real build would leave it; no gold or items are spent. For engine tests of the rules
+ * inside a building; BUILD itself is tested in tests/buildings.test.ts.
  */
 export function withBuilt(state: GameState, ids: readonly BuildingId[] = BUILDING_IDS): GameState {
   const buildings = { ...state.buildings };
-  for (const id of ids) buildings[id] = { state: 'built', level: 1 };
-  return { ...state, buildings };
+  let training = state.training;
+  for (const id of ids) {
+    buildings[id] = { state: 'built', level: 1 };
+    const tier = BUILDINGS[id].grantsTrainingTier;
+    if (tier !== undefined && training.tier < tier) training = { ...training, tier };
+  }
+  return { ...state, buildings, training };
 }
 
-/** newGame() with every building already built (see withBuilt). Training stays at tier 0. */
+/** newGame() with every building already built (see withBuilt): Training Tier 1 comes with the Training Grounds. */
 export function builtGame(seed: number, now: number): GameState {
   return withBuilt(newGame(seed, now));
 }
