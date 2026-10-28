@@ -9,6 +9,8 @@ type Props = {
   active?: boolean;
   /** Greyed out and not pressable. */
   disabled?: boolean;
+  /** Greyed out but still pressable (e.g. a locked building's sign, which opens its Build sheet). */
+  muted?: boolean;
   /** Spoken instead of `label` when the visible text is not enough. */
   accessibilityLabel?: string;
   accessibilityHint?: string;
@@ -21,7 +23,8 @@ type Props = {
 };
 
 /** Wooden sign button with hard pixel bevels (no rounded corners). */
-export function PixelButton({ label, icon, onPress, active, disabled, accessibilityLabel, accessibilityHint, sublabel, stretch, sign }: Props) {
+export function PixelButton({ label, icon, onPress, active, disabled, muted, accessibilityLabel, accessibilityHint, sublabel, stretch, sign }: Props) {
+  const grey = disabled || muted;
   return (
     <Pressable
       onPress={onPress}
@@ -34,22 +37,22 @@ export function PixelButton({ label, icon, onPress, active, disabled, accessibil
       style={stretch ? styles.stretch : undefined}
     >
       {({ pressed }) => (
-        <View style={[styles.outer, active && styles.outerActive, pressed && styles.outerPressed, disabled && styles.outerDisabled]}>
+        <View style={[styles.outer, active && styles.outerActive, pressed && styles.outerPressed, grey && styles.outerDisabled]}>
           <View
             style={[
               styles.inner,
               (stretch || sublabel) && styles.innerStacked,
               active && styles.innerActive,
               pressed && styles.innerPressed,
-              disabled && styles.innerDisabled,
+              grey && styles.innerDisabled,
             ]}
           >
             {icon ? <Text style={styles.icon}>{icon}</Text> : null}
-            <Text style={[styles.label, sign && styles.labelSign, disabled && styles.labelDisabled]} numberOfLines={1}>
+            <Text style={[styles.label, sign && styles.labelSign, grey && styles.labelDisabled]} numberOfLines={1}>
               {label}
             </Text>
             {sublabel ? (
-              <Text style={[styles.sublabel, disabled && styles.labelDisabled]} numberOfLines={1}>
+              <Text style={[styles.sublabel, grey && styles.labelDisabled]} numberOfLines={1}>
                 {sublabel}
               </Text>
             ) : null}

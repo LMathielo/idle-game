@@ -1,23 +1,56 @@
 import { router } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameState } from '../../client/GameProvider';
 import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
+import { BuildSheet } from '../../components/buildings/BuildSheet';
 import { type VillageAction, VillageScene } from '../../components/VillageScene';
 import { formatNumber } from '../../components/format';
+import { type ActivityKind, type BuildingId, isBuilt } from '../../engine';
 import { colors, fonts } from '../../theme';
 
-const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'dungeon' | 'training' | 'merchant'>, string> = {
+const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'mine' | 'town_hall' | 'dungeon' | 'training' | 'merchant'>, string> = {
   storage: 'Storage',
 };
+
+/** Signs whose building has to be built first. Dungeon, Merchant and Storage are always built. */
+const SIGN_BUILDING: Partial<Record<VillageAction, BuildingId>> = {
+  woodcutting: 'woodcutting',
+  mine: 'mine_shaft',
+  town_hall: 'town_hall',
+  training: 'training_grounds',
+};
+
+/** The full-screen modal each built sign opens. */
+const SIGN_ROUTE: Partial<Record<VillageAction, '/dungeon' | '/training' | '/woodcutting' | '/mine' | '/merchant' | '/town-hall'>> = {
+  dungeon: '/dungeon',
+  training: '/training',
+  woodcutting: '/woodcutting',
+  mine: '/mine',
+  merchant: '/merchant',
+  town_hall: '/town-hall',
+};
+
+/** The sign highlighted while an activity runs. */
+const ACTIVITY_SIGN: Record<ActivityKind, VillageAction> = { woodcutting: 'woodcutting', mining: 'mine', dungeon: 'dungeon', training: 'training' };
 
 const TOAST_MS = 1600;
 
 export default function VillageScreen() {
-  const { character, activity } = useGameState();
+  const state = useGameState();
+  const { character, activity } = state;
   const [toast, setToast] = useState<string | null>(null);
+  /** The locked building whose Build sheet is open. */
+  const [building, setBuilding] = useState<BuildingId | null>(null);
+  // Building state is read through the engine selector; `state.buildings` keeps its identity until a build.
+  const buildings = state.buildings;
+  const locked = useMemo(() => {
+    const out = new Set<VillageAction>();
+    for (const [sign, id] of Object.entries(SIGN_BUILDING) as [VillageAction, BuildingId][]) if (!isBuilt({ buildings }, id)) out.add(sign);
+    return out;
+  }, [buildings]);
   /** Bottom edge of the top HUD (safe area included); signs are kept below it. */
   const [hudBottom, setHudBottom] = useState(0);
   const onHudLayout = useCallback((e: LayoutChangeEvent) => {
@@ -38,23 +71,25 @@ export default function VillageScreen() {
 
   const onAction = useCallback(
     (action: VillageAction) => {
-      if (action === 'dungeon') {
-        router.push('/dungeon');
+      const needs = SIGN_BUILDING[action];
+      if (needs && locked.has(action)) {
+        setBuilding(needs);
         return;
       }
-      if (action === 'training') {
-        router.push('/training');
+      const route = SIGN_ROUTE[action];
+      if (route) {
+        router.push(route);
         return;
       }
-      if (action === 'woodcutting') {
-        router.push('/woodcutting');
-        return;
-      }
-      if (action === 'merchant') {
-        router.push('/merchant');
-        return;
-      }
-      showToast(`${COMING_SOON[action]}: coming soon`);
+      showToast(`${COMING_SOON[action as keyof typeof COMING_SOON]}: coming soon`);
+    },
+    [locked, showToast],
+  );
+  const closeSheet = useCallback(() => setBuilding(null), []);
+  const onBuilt = useCallback(
+    (name: string) => {
+      setBuilding(null);
+      showToast(`${name} built!`);
     },
     [showToast],
   );
@@ -62,7 +97,13 @@ export default function VillageScreen() {
   return (
     <View style={styles.root}>
       {/* The activity strip is reserved even when hidden, so signs never move when an activity starts. */}
-      <VillageScene onAction={onAction} active={activity?.kind ?? null} topReserve={hudBottom} bottomReserve={ACTIVITY_STRIP_HEIGHT} />
+      <VillageScene
+        onAction={onAction}
+        active={activity ? ACTIVITY_SIGN[activity.kind] : null}
+        locked={locked}
+        topReserve={hudBottom}
+        bottomReserve={ACTIVITY_STRIP_HEIGHT}
+      />
       {/* Top HUD over the sky */}
       <SafeAreaView edges={['top']} style={styles.hudWrap} pointerEvents="none">
         <View style={styles.hud} onLayout={onHudLayout}>
@@ -77,6 +118,7 @@ export default function VillageScreen() {
           </Animated.View>
         ) : null}
       </SafeAreaView>
+      <BuildSheet buildingId={building} onClose={closeSheet} onBuilt={onBuilt} />
     </View>
   );
 }

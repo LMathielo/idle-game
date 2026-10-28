@@ -9,22 +9,27 @@ const village = require('../../assets/images/village.png');
 const ART_W = 180;
 const ART_H = 390;
 
-export type VillageAction = 'storage' | 'merchant' | 'dungeon' | 'training' | 'woodcutting';
+export type VillageAction = 'storage' | 'merchant' | 'dungeon' | 'training' | 'woodcutting' | 'mine' | 'town_hall';
 
 /**
  * Where the CENTRE of each sign sits on the artwork, as fractions of the image (base px / 180, base px / 390).
  * Landmarks come from tools/generate-village.py (anchors printed by the script):
  * - dungeon: just under the cave mouth (cave 150,104-119)
+ * - mine: just under the mine entrance (opening 32-44, 116-129; rails to y 142)
  * - woodcutting: at the foot of the forest, by the stumps (trees x 0-70, y 150-209)
  * - merchant: over the stall's awning (stall 114-150, 204-226)
+ * - town_hall: on the hall's roof, under the bell tower (hall 110-142, 231-282)
  * - storage: in front of the barn (barn 22-56, 234-277)
  * - training: on the yard's top fence (yard 108-156, 286-314)
- * Keep x within ~0.2-0.8 so the longest label still fits on a 375pt-wide screen.
+ * Keep x within ~0.2-0.8 so the longest label still fits on a 375pt-wide screen. Checked for overlaps at 320×568,
+ * 375×667, 390×844 and 430×932 (the Town Hall sign sits between Merchant and Training on the right).
  */
 const SIGNS: { key: VillageAction; label: string; icon: string; x: number; y: number }[] = [
   { key: 'dungeon', label: 'Dungeon', icon: '💀', x: 0.8, y: 0.336 },
+  { key: 'mine', label: 'Mine Shaft', icon: '⛏️', x: 0.25, y: 0.335 },
   { key: 'woodcutting', label: 'Woodcutting', icon: '🪓', x: 0.25, y: 0.55 },
   { key: 'merchant', label: 'Merchant', icon: '💰', x: 0.733, y: 0.49 },
+  { key: 'town_hall', label: 'Town Hall', icon: '🏛️', x: 0.71, y: 0.615 },
   { key: 'storage', label: 'Storage', icon: '📦', x: 0.217, y: 0.74 },
   { key: 'training', label: 'Training', icon: '⚔️', x: 0.733, y: 0.705 },
 ];
@@ -44,12 +49,15 @@ const SIGN_GAP = 4;
 export const VillageScene = memo(function VillageScene({
   onAction,
   active,
+  locked,
   topReserve = 0,
   bottomReserve = 0,
 }: {
   onAction?: (a: VillageAction) => void;
   /** Sign of the running activity, drawn highlighted. */
   active?: VillageAction | null;
+  /** Signs of buildings not built yet: greyed with 🔒, still tappable (they open the Build sheet). */
+  locked?: ReadonlySet<VillageAction>;
   topReserve?: number;
   bottomReserve?: number;
 }) {
@@ -76,9 +84,19 @@ export const VillageScene = memo(function VillageScene({
           {SIGNS.map((s) => {
             const cx = left + s.x * imgW;
             const cy = Math.min(Math.max(top + s.y * imgH, minY), maxY);
+            const isLocked = !!locked?.has(s.key);
             return (
               <View key={s.key} style={[styles.sign, { left: cx - SIGN_BOX_W / 2, top: cy - SIGN_BOX_H / 2 }]} pointerEvents="box-none">
-                <PixelButton sign label={s.label} icon={s.icon} active={active === s.key} onPress={() => onAction?.(s.key)} />
+                <PixelButton
+                  sign
+                  label={s.label}
+                  icon={isLocked ? '🔒' : s.icon}
+                  muted={isLocked}
+                  active={!isLocked && active === s.key}
+                  onPress={() => onAction?.(s.key)}
+                  accessibilityLabel={isLocked ? `${s.label}, not built` : s.label}
+                  accessibilityHint={isLocked ? 'Shows what it needs to build' : undefined}
+                />
               </View>
             );
           })}
