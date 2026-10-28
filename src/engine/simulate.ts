@@ -7,6 +7,8 @@ import { regenMerchantCharges } from './merchant';
 import { regenStamina } from './stamina';
 import { advanceTraining } from './training';
 import { advanceWoodcutting } from './woodcutting';
+import { onUpgraded } from './upgradeEffects';
+import { advanceWorld } from './world';
 import { CLOCK_BACKWARD_TOLERANCE_MS } from './config/time';
 import { emptySummary } from './summary';
 import type { GameEvent, GameState, SimulationSummary } from './types';
@@ -28,7 +30,8 @@ export type SimulationResult = { state: GameState; events: GameEvent[]; summary:
  *
  * Gathering (woodcutting, mining), dungeon runs and training share this path. Dungeon runs and training level-ups interleave with
  * HP regen in time order (advanceDungeon, advanceTraining); otherwise HP simply regenerates over the whole
- * elapsed time.
+ * elapsed time. The builder (and the worker crews) run side by side with the hero's activity on the granted time,
+ * in time order (advanceWorld, world.ts).
  */
 export function simulate(state: GameState, now: number): SimulationResult {
   const summary = emptySummary();
@@ -80,23 +83,29 @@ export function simulate(state: GameState, now: number): SimulationResult {
   // Merchant refresh charges follow the same rule: uncapped, bounded by their max.
   draft.merchant = regenMerchantCharges(state.merchant, requestedMs);
 
-  const activity = draft.activity;
-  if (activity?.kind === 'dungeon') {
-    advanceDungeon(draft, activity, grantedMs, requestedMs, summary, events);
-    return { state: draft, events, summary };
-  }
-  if (activity?.kind === 'training') {
-    // Same clock rules as woodcutting: the 8h cap limits training time (grantedMs); regen uses requestedMs.
-    advanceTraining(draft, activity, grantedMs, requestedMs, summary, events);
-    return { state: draft, events, summary };
-  }
+  // The hero's activity, one step of the world walk at a time. Dungeon runs and training interleave HP regen with
+  // their own events; gathering never touches HP, so its regen is done once at the end ("plain" regen).
+  let plainRegenMs = 0;
+  const heroStep = (ms: number) => {
+    if (!(ms > 0)) return;
+    const a = draft.activity;
+    if (a?.kind === 'dungeon') advanceDungeon(draft, a, ms, ms, summary, events);
+    else if (a?.kind === 'training') advanceTraining(draft, a, ms, ms, summary, events);
+    else {
+      if (a?.kind === 'woodcutting') advanceWoodcutting(draft, a, ms, summary, events);
+      if (a?.kind === 'mining') advanceMining(draft, a, ms, summary, events);
+      plainRegenMs += ms;
+    }
+  };
+  // Granted (capped) time: the hero's activity and the village (builder) side by side, in time order.
+  advanceWorld(draft, grantedMs, heroStep, summary, events, onUpgraded);
 
-  if (activity?.kind === 'woodcutting') advanceWoodcutting(draft, activity, grantedMs, summary, events);
-  if (activity?.kind === 'mining') advanceMining(draft, activity, grantedMs, summary, events);
-
-  // Gathering never touches HP, so regen over the whole (uncapped) time is the same in any order.
+  // Beyond the cap only a dungeon fight in progress finishes (and HP regenerates); see advanceDungeon.
+  const beyondCapMs = requestedMs - grantedMs;
+  if (draft.activity?.kind === 'dungeon') advanceDungeon(draft, draft.activity, 0, beyondCapMs, summary, events);
+  else plainRegenMs += beyondCapMs;
   // Same object when nothing changed (full HP).
-  draft.character = regenHp(draft.character, maxHpOf(draft), hpRegenPerMinute(draft), requestedMs);
+  if (plainRegenMs > 0) draft.character = regenHp(draft.character, maxHpOf(draft), hpRegenPerMinute(draft), plainRegenMs);
 
   return { state: draft, events, summary };
 }

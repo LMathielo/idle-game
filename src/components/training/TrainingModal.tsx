@@ -13,6 +13,7 @@ import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
 import { Panel } from '../Panel';
 import { PixelButton } from '../PixelButton';
+import { UpgradeEntry } from '../buildings/UpgradeEntry';
 
 export function TrainingModal() {
   const client = useGameClient();
@@ -98,6 +99,7 @@ export function TrainingModal() {
           {otherActivity === 'woodcutting' ? <Text style={styles.note}>Training stops woodcutting (your logs are kept).</Text> : null}
           {otherActivity === 'dungeon' ? <Text style={styles.note}>Training stops the dungeon: the run in progress is lost.</Text> : null}
         </Panel>
+        <UpgradeEntry buildingId="training_grounds" />
       </ScrollView>
     </ModalScreen>
   );

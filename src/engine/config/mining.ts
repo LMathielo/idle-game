@@ -19,10 +19,11 @@ export const MINING = {
   /**
    * Formula constants, documented here and asserted by tests/mining.test.ts against the stored per-rock values
    * (the engine never evaluates them: Math.pow is banned in src/engine).
-   *   required MS  = max(0, reqMsPerLevel × reqLevel − reqMsOffset)          (Stone: 0)
+   *   required MS  = max(reqMsFloor, reqMsPerLevel × reqLevel − reqMsOffset)  (Stone: 20, since 1.10.0; was 0)
    *   XP per ore   = round(xpPerBaseMinute × base minutes × reqLevel^xpLevelExponent)
+   * The requirement is also the divisor of the yield (ores per action = MS ÷ required MS × bonus), so it is never 0.
    */
-  formula: { reqMsPerLevel: 35, reqMsOffset: 75, xpPerBaseMinute: 12.5, xpLevelExponent: 0.4 },
+  formula: { reqMsFloor: 20, reqMsPerLevel: 35, reqMsOffset: 75, xpPerBaseMinute: 12.5, xpLevelExponent: 0.4 },
 } as const;
 
 export type RockDef = {
@@ -32,13 +33,13 @@ export type RockDef = {
   icon: string;
   /** Mining level needed to start this rock. */
   reqLevel: number;
-  /** Mining strength needed to start this rock (precomputed from MINING.formula). */
+  /** Mining strength needed to start this rock (precomputed from MINING.formula). Also the yield divisor: > 0. */
   reqMs: number;
   /** Time per ore before DEX. */
   baseMs: number;
-  /** Mining XP per ore (precomputed from MINING.formula). */
+  /** Mining XP per action, whatever the number of ores it yields (precomputed from MINING.formula). */
   xpPerOre: number;
-  /** Stackable item every ore gives (1 per ore). */
+  /** Stackable item every action gives (MS ÷ reqMs × bonus per action, see gathering.ts). */
   oreItemId: string;
 };
 
@@ -46,7 +47,7 @@ export type RockDef = {
 export const ROCK_IDS = ['stone', 'copper', 'iron', 'silver', 'gold'] as const satisfies readonly RockId[];
 
 export const ROCKS: Record<RockId, RockDef> = {
-  stone: { id: 'stone', name: 'Stone', icon: '🪨', reqLevel: 1, reqMs: 0, baseMs: 2 * MIN_MS, xpPerOre: 25, oreItemId: 'stone' },
+  stone: { id: 'stone', name: 'Stone', icon: '🪨', reqLevel: 1, reqMs: 20, baseMs: 2 * MIN_MS, xpPerOre: 25, oreItemId: 'stone' },
   copper: { id: 'copper', name: 'Copper', icon: '🟠', reqLevel: 5, reqMs: 100, baseMs: 5 * MIN_MS, xpPerOre: 119, oreItemId: 'copper_ore' },
   iron: { id: 'iron', name: 'Iron', icon: '⚫', reqLevel: 15, reqMs: 450, baseMs: 10 * MIN_MS, xpPerOre: 369, oreItemId: 'iron_ore' },
   silver: { id: 'silver', name: 'Silver', icon: '⚪', reqLevel: 28, reqMs: 905, baseMs: 18 * MIN_MS, xpPerOre: 853, oreItemId: 'silver_ore' },

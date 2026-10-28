@@ -18,16 +18,17 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - iOS + Android via Expo (SDK 58), tested through Expo Go. No web.
 - Single player for now; multiplayer later via a server that reuses the engine.
 
-## Current state (2026-10-28)
+## Current state (2026-10-28, engine 1.10.0)
 
 - Two tabs: **Village** (pixel village hub with signs: Storage, Merchant, Dungeon, Training, Woodcutting, Mine Shaft, Town Hall) and **Hero** (XP, Status panel with 4 attributes, derived damage/defense, current/max HP with regen, mana and stamina, 11 equipment slots (incl. the axe and the pickaxe), 20-slot inventory, 4 skills).
-- **Buildings (2026-10-28):** Woodcutting, Mine Shaft, Town Hall and Training Grounds start **locked** (greyed sign with 🔒); tapping one opens a Build sheet with each requirement (have / need) and a Build button. Dungeon, Merchant and Storage are always built. The built Town Hall shows "Coming soon: automated workers and building upgrades". Table below.
+- **Buildings (2026-10-28):** Woodcutting, Mine Shaft, Town Hall and Training Grounds start **locked** (greyed sign with 🔒); tapping one opens a Build sheet with each requirement (have / need) and a Build button. Dungeon, Merchant and Storage are always built. Table below.
+- **Town Hall, upgrades and workers (2026-10-28, engine 1.10.0):** every building upgrades to Lv5 (never above the Town Hall) with **one builder**, paid up front, timed, live and offline; the sign shows "Upgrading 12:34". Bonuses per level (yield, sell prices, worker slots, merchant stock slots). The Town Hall hires **workers** who gather on any tree or rock the hero can work, at 25% of the hero's power each, for upkeep per minute. **Gathering yield is power-based**: power ÷ requirement items per action (Oak and Stone need 20 now). The Merchant rolls a **random stock** from a 12-item pool on each refresh. Tables below.
 - **Mine Shaft (2026-10-28):** mining mirrors woodcutting with its own config: 5 rocks (Stone, Copper, Iron, Silver, Gold), mining strength (MS = 10 × level + STR + pickaxe), Wooden Pickaxe for everyone, Iron Pickaxe at the Merchant, Geode 1/200. Table below.
 - **M1 done and on `main`:** deterministic engine (`src/engine`), `LocalGameClient`, on-device SQLite save with an action log. Woodcutting works from the Village sign (tap to start/stop), progresses live and offline (8h cap), and shows a "While you were away" summary. Hero tab reads real state. Debug panel on the Hero tab (clock offset, +10k hero XP, stamina, attributes, hero HP → 1, finish run, reset save).
 - **M4 Dungeon in progress:** the Dungeon sign opens a full-screen modal with **5 dungeon tiers** (Rat Cellar, Bat Cave, Wolf Den, Forgotten Crypt, Troll Bridge), one enemy each. Each tier unlocks after a number of wins in the previous one (10 / 15 / 25 / 40); locked tiers show what opens them and their progress, and a banner announces a new unlock. Runs auto-repeat, live and offline. **Since 2026-10-27 a run is a search for an opponent (2/3/5/8/12 min − 1 s per DEX), then a live fight** that plays out strike by strike in engine time (each side on its own attack timer, 60 s limit) and gives hero XP, gold and the tier's loot; stamina skips the search only. A danger hint (Easy / Tough / Deadly) estimates the HP cost of a fight. Current HP persists and regenerates (5 + END per minute). Last-fight panel with a replay of the fight log. Only one activity runs at a time. Tiers 4–5 need Training.
 - **M3 Training in progress:** the Training sign opens a full-screen modal. Gold buys training tiers (Tier 1 = 100 g, tier t = 100·t³, 10 tiers, each +20 max level for all four attributes); time trains one attribute at a time at 1 XP per minute, live and offline (8h cap). Effective attribute = base + training level, used by damage, defense, HP regen and the DEX run time. The Hero tab shows each attribute's base + trained split.
 - **Woodcutting (2026-10-27):** the Woodcutting sign opens a full-screen modal with **5 trees** (Oak, Birch, Maple, Yew, Ironwood) in a swipeable carousel. Each tree needs a woodcutting level and a **woodcutting strength** (WS = 10 × level + STR + axe). New **axe** equipment slot; everyone has the Wooden Axe (+1 WS). Logs every 1:50 on Oak at DEX 10, skippable with stamina. Training can be sped up with stamina (1 per minute).
-- **Merchant (2026-10-27):** the Merchant sign opens a full-screen modal with **Buy | Sell** tabs. It stocks Health Potions ×10 and the Iron Axe, Sword and Helm; 5 refresh charges (+1 per 2 h). Tapping an item on the Hero tab opens an info sheet with **Equip / Use / Unequip**. Item names are colored by quality.
+- **Merchant (2026-10-27):** the Merchant sign opens a full-screen modal with **Buy | Sell** tabs. Slot 1 is always Health Potion ×10; since 1.10.0 the other slots are rolled from a pool on each refresh (table below); 5 refresh charges (+1 per 2 h). Tapping an item on the Hero tab opens an info sheet with **Equip / Use / Unequip**. Item names are colored by quality.
 - Storage shows "coming soon". No storage, crafting or item affixes yet.
 - Technical details: `docs/ENGINE.md`.
 - Delivery: PRs land on `dev` (test preview in Expo Go, EAS branch `dev`); the owner releases `dev` → `main` (EAS branch `main`) after testing.
@@ -36,23 +37,76 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 
 | Building | State on a new save | Requirements | Gives |
 | --- | --- | --- | --- |
-| Dungeon, Merchant, Storage | always built | — | — |
+| Dungeon, Storage | always there (not upgradable) | — | — |
+| Merchant | built, Lv1 (a stored building since 1.10.0) | — | stock slots by level |
 | Woodcutting | locked | 50 gold | woodcutting |
 | Mine Shaft | locked | 50 gold | mining |
-| Town Hall | locked | hero Lv5, 20 Oak Logs, 20 Stone, 100 gold | level 1; placeholder for workers and upgrades |
+| Town Hall | locked | hero Lv5, 20 Oak Logs, 20 Stone, 100 gold | workers; caps every other building's level |
 | Training Grounds | locked | hero Lv10, Town Hall Lv1, 50 Oak Logs, 50 Stone, 250 gold | training, with Tier 1 included |
 
-## Mine Shaft rocks (2026-10-28)
+## Building upgrades (2026-10-28, engine 1.10.0)
 
-| Rock | Mining level | MS | Min / item (DEX 10) | XP / item | Item (sell) |
+One builder: one upgrade at a time, paid up front (gold + items), timed on engine time (live and offline, 8 h cap), never blocks the hero. No cancel. No building above the Town Hall's level; max Lv5. A level with no bonus data can't be built (`NOT_UPGRADABLE`): the Training Grounds stay at Lv1 until they get a bonus. Dungeon and Storage are not upgradable.
+
+| To level | Town Hall | Every other building (half, rounded up) |
+| ---: | --- | --- |
+| 2 | 500 g, 50 Oak Logs, 50 Stone, 30 min | 250 g, 25 Oak Logs, 25 Stone, 15 min |
+| 3 | 2,000 g, 100 Birch Logs, 100 Copper Ore, 2 h | 1,000 g, 50 Birch Logs, 50 Copper Ore, 1 h |
+| 4 | 8,000 g, 200 Maple Logs, 200 Iron Ore, 8 h | 4,000 g, 100 Maple Logs, 100 Iron Ore, 4 h |
+| 5 | 32,000 g, 400 Yew Logs, 400 Silver Ore, 24 h | 16,000 g, 200 Yew Logs, 200 Silver Ore, 12 h |
+
+## Building bonuses (per level; bonuses add together)
+
+| Building | Lv1 | Lv2 | Lv3 | Lv4 | Lv5 |
+| --- | --- | --- | --- | --- | --- |
+| Town Hall | 5 workers | +20% wood/stone/ore yield, +20% sell prices, 7 workers | same, 9 workers | same, 12 workers | same, 15 workers |
+| Woodcutting | — | +20% log yield | +40% | +60% | +80% |
+| Mine Shaft | — | +20% stone/ore yield | +40% | +60% | +80% |
+| Merchant | 5 stock slots | 7 | 9 | 11 | 13 |
+| Training Grounds | — | not upgradable yet | | | |
+
+Yield multiplier = 1 + Town Hall bonus + the skill's building bonus (hero and workers). Sell price = floor(catalog × 1.2) at Town Hall Lv2+.
+
+## Workers (2026-10-28, engine 1.10.0)
+
+| Rule | Value |
+| --- | --- |
+| Hire | Town Hall built; 100 × 2^(workers owned) gold (100, 200, 400…); cap by Town Hall level above. Dismiss: no refund |
+| Assign | any tree or rock the hero can work now (level and power), building built; one crew per node |
+| Crew power | 25% × the hero's current power for that skill × workers on the node (gear upgrades count at once) |
+| Yield / action | crew power ÷ node requirement × bonus multiplier; whole part + fraction as a chance; base time per node (no DEX) |
+| Not | no XP, no rare drops; separate from the hero on the same node (additive) |
+| Idle | hero below a node's requirement (equip change): crew stays assigned, works and costs nothing until he qualifies again |
+| Upkeep / worker / minute | Tier 1 (Oak, Stone) 1 · T2 5 · T3 15 · T4 40 · T5 100 gold, per started minute; can't pay → all crews pause until gold covers it |
+| Time | live and offline, 8 h cap, same clock rules; output lost when the inventory is full |
+
+## Merchant stock (2026-10-28, engine 1.10.0)
+
+Slot 1: Health Potion ×10. Other slots: rolled from the pool on each refresh (seeded, no duplicates). A new save starts with Iron Axe, Iron Pickaxe, Iron Sword, Iron Helm. Every item sells for 30% of its price (floored), below its buy price even with the +20% bonus.
+
+| Item | Slot | Stat | Buy | Sell |
+| --- | --- | --- | ---: | ---: |
+| Iron Axe / Iron Pickaxe | axe / pickaxe | +40 WS / MS | 600 | 180 |
+| Iron Sword | weapon | 6–9 dmg | 500 | 150 |
+| Iron Helm | helmet | +4 armor | 400 | 120 |
+| Iron Chestplate | armor | +6 armor | 700 | 210 |
+| Iron Shield | shield | +5 armor | 550 | 165 |
+| Iron Gloves / Iron Boots | gloves / boots | +2 armor | 250 | 75 |
+| Greater Health Potion (×5) | — | heal 60 | 30 | 9 |
+| Steel Axe / Steel Pickaxe | axe / pickaxe | +120 WS / MS | 2,500 | 750 |
+| Steel Sword | weapon | 10–14 dmg | 2,000 | 600 |
+
+## Mine Shaft rocks (2026-10-28; Stone needs 20 MS since 1.10.0)
+
+| Rock | Mining level | MS | Min / action (DEX 10) | XP / action | Item (sell) |
 | --- | ---: | ---: | ---: | ---: | --- |
-| Stone | 1 | 0 | 2 (1:50) | 25 | Stone (1) |
+| Stone | 1 | 20 | 2 (1:50) | 25 | Stone (1) |
 | Copper | 5 | 100 | 5 (4:50) | 119 | Copper Ore (3) |
 | Iron | 15 | 450 | 10 (9:50) | 369 | Iron Ore (8) |
 | Silver | 28 | 905 | 18 (17:50) | 853 | Silver Ore (20) |
 | Gold | 42 | 1395 | 30 (29:50) | 1672 | Gold Ore (50) |
 
-Geode: 1/200 per item on every rock (uncommon, sell 30). Pickaxes: Wooden +1 MS (sell 1), Iron +40 MS (buy 600, sell 180).
+Items per action = MS ÷ the rock's MS × bonus (whole part + the fraction as a chance). Geode: 1/200 per action on every rock (uncommon, sell 30). Pickaxes: Wooden +1 MS (sell 1), Iron +40 MS (buy 600, sell 180), Steel +120 MS (buy 2,500, sell 750).
 
 ## Roadmap (proposed, not yet committed by the owner)
 
@@ -130,7 +184,7 @@ Geode: 1/200 per item on every rock (uncommon, sell 30). Pickaxes: Wooden +1 MS 
 | 2026-10-27 | **Sell prices** (gold): Rat Skin 2, Bat Wing 5, Wolf Pelt 12, Old Bone 25, Troll Hide 60; logs 1 / 3 / 8 / 20 / 50; Bird Nest 30; Health Potion 5; Iron Axe 180, Sword 150, Helm 120; Rusty Gladius 3, Linen Tunic 2, Worn Sandals 1, Wooden Axe 1, Bread 1. Every buyable item sells for less than it costs | Gives gathering and dungeon loot a gold value; no buy→sell profit |
 | 2026-10-27 | **New items:** Health Potion (T1) +50 HP capped at max, 12 g; Iron Axe +40 WS, 600 g; Iron Sword 6–9 damage, 500 g; Iron Helm +4 armor, 400 g | First gold sinks besides Training; Iron Axe opens later trees |
 | 2026-10-27 | **Equip / unequip / use** are engine commands. Equipping swaps the old item into the new one's inventory place (works with a full inventory, never loses an item); unequip needs a free slot; potions refuse at full HP. Item info sheet on the Hero tab (Equip, Use, Unequip); no selling there | Gear choices finally matter; one place to read an item |
-| 2026-10-27 | **Merchant stock**: as many slots as the inventory; each refresh fills only the first 4 with Health Potion ×10 (bought per unit), Iron Axe, Iron Sword, Iron Helm. A bought-out slot stays empty until the next refresh. Stock generation is data-driven (pool + roll) so a seeded, rarity-tiered roll can replace it later | Fixed shop for now, random stock later without a rewrite |
+| 2026-10-27 | **Merchant stock**: as many slots as the inventory; each refresh fills only the first 4 with Health Potion ×10 (bought per unit), Iron Axe, Iron Sword, Iron Helm. A bought-out slot stays empty until the next refresh. Stock generation is data-driven (pool + roll) so a seeded, rarity-tiered roll can replace it later. **Superseded 2026-10-28 by the random stock pool** | Fixed shop for now, random stock later without a rewrite |
 | 2026-10-27 | **Refresh charges**: +1 every 2 h, max 5 (extra lost), like stamina: uncapped by the 8 h offline cap, paused when the clock goes back, remainder kept. Refresh spends 1 | Gives a reason to come back; bounded |
 | 2026-10-27 | **Buy / sell rules**: quantity 1..available, gold never negative, stacks merge, a new stack or unique item needs a free slot, equipped items can't be sold. A buy is bound to the item and price shown (`STOCK_CHANGED`, `PRICE_CHANGED`). The merchant is **not an activity**: trading works while woodcutting, training or in a dungeon | No surprises, nothing interrupts idle progress |
 | 2026-10-27 | **Woodcutting stops when WS drops below the current tree's requirement** through an equipment change (unequipping the axe, equipping a weaker one). Logs already finished are kept; the log in progress is lost like any stop (`ACTIVITY_STOPPED`). Staying at or above the requirement keeps it running | Gear gates trees while you cut, not only when you start |
@@ -146,8 +200,16 @@ Geode: 1/200 per item on every rock (uncommon, sell 30). Pickaxes: Wooden +1 MS 
 | 2026-10-28 | New **`pickaxe`** equipment slot; new saves start with the Wooden Pickaxe (+1 MS). Merchant stocks the **Iron Pickaxe** (+40 MS, 600 g) right after the Iron Axe; the stock has 5 listings | Mirrors the axe |
 | 2026-10-28 | **Buildings and construction:** buildings are `locked` or `built` (Town Hall also has a level, 1 once built); requirements are data. `BUILD` checks every requirement, consumes gold and items atomically, builds at once, is logged and replayable (`ALREADY_BUILT`, `REQUIREMENTS_NOT_MET`). Locked buildings can't be used (`BUILDING_LOCKED` on woodcutting, mining and training). Building table above | A first construction goal that uses gathered materials |
 | 2026-10-28 | **Training Grounds come with Tier 1** (no extra 100 g); Tier 2+ is paid as before. Engineer choice: buying a tier is also refused while the Training Grounds are locked | Building is the price of Tier 1 |
-| 2026-10-28 | **Village:** mine entrance under the left mountain, Town Hall in the town centre; locked signs greyed with 🔒 open a Build sheet (have / need, met / unmet, Build enabled only when all are met); the built Town Hall shows "Coming soon: automated workers and building upgrades" | Every building visible from day one, with its next goal |
+| 2026-10-28 | **Village:** mine entrance under the left mountain, Town Hall in the town centre; locked signs greyed with 🔒 open a Build sheet (have / need, met / unmet, Build enabled only when all are met); the built Town Hall shows "Coming soon: automated workers and building upgrades" (**replaced 2026-10-28** by the Town Hall modal with upgrades and workers) | Every building visible from day one, with its next goal |
 | 2026-10-28 | Save v10, engine 1.9.0: existing saves get buildings **like a new save** (all four locked; owner said wiping was fine); a running woodcutting or training activity stops; Wooden Pickaxe and mining Lv1 added; the Iron Pickaxe listing fills merchant slot 4; everything else (gold, items, training tier, levels) kept | Same start for everyone without losing progress |
+| 2026-10-28 | **Power-based yield** (woodcutting and mining): items per action = power ÷ the node's requirement × bonus multiplier; the whole part is guaranteed, the fraction is the chance of one more (one seeded draw per action, integer basis points). Oak and Stone need 20 power (was 0; the requirement is the divisor). Skill XP and the rare drop stay one per action; action time unchanged | Power keeps paying after a node unlocks; gives workers and bonuses something to multiply |
+| 2026-10-28 | **Building upgrades and one builder:** every building to Lv5, never above the Town Hall (which caps at 5); `UPGRADE_BUILDING` checks cap and cost, pays gold + items up front atomically, bound to the level shown; one construction at a time; completes in simulate on the granted (capped) time; never blocks the hero; no cancel; debug "finish now". Costs: Town Hall table above, other buildings half rounded up | A long-term gold and material sink |
+| 2026-10-28 | **Bonuses as data per level**, adding together: Town Hall Lv2+ +20% wood/stone/ore yield (hero and workers) and +20% sell prices (floor); Woodcutting / Mine Shaft +20% of their yield per level above 1; Merchant 5 + 2 × (level − 1) stock slots; worker cap 5/7/9/12/15 | Every upgrade does something visible |
+| 2026-10-28 | **Merchant random stock pool:** slot 1 Health Potion ×10, the rest rolled per refresh from a 12-item pool without duplicates (seeded). New items: Iron Chestplate, Shield, Gloves, Boots, Greater Health Potion ×5, Steel Axe, Pickaxe, Sword (sell 30% of buy, floor). Existing saves keep their stock until the next refresh | Something new to look for on each refresh |
+| 2026-10-28 | **Workers** (Town Hall): hire 100 × 2^owned, dismiss without refund; assign to any node the hero can work; crew power = 25% × hero's current power × workers; yield as the hero's on the node's base time; no XP / rare drops; idle (free, still assigned) when the hero no longer qualifies; upkeep 1/5/15/40/100 gold per worker per started minute by tier; can't pay → every crew pauses until gold covers it; live and offline under the same time rules | Idle income that scales with the hero and costs gold to run |
+| 2026-10-28 | Engineering choices for workers (engineer, flagged for the owner): (1) a crew's yield follows the **average** crew size over the action (worker·ms), so moving workers just before an action ends gains nothing; a crew keeps its progress when workers join or leave, and loses it when its last worker leaves. (2) Upkeep per **started minute** is paid at the start of each minute for every working worker; a worker joining mid-minute pays its minute at once (no refund when one leaves). (3) Order within one instant: the hero's events (incl. dungeon gold) → an upgrade completing → crew actions → next minute's upkeep, so dungeon gold earned at a minute boundary counts before that minute is charged. (4) A new save's merchant stock is fixed (not rolled), so a new hero always finds the iron tools. (5) A Merchant upgrade fills its new stock slots at once. (6) Dungeon and Storage are not upgradable (no building in the engine; **owner confirmed**). (7) With no activity, the activity strip shows the builder's job | Determinism, no exploits, readable UI |
+| 2026-10-28 | Owner answers on PR #16: **Dungeon and Storage stay non-upgradable**; **the Training Grounds can't be upgraded until they have a bonus** (data-driven: a level with no bonus data is unreachable, `NOT_UPGRADABLE`; the Upgrade entry is hidden); crew status in the Town Hall and on the node cards is enough (no toast) | Upgrades always give something |
+| 2026-10-28 | Save v11, engine 1.10.0: buildings keep their levels, the Merchant becomes a stored building (built, Lv1), the builder is idle, no workers, the merchant stock is kept | Old saves keep everything |
 | 2026-10-26 | Review council sized by risk: 2 reviewers normally, 5 for high-risk PRs; reviewers on Sonnet (medium reasoning); only findings ≥ 80 are fixed in the PR, one verification reviewer after fixes, lower findings batched into cleanup PRs | Token cost: the 5-reviewer council on every PR cost about as much as the coding itself |
 
 ## Stamina projection (2026-10-27, search-only skip)
@@ -170,7 +232,8 @@ Geode: 1/200 per item on every rock (uncommon, sell 30). Pickaxes: Wooden +1 MS 
 - Big-number support for XP beyond ~level 150 (values clamp to `Number.MAX_SAFE_INTEGER` today).
 - Server-owned time: closes the repeated "clock forward 8h, open, repeat" offline-cap farm, which can't be detected on the device (see ENGINE.md exploit table).
 - Ordered SQL schema migrations keyed on `meta.schema_version`, before the first table change.
-- Better axes (Merchant or drops), selling logs.
+- Selling logs in bulk; crafting with ores and logs.
+- Cancel an upgrade; a second builder; passive bonuses for Town Hall Lv3–5 and the Training Grounds.
 - Modals for the other village signs (Merchant, Storage).
 - More dungeon content: multi-enemy runs, bosses, unlock rules beyond wins (e.g. hero level).
 - Hit chance and crit using DEX.

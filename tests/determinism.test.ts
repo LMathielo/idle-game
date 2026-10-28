@@ -39,12 +39,12 @@ describe('determinism', () => {
     expect(a.state).toEqual(b.state);
   });
 
-  it('the RNG is actually used: the seed advances by exactly one draw per action', () => {
+  it('the RNG is actually used: the seed advances by exactly two draws per action', () => {
     const { state } = run(424242);
     const actions = state.stats.totalActions;
     expect(actions).toBeGreaterThan(300);
-    // One bird-nest roll per action; mulberry32 adds 0x6d2b79f5 to the seed per draw.
-    expect(state.rng.seed).toBe((424242 + Math.imul(actions, 0x6d2b79f5)) >>> 0);
+    // One yield roll and one bird-nest roll per action; mulberry32 adds 0x6d2b79f5 to the seed per draw.
+    expect(state.rng.seed).toBe((424242 + Math.imul(2 * actions, 0x6d2b79f5)) >>> 0);
   });
 
   it('a different seed gives a different outcome over a long run (not just a different seed)', () => {

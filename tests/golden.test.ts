@@ -48,6 +48,13 @@
 // BUILD of the Mine Shaft, 1 h of Stone, a bound SKIP_MINE, debug mining levels, the Iron Pickaxe bought and
 // equipped for Copper, the Wooden Pickaxe re-equipped (Copper stops: MS too low), a real BUILD of the Town Hall
 // (logs, stone and gold consumed), then the Rat Cellar and 20 h away (capped).
+// 1.9.0 → 1.10.0 (2026-10-28): save v11 (building upgrades and the builder, workers, the Merchant as a building).
+// Power-based yield (items per action = power ÷ requirement, the fraction rolled: one more RNG draw per log and ore;
+// Oak and Stone need 20), so every pin was re-pinned (more logs, a shifted RNG stream, different gold). Refreshes now
+// roll the merchant stock (seeded): the script's Iron Helm buy after the refreshes became the Iron Gloves that slot
+// holds now (the Iron Pickaxe buy still finds it in slot 2). The script gained a 1.10.0 segment: two hires, crews on
+// Oak and Stone during Rat Cellar runs, the hero on Oak beside the Oak crew, a real Town Hall upgrade with a simulate
+// boundary mid-build, a third worker, then ~10 h away (capped).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -89,6 +96,8 @@ type Step = { at: number; cmd?: Command | ((s: GameState) => Command) };
 
 /** End of the 1.8.0 script; the 1.9.0 segment starts here. */
 const E = D + 31 * SEC + HOUR;
+/** End of the 1.9.0 script; the 1.10.0 segment starts here. */
+const F = E + 10 * SEC + 22 * HOUR;
 
 const SCRIPT: Step[] = [
   { at: T0, cmd: { id: 'b0', type: 'DEBUG_BUILD', buildingId: 'woodcutting' } }, // 1.9.0: Woodcutting starts locked
@@ -160,8 +169,9 @@ const SCRIPT: Step[] = [
   { at: C + 11 * SEC + 5 * HOUR, cmd: { id: 'm11', type: 'REFRESH_MERCHANT' } },
   { at: C + 12 * SEC + 5 * HOUR, cmd: { id: 'm12', type: 'DEBUG_ADD_MERCHANT_CHARGE' } },
   { at: C + 13 * SEC + 5 * HOUR, cmd: { id: 'm13', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' } },
-  { at: C + 14 * SEC + 5 * HOUR, cmd: { id: 'm14', type: 'BUY_ITEM', slot: 4, defId: 'iron_helm', quantity: 1, maxUnitPrice: 400 } },
-  { at: C + 15 * SEC + 5 * HOUR, cmd: { id: 'm15', type: 'EQUIP_ITEM', itemId: 'iron_helm#2' } },
+  // 1.10.0: refreshes roll the stock (seeded); this one holds Iron Gloves in slot 4 (it held the Iron Helm before).
+  { at: C + 14 * SEC + 5 * HOUR, cmd: { id: 'm14', type: 'BUY_ITEM', slot: 4, defId: 'iron_gloves', quantity: 1, maxUnitPrice: 250 } },
+  { at: C + 15 * SEC + 5 * HOUR, cmd: { id: 'm15', type: 'EQUIP_ITEM', itemId: 'iron_gloves#2' } },
   { at: D }, // 1 h of Birch
   // 1.8.0: live combat. Rat Cellar cancels the Birch log; skip the search; a simulate boundary mid-fight.
   { at: D + 1 * SEC, cmd: { id: 'l1', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } },
@@ -183,6 +193,21 @@ const SCRIPT: Step[] = [
   { at: E + 9 * SEC + 2 * HOUR, cmd: { id: 'n9', type: 'BUILD', buildingId: 'town_hall' } }, // 20 Oak Logs, 20 Stone, 100 gold
   { at: E + 10 * SEC + 2 * HOUR, cmd: { id: 'n10', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } },
   { at: E + 10 * SEC + 22 * HOUR }, // 20 h away: 8 h of runs (a fight in progress at the cap would be finished)
+  // 1.10.0: workers, the builder, upkeep. Two hires, crews on Oak and Stone while the Rat Cellar runs (dungeon gold and
+  // upkeep side by side), the hero then cuts Oak next to the Oak crew, a real Town Hall upgrade, a third worker.
+  { at: F + 1 * SEC, cmd: { id: 'o1', type: 'HIRE_WORKER', maxCost: 100 } },
+  { at: F + 2 * SEC, cmd: { id: 'o2', type: 'HIRE_WORKER', maxCost: 200 } },
+  { at: F + 3 * SEC, cmd: { id: 'o3', type: 'ASSIGN_WORKER', workerId: 'w1', node: 'oak' } },
+  { at: F + 4 * SEC, cmd: { id: 'o4', type: 'ASSIGN_WORKER', workerId: 'w2', node: 'stone' } },
+  { at: F + 4 * SEC + HOUR }, // 1 h: Rat Cellar runs and two crews
+  { at: F + 5 * SEC + HOUR, cmd: { id: 'o5', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } },
+  { at: F + 5 * SEC + 2 * HOUR }, // 1 h: the hero and the Oak crew on the same tree
+  { at: F + 6 * SEC + 2 * HOUR, cmd: { id: 'o6', type: 'DEBUG_ADD_GOLD', amount: 1000 } },
+  { at: F + 7 * SEC + 2 * HOUR, cmd: { id: 'o7', type: 'UPGRADE_BUILDING', buildingId: 'town_hall', level: 2 } }, // 500 g, 50 Oak, 50 Stone
+  { at: F + 7 * SEC + 2 * HOUR + 20 * MIN + 500 }, // a simulate boundary mid-upgrade
+  { at: F + 8 * SEC + 2 * HOUR + 20 * MIN + 500, cmd: { id: 'o8', type: 'HIRE_WORKER', maxCost: 400 } },
+  { at: F + 9 * SEC + 2 * HOUR + 20 * MIN + 500, cmd: { id: 'o9', type: 'ASSIGN_WORKER', workerId: 'w3', node: 'oak' } },
+  { at: F + 10 * SEC + 12 * HOUR }, // ~10 h away (capped at 8 h): the upgrade completes, +20% yield after it
 ];
 
 function runScript(steps: Step[] = SCRIPT) {
@@ -230,6 +255,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.7.0', 8],
       ['1.8.0', 9],
       ['1.9.0', 10],
+      ['1.10.0', 11],
     ]);
   });
 });
@@ -253,13 +279,13 @@ describe('golden', () => {
           "runs": 98,
           "wins": 98,
         },
-        "gold": 368,
+        "gold": 373,
         "heroLevel": 12,
         "hp": [
           160,
           0,
         ],
-        "lastFightMs": 2000,
+        "lastFightMs": 3000,
         "stamina": {
           "current": 100,
           "max": 100,
@@ -302,14 +328,14 @@ describe('golden', () => {
             "wins": 98,
           },
         },
-        "gold": 738,
+        "gold": 734,
         "heroLevel": 12,
         "hp": [
-          141,
-          30000,
+          143,
+          15000,
         ],
         "lastFightMs": 5000,
-        "nests": undefined,
+        "nests": 2,
         "stamina": {
           "current": 100,
           "max": 100,
@@ -337,19 +363,123 @@ describe('golden', () => {
       dungeon: s.dungeon,
       training: s.training,
       rng: s.rng,
-    }).toEqual({
-      actions: 515,
-      activity: 'training',
-      gold: 1047, // 1.9.0: was 947; the Training Grounds gave Tier 1 instead of selling it for 100
-      hp: [170, 0],
-      heroLevel: 13,
-      stamina: { current: 91, max: 100, progressMs: 1000 },
-      woodcutting: expect.objectContaining({ level: 9, xp: 6619 }),
-      logs: { oak_logs: 491, birch_logs: 24 },
-      dungeon: expect.objectContaining({ totals: { runs: 181, wins: 181, losses: 0 } }),
-      training: expect.objectContaining({ tier: 2 }),
-      rng: expect.anything(),
-    });
+    }).toMatchInlineSnapshot(`
+      {
+        "actions": 515,
+        "activity": "training",
+        "dungeon": {
+          "byDungeon": {
+            "bat_cave": {
+              "losses": 0,
+              "runs": 51,
+              "wins": 51,
+            },
+            "rat_cellar": {
+              "losses": 0,
+              "runs": 130,
+              "wins": 130,
+            },
+          },
+          "lastFight": {
+            "dungeonId": "rat_cellar",
+            "durationMs": 2000,
+            "endReason": "enemy_defeated",
+            "enemyHpEnd": 0,
+            "enemyId": "rat",
+            "enemyMaxHp": 30,
+            "heroHpEnd": 168,
+            "heroHpStart": 170,
+            "heroMaxHp": 170,
+            "log": [
+              {
+                "actor": "hero",
+                "atMs": 1000,
+                "dealt": 16,
+                "roll": 17,
+                "strike": 1,
+                "targetHpAfter": 14,
+              },
+              {
+                "actor": "enemy",
+                "atMs": 1000,
+                "dealt": 2,
+                "roll": 5,
+                "strike": 1,
+                "targetHpAfter": 168,
+              },
+              {
+                "actor": "hero",
+                "atMs": 2000,
+                "dealt": 16,
+                "roll": 17,
+                "strike": 2,
+                "targetHpAfter": 0,
+              },
+            ],
+            "rewards": {
+              "gold": 4,
+              "heroXp": 35,
+              "items": {},
+              "itemsLost": {},
+            },
+            "won": true,
+          },
+          "totals": {
+            "losses": 0,
+            "runs": 181,
+            "wins": 181,
+          },
+        },
+        "gold": 1041,
+        "heroLevel": 13,
+        "hp": [
+          170,
+          0,
+        ],
+        "logs": {
+          "birch_logs": 25,
+          "oak_logs": 1251,
+        },
+        "rng": {
+          "seed": 3241514865,
+        },
+        "stamina": {
+          "current": 91,
+          "max": 100,
+          "progressMs": 1000,
+        },
+        "training": {
+          "attributes": {
+            "dexterity": {
+              "level": 0,
+              "progressMs": 0,
+              "xp": 0,
+            },
+            "endurance": {
+              "level": 40,
+              "progressMs": 0,
+              "xp": 0,
+            },
+            "intelligence": {
+              "level": 0,
+              "progressMs": 0,
+              "xp": 0,
+            },
+            "strength": {
+              "level": 3,
+              "progressMs": 33000,
+              "xp": 30,
+            },
+          },
+          "tier": 2,
+        },
+        "woodcutting": {
+          "level": 9,
+          "xp": 6619,
+          "xpToNext": 13500,
+        },
+      }
+    `);
     expect(s.training.attributes.strength).toEqual({ level: 3, xp: 30, progressMs: 33000 });
   });
 
@@ -370,33 +500,98 @@ describe('golden', () => {
       seed: s.rng.seed,
       nextItemSerial: s.nextItemSerial,
       inventory: s.inventory,
-    }).toEqual({
-      // Values from running the 1.8.0 script on dev (engine 1.8.0, 2026-10-28); only gold differs.
-      actions: 527,
-      gold: 1228, // 1.8.0: 1128
-      heroLevel: 13,
-      hp: [170, 0],
-      dungeon: { runs: 214, wins: 214, losses: 0 },
-      nests: 1,
-      logs: { oak_logs: 391, birch_logs: 36 },
-      tier: 2,
-      xp: 2092,
-      stamina: { current: 100, max: 100, progressMs: 0 },
-      seed: 2143607419,
-      nextItemSerial: 3,
-      inventory: {
-        capacity: 20,
-        items: [
-          { id: 'bread', defId: 'bread', name: 'Bread', icon: '🍞', stackable: true, quantity: 3 },
-          { id: 'oak_logs', defId: 'oak_logs', name: 'Oak Logs', icon: '🪵', stackable: true, quantity: 391 },
-          { id: 'rat_skin', defId: 'rat_skin', name: 'Rat Skin', icon: '🐾', stackable: true, quantity: 75 },
-          { id: 'bat_wing', defId: 'bat_wing', name: 'Bat Wing', icon: '🪽', stackable: true, quantity: 12 },
-          { id: 'bird_nest', defId: 'bird_nest', name: 'Bird Nest', icon: '🪺', stackable: true, quantity: 1 },
-          { id: 'birch_logs', defId: 'birch_logs', name: 'Birch Logs', icon: '🪵', stackable: true, quantity: 36 },
-          { id: 'health_potion_t1', defId: 'health_potion_t1', name: 'Health Potion (T1)', icon: '🧪', stackable: true, quantity: 2 },
+      // 1.10.0: re-pinned (power-based yield: more logs per cut, one more RNG draw per cut).
+    }).toMatchInlineSnapshot(`
+      {
+        "actions": 527,
+        "dungeon": {
+          "losses": 0,
+          "runs": 214,
+          "wins": 214,
+        },
+        "gold": 1377,
+        "heroLevel": 13,
+        "hp": [
+          170,
+          0,
         ],
-      },
-    });
+        "inventory": {
+          "capacity": 20,
+          "items": [
+            {
+              "defId": "bread",
+              "icon": "🍞",
+              "id": "bread",
+              "name": "Bread",
+              "quantity": 3,
+              "stackable": true,
+            },
+            {
+              "defId": "oak_logs",
+              "icon": "🪵",
+              "id": "oak_logs",
+              "name": "Oak Logs",
+              "quantity": 1151,
+              "stackable": true,
+            },
+            {
+              "defId": "bird_nest",
+              "icon": "🪺",
+              "id": "bird_nest",
+              "name": "Bird Nest",
+              "quantity": 2,
+              "stackable": true,
+            },
+            {
+              "defId": "rat_skin",
+              "icon": "🐾",
+              "id": "rat_skin",
+              "name": "Rat Skin",
+              "quantity": 75,
+              "stackable": true,
+            },
+            {
+              "defId": "bat_wing",
+              "icon": "🪽",
+              "id": "bat_wing",
+              "name": "Bat Wing",
+              "quantity": 12,
+              "stackable": true,
+            },
+            {
+              "defId": "birch_logs",
+              "icon": "🪵",
+              "id": "birch_logs",
+              "name": "Birch Logs",
+              "quantity": 41,
+              "stackable": true,
+            },
+            {
+              "defId": "health_potion_t1",
+              "icon": "🧪",
+              "id": "health_potion_t1",
+              "name": "Health Potion (T1)",
+              "quantity": 2,
+              "stackable": true,
+            },
+          ],
+        },
+        "logs": {
+          "birch_logs": 41,
+          "oak_logs": 1151,
+        },
+        "nests": 2,
+        "nextItemSerial": 3,
+        "seed": 2019055822,
+        "stamina": {
+          "current": 100,
+          "max": 100,
+          "progressMs": 0,
+        },
+        "tier": 2,
+        "xp": 2092,
+      }
+    `);
   });
 
   it('fixed seed + fixed script → fixed final state hash', () => {
@@ -421,7 +616,7 @@ describe('golden', () => {
       woodcuttingXp: s.character.skills.woodcutting.xp,
       logs: Object.fromEntries(s.inventory.items.filter((i) => i.defId.endsWith('_logs')).map((i) => [i.defId, i.quantity])),
       axe: s.character.equipment.axe?.defId,
-      helmet: s.character.equipment.helmet?.id,
+      gloves: s.character.equipment.gloves?.id, // 1.10.0: the post-refresh buy is the Iron Gloves (was the Iron Helm)
       merchant: { charges: s.merchant.charges, chargeProgressMs: s.merchant.chargeProgressMs, stock: s.merchant.stock.slice(0, 5) },
       nextItemSerial: s.nextItemSerial,
       potions: s.inventory.items.find((i) => i.defId === 'health_potion_t1')?.quantity,
@@ -432,19 +627,25 @@ describe('golden', () => {
       ores: Object.fromEntries(s.inventory.items.filter((i) => ['stone', 'copper_ore', 'geode'].includes(i.defId)).map((i) => [i.defId, i.quantity])),
       lastFight: s.dungeon.lastFight && { won: s.dungeon.lastFight.won, endReason: s.dungeon.lastFight.endReason },
       dungeonActivity: s.activity?.kind === 'dungeon' ? { phase: s.activity.phase, progressMs: s.activity.progressMs } : null,
+      workers: s.workers,
+      construction: s.construction,
     }).toMatchInlineSnapshot(`
       {
-        "actions": 572,
-        "activity": "dungeon",
+        "actions": 877,
+        "activity": "woodcutting",
         "axe": "iron_axe",
         "batWings": 12,
         "buildings": {
+          "merchant": {
+            "level": 1,
+            "state": "built",
+          },
           "mine_shaft": {
             "level": 1,
             "state": "built",
           },
           "town_hall": {
-            "level": 1,
+            "level": 2,
             "state": "built",
           },
           "training_grounds": {
@@ -464,23 +665,21 @@ describe('golden', () => {
           },
           "rat_cellar": {
             "losses": 0,
-            "runs": 420,
-            "wins": 420,
+            "runs": 452,
+            "wins": 452,
           },
         },
+        "construction": null,
         "dungeon": {
           "losses": 0,
-          "runs": 471,
-          "wins": 471,
+          "runs": 503,
+          "wins": 503,
         },
-        "dungeonActivity": {
-          "phase": "search",
-          "progressMs": 16000,
-        },
-        "engineVersion": "1.9.0",
-        "gold": 1370,
-        "hash": "4f740730",
-        "helmet": "iron_helm#2",
+        "dungeonActivity": null,
+        "engineVersion": "1.10.0",
+        "gloves": "iron_gloves#2",
+        "gold": 0,
+        "hash": "1aed0f53",
         "heroLevel": 15,
         "hp": [
           190,
@@ -492,8 +691,8 @@ describe('golden', () => {
         },
         "lastFightMs": 2000,
         "logs": {
-          "birch_logs": 36,
-          "oak_logs": 371,
+          "birch_logs": 41,
+          "oak_logs": 4856,
         },
         "merchant": {
           "chargeProgressMs": 0,
@@ -505,15 +704,15 @@ describe('golden', () => {
               "unitPrice": 12,
             },
             {
-              "defId": "iron_axe",
+              "defId": "iron_shield",
               "quantity": 1,
-              "unitPrice": 600,
+              "unitPrice": 550,
             },
             null,
             {
-              "defId": "iron_sword",
+              "defId": "iron_chestplate",
               "quantity": 1,
-              "unitPrice": 500,
+              "unitPrice": 700,
             },
             null,
           ],
@@ -523,11 +722,11 @@ describe('golden', () => {
           "xp": 1753,
           "xpToNext": 7348,
         },
-        "nests": 1,
+        "nests": 2,
         "nextItemSerial": 4,
         "ores": {
-          "copper_ore": 12,
-          "stone": 13,
+          "copper_ore": 13,
+          "stone": 295,
         },
         "pickaxe": "start-wooden_pickaxe",
         "potions": 2,
@@ -562,9 +761,41 @@ describe('golden', () => {
           },
           "tier": 2,
         },
-        "woodcutting": 9,
-        "woodcuttingXp": 8047,
+        "woodcutting": 10,
+        "woodcuttingXp": 2172,
         "woodenAxe": false,
+        "workers": {
+          "crews": {
+            "oak": {
+              "idle": false,
+              "progressMs": 0,
+              "workMs": 0,
+            },
+            "stone": {
+              "idle": false,
+              "progressMs": 119000,
+              "workMs": 119000,
+            },
+          },
+          "list": [
+            {
+              "id": "w1",
+              "node": "oak",
+            },
+            {
+              "id": "w2",
+              "node": "stone",
+            },
+            {
+              "id": "w3",
+              "node": "oak",
+            },
+          ],
+          "minuteLeftMs": 0,
+          "nextSerial": 4,
+          "paidPerMin": 3,
+          "paused": true,
+        },
       }
     `);
   });
@@ -641,7 +872,9 @@ describe('golden', () => {
     expect(next.summary.actions).toBe(2);
     // Logs keep stacking on the migrated stack (matched by defId).
     expect(next.state.inventory.items.filter((i) => i.defId === 'oak_logs')).toHaveLength(1);
-    expect(next.state.inventory.items.find((i) => i.defId === 'oak_logs')?.quantity).toBe(3785 + next.summary.actions);
+    // WC Lv8: WS 91 on Oak (20) = 4.55 logs per cut (1.10.0 yield), so 2 cuts give 9 or 10.
+    expect(next.summary.itemsGained.oak_logs).toBeGreaterThanOrEqual(9);
+    expect(next.state.inventory.items.find((i) => i.defId === 'oak_logs')?.quantity).toBe(3785 + (next.summary.itemsGained.oak_logs ?? 0));
     // And commands work on the migrated save.
     const spent = applyCommand(next.state, { id: 'v2-spend', type: 'DEBUG_SPEND_STAMINA', amount: 10 }, s.time.lastSimulatedAt + 4 * MIN);
     expect(spent.ok && spent.state.stamina.current).toBe(90);
@@ -675,7 +908,7 @@ describe('golden', () => {
     });
     expect(axe?.defId).toBe('wooden_axe');
     expect(pickaxe?.defId).toBe('wooden_pickaxe');
-    const { dungeon, training, activity, merchant, nextItemSerial, inventory, buildings: _b, character: _c, saveVersion: _v, ...rest } = s;
+    const { dungeon, training, activity, merchant, nextItemSerial, inventory, buildings: _b, construction: _k, workers: _w, character: _c, saveVersion: _v, ...rest } = s;
     expect(merchant.charges).toBe(5);
     expect(nextItemSerial).toBe(1);
     expect(inventory).toEqual({ ...raw.inventory, items: raw.inventory.items.map(noRarity) });

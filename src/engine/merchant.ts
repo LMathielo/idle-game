@@ -2,12 +2,15 @@
 //
 //   refresh charges: +1 per MERCHANT.chargeIntervalMs, at most maxCharges (extra charges are lost);
 //                    regen in simulate() on the sanitized, UNCAPPED time, like stamina; remainder kept.
-//   REFRESH_MERCHANT spends 1 charge and rolls a new stock (rollStock).
+//   REFRESH_MERCHANT spends 1 charge and rolls a new stock (rollStock: Health Potion ×10, then the pool, seeded,
+//                    no duplicates; as many slots as the Merchant's level gives).
 //   BUY_ITEM / SELL_ITEM move gold and items; gold never goes negative, inventory never overflows.
+import { merchantStockSlots, sellPriceOf } from './bonuses';
 import { getItemDef } from './config/items';
 import { MERCHANT, type MerchantPoolEntry } from './config/merchant';
 import { addStackable, freeSlots, makeItem } from './inventory';
-import type { GameState, MerchantListing, MerchantState } from './types';
+import { nextInt } from './rng';
+import type { GameState, MerchantListing, MerchantState, RngState } from './types';
 
 export type ItemErrorCode =
   | 'INVALID_AMOUNT'
@@ -33,23 +36,75 @@ export type ItemError = { code: ItemErrorCode; message: string } | null;
 const err = (code: ItemErrorCode, message: string): ItemError => ({ code, message });
 const isWhole = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n);
 
-/**
- * The stock a refresh produces: `capacity` slots, the pool's listings in order in the first slots, the rest
- * empty. Deterministic today; a seeded, rarity-tiered roll will replace it (it will take the RNG then).
- */
-export function rollStock(capacity: number, pool: readonly MerchantPoolEntry[] = MERCHANT.pool): (MerchantListing | null)[] {
-  const stock: (MerchantListing | null)[] = Array.from({ length: Math.max(0, capacity) }, () => null);
-  pool.slice(0, stock.length).forEach((entry, i) => {
-    const def = getItemDef(entry.defId);
-    if (!def || def.buyPrice === undefined) throw new Error(`Merchant pool item ${entry.defId} has no buyPrice`);
-    stock[i] = { defId: entry.defId, quantity: entry.quantity, unitPrice: def.buyPrice };
-  });
-  return stock;
+function listingOf(entry: MerchantPoolEntry): MerchantListing {
+  const def = getItemDef(entry.defId);
+  if (!def || def.buyPrice === undefined) throw new Error(`Merchant pool item ${entry.defId} has no buyPrice`);
+  return { defId: entry.defId, quantity: entry.quantity, unitPrice: def.buyPrice };
 }
 
-/** A new hero's merchant: full charges and a fresh stock. */
-export function newMerchantState(capacity: number): MerchantState {
-  return { charges: MERCHANT.maxCharges, chargeProgressMs: 0, stock: rollStock(capacity) };
+/**
+ * Picks up to `count` pool entries without duplicates (and none whose defId is in `exclude`), in the order drawn:
+ * one seeded draw per pick, from the entries still left. Pure: returns the advanced RNG.
+ */
+export function rollPoolListings(
+  rng: RngState,
+  count: number,
+  exclude: ReadonlySet<string> = new Set(),
+  pool: readonly MerchantPoolEntry[] = MERCHANT.pool,
+): { listings: MerchantListing[]; rng: RngState } {
+  const left = pool.filter((e) => !exclude.has(e.defId));
+  const listings: MerchantListing[] = [];
+  let r = rng;
+  while (listings.length < count && left.length > 0) {
+    const pick = nextInt(r, 0, left.length - 1);
+    r = pick.rng;
+    listings.push(listingOf(left[pick.value]));
+    left.splice(pick.value, 1);
+  }
+  return { listings, rng: r };
+}
+
+/**
+ * The stock a refresh produces: `slots` slots; slot 1 is always MERCHANT.fixed (Health Potion ×10), the others are
+ * rolled from MERCHANT.pool with the seeded RNG, without duplicates (empty when the pool runs out).
+ */
+export function rollStock(rng: RngState, slots: number): { stock: (MerchantListing | null)[]; rng: RngState } {
+  const n = Math.max(0, slots);
+  const stock: (MerchantListing | null)[] = Array.from({ length: n }, () => null);
+  if (n === 0) return { stock, rng };
+  stock[0] = listingOf(MERCHANT.fixed);
+  const rolled = rollPoolListings(rng, n - 1, new Set([MERCHANT.fixed.defId]));
+  rolled.listings.forEach((l, i) => (stock[i + 1] = l));
+  return { stock, rng: rolled.rng };
+}
+
+/** A new save's stock (not rolled): slot 1, then MERCHANT.starter in order, `slots` slots in all. */
+export function starterStock(slots: number): (MerchantListing | null)[] {
+  const n = Math.max(0, slots);
+  const entries = [MERCHANT.fixed, ...MERCHANT.starter];
+  return Array.from({ length: n }, (_, i) => (entries[i] ? listingOf(entries[i]) : null));
+}
+
+/** A new hero's merchant: full charges and the starter stock. */
+export function newMerchantState(slots: number): MerchantState {
+  return { charges: MERCHANT.maxCharges, chargeProgressMs: 0, stock: starterStock(slots) };
+}
+
+/**
+ * The Merchant reached a level with more stock slots: the new slots are filled at once from the pool (seeded RNG,
+ * no duplicate of a listing still in stock). A stock already that long (a pre-1.10.0 stock) is kept as it is.
+ * Mutates the draft (draft.merchant and draft.rng are replaced).
+ */
+export function growStock(draft: GameState): void {
+  const slots = merchantStockSlots(draft);
+  const stock = draft.merchant.stock;
+  if (stock.length >= slots) return;
+  const present = new Set(stock.filter((l): l is MerchantListing => l !== null).map((l) => l.defId));
+  present.add(MERCHANT.fixed.defId);
+  const rolled = rollPoolListings(draft.rng, slots - stock.length, present);
+  draft.rng = rolled.rng;
+  const extra: (MerchantListing | null)[] = Array.from({ length: slots - stock.length }, (_, i) => rolled.listings[i] ?? null);
+  draft.merchant = { ...draft.merchant, stock: [...stock, ...extra] };
 }
 
 /**
@@ -81,11 +136,13 @@ export function merchantView(state: Pick<GameState, 'merchant'>): MerchantView {
   return { charges, maxCharges: MERCHANT.maxCharges, full, nextInMs: full ? 0 : Math.max(0, MERCHANT.chargeIntervalMs - chargeProgressMs), stock };
 }
 
-/** Spends one charge and restocks. Mutates the draft. */
+/** Spends one charge and restocks (rollStock with the Merchant level's slot count). Mutates the draft. */
 export function refreshMerchant(draft: GameState): ItemError {
   const m = draft.merchant;
   if (m.charges <= 0) return err('NO_REFRESH_CHARGES', 'No refresh charges left');
-  draft.merchant = { charges: m.charges - 1, chargeProgressMs: m.chargeProgressMs, stock: rollStock(draft.inventory.capacity) };
+  const rolled = rollStock(draft.rng, merchantStockSlots(draft));
+  draft.rng = rolled.rng;
+  draft.merchant = { charges: m.charges - 1, chargeProgressMs: m.chargeProgressMs, stock: rolled.stock };
   return null;
 }
 
@@ -153,7 +210,7 @@ export function buyItem(draft: GameState, slot: unknown, defId: unknown, quantit
   return null;
 }
 
-/** Sells `quantity` of inventory item `itemId` at its catalog sellPrice. Equipped items are refused. Mutates the draft. */
+/** Sells `quantity` of inventory item `itemId` at sellPriceOf() (catalog price + building bonus). Equipped items are refused. Mutates the draft. */
 export function sellItem(draft: GameState, itemId: unknown, quantity: unknown): ItemError {
   if (typeof itemId !== 'string') return err('INVALID_COMMAND', 'Missing itemId');
   const items = draft.inventory.items;
@@ -167,7 +224,8 @@ export function sellItem(draft: GameState, itemId: unknown, quantity: unknown): 
   if (!def || !(def.sellPrice > 0)) return err('NOT_SELLABLE', 'The merchant does not buy that');
   const owned = item.stackable ? (item.quantity ?? 0) : 1;
   if (!isWhole(quantity) || quantity < 1 || quantity > owned) return err('INVALID_AMOUNT', `Quantity must be 1 to ${owned}`);
-  const gold = draft.character.gold + def.sellPrice * quantity;
+  // Town Hall Lv2+ adds to every sell price (floored); still below every buy price (tested).
+  const gold = draft.character.gold + sellPriceOf(draft, def.id) * quantity;
   if (!isWhole(gold)) return err('INVALID_AMOUNT', 'Gold would overflow');
   draft.character.gold = gold;
   if (quantity === owned) items.splice(index, 1);

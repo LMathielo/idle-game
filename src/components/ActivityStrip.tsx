@@ -1,10 +1,11 @@
-// Status strip shown above the tab bar while an activity runs (woodcutting, mining, dungeon runs or training).
+// Status strip shown above the tab bar while an activity runs (woodcutting, mining, dungeon runs or training), or,
+// with no activity, while the builder upgrades a building.
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useGameSnapshot } from '../client/GameProvider';
-import { activityView, DUNGEONS, ENEMIES, hpView, itemQuantity, ROCKS, TREES } from '../engine';
+import { activityView, constructionView, DUNGEONS, ENEMIES, hpView, itemQuantity, ROCKS, TREES } from '../engine';
 import { colors, fonts } from '../theme';
-import { ATTRIBUTE_NAMES, formatClock, formatNumber, formatTrainingLeft } from './format';
+import { ATTRIBUTE_NAMES, formatClock, formatCountdown, formatNumber, formatTrainingLeft } from './format';
 import { LiveBar } from './LiveBar';
 
 /** Fixed height: the strip floats over the screen, so scrollable screens reserve this much at the bottom. */
@@ -15,7 +16,22 @@ const PAUSED_A11Y = ', paused because the device clock moved back';
 export function ActivityStrip() {
   const { state, clockPaused } = useGameSnapshot();
   const view = activityView(state);
-  if (!view) return null;
+  if (!view) {
+    // No hero activity: the strip shows the builder's job instead, when there is one.
+    const job = constructionView(state);
+    if (!job) return null;
+    return (
+      <StripView
+        title={`🔨 ${job.name} → Lv ${job.level} · ${formatCountdown(job.remainingMs)}`}
+        right="Builder"
+        a11y={`Upgrading ${job.name} to level ${job.level}, ${formatCountdown(job.remainingMs)} left${clockPaused ? PAUSED_A11Y : ''}`}
+        fraction={job.fraction}
+        remainingMs={job.remainingMs}
+        paused={clockPaused}
+        color={colors.gold}
+      />
+    );
+  }
 
   if (view.kind === 'dungeon') {
     const dungeon = DUNGEONS[view.dungeonId];

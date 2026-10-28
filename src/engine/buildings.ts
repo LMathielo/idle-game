@@ -1,17 +1,21 @@
-// Buildings (pure): which village buildings are built, their requirements, BUILD, and the Build-sheet view.
-// See docs/ENGINE.md ("Buildings"). Requirements are data (config/buildings.ts).
+// Buildings (pure): which village buildings are built, their requirements, BUILD, upgrades with the one builder,
+// and the Build / Upgrade sheet views. See docs/ENGINE.md ("Buildings"). Requirements and costs are data
+// (config/buildings.ts).
 //
 //   BUILD validates every requirement first, then consumes gold and items and builds at once (level 1).
+//   UPGRADE_BUILDING validates the level cap (5, and never above the Town Hall) and the cost, pays up front and
+//   starts the builder; the upgrade completes inside simulate() on the granted (capped) time.
 //   A locked building can't be used: the activity it hosts refuses to start (BUILDING_LOCKED).
-import { BUILDING_IDS, BUILDINGS } from './config/buildings';
+import { bonusesAt } from './bonuses';
+import { BUILDING_IDS, BUILDING_MAX_LEVEL, BUILDINGS, type LevelBonuses, type UpgradeCost } from './config/buildings';
 import { getItemDef } from './config/items';
 import { itemQuantity } from './selectors';
-import type { ActivityKind, BuildingId, BuildingState, GameEvent, GameState } from './types';
+import type { ActivityKind, BuildingId, BuildingState, Construction, GameEvent, GameState, SimulationSummary } from './types';
 
-/** Every building locked (a new save, and the v9 → v10 migration). */
+/** A new save: every building locked but the ones that start built (the Merchant, level 1). */
 export function newBuildingsState(): Record<BuildingId, BuildingState> {
   const out = {} as Record<BuildingId, BuildingState>;
-  for (const id of BUILDING_IDS) out[id] = { state: 'locked', level: 0 };
+  for (const id of BUILDING_IDS) out[id] = BUILDINGS[id].startsBuilt ? { state: 'built', level: 1 } : { state: 'locked', level: 0 };
   return out;
 }
 
@@ -39,6 +43,43 @@ export type RequirementView =
   | { kind: 'item'; defId: string; need: number; have: number; met: boolean }
   | { kind: 'gold'; need: number; have: number; met: boolean };
 
+/** Why the next upgrade can't start right now (the sheet shows it), or null. */
+export type UpgradeBlock =
+  /** Not built yet: BUILD first. */
+  | 'locked'
+  /** Already at BUILDING_MAX_LEVEL. */
+  | 'max_level'
+  /** The next level has no bonus data: nothing to upgrade to (Training Grounds, for now). */
+  | 'not_upgradable'
+  /** The Town Hall's level caps this building: upgrade the Town Hall first. */
+  | 'town_hall'
+  /** The builder is busy with an upgrade (this building's or another's). */
+  | 'builder_busy'
+  /** Gold or items missing (see `cost`). */
+  | 'cost';
+
+export type UpgradeView = {
+  buildingId: BuildingId;
+  level: number;
+  maxLevel: number;
+  /** The level the next upgrade reaches, or null at the max level (or while locked). */
+  nextLevel: number | null;
+  /** Gold and items of the next upgrade (have / need / met), in the order items, gold. Empty without a next level. */
+  cost: RequirementView[];
+  /** Builder time of the next upgrade, ms (0 without a next level). */
+  durationMs: number;
+  /** The first reason the upgrade can't start, or null when it can. */
+  block: UpgradeBlock | null;
+  /** The Town Hall level needed for the next upgrade when the Town Hall is the cap, else null. */
+  townHallNeeded: number | null;
+  /** This building is being upgraded right now. */
+  upgrading: boolean;
+  /** Passive bonuses at the current level ({} while locked). */
+  bonuses: LevelBonuses;
+  /** Passive bonuses at the next level, or null without one. */
+  nextBonuses: LevelBonuses | null;
+};
+
 export type BuildingView = {
   buildingId: BuildingId;
   name: string;
@@ -52,7 +93,21 @@ export type BuildingView = {
   canBuild: boolean;
   /** Training tier the building grants when built, if any. */
   grantsTrainingTier: number | null;
+  upgrade: UpgradeView;
 };
+
+function itemAndGoldViews(state: GameState, items: readonly { defId: string; quantity: number }[], gold: number | undefined): RequirementView[] {
+  const out: RequirementView[] = [];
+  for (const it of items) {
+    const have = itemQuantity(state, it.defId);
+    out.push({ kind: 'item', defId: it.defId, need: it.quantity, have, met: have >= it.quantity });
+  }
+  if (gold !== undefined) {
+    const have = state.character.gold;
+    out.push({ kind: 'gold', need: gold, have, met: Number.isSafeInteger(have) && have >= gold });
+  }
+  return out;
+}
 
 /** Requirement lines with have / need / met, in display order. */
 export function requirementViews(state: GameState, buildingId: BuildingId): RequirementView[] {
@@ -66,15 +121,56 @@ export function requirementViews(state: GameState, buildingId: BuildingId): Requ
     const have = buildingLevel(state, b.buildingId);
     out.push({ kind: 'building', buildingId: b.buildingId, need: b.level, have, met: have >= b.level });
   }
-  for (const it of r.items ?? []) {
-    const have = itemQuantity(state, it.defId);
-    out.push({ kind: 'item', defId: it.defId, need: it.quantity, have, met: have >= it.quantity });
-  }
-  if (r.gold !== undefined) {
-    const have = state.character.gold;
-    out.push({ kind: 'gold', need: r.gold, have, met: Number.isSafeInteger(have) && have >= r.gold });
-  }
+  out.push(...itemAndGoldViews(state, r.items ?? [], r.gold));
   return out;
+}
+
+/** The cost of upgrading `buildingId` to `level` (2..BUILDING_MAX_LEVEL), or null outside that range. */
+export function upgradeCost(buildingId: BuildingId, level: number): UpgradeCost | null {
+  if (!Number.isSafeInteger(level) || level < 2 || level > BUILDING_MAX_LEVEL) return null;
+  return BUILDINGS[buildingId].upgrades[level - 2] ?? null;
+}
+
+/**
+ * Data-driven: a level is only worth building when its bonus data says what it gives. A building whose next level has
+ * no bonus (an empty LevelBonuses) can't be upgraded to it (Training Grounds today, until it gets a bonus).
+ */
+export function hasLevelBonuses(buildingId: BuildingId, level: number): boolean {
+  return Object.keys(bonusesAt(buildingId, level)).length > 0;
+}
+
+/** Highest level this building may reach right now: 5 for the Town Hall, else the Town Hall's level (at most 5). */
+export function levelCap(state: Pick<GameState, 'buildings'>, buildingId: BuildingId): number {
+  return BUILDINGS[buildingId].cappedByTownHall ? Math.min(BUILDING_MAX_LEVEL, buildingLevel(state, 'town_hall')) : BUILDING_MAX_LEVEL;
+}
+
+export function upgradeView(state: GameState, buildingId: BuildingId): UpgradeView {
+  const level = buildingLevel(state, buildingId);
+  const built = isBuilt(state, buildingId);
+  const nextLevel = built && level < BUILDING_MAX_LEVEL ? level + 1 : null;
+  const cost = nextLevel ? upgradeCost(buildingId, nextLevel) : null;
+  const costViews = cost ? itemAndGoldViews(state, cost.items, cost.gold) : [];
+  const capped = nextLevel !== null && nextLevel > levelCap(state, buildingId);
+  let block: UpgradeBlock | null = null;
+  if (!built) block = 'locked';
+  else if (nextLevel === null) block = 'max_level';
+  else if (!hasLevelBonuses(buildingId, nextLevel)) block = 'not_upgradable';
+  else if (capped) block = 'town_hall';
+  else if (state.construction) block = 'builder_busy';
+  else if (!costViews.every((c) => c.met)) block = 'cost';
+  return {
+    buildingId,
+    level,
+    maxLevel: BUILDING_MAX_LEVEL,
+    nextLevel,
+    cost: costViews,
+    durationMs: cost?.durationMs ?? 0,
+    block,
+    townHallNeeded: capped ? nextLevel : null,
+    upgrading: state.construction?.buildingId === buildingId,
+    bonuses: built ? bonusesAt(buildingId, level) : {},
+    nextBonuses: nextLevel ? bonusesAt(buildingId, nextLevel) : null,
+  };
 }
 
 export function buildingView(state: GameState, buildingId: BuildingId): BuildingView {
@@ -91,6 +187,7 @@ export function buildingView(state: GameState, buildingId: BuildingId): Building
     requirements,
     canBuild: !built && requirements.every((r) => r.met),
     grantsTrainingTier: def.grantsTrainingTier ?? null,
+    upgrade: upgradeView(state, buildingId),
   };
 }
 
@@ -149,6 +246,87 @@ export function build(draft: GameState, buildingId: BuildingId, events: GameEven
   if (r.gold) draft.character.gold -= r.gold;
   completeBuilding(draft, buildingId, events);
   return null;
+}
+
+export type UpgradeErrorCode = 'BUILDING_LOCKED' | 'MAX_LEVEL' | 'NOT_UPGRADABLE' | 'LEVEL_CHANGED' | 'TOWN_HALL_TOO_LOW' | 'BUILDER_BUSY' | 'REQUIREMENTS_NOT_MET';
+
+/**
+ * UPGRADE_BUILDING on `draft` (a full copy). `level` is the target level the player saw (current + 1), so a double
+ * tap never starts two upgrades or pays twice. Every check runs before anything is paid; then gold and items are
+ * consumed atomically and the builder starts. Returns an error (nothing changed) or null.
+ */
+export function startUpgrade(draft: GameState, buildingId: BuildingId, level: unknown, now: number, events: GameEvent[]): { code: UpgradeErrorCode; message: string } | null {
+  const def = BUILDINGS[buildingId];
+  if (!isBuilt(draft, buildingId)) return { code: 'BUILDING_LOCKED', message: `Build the ${def.name} first` };
+  const current = buildingLevel(draft, buildingId);
+  if (current >= BUILDING_MAX_LEVEL) return { code: 'MAX_LEVEL', message: `${def.name} is already at level ${BUILDING_MAX_LEVEL}` };
+  if (!hasLevelBonuses(buildingId, current + 1)) return { code: 'NOT_UPGRADABLE', message: `${def.name} can't be upgraded yet: its next level gives nothing` };
+  if (level !== current + 1) return { code: 'LEVEL_CHANGED', message: `${def.name} is level ${current}: the next upgrade is level ${current + 1}` };
+  if (level > levelCap(draft, buildingId)) {
+    return { code: 'TOWN_HALL_TOO_LOW', message: `${def.name} can't go above the Town Hall's level: upgrade the Town Hall to level ${level} first` };
+  }
+  const busy = draft.construction;
+  if (busy) return { code: 'BUILDER_BUSY', message: `The builder is busy upgrading the ${BUILDINGS[busy.buildingId].name}` };
+  const cost = upgradeCost(buildingId, level);
+  if (!cost) return { code: 'MAX_LEVEL', message: `${def.name} has no level ${level}` };
+  const missing = itemAndGoldViews(draft, cost.items, cost.gold).filter((r) => !r.met);
+  if (missing.length > 0) {
+    return { code: 'REQUIREMENTS_NOT_MET', message: `Level ${level} needs ${missing.map(describeMissing).join(', ')}` };
+  }
+  for (const it of cost.items) consumeItem(draft, it.defId, it.quantity);
+  draft.character.gold -= cost.gold;
+  draft.construction = { buildingId, level, durationMs: cost.durationMs, progressMs: 0, startedAt: now };
+  events.push({ type: 'CONSTRUCTION_STARTED', buildingId, level });
+  return null;
+}
+
+/** What else changes when an upgrade completes (e.g. new merchant stock slots). Mutates the draft. */
+export type UpgradeEffect = (draft: GameState, buildingId: BuildingId, level: number) => void;
+
+/**
+ * The builder finishes now: the building reaches the construction's level and `onUpgraded` applies its effects.
+ * Mutates `draft`; draft.buildings and draft.construction are replaced, never mutated in place.
+ */
+export function completeConstruction(draft: GameState, events: GameEvent[], summary: SimulationSummary | null, onUpgraded?: UpgradeEffect): void {
+  const c = draft.construction;
+  if (!c) return;
+  draft.construction = null;
+  draft.buildings = { ...draft.buildings, [c.buildingId]: { state: 'built', level: c.level } };
+  events.push({ type: 'BUILDING_UPGRADED', buildingId: c.buildingId, level: c.level });
+  summary?.buildingsUpgraded.push({ buildingId: c.buildingId, level: c.level });
+  onUpgraded?.(draft, c.buildingId, c.level);
+}
+
+/**
+ * The builder inside simulate(): adds `ms` of granted time (× efficiency) and completes the upgrade when it is due.
+ * The world walk (world.ts) never passes more than the time to completion, so nothing is carried over.
+ */
+export function advanceConstruction(draft: GameState, ms: number, events: GameEvent[], summary: SimulationSummary | null, onUpgraded?: UpgradeEffect): void {
+  const c = draft.construction;
+  if (!c) return;
+  const progressMs = c.progressMs + ms * draft.offline.efficiency;
+  draft.construction = { ...c, progressMs };
+  if (progressMs >= c.durationMs) completeConstruction(draft, events, summary, onUpgraded);
+}
+
+/** Wall time left on the builder's job (ceil over efficiency), or null when the builder is idle. */
+export function constructionRemainingMs(state: Pick<GameState, 'construction' | 'offline'>): number | null {
+  const c = state.construction;
+  if (!c) return null;
+  const left = Math.max(0, c.durationMs - c.progressMs);
+  const eff = state.offline.efficiency;
+  return eff > 0 ? Math.ceil(left / eff) : Number.POSITIVE_INFINITY;
+}
+
+export type ConstructionView = Construction & { remainingMs: number; fraction: number; name: string; icon: string };
+
+/** The builder's job for the Village sign and the activity strip, or null when the builder is idle. */
+export function constructionView(state: GameState): ConstructionView | null {
+  const c = state.construction;
+  if (!c) return null;
+  const remainingMs = Math.max(0, c.durationMs - c.progressMs);
+  const def = BUILDINGS[c.buildingId];
+  return { ...c, remainingMs, fraction: c.durationMs > 0 ? Math.min(1, c.progressMs / c.durationMs) : 1, name: def.name, icon: def.icon };
 }
 
 function describeMissing(r: RequirementView): string {

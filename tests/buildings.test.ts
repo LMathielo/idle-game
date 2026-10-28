@@ -57,8 +57,9 @@ const TOWN_HALL_READY = { gold: 100, level: 5, items: { oak_logs: 20, stone: 20 
 const GROUNDS_READY = { gold: 250, level: 10, items: { oak_logs: 50, stone: 50 } };
 
 describe('config and a new save', () => {
-  it('the four buildings and their requirements are data, as the owner approved', () => {
-    expect(BUILDING_IDS).toEqual(['woodcutting', 'mine_shaft', 'town_hall', 'training_grounds']);
+  it('the four buildings and their requirements are data, as the owner approved (+ the Merchant, always built, since 1.10.0)', () => {
+    expect(BUILDING_IDS).toEqual(['woodcutting', 'mine_shaft', 'town_hall', 'training_grounds', 'merchant']);
+    expect(BUILDINGS.merchant.startsBuilt).toBe(true);
     expect(BUILDINGS.woodcutting.requirements).toEqual({ gold: 50 });
     expect(BUILDINGS.mine_shaft.requirements).toEqual({ gold: 50 });
     expect(BUILDINGS.town_hall.requirements).toEqual({ heroLevel: 5, items: [{ defId: 'oak_logs', quantity: 20 }, { defId: 'stone', quantity: 20 }], gold: 100 });
@@ -71,13 +72,14 @@ describe('config and a new save', () => {
     expect(BUILDINGS.training_grounds.grantsTrainingTier).toBe(1);
   });
 
-  it('a new save has every building locked (level 0); the dungeon, merchant and storage are not stored (always built)', () => {
+  it('a new save has every building locked (level 0) but the Merchant (built, Lv1); the dungeon and storage are not stored', () => {
     const s = newGame(1, T0);
     expect(s.buildings).toEqual({
       woodcutting: { state: 'locked', level: 0 },
       mine_shaft: { state: 'locked', level: 0 },
       town_hall: { state: 'locked', level: 0 },
       training_grounds: { state: 'locked', level: 0 },
+      merchant: { state: 'built', level: 1 },
     });
     expect(s.training.tier).toBe(0);
   });
@@ -181,11 +183,12 @@ describe('BUILD', () => {
     expect(r.ok && r.events.some((e) => e.type === 'TRAINING_TIER_UNLOCKED')).toBe(false);
   });
 
-  it('ALREADY_BUILT on a second build (a double tap never pays twice); UNKNOWN_BUILDING for anything else', () => {
+  it('ALREADY_BUILT on a second build (a double tap never pays twice) and on the Merchant; UNKNOWN_BUILDING for anything else', () => {
     const once = apply(hero({ gold: 200 }), { type: 'BUILD', buildingId: 'woodcutting' }, T0);
     expect(run(once, { type: 'BUILD', buildingId: 'woodcutting' })).toMatchObject({ ok: false, error: { code: 'ALREADY_BUILT' } });
     expect(once.character.gold).toBe(150);
-    for (const bad of ['dungeon', 'merchant', 'storage', 'nope', '__proto__', undefined]) {
+    expect(run(hero({ gold: 200 }), { type: 'BUILD', buildingId: 'merchant' })).toMatchObject({ ok: false, error: { code: 'ALREADY_BUILT' } });
+    for (const bad of ['dungeon', 'storage', 'nope', '__proto__', undefined]) {
       expect(run(hero({ gold: 200 }), { type: 'BUILD', buildingId: bad as BuildingId })).toMatchObject({ ok: false, error: { code: 'UNKNOWN_BUILDING' } });
     }
   });
@@ -203,7 +206,7 @@ describe('BUILD', () => {
       if (r.ok) s = r.state;
       expect(s.character.gold).toBeGreaterThanOrEqual(0);
     }
-    expect(BUILDING_IDS.map((id) => s.buildings[id].state)).toEqual(['built', 'built', 'built', 'built']);
+    expect(BUILDING_IDS.map((id) => s.buildings[id].state)).toEqual(['built', 'built', 'built', 'built', 'built']);
     expect([s.character.gold, qty(s, 'oak_logs'), qty(s, 'stone')]).toEqual([0, 0, 0]);
   });
 });
@@ -263,7 +266,12 @@ describe('save v10 migration (v9 → v10)', () => {
     const v10 = MIGRATIONS[9](doc) as unknown as GameState;
     expect(doc).toEqual(frozen);
     expect(v10.saveVersion).toBe(10);
-    expect(v10.buildings).toEqual(newGame(1, T0).buildings);
+    expect(v10.buildings).toEqual({
+      woodcutting: { state: 'locked', level: 0 },
+      mine_shaft: { state: 'locked', level: 0 },
+      town_hall: { state: 'locked', level: 0 },
+      training_grounds: { state: 'locked', level: 0 },
+    });
     expect(v10.activity).toBeNull();
     expect(v10.training).toEqual(doc.training); // tier and XP kept
     expect(v10.inventory).toEqual(doc.inventory);
@@ -339,10 +347,10 @@ describe('frozen v9 save (tests/fixtures/save-v9.json) → v10', () => {
     const s = loadSave(V9_SAVE);
     expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
     expect(s.activity).toBeNull();
-    expect(BUILDING_IDS.map((id) => s.buildings[id].state)).toEqual(['locked', 'locked', 'locked', 'locked']);
+    expect(BUILDING_IDS.map((id) => s.buildings[id].state)).toEqual(['locked', 'locked', 'locked', 'locked', 'built']); // v11: the Merchant
     expect(s.character.equipment.pickaxe?.defId).toBe('wooden_pickaxe');
     expect(s.merchant.stock[4]).toEqual({ defId: 'iron_pickaxe', quantity: 1, unitPrice: 600 });
-    const { activity: _a, buildings: _b, merchant, character, saveVersion: _v, ...rest } = s;
+    const { activity: _a, buildings: _b, construction: _k, workers: _w, merchant, character, saveVersion: _v, ...rest } = s;
     const { activity: _ra, merchant: rm, character: rc, saveVersion: _rv, ...rawRest } = V9_SAVE;
     expect(rest).toEqual(rawRest);
     const { pickaxe: _p, ...equipment } = character.equipment;

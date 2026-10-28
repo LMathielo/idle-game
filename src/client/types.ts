@@ -115,6 +115,8 @@ export interface GameClient {
     build(buildingId: BuildingId): Promise<DispatchResult>;
     /** Adds mining levels (default 1), to test rock unlocks. Logged as DEBUG_ADD_MINING_LEVEL. */
     addMiningLevel(levels?: number): Promise<DispatchResult>;
+    /** Finishes the builder's current upgrade now, for free. Logged as DEBUG_FINISH_CONSTRUCTION. */
+    finishConstruction(): Promise<DispatchResult>;
     /** New game with a new seed and a real clock (offset 0). Logged, never deletes the log. */
     resetSave(): Promise<void>;
   };

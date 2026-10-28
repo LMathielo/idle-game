@@ -18,10 +18,11 @@ export const WOODCUTTING = {
   /**
    * Formula constants, documented here and asserted by tests/woodcutting.test.ts against the stored
    * per-tree values (the engine never evaluates them: Math.pow is banned in src/engine).
-   *   required WS  = max(0, reqWsPerLevel × reqLevel − reqWsOffset)          (Oak: 0)
+   *   required WS  = max(reqWsFloor, reqWsPerLevel × reqLevel − reqWsOffset)  (Oak: 20, since 1.10.0; was 0)
    *   XP per log   = round(xpPerBaseMinute × base minutes × reqLevel^xpLevelExponent)
+   * The requirement is also the divisor of the yield (logs per cut = WS ÷ required WS × bonus), so it is never 0.
    */
-  formula: { reqWsPerLevel: 35, reqWsOffset: 75, xpPerBaseMinute: 12.5, xpLevelExponent: 0.4 },
+  formula: { reqWsFloor: 20, reqWsPerLevel: 35, reqWsOffset: 75, xpPerBaseMinute: 12.5, xpLevelExponent: 0.4 },
 } as const;
 
 export type TreeDef = {
@@ -31,13 +32,13 @@ export type TreeDef = {
   icon: string;
   /** Woodcutting level needed to start this tree. */
   reqLevel: number;
-  /** Woodcutting strength needed to start this tree (precomputed from WOODCUTTING.formula). */
+  /** Woodcutting strength needed to start this tree (precomputed from WOODCUTTING.formula). Also the yield divisor: > 0. */
   reqWs: number;
   /** Cut time per log before DEX. */
   baseMs: number;
-  /** Woodcutting XP per log (precomputed from WOODCUTTING.formula). */
+  /** Woodcutting XP per cut, whatever the number of logs it yields (precomputed from WOODCUTTING.formula). */
   xpPerLog: number;
-  /** Stackable item every log gives (1 per log). */
+  /** Stackable item every cut gives (WS ÷ reqWs × bonus per cut, see gathering.ts). */
   logItemId: string;
 };
 
@@ -45,7 +46,7 @@ export type TreeDef = {
 export const TREE_IDS = ['oak', 'birch', 'maple', 'yew', 'ironwood'] as const satisfies readonly TreeId[];
 
 export const TREES: Record<TreeId, TreeDef> = {
-  oak: { id: 'oak', name: 'Oak', icon: '🌳', reqLevel: 1, reqWs: 0, baseMs: 2 * MIN_MS, xpPerLog: 25, logItemId: 'oak_logs' },
+  oak: { id: 'oak', name: 'Oak', icon: '🌳', reqLevel: 1, reqWs: 20, baseMs: 2 * MIN_MS, xpPerLog: 25, logItemId: 'oak_logs' },
   birch: { id: 'birch', name: 'Birch', icon: '🌿', reqLevel: 5, reqWs: 100, baseMs: 5 * MIN_MS, xpPerLog: 119, logItemId: 'birch_logs' },
   maple: { id: 'maple', name: 'Maple', icon: '🍁', reqLevel: 15, reqWs: 450, baseMs: 10 * MIN_MS, xpPerLog: 369, logItemId: 'maple_logs' },
   yew: { id: 'yew', name: 'Yew', icon: '🌲', reqLevel: 28, reqWs: 905, baseMs: 18 * MIN_MS, xpPerLog: 853, logItemId: 'yew_logs' },

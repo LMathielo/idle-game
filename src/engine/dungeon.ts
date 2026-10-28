@@ -350,6 +350,21 @@ export function advanceDungeon(
   regen(regenLeft);
 }
 
+/**
+ * Wall ms until the dungeon's next event (the search ends, a strike, the fight's end), the same `need` the event walk
+ * uses, or Infinity when no dungeon runs or no time counts. Used by the world walk to stop at hero events.
+ */
+export function dungeonNextEventMs(state: GameState): number {
+  const a = state.activity;
+  const efficiency = state.offline.efficiency;
+  if (a?.kind !== 'dungeon' || !(efficiency > 0)) return Number.POSITIVE_INFINITY;
+  const fight = a.phase === 'fight' ? a.fight : null;
+  const need = fight
+    ? Math.max(0, nextFightEvent(fight, COMBAT.maxFightMs).atMs - fight.elapsedMs)
+    : Math.max(0, searchMsFor(a.dungeonId, effectiveAttributes(state)) - a.progressMs);
+  return Math.ceil(need / efficiency);
+}
+
 // ---------- views ----------
 
 /** The fight on screen, as it stands at the state's engine time. */

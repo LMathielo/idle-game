@@ -5,7 +5,7 @@ import { ATTRIBUTE_NAMES, formatAwayDuration, formatNumber, itemIcon, itemName }
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
 import { colors, fonts } from '../theme';
-import { type AttributeKey, DUNGEONS, type SimulationSummary, type SkillKey, TRAINING, trainingXpTotal } from '../engine';
+import { type AttributeKey, BUILDINGS, DUNGEONS, type SimulationSummary, type SkillKey, TRAINING, trainingXpTotal } from '../engine';
 
 const SKILL_NAMES: Record<SkillKey, string> = {
   woodcutting: 'Woodcutting',
@@ -47,6 +47,8 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
   const capped = summary.grantedMs < summary.requestedMs;
   const gained = Object.entries(summary.itemsGained);
   const lost = Object.entries(summary.itemsLost);
+  const workerGained = Object.entries(summary.workerItemsGained);
+  const workerLost = Object.entries(summary.workerItemsLost);
   const skills = Object.entries(summary.skillXpGained) as [SkillKey, number][];
   const trained = Object.entries(summary.trainingXpGained) as [AttributeKey, number][];
   const maxed = summary.trainingMaxed;
@@ -86,6 +88,14 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
         );
       })}
       {summary.heroLevelsGained > 0 ? <Line label="Hero levels" value={`+${summary.heroLevelsGained}`} /> : null}
+      {summary.workerActions > 0 ? <Text style={styles.section}>👷 Workers</Text> : null}
+      {workerGained.map(([id, n]) => (
+        <Line key={`w-${id}`} label={`${itemIcon(id)} ${itemName(id)}`} value={`+${formatNumber(n)}`} />
+      ))}
+      {summary.upkeepPaid > 0 ? <Line label="🪙 Upkeep paid" value={`−${formatNumber(summary.upkeepPaid)}`} cost /> : null}
+      {summary.buildingsUpgraded.map((u) => (
+        <Line key={`${u.buildingId}-${u.level}`} label={`🔨 ${BUILDINGS[u.buildingId].name} upgraded`} value={`Lv ${u.level}`} />
+      ))}
       {trained.map(([attribute, xp]) => {
         const levels = summary.trainingLevelsGained[attribute] ?? 0;
         return (
@@ -106,18 +116,29 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
           Inventory full: {formatNumber(n)} {itemName(id)} lost
         </Text>
       ))}
-      {summary.actions === 0 && summary.oresMined === 0 && summary.dungeon.runs === 0 && trainingXpTotal(summary) === 0 && !backward ? (
+      {workerLost.map(([id, n]) => (
+        <Text key={`w-${id}`} style={styles.lost}>
+          Inventory full: {formatNumber(n)} {itemName(id)} from workers lost
+        </Text>
+      ))}
+      {summary.actions === 0 &&
+      summary.oresMined === 0 &&
+      summary.dungeon.runs === 0 &&
+      trainingXpTotal(summary) === 0 &&
+      summary.workerActions === 0 &&
+      summary.buildingsUpgraded.length === 0 &&
+      !backward ? (
         <Text style={styles.muted}>Nothing was gathered.</Text>
       ) : null}
     </View>
   );
 }
 
-function Line({ label, value }: { label: string; value: string }) {
+function Line({ label, value, cost }: { label: string; value: string; cost?: boolean }) {
   return (
     <View style={styles.line}>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
+      <Text style={[styles.value, cost && styles.cost]}>{value}</Text>
     </View>
   );
 }
@@ -136,6 +157,8 @@ const styles = StyleSheet.create({
   },
   label: { fontFamily: fonts.body, fontSize: 15, color: colors.ink },
   value: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.skill },
+  cost: { color: colors.dangerDeadly },
+  section: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink, marginTop: 6 },
   warn: { fontFamily: fonts.bodyBold, fontSize: 14, lineHeight: 19, color: colors.goldDark },
   lost: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.hp },
   muted: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft },

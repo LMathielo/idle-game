@@ -258,6 +258,7 @@ export class LocalGameClient implements GameClient {
     build: (buildingId: BuildingId): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_BUILD', buildingId }),
     /** Adds mining levels (default 1), to test rock unlocks. Logged as DEBUG_ADD_MINING_LEVEL. */
     addMiningLevel: (levels = 1): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_MINING_LEVEL', levels }),
+    finishConstruction: (): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_FINISH_CONSTRUCTION' }),
 
     resetSave: (): Promise<void> =>
       this.serial(async () => {

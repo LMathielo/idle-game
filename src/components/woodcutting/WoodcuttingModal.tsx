@@ -3,13 +3,14 @@
 // woodcuttingView() and dispatches START_ACTIVITY {kind:'woodcutting', treeId} / STOP_ACTIVITY / SKIP_WOODCUT.
 // Locked trees are refused by the engine too (TREE_LOCKED).
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, type ListRenderItem, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, FlatList, ScrollView, type ListRenderItem, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
-import { type TreeId, type TreeView, type WoodcutActivityView, woodcuttingView } from '../../engine';
+import { type CrewView, crewViews, type TreeId, type TreeView, type WoodcutActivityView, woodcuttingView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { confirmCancelRun } from '../dungeon/confirmCancelRun';
-import { formatClock, formatNumber, itemIcon, itemName } from '../format';
+import { formatBp, formatClock, formatNumber, formatPerMin, itemIcon, itemName } from '../format';
+import { UpgradeEntry } from '../buildings/UpgradeEntry';
 import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
 import { Bar } from '../Panel';
@@ -70,6 +71,7 @@ export function WoodcuttingModal() {
   const onSkip = useCallback((log: number, cost: number) => send({ type: 'SKIP_WOODCUT', log, maxCost: cost }), [send]);
 
   const current = view.current;
+  const crewOf = useMemo(() => new Map(crewViews(state, 'woodcutting').map((c) => [c.node, c])), [state]);
   const stamina = state.stamina.current;
   const otherActivity = state.activity && state.activity.kind !== 'woodcutting' ? state.activity.kind : null;
 
@@ -77,6 +79,7 @@ export function WoodcuttingModal() {
     ({ item }) => (
       <TreeCard
         tree={item}
+        crew={crewOf.get(item.treeId) ?? null}
         width={cardWidth}
         current={item.active ? current : null}
         stamina={stamina}
@@ -88,7 +91,7 @@ export function WoodcuttingModal() {
         onSkip={onSkip}
       />
     ),
-    [cardWidth, current, stamina, clockPaused, view.level, view.ws.value, onStart, onStop, onSkip],
+    [cardWidth, crewOf, current, stamina, clockPaused, view.level, view.ws.value, onStart, onStop, onSkip],
   );
   const getItemLayout = useCallback((_: unknown, index: number) => ({ length: step, offset: step * index, index }), [step]);
   const separator = useCallback(() => <View style={styles.gap} />, []);
@@ -117,32 +120,35 @@ export function WoodcuttingModal() {
       }
     >
       {clockPaused ? <Text style={styles.paused}>⏸ Paused: your device clock moved back. Logs wait until it catches up.</Text> : null}
-      <FlatList
-        data={view.trees}
-        keyExtractor={(t) => t.treeId}
-        renderItem={renderItem}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={step}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        disableIntervalMomentum
-        getItemLayout={getItemLayout}
-        initialScrollIndex={initialIndex}
-        ItemSeparatorComponent={separator}
-        contentContainerStyle={contentStyle}
-        onMomentumScrollEnd={onScrollEnd}
-        style={styles.list}
-      />
-      <View style={styles.dots} accessibilityRole="text" accessibilityLabel={`Tree ${page + 1} of ${view.trees.length}`}>
-        {view.trees.map((t, i) => (
-          <View key={t.treeId} style={[styles.dot, i === page && styles.dotActive, t.active && styles.dotRunning]} />
-        ))}
-      </View>
-      <Text style={styles.note}>Logs are cut one after another, also while the app is closed (up to {formatNumber(state.offline.capMs / 3_600_000)}h).</Text>
-      {otherActivity === 'training' ? <Text style={styles.note}>Starting stops training (your training XP is kept).</Text> : null}
-      {otherActivity === 'mining' ? <Text style={styles.note}>Starting stops mining (your ores are kept).</Text> : null}
-      {otherActivity === 'dungeon' ? <Text style={styles.note}>Starting stops the dungeon: the run in progress is lost.</Text> : null}
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <FlatList
+          data={view.trees}
+          keyExtractor={(t) => t.treeId}
+          renderItem={renderItem}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={step}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          disableIntervalMomentum
+          getItemLayout={getItemLayout}
+          initialScrollIndex={initialIndex}
+          ItemSeparatorComponent={separator}
+          contentContainerStyle={contentStyle}
+          onMomentumScrollEnd={onScrollEnd}
+          style={styles.list}
+        />
+        <View style={styles.dots} accessibilityRole="text" accessibilityLabel={`Tree ${page + 1} of ${view.trees.length}`}>
+          {view.trees.map((t, i) => (
+            <View key={t.treeId} style={[styles.dot, i === page && styles.dotActive, t.active && styles.dotRunning]} />
+          ))}
+        </View>
+        <Text style={styles.note}>Logs are cut one after another, also while the app is closed (up to {formatNumber(state.offline.capMs / 3_600_000)}h).</Text>
+        {otherActivity === 'training' ? <Text style={styles.note}>Starting stops training (your training XP is kept).</Text> : null}
+        {otherActivity === 'mining' ? <Text style={styles.note}>Starting stops mining (your ores are kept).</Text> : null}
+        {otherActivity === 'dungeon' ? <Text style={styles.note}>Starting stops the dungeon: the run in progress is lost.</Text> : null}
+        <UpgradeEntry buildingId="woodcutting" />
+      </ScrollView>
     </ModalScreen>
   );
 }
@@ -151,6 +157,8 @@ export function WoodcuttingModal() {
 
 type CardProps = {
   tree: TreeView;
+  /** The workers on this node, or null. */
+  crew: CrewView | null;
   width: number;
   /** The log in progress when this tree is being cut. */
   current: WoodcutActivityView | null;
@@ -163,7 +171,7 @@ type CardProps = {
   onSkip: (log: number, cost: number) => void;
 };
 
-const TreeCard = memo(function TreeCard({ tree, width, current, stamina, paused, level, ws, onStart, onStop, onSkip }: CardProps) {
+const TreeCard = memo(function TreeCard({ tree, crew, width, current, stamina, paused, level, ws, onStart, onStop, onSkip }: CardProps) {
   const start = useCallback(() => onStart(tree.treeId, tree.name), [onStart, tree.treeId, tree.name]);
   const skip = useCallback(() => current && onSkip(current.log, current.skipCost), [current, onSkip]);
   const nest = tree.rareDrops[0];
@@ -187,16 +195,25 @@ const TreeCard = memo(function TreeCard({ tree, width, current, stamina, paused,
         <Req ok={tree.wsOk} label={`WS ${formatNumber(tree.reqWs)}`} detail={`you ${formatNumber(ws)}`} />
       </View>
       <View style={styles.facts}>
-        <Fact label="Time per log" value={formatClock(tree.logMs)} />
-        <Fact label="XP per log" value={formatNumber(tree.xpPerLog)} />
+        <Fact label="Time per cut" value={formatClock(tree.logMs)} />
+        <Fact label="Logs per cut" value={`×${formatBp(tree.yieldBp)}`} />
+        <Fact label="XP per cut" value={formatNumber(tree.xpPerLog)} />
         <Fact label="Log" value={`${itemIcon(tree.logItemId)} ${itemName(tree.logItemId)}`} />
         {nest ? <Fact label={`${itemIcon(nest.itemId)} ${itemName(nest.itemId)}`} value={`1 in ${formatNumber(Math.round(1 / nest.chance))}`} /> : null}
       </View>
 
+      <Text style={styles.yieldNote}>Logs per cut = your WS ÷ the WS needed; the decimals are the chance of one more.</Text>
+      {crew ? (
+        <Text style={[styles.crew, crew.status !== 'working' && styles.crewOff]} accessibilityLabel={`${crew.workers} workers here, ${crew.status === 'working' ? `about ${formatPerMin(crew.itemsPerMin)} per minute` : crew.status}`}>
+          👷 {crew.workers} {crew.workers === 1 ? 'worker' : 'workers'} ·{' '}
+          {crew.status === 'working' ? `${formatPerMin(crew.itemsPerMin)} ${itemName(crew.itemId)}/min` : crew.status === 'idle' ? 'idle (you can’t work it now)' : 'paused (upkeep)'}
+        </Text>
+      ) : null}
+
       {current ? (
         <View style={styles.running}>
           <Text style={styles.countdown} accessibilityLabel={`${formatClock(current.remainingMs)} left on this log`}>
-            Next log in {formatClock(current.remainingMs)}
+            Next cut in {formatClock(current.remainingMs)}
           </Text>
           <LiveBar fraction={current.fraction} remainingMs={current.remainingMs} paused={paused} color={colors.skill} style={styles.bar} />
         </View>
@@ -242,6 +259,10 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  scroll: { paddingBottom: 24 },
+  yieldNote: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, textAlign: 'center' },
+  crew: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerEasy, textAlign: 'center' },
+  crewOff: { color: colors.dangerDeadly },
   stamina: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.stamina },
   headerBelow: { paddingHorizontal: 12, gap: 4 },
   ws: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.parchment },

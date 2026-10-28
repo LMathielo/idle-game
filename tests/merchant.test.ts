@@ -125,29 +125,31 @@ describe('catalog: quality and prices (config/items.ts)', () => {
 });
 
 describe('merchant stock and refresh charges', () => {
-  it('a new hero: 5/5 charges, inventory-sized stock, the 5 listings first (Iron Pickaxe after the Iron Axe), the rest empty', () => {
+  it('a new hero: 5/5 charges and the starter stock (not rolled): 5 slots at Merchant Lv1, potions then the iron gear', () => {
     const s = builtGame(1, T0);
     expect(s.merchant.charges).toBe(5);
-    expect(s.merchant.stock).toHaveLength(s.inventory.capacity);
-    expect(s.merchant.stock.slice(0, 5)).toEqual([
+    expect(s.merchant.stock).toHaveLength(5);
+    expect(s.merchant.stock).toEqual([
       { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
       { defId: 'iron_axe', quantity: 1, unitPrice: 600 },
       { defId: 'iron_pickaxe', quantity: 1, unitPrice: 600 },
       { defId: 'iron_sword', quantity: 1, unitPrice: 500 },
       { defId: 'iron_helm', quantity: 1, unitPrice: 400 },
     ]);
-    expect(s.merchant.stock.slice(5).every((x) => x === null)).toBe(true);
-    expect(rollStock(2)).toHaveLength(2);
+    expect(rollStock({ seed: 1 }, 2).stock).toHaveLength(2);
   });
 
-  it('REFRESH_MERCHANT spends 1 charge, restocks the first 5, starts the 2 h timer; errors at 0', () => {
+  it('REFRESH_MERCHANT spends 1 charge, rolls a new stock (seeded), starts the 2 h timer; errors at 0', () => {
     let s = richHero();
     s = apply(s, { type: 'BUY_ITEM', slot: 0, defId: 'health_potion_t1', quantity: 10, maxUnitPrice: 12 }, T0);
     s = apply(s, { type: 'BUY_ITEM', slot: 3, defId: 'iron_sword', quantity: 1, maxUnitPrice: 500 }, T0);
     expect(s.merchant.stock[0]).toBeNull();
+    const before = s;
     s = apply(s, { type: 'REFRESH_MERCHANT' }, T0);
     expect(s.merchant.charges).toBe(4);
-    expect(s.merchant.stock).toEqual(rollStock(s.inventory.capacity));
+    const rolled = rollStock(before.rng, 5);
+    expect(s.merchant.stock).toEqual(rolled.stock);
+    expect(s.rng).toEqual(rolled.rng);
     expect(merchantView(s)).toMatchObject({ charges: 4, maxCharges: 5, full: false, nextInMs: 2 * HOUR });
     for (let i = 0; i < 4; i++) s = apply(s, { type: 'REFRESH_MERCHANT' }, T0);
     expect(s.merchant.charges).toBe(0);
@@ -210,7 +212,7 @@ describe('BUY_ITEM', () => {
     expect(s.merchant.stock[0]).toBeNull();
     expect(code(s, potions(1))).toBe('SLOT_EMPTY');
     expect(code(s, { type: 'BUY_ITEM', slot: 99, defId: 'x', quantity: 1, maxUnitPrice: 1 })).toBe('UNKNOWN_SLOT');
-    expect(code(s, { type: 'BUY_ITEM', slot: 7, defId: 'x', quantity: 1, maxUnitPrice: 1 })).toBe('SLOT_EMPTY');
+    expect(code(s, { type: 'BUY_ITEM', slot: 7, defId: 'x', quantity: 1, maxUnitPrice: 1 })).toBe('UNKNOWN_SLOT'); // 5 slots at Merchant Lv1
   });
 
   it('gold never goes negative: NOT_ENOUGH_GOLD and nothing changes', () => {

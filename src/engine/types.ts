@@ -272,15 +272,54 @@ export type Stamina = {
 // ---------- Buildings (save v10) ----------
 
 /**
- * Village buildings that have to be built before use. Dungeon, Merchant and Storage are always built and are not
- * stored. Requirements are data (config/buildings.ts).
+ * Village buildings stored in the save. Woodcutting, Mine Shaft, Town Hall and Training Grounds have to be built
+ * before use; the Merchant is always built (save v11, so it can be upgraded). Dungeon and Storage are always there
+ * and are not stored. Requirements and upgrade costs are data (config/buildings.ts).
  */
-export type BuildingId = 'woodcutting' | 'mine_shaft' | 'town_hall' | 'training_grounds';
+export type BuildingId = 'woodcutting' | 'mine_shaft' | 'town_hall' | 'training_grounds' | 'merchant';
 
 export type BuildingStatus = 'locked' | 'built';
 
-/** `level` is 0 while locked and 1 once built (upgrades later raise it; only the Town Hall plans any). */
+/** `level` is 0 while locked and 1 once built; upgrades raise it up to BUILDING_MAX_LEVEL (save v11). */
 export type BuildingState = { state: BuildingStatus; level: number };
+
+/**
+ * The one builder's job (save v11): an upgrade of `buildingId` to `level`, paid up front. It progresses in
+ * simulate() on the granted (capped) time, like every activity, and completes when `progressMs` reaches
+ * `durationMs` (fixed when it started). It never blocks the hero's activity. No cancel.
+ */
+export type Construction = { buildingId: BuildingId; level: number; durationMs: number; progressMs: number; startedAt: number };
+
+// ---------- Workers (save v11) ----------
+
+/** A node workers can be assigned to: any tree or rock (tree and rock ids never overlap). */
+export type WorkerNodeId = TreeId | RockId;
+
+/** One hired worker. `node` null = unassigned (costs nothing). */
+export type Worker = { id: string; node: WorkerNodeId | null };
+
+/**
+ * The crew on one node (every worker assigned to it). It works on the node's base action time (no DEX); its timer
+ * only runs while it works. `workMs` = worker·ms worked during the current action, so the yield reflects the
+ * average crew size over the action. `idle` = the hero can't work this node right now (power or level below its
+ * requirement): the crew stays assigned and waits.
+ */
+export type CrewState = { progressMs: number; workMs: number; idle: boolean };
+
+export type WorkersState = {
+  /** Hired workers, in hiring order. */
+  list: Worker[];
+  /** Serial for worker ids (`w<n>`). Only goes up. */
+  nextSerial: number;
+  /** One entry per node with at least one assigned worker. */
+  crews: Partial<Record<WorkerNodeId, CrewState>>;
+  /** Upkeep could not be paid: every crew waits until gold covers it again. */
+  paused: boolean;
+  /** Paid work left in the current upkeep minute, ms (0 = the next minute is due). */
+  minuteLeftMs: number;
+  /** Upkeep per minute already paid for the current minute (a crew joining mid-minute pays the difference). */
+  paidPerMin: number;
+};
 
 // ---------- Merchant ----------
 
@@ -297,7 +336,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 10;
+  saveVersion: 11;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -314,8 +353,12 @@ export type GameState = {
   training: TrainingState;
   /** Save v8. Not an activity: buying and selling work while any activity runs. */
   merchant: MerchantState;
-  /** Save v10. Every building that has to be built (BuildingId), locked or built. */
+  /** Save v10. Every stored building (BuildingId), locked or built, with its level (upgrades since save v11). */
   buildings: Record<BuildingId, BuildingState>;
+  /** Save v11. The one builder's current upgrade, or null when the builder is idle. */
+  construction: Construction | null;
+  /** Save v11. Hired workers and their crews (Town Hall). */
+  workers: WorkersState;
   /** Save v8. Serial for unique item instance ids (bought gear: `<defId>#<n>`). Only goes up. */
   nextItemSerial: number;
   stats: GameStats;
@@ -347,7 +390,20 @@ export type GameEvent =
   | { type: 'TRAINING_LEVEL_UP'; attribute: AttributeKey; level: number }
   /** The attribute reached its tier's cap: training stopped by itself. */
   | { type: 'TRAINING_MAXED'; attribute: AttributeKey }
-  | { type: 'BUILDING_BUILT'; buildingId: BuildingId };
+  | { type: 'BUILDING_BUILT'; buildingId: BuildingId }
+  /** UPGRADE_BUILDING paid and the builder started. */
+  | { type: 'CONSTRUCTION_STARTED'; buildingId: BuildingId; level: number }
+  /** The builder finished: the building is now at `level`. */
+  | { type: 'BUILDING_UPGRADED'; buildingId: BuildingId; level: number }
+  | { type: 'WORKER_HIRED'; workerId: string }
+  /** The hero can no longer work this node (an equip change): its crew waits, still assigned. */
+  | { type: 'CREW_IDLE'; node: WorkerNodeId }
+  /** The hero can work this node again: its idle crew resumes. */
+  | { type: 'CREW_ACTIVE'; node: WorkerNodeId }
+  /** Gold can't cover the next minute of upkeep: every crew waits. */
+  | { type: 'WORKERS_PAUSED'; upkeepDue: number }
+  /** Upkeep is covered again: the crews resume. */
+  | { type: 'WORKERS_RESUMED' };
 
 /** What happened during one simulate() call. Shown in the "While you were away" modal. */
 export type SimulationSummary = {
@@ -377,5 +433,14 @@ export type SimulationSummary = {
   trainingLevelsGained: Partial<Record<AttributeKey, number>>;
   /** Attributes that hit their tier cap (training stopped), in order. */
   trainingMaxed: AttributeKey[];
+  /** Upgrades the builder finished during this period, in order (save v11). */
+  buildingsUpgraded: { buildingId: BuildingId; level: number }[];
+  /** Actions completed by worker crews (save v11). Their items are under workerItemsGained / workerItemsLost. */
+  workerActions: number;
+  workerItemsGained: Record<string, number>;
+  /** Worker items that did not fit (inventory full). */
+  workerItemsLost: Record<string, number>;
+  /** Gold paid in worker upkeep during this period. */
+  upkeepPaid: number;
   anomalies: ClockAnomalyEvent[];
 };
