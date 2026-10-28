@@ -272,15 +272,23 @@ export type Stamina = {
 // ---------- Buildings (save v10) ----------
 
 /**
- * Village buildings that have to be built before use. Dungeon, Merchant and Storage are always built and are not
- * stored. Requirements are data (config/buildings.ts).
+ * Village buildings stored in the save. Woodcutting, Mine Shaft, Town Hall and Training Grounds have to be built
+ * before use; the Merchant is always built (save v11, so it can be upgraded). Dungeon and Storage are always there
+ * and are not stored. Requirements and upgrade costs are data (config/buildings.ts).
  */
-export type BuildingId = 'woodcutting' | 'mine_shaft' | 'town_hall' | 'training_grounds';
+export type BuildingId = 'woodcutting' | 'mine_shaft' | 'town_hall' | 'training_grounds' | 'merchant';
 
 export type BuildingStatus = 'locked' | 'built';
 
-/** `level` is 0 while locked and 1 once built (upgrades later raise it; only the Town Hall plans any). */
+/** `level` is 0 while locked and 1 once built; upgrades raise it up to BUILDING_MAX_LEVEL (save v11). */
 export type BuildingState = { state: BuildingStatus; level: number };
+
+/**
+ * The one builder's job (save v11): an upgrade of `buildingId` to `level`, paid up front. It progresses in
+ * simulate() on the granted (capped) time, like every activity, and completes when `progressMs` reaches
+ * `durationMs` (fixed when it started). It never blocks the hero's activity. No cancel.
+ */
+export type Construction = { buildingId: BuildingId; level: number; durationMs: number; progressMs: number; startedAt: number };
 
 // ---------- Merchant ----------
 
@@ -297,7 +305,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 10;
+  saveVersion: 11;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -314,8 +322,10 @@ export type GameState = {
   training: TrainingState;
   /** Save v8. Not an activity: buying and selling work while any activity runs. */
   merchant: MerchantState;
-  /** Save v10. Every building that has to be built (BuildingId), locked or built. */
+  /** Save v10. Every stored building (BuildingId), locked or built, with its level (upgrades since save v11). */
   buildings: Record<BuildingId, BuildingState>;
+  /** Save v11. The one builder's current upgrade, or null when the builder is idle. */
+  construction: Construction | null;
   /** Save v8. Serial for unique item instance ids (bought gear: `<defId>#<n>`). Only goes up. */
   nextItemSerial: number;
   stats: GameStats;
@@ -347,7 +357,11 @@ export type GameEvent =
   | { type: 'TRAINING_LEVEL_UP'; attribute: AttributeKey; level: number }
   /** The attribute reached its tier's cap: training stopped by itself. */
   | { type: 'TRAINING_MAXED'; attribute: AttributeKey }
-  | { type: 'BUILDING_BUILT'; buildingId: BuildingId };
+  | { type: 'BUILDING_BUILT'; buildingId: BuildingId }
+  /** UPGRADE_BUILDING paid and the builder started. */
+  | { type: 'CONSTRUCTION_STARTED'; buildingId: BuildingId; level: number }
+  /** The builder finished: the building is now at `level`. */
+  | { type: 'BUILDING_UPGRADED'; buildingId: BuildingId; level: number };
 
 /** What happened during one simulate() call. Shown in the "While you were away" modal. */
 export type SimulationSummary = {
@@ -377,5 +391,7 @@ export type SimulationSummary = {
   trainingLevelsGained: Partial<Record<AttributeKey, number>>;
   /** Attributes that hit their tier cap (training stopped), in order. */
   trainingMaxed: AttributeKey[];
+  /** Upgrades the builder finished during this period, in order (save v11). */
+  buildingsUpgraded: { buildingId: BuildingId; level: number }[];
   anomalies: ClockAnomalyEvent[];
 };

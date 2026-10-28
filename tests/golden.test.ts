@@ -230,6 +230,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.7.0', 8],
       ['1.8.0', 9],
       ['1.9.0', 10],
+      ['1.10.0', 11],
     ]);
   });
 });
@@ -608,6 +609,10 @@ describe('golden', () => {
         "axe": "iron_axe",
         "batWings": 12,
         "buildings": {
+          "merchant": {
+            "level": 1,
+            "state": "built",
+          },
           "mine_shaft": {
             "level": 1,
             "state": "built",
@@ -646,9 +651,9 @@ describe('golden', () => {
           "phase": "search",
           "progressMs": 16000,
         },
-        "engineVersion": "1.9.0",
+        "engineVersion": "1.10.0",
         "gold": 1367,
-        "hash": "9d13ab88",
+        "hash": "08273621",
         "helmet": "iron_helm#2",
         "heroLevel": 15,
         "hp": [
@@ -846,7 +851,7 @@ describe('golden', () => {
     });
     expect(axe?.defId).toBe('wooden_axe');
     expect(pickaxe?.defId).toBe('wooden_pickaxe');
-    const { dungeon, training, activity, merchant, nextItemSerial, inventory, buildings: _b, character: _c, saveVersion: _v, ...rest } = s;
+    const { dungeon, training, activity, merchant, nextItemSerial, inventory, buildings: _b, construction: _k, character: _c, saveVersion: _v, ...rest } = s;
     expect(merchant.charges).toBe(5);
     expect(nextItemSerial).toBe(1);
     expect(inventory).toEqual({ ...raw.inventory, items: raw.inventory.items.map(noRarity) });

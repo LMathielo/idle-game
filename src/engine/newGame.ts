@@ -44,6 +44,7 @@ export function newGame(seed: number, now: number): GameState {
     training,
     merchant: newMerchantState(INVENTORY_CAPACITY),
     buildings: newBuildingsState(),
+    construction: null,
     nextItemSerial: 1,
     stats: { totalActions: 0, itemsGathered: {} },
     flags: { debugUsed: false },

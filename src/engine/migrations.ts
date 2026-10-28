@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 10 as const;
+export const CURRENT_SAVE_VERSION = 11 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -20,6 +20,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   7: migrateV7toV8,
   8: migrateV8toV9,
   9: migrateV9toV10,
+  10: migrateV10toV11,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -330,6 +331,28 @@ function migrateV9toV10(doc: SaveDoc): SaveDoc {
     buildings,
     merchant,
     character: { ...character, equipment: withPickaxe, skills: withMining },
+  };
+}
+
+// ---- v10 → v11 (2026-10-28): building upgrades, the builder, workers, the Merchant as a building ----
+// Frozen literals: the Merchant as a v11 building (built, level 1) and the empty v11 village state.
+const V11_MERCHANT_BUILDING = { state: 'built', level: 1 } as const;
+
+/**
+ * Owner-approved (2026-10-28):
+ * - buildings keep their state and level (built = level 1; nothing was upgradable before); the Merchant becomes a
+ *   stored building, built at level 1 (it was always built).
+ * - the builder is idle (`construction = null`).
+ * - the merchant stock is kept as it is until the next refresh.
+ * - everything else is kept.
+ */
+function migrateV10toV11(doc: SaveDoc): SaveDoc {
+  const buildings = isDoc(doc.buildings) ? doc.buildings : {};
+  return {
+    ...doc,
+    saveVersion: 11,
+    buildings: { ...buildings, merchant: { ...V11_MERCHANT_BUILDING } },
+    construction: null,
   };
 }
 

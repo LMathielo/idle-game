@@ -1,7 +1,8 @@
 // Player commands. Serializable, validated here (never in the UI), applied after simulating to `now`.
 import { grantHeroXp } from './activities';
 import { effectiveAttributes } from './attributes';
-import { build, buildingForActivity, completeBuilding, isBuilt } from './buildings';
+import { build, buildingForActivity, completeBuilding, completeConstruction, isBuilt, startUpgrade, type UpgradeErrorCode } from './buildings';
+import { onUpgraded } from './upgradeEffects';
 import { cloneState } from './clone';
 import { BUILDINGS, isBuildingId } from './config/buildings';
 import { isRockId, ROCKS } from './config/mining';
@@ -73,6 +74,14 @@ export type Command =
   | { id: string; type: 'BUILD'; buildingId: BuildingId }
   /** Builds a locked building for free, ignoring its requirements (its effects still apply), to test on a phone. */
   | { id: string; type: 'DEBUG_BUILD'; buildingId: BuildingId }
+  /**
+   * Starts the one builder on `buildingId`'s next level. `level` is the target level the player saw (current + 1).
+   * Checks the cap (5, and never above the Town Hall's level) and the cost, then pays gold and items up front,
+   * atomically. The upgrade completes in simulate() on engine time. Never blocks the hero's activity. No cancel.
+   */
+  | { id: string; type: 'UPGRADE_BUILDING'; buildingId: BuildingId; level: number }
+  /** Finishes the builder's current upgrade now, for free. */
+  | { id: string; type: 'DEBUG_FINISH_CONSTRUCTION' }
   /** Adds mining levels (XP toward the next level is kept), so rock unlocks can be tested on a phone. */
   | { id: string; type: 'DEBUG_ADD_MINING_LEVEL'; levels: number }
   /**
@@ -132,6 +141,8 @@ export type CommandErrorCode =
   | 'BUILDING_LOCKED'
   | 'ALREADY_BUILT'
   | 'REQUIREMENTS_NOT_MET'
+  | UpgradeErrorCode
+  | 'NO_CONSTRUCTION'
   | 'COST_CHANGED'
   | 'DUNGEON_LOCKED'
   | 'NO_ACTIVE_ACTIVITY'
@@ -369,6 +380,20 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       if (isBuilt(draft, buildingId)) return fail('ALREADY_BUILT', `${BUILDINGS[buildingId].name} is already built`);
       draft = markDebugUsed(draft);
       completeBuilding(draft, buildingId, events);
+      break;
+    }
+    case 'UPGRADE_BUILDING': {
+      const { buildingId } = cmd;
+      if (!isBuildingId(buildingId)) return fail('UNKNOWN_BUILDING', `Unknown building ${String(buildingId)}`);
+      const e = startUpgrade(draft, buildingId, cmd.level, now, events);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'DEBUG_FINISH_CONSTRUCTION': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      if (!draft.construction) return fail('NO_CONSTRUCTION', 'The builder is idle');
+      draft = markDebugUsed(draft);
+      completeConstruction(draft, events, null, onUpgraded);
       break;
     }
     case 'DEBUG_ADD_MINING_LEVEL': {
