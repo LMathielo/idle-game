@@ -69,8 +69,11 @@ export {
 export {
   maxBuyable,
   merchantView,
+  growStock,
+  rollPoolListings,
   rollStock,
   slotsNeeded,
+  starterStock,
   type ItemError,
   type ItemErrorCode,
   type MerchantView,

@@ -160,8 +160,9 @@ const SCRIPT: Step[] = [
   { at: C + 11 * SEC + 5 * HOUR, cmd: { id: 'm11', type: 'REFRESH_MERCHANT' } },
   { at: C + 12 * SEC + 5 * HOUR, cmd: { id: 'm12', type: 'DEBUG_ADD_MERCHANT_CHARGE' } },
   { at: C + 13 * SEC + 5 * HOUR, cmd: { id: 'm13', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' } },
-  { at: C + 14 * SEC + 5 * HOUR, cmd: { id: 'm14', type: 'BUY_ITEM', slot: 4, defId: 'iron_helm', quantity: 1, maxUnitPrice: 400 } },
-  { at: C + 15 * SEC + 5 * HOUR, cmd: { id: 'm15', type: 'EQUIP_ITEM', itemId: 'iron_helm#2' } },
+  // 1.10.0: refreshes roll the stock (seeded); this one holds Iron Gloves in slot 4 (it held the Iron Helm before).
+  { at: C + 14 * SEC + 5 * HOUR, cmd: { id: 'm14', type: 'BUY_ITEM', slot: 4, defId: 'iron_gloves', quantity: 1, maxUnitPrice: 250 } },
+  { at: C + 15 * SEC + 5 * HOUR, cmd: { id: 'm15', type: 'EQUIP_ITEM', itemId: 'iron_gloves#2' } },
   { at: D }, // 1 h of Birch
   // 1.8.0: live combat. Rat Cellar cancels the Birch log; skip the search; a simulate boundary mid-fight.
   { at: D + 1 * SEC, cmd: { id: 'l1', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } },
@@ -484,7 +485,7 @@ describe('golden', () => {
           "runs": 214,
           "wins": 214,
         },
-        "gold": 1222,
+        "gold": 1377,
         "heroLevel": 13,
         "hp": [
           170,
@@ -522,7 +523,7 @@ describe('golden', () => {
               "icon": "🐾",
               "id": "rat_skin",
               "name": "Rat Skin",
-              "quantity": 80,
+              "quantity": 75,
               "stackable": true,
             },
             {
@@ -538,7 +539,7 @@ describe('golden', () => {
               "icon": "🪵",
               "id": "birch_logs",
               "name": "Birch Logs",
-              "quantity": 45,
+              "quantity": 41,
               "stackable": true,
             },
             {
@@ -552,12 +553,12 @@ describe('golden', () => {
           ],
         },
         "logs": {
-          "birch_logs": 45,
+          "birch_logs": 41,
           "oak_logs": 1151,
         },
         "nests": 2,
         "nextItemSerial": 3,
-        "seed": 1515102546,
+        "seed": 2019055822,
         "stamina": {
           "current": 100,
           "max": 100,
@@ -652,9 +653,9 @@ describe('golden', () => {
           "progressMs": 16000,
         },
         "engineVersion": "1.10.0",
-        "gold": 1367,
-        "hash": "08273621",
-        "helmet": "iron_helm#2",
+        "gold": 1552,
+        "hash": "2165cabd",
+        "helmet": undefined,
         "heroLevel": 15,
         "hp": [
           190,
@@ -666,7 +667,7 @@ describe('golden', () => {
         },
         "lastFightMs": 2000,
         "logs": {
-          "birch_logs": 45,
+          "birch_logs": 41,
           "oak_logs": 1131,
         },
         "merchant": {
@@ -679,15 +680,15 @@ describe('golden', () => {
               "unitPrice": 12,
             },
             {
-              "defId": "iron_axe",
+              "defId": "iron_shield",
               "quantity": 1,
-              "unitPrice": 600,
+              "unitPrice": 550,
             },
             null,
             {
-              "defId": "iron_sword",
+              "defId": "iron_chestplate",
               "quantity": 1,
-              "unitPrice": 500,
+              "unitPrice": 700,
             },
             null,
           ],
@@ -700,8 +701,8 @@ describe('golden', () => {
         "nests": 2,
         "nextItemSerial": 4,
         "ores": {
-          "copper_ore": 14,
-          "stone": 39,
+          "copper_ore": 13,
+          "stone": 37,
         },
         "pickaxe": "start-wooden_pickaxe",
         "potions": 2,

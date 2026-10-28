@@ -1,3 +1,4 @@
+import { merchantStockSlots } from './bonuses';
 import { newBuildingsState } from './buildings';
 import { STARTING_HERO } from './config/newGame';
 import { INVENTORY_CAPACITY } from './config/items';
@@ -31,6 +32,7 @@ export function newGame(seed: number, now: number): GameState {
   const items: Item[] = STARTING_HERO.inventory.map((s) => makeItem(s.itemId, s.quantity));
   const attributes = { ...STARTING_HERO.attributes };
   const training = newTrainingState();
+  const buildings = newBuildingsState();
   const maxHp = maxHpOf({ character: { level: hero.level, attributes, equipment }, training });
 
   return {
@@ -42,8 +44,8 @@ export function newGame(seed: number, now: number): GameState {
     stamina: { current: STAMINA.startMax, max: STAMINA.startMax, progressMs: 0 },
     dungeon: { lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {} },
     training,
-    merchant: newMerchantState(INVENTORY_CAPACITY),
-    buildings: newBuildingsState(),
+    merchant: newMerchantState(merchantStockSlots({ buildings })),
+    buildings,
     construction: null,
     nextItemSerial: 1,
     stats: { totalActions: 0, itemsGathered: {} },
