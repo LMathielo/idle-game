@@ -113,3 +113,14 @@ export {
   type UpgradeBlock,
   type UpgradeView,
 } from './buildings';
+export {
+  bonusesAt,
+  levelBonuses,
+  merchantStockSlots,
+  sellPriceBonusBp,
+  sellPriceOf,
+  workerCap,
+  yieldBonusParts,
+  yieldMultiplierBp,
+  type YieldBonusPart,
+} from './bonuses';

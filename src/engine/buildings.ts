@@ -6,7 +6,8 @@
 //   UPGRADE_BUILDING validates the level cap (5, and never above the Town Hall) and the cost, pays up front and
 //   starts the builder; the upgrade completes inside simulate() on the granted (capped) time.
 //   A locked building can't be used: the activity it hosts refuses to start (BUILDING_LOCKED).
-import { BUILDING_IDS, BUILDING_MAX_LEVEL, BUILDINGS, type UpgradeCost } from './config/buildings';
+import { bonusesAt } from './bonuses';
+import { BUILDING_IDS, BUILDING_MAX_LEVEL, BUILDINGS, type LevelBonuses, type UpgradeCost } from './config/buildings';
 import { getItemDef } from './config/items';
 import { itemQuantity } from './selectors';
 import type { ActivityKind, BuildingId, BuildingState, Construction, GameEvent, GameState, SimulationSummary } from './types';
@@ -71,6 +72,10 @@ export type UpgradeView = {
   townHallNeeded: number | null;
   /** This building is being upgraded right now. */
   upgrading: boolean;
+  /** Passive bonuses at the current level ({} while locked). */
+  bonuses: LevelBonuses;
+  /** Passive bonuses at the next level, or null without one. */
+  nextBonuses: LevelBonuses | null;
 };
 
 export type BuildingView = {
@@ -152,6 +157,8 @@ export function upgradeView(state: GameState, buildingId: BuildingId): UpgradeVi
     block,
     townHallNeeded: capped ? nextLevel : null,
     upgrading: state.construction?.buildingId === buildingId,
+    bonuses: built ? bonusesAt(buildingId, level) : {},
+    nextBonuses: nextLevel ? bonusesAt(buildingId, nextLevel) : null,
   };
 }
 

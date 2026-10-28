@@ -4,6 +4,7 @@
 //                    regen in simulate() on the sanitized, UNCAPPED time, like stamina; remainder kept.
 //   REFRESH_MERCHANT spends 1 charge and rolls a new stock (rollStock).
 //   BUY_ITEM / SELL_ITEM move gold and items; gold never goes negative, inventory never overflows.
+import { sellPriceOf } from './bonuses';
 import { getItemDef } from './config/items';
 import { MERCHANT, type MerchantPoolEntry } from './config/merchant';
 import { addStackable, freeSlots, makeItem } from './inventory';
@@ -153,7 +154,7 @@ export function buyItem(draft: GameState, slot: unknown, defId: unknown, quantit
   return null;
 }
 
-/** Sells `quantity` of inventory item `itemId` at its catalog sellPrice. Equipped items are refused. Mutates the draft. */
+/** Sells `quantity` of inventory item `itemId` at sellPriceOf() (catalog price + building bonus). Equipped items are refused. Mutates the draft. */
 export function sellItem(draft: GameState, itemId: unknown, quantity: unknown): ItemError {
   if (typeof itemId !== 'string') return err('INVALID_COMMAND', 'Missing itemId');
   const items = draft.inventory.items;
@@ -167,7 +168,8 @@ export function sellItem(draft: GameState, itemId: unknown, quantity: unknown): 
   if (!def || !(def.sellPrice > 0)) return err('NOT_SELLABLE', 'The merchant does not buy that');
   const owned = item.stackable ? (item.quantity ?? 0) : 1;
   if (!isWhole(quantity) || quantity < 1 || quantity > owned) return err('INVALID_AMOUNT', `Quantity must be 1 to ${owned}`);
-  const gold = draft.character.gold + def.sellPrice * quantity;
+  // Town Hall Lv2+ adds to every sell price (floored); still below every buy price (tested).
+  const gold = draft.character.gold + sellPriceOf(draft, def.id) * quantity;
   if (!isWhole(gold)) return err('INVALID_AMOUNT', 'Gold would overflow');
   draft.character.gold = gold;
   if (quantity === owned) items.splice(index, 1);

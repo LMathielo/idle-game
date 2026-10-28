@@ -1,13 +1,46 @@
 // Buildings (data). Rules in src/engine/buildings.ts; the tables in docs/ENGINE.md ("Buildings").
 // Owner-approved 2026-10-28 (build requirements; upgrades, the builder and bonuses in 1.10.0). Every requirement and
 // cost is data: adding a building or changing a cost needs no code.
-import type { BuildingId } from '../types';
+import type { BuildingId, GatheringKind } from '../types';
 
 const MIN_MS = 60 * 1000;
 const HOUR_MS = 60 * MIN_MS;
 
 /** Every building upgrades up to this level. Other buildings never go above the Town Hall's level. */
 export const BUILDING_MAX_LEVEL = 5;
+
+/**
+ * A building's passive bonuses AT a level (totals for that level, not increments). Missing fields mean none. Every
+ * percent is basis points (2000 = +20%). Bonuses from different buildings add together.
+ */
+export type LevelBonuses = {
+  /** Added to the gathering yield multiplier, per skill (hero and workers). */
+  yieldBp?: Partial<Record<GatheringKind, number>>;
+  /** Added to every merchant sell price (the result is floored). */
+  sellPriceBp?: number;
+  /** Most workers that can be hired (Town Hall). */
+  workerCap?: number;
+  /** Merchant stock slots per refresh. */
+  stockSlots?: number;
+};
+
+/** Town Hall: Lv2+ gives +20% wood/stone/ore yield and +20% sell prices; Lv3–5 only raise the worker cap (for now). */
+const TOWN_HALL_LEVELS: readonly LevelBonuses[] = [
+  { workerCap: 5 },
+  { yieldBp: { woodcutting: 2000, mining: 2000 }, sellPriceBp: 2000, workerCap: 7 },
+  { yieldBp: { woodcutting: 2000, mining: 2000 }, sellPriceBp: 2000, workerCap: 9 },
+  { yieldBp: { woodcutting: 2000, mining: 2000 }, sellPriceBp: 2000, workerCap: 12 },
+  { yieldBp: { woodcutting: 2000, mining: 2000 }, sellPriceBp: 2000, workerCap: 15 },
+];
+
+/** Woodcutting / Mine Shaft: +20% yield of their own skill per level above 1 (Lv5 = +80%). */
+const gatheringLevels = (kind: GatheringKind): readonly LevelBonuses[] => [{}, { yieldBp: { [kind]: 2000 } }, { yieldBp: { [kind]: 4000 } }, { yieldBp: { [kind]: 6000 } }, { yieldBp: { [kind]: 8000 } }];
+
+/** Merchant: stock slots = 5 + 2 × (level − 1). */
+const MERCHANT_LEVELS: readonly LevelBonuses[] = [{ stockSlots: 5 }, { stockSlots: 7 }, { stockSlots: 9 }, { stockSlots: 11 }, { stockSlots: 13 }];
+
+/** No passive bonus yet (the data shape is ready for one). */
+const NO_BONUS_LEVELS: readonly LevelBonuses[] = [{}, {}, {}, {}, {}];
 
 /** What one upgrade costs, paid up front when it starts, and how long the builder takes. */
 export type UpgradeCost = {
@@ -64,6 +97,8 @@ export type BuildingDef = {
   upgrades: readonly UpgradeCost[];
   /** Its level can never go above the Town Hall's (every building but the Town Hall itself). */
   cappedByTownHall: boolean;
+  /** levels[i] = the passive bonuses at level i + 1 (length BUILDING_MAX_LEVEL). A locked building gives none. */
+  levels: readonly LevelBonuses[];
 };
 
 /**
@@ -81,6 +116,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     requirements: { gold: 50 },
     upgrades: BUILDING_UPGRADES,
     cappedByTownHall: true,
+    levels: gatheringLevels('woodcutting'),
   },
   mine_shaft: {
     id: 'mine_shaft',
@@ -90,6 +126,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     requirements: { gold: 50 },
     upgrades: BUILDING_UPGRADES,
     cappedByTownHall: true,
+    levels: gatheringLevels('mining'),
   },
   town_hall: {
     id: 'town_hall',
@@ -106,6 +143,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     },
     upgrades: TOWN_HALL_UPGRADES,
     cappedByTownHall: false,
+    levels: TOWN_HALL_LEVELS,
   },
   training_grounds: {
     id: 'training_grounds',
@@ -124,6 +162,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     grantsTrainingTier: 1,
     upgrades: BUILDING_UPGRADES,
     cappedByTownHall: true,
+    levels: NO_BONUS_LEVELS,
   },
   merchant: {
     id: 'merchant',
@@ -134,6 +173,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     startsBuilt: true,
     upgrades: BUILDING_UPGRADES,
     cappedByTownHall: true,
+    levels: MERCHANT_LEVELS,
   },
 };
 
