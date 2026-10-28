@@ -48,6 +48,13 @@
 // BUILD of the Mine Shaft, 1 h of Stone, a bound SKIP_MINE, debug mining levels, the Iron Pickaxe bought and
 // equipped for Copper, the Wooden Pickaxe re-equipped (Copper stops: MS too low), a real BUILD of the Town Hall
 // (logs, stone and gold consumed), then the Rat Cellar and 20 h away (capped).
+// 1.9.0 → 1.10.0 (2026-10-28): save v11 (building upgrades and the builder, workers, the Merchant as a building).
+// Power-based yield (items per action = power ÷ requirement, the fraction rolled: one more RNG draw per log and ore;
+// Oak and Stone need 20), so every pin was re-pinned (more logs, a shifted RNG stream, different gold). Refreshes now
+// roll the merchant stock (seeded): the script's Iron Helm buy after the refreshes became the Iron Gloves that slot
+// holds now (the Iron Pickaxe buy still finds it in slot 2). The script gained a 1.10.0 segment: two hires, crews on
+// Oak and Stone during Rat Cellar runs, the hero on Oak beside the Oak crew, a real Town Hall upgrade with a simulate
+// boundary mid-build, a third worker, then ~10 h away (capped).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -89,6 +96,8 @@ type Step = { at: number; cmd?: Command | ((s: GameState) => Command) };
 
 /** End of the 1.8.0 script; the 1.9.0 segment starts here. */
 const E = D + 31 * SEC + HOUR;
+/** End of the 1.9.0 script; the 1.10.0 segment starts here. */
+const F = E + 10 * SEC + 22 * HOUR;
 
 const SCRIPT: Step[] = [
   { at: T0, cmd: { id: 'b0', type: 'DEBUG_BUILD', buildingId: 'woodcutting' } }, // 1.9.0: Woodcutting starts locked
@@ -184,6 +193,21 @@ const SCRIPT: Step[] = [
   { at: E + 9 * SEC + 2 * HOUR, cmd: { id: 'n9', type: 'BUILD', buildingId: 'town_hall' } }, // 20 Oak Logs, 20 Stone, 100 gold
   { at: E + 10 * SEC + 2 * HOUR, cmd: { id: 'n10', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } },
   { at: E + 10 * SEC + 22 * HOUR }, // 20 h away: 8 h of runs (a fight in progress at the cap would be finished)
+  // 1.10.0: workers, the builder, upkeep. Two hires, crews on Oak and Stone while the Rat Cellar runs (dungeon gold and
+  // upkeep side by side), the hero then cuts Oak next to the Oak crew, a real Town Hall upgrade, a third worker.
+  { at: F + 1 * SEC, cmd: { id: 'o1', type: 'HIRE_WORKER', maxCost: 100 } },
+  { at: F + 2 * SEC, cmd: { id: 'o2', type: 'HIRE_WORKER', maxCost: 200 } },
+  { at: F + 3 * SEC, cmd: { id: 'o3', type: 'ASSIGN_WORKER', workerId: 'w1', node: 'oak' } },
+  { at: F + 4 * SEC, cmd: { id: 'o4', type: 'ASSIGN_WORKER', workerId: 'w2', node: 'stone' } },
+  { at: F + 4 * SEC + HOUR }, // 1 h: Rat Cellar runs and two crews
+  { at: F + 5 * SEC + HOUR, cmd: { id: 'o5', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } },
+  { at: F + 5 * SEC + 2 * HOUR }, // 1 h: the hero and the Oak crew on the same tree
+  { at: F + 6 * SEC + 2 * HOUR, cmd: { id: 'o6', type: 'DEBUG_ADD_GOLD', amount: 1000 } },
+  { at: F + 7 * SEC + 2 * HOUR, cmd: { id: 'o7', type: 'UPGRADE_BUILDING', buildingId: 'town_hall', level: 2 } }, // 500 g, 50 Oak, 50 Stone
+  { at: F + 7 * SEC + 2 * HOUR + 20 * MIN + 500 }, // a simulate boundary mid-upgrade
+  { at: F + 8 * SEC + 2 * HOUR + 20 * MIN + 500, cmd: { id: 'o8', type: 'HIRE_WORKER', maxCost: 400 } },
+  { at: F + 9 * SEC + 2 * HOUR + 20 * MIN + 500, cmd: { id: 'o9', type: 'ASSIGN_WORKER', workerId: 'w3', node: 'oak' } },
+  { at: F + 10 * SEC + 12 * HOUR }, // ~10 h away (capped at 8 h): the upgrade completes, +20% yield after it
 ];
 
 function runScript(steps: Step[] = SCRIPT) {
@@ -603,10 +627,12 @@ describe('golden', () => {
       ores: Object.fromEntries(s.inventory.items.filter((i) => ['stone', 'copper_ore', 'geode'].includes(i.defId)).map((i) => [i.defId, i.quantity])),
       lastFight: s.dungeon.lastFight && { won: s.dungeon.lastFight.won, endReason: s.dungeon.lastFight.endReason },
       dungeonActivity: s.activity?.kind === 'dungeon' ? { phase: s.activity.phase, progressMs: s.activity.progressMs } : null,
+      workers: s.workers,
+      construction: s.construction,
     }).toMatchInlineSnapshot(`
       {
-        "actions": 572,
-        "activity": "dungeon",
+        "actions": 877,
+        "activity": "woodcutting",
         "axe": "iron_axe",
         "batWings": 12,
         "buildings": {
@@ -619,7 +645,7 @@ describe('golden', () => {
             "state": "built",
           },
           "town_hall": {
-            "level": 1,
+            "level": 2,
             "state": "built",
           },
           "training_grounds": {
@@ -639,22 +665,20 @@ describe('golden', () => {
           },
           "rat_cellar": {
             "losses": 0,
-            "runs": 420,
-            "wins": 420,
+            "runs": 452,
+            "wins": 452,
           },
         },
+        "construction": null,
         "dungeon": {
           "losses": 0,
-          "runs": 471,
-          "wins": 471,
+          "runs": 503,
+          "wins": 503,
         },
-        "dungeonActivity": {
-          "phase": "search",
-          "progressMs": 16000,
-        },
+        "dungeonActivity": null,
         "engineVersion": "1.10.0",
-        "gold": 1552,
-        "hash": "6fb66807",
+        "gold": 0,
+        "hash": "1aed0f53",
         "helmet": undefined,
         "heroLevel": 15,
         "hp": [
@@ -668,7 +692,7 @@ describe('golden', () => {
         "lastFightMs": 2000,
         "logs": {
           "birch_logs": 41,
-          "oak_logs": 1131,
+          "oak_logs": 4856,
         },
         "merchant": {
           "chargeProgressMs": 0,
@@ -702,7 +726,7 @@ describe('golden', () => {
         "nextItemSerial": 4,
         "ores": {
           "copper_ore": 13,
-          "stone": 37,
+          "stone": 295,
         },
         "pickaxe": "start-wooden_pickaxe",
         "potions": 2,
@@ -737,9 +761,41 @@ describe('golden', () => {
           },
           "tier": 2,
         },
-        "woodcutting": 9,
-        "woodcuttingXp": 8047,
+        "woodcutting": 10,
+        "woodcuttingXp": 2172,
         "woodenAxe": false,
+        "workers": {
+          "crews": {
+            "oak": {
+              "idle": false,
+              "progressMs": 0,
+              "workMs": 0,
+            },
+            "stone": {
+              "idle": false,
+              "progressMs": 119000,
+              "workMs": 119000,
+            },
+          },
+          "list": [
+            {
+              "id": "w1",
+              "node": "oak",
+            },
+            {
+              "id": "w2",
+              "node": "stone",
+            },
+            {
+              "id": "w3",
+              "node": "oak",
+            },
+          ],
+          "minuteLeftMs": 0,
+          "nextSerial": 4,
+          "paidPerMin": 3,
+          "paused": true,
+        },
       }
     `);
   });
