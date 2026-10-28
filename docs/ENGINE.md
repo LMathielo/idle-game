@@ -47,7 +47,7 @@ The hash is FNV-1a 32-bit over canonical JSON (keys sorted). It detects divergen
 | a | `elapsed = now − time.lastSimulatedAt` |
 | b | Clock moved back (`now < highestSeenAt − 60 s`): grant 0, never move `lastSimulatedAt`/`highestSeenAt` back, emit `CLOCK_ANOMALY {kind:'backward', deltaMs}`. Progress stays paused until real time passes `highestSeenAt` again. No other penalty. |
 | c | Backward jitter within 60 s: 0 elapsed, no anomaly. |
-| d | `elapsed > offline.capMs` (8 h): grant exactly the cap, emit `CLOCK_ANOMALY {kind:'forward_capped', requestedMs, grantedMs}`, set `lastSimulatedAt = now`. The excess is forfeited, never banked. Exception (1.9.0): a dungeon **fight** in progress when the cap is reached is finished (see "Runs (auto-repeat)"). |
+| d | `elapsed > offline.capMs` (8 h): grant exactly the cap, emit `CLOCK_ANOMALY {kind:'forward_capped', requestedMs, grantedMs}`, set `lastSimulatedAt = now`. The excess is forfeited, never banked. Exception (1.9.0): a dungeon **fight** in progress when the cap is reached is finished (see "Runs (auto-repeat)"). The builder, the worker crews and their upkeep (1.10.0) use the granted time like every activity. |
 | e | `now` is NaN/Infinity/not a number: no-op plus an `ERROR` event. |
 | f | `highestSeenAt = max(highestSeenAt, now)` whenever `now` is accepted. |
 
@@ -138,6 +138,10 @@ Base item combat stats (`damage`, `armor`) live only in the catalog `ITEMS` (`sr
 | defId | Slot | Stats |
 | --- | --- | --- |
 | `rusty_gladius` | weapon | damage 2–4 |
+| `iron_chestplate` / `iron_shield` / `iron_gloves` / `iron_boots` (1.10.0) | armor / shield / gloves / boots | armor 6 / 5 / 2 / 2 |
+| `steel_axe` / `steel_pickaxe` (1.10.0) | axe / pickaxe | woodcutting / mining strength +120 |
+| `steel_sword` (1.10.0) | weapon | damage 10–14 |
+| `greater_health_potion` (1.10.0) | — (stackable, usable) | heals 60 HP |
 | `linen_tunic` | armor | armor 2 |
 | `worn_sandals` | boots | armor 1 |
 | `wooden_axe` | axe (tool) | woodcutting strength +1 |
@@ -175,16 +179,21 @@ Every color passes 4.5:1 on `colors.sheet`, `colors.slot` and `colors.night`, th
 | Bird Nest / Geode | 30 / 30 | — |
 | Health Potion (T1) | 5 | 12 |
 | Iron Axe / Iron Pickaxe / Iron Sword / Iron Helm | 180 / 180 / 150 / 120 | 600 / 600 / 500 / 400 |
+| Iron Chestplate / Shield / Gloves / Boots (1.10.0) | 210 / 165 / 75 / 75 | 700 / 550 / 250 / 250 |
+| Greater Health Potion (1.10.0) | 9 | 30 |
+| Steel Axe / Steel Pickaxe / Steel Sword (1.10.0) | 750 / 750 / 600 | 2,500 / 2,500 / 2,000 |
 | Rusty Gladius / Linen Tunic / Worn Sandals / Wooden Axe / Wooden Pickaxe / Bread | 3 / 2 / 1 / 1 / 1 / 1 | — |
 
-Every buyable item sells for less than it costs (tested), so no buy→sell loop prints gold.
+Every buyable item sells for less than it costs (tested), so no buy→sell loop prints gold. Since 1.10.0 the merchant pays **`sellPriceOf()` = floor(sellPrice × (1 + sell bonus))**: the Town Hall's Lv2+ bonus is +20% (see "Building bonuses"); every price stays below its buy price at the largest bonus any level gives (tested). The new 1.10.0 items sell for 30% of their price, floored.
 
 ### State (save v8)
 
 `state.merchant = { charges, chargeProgressMs, stock }` and `state.nextItemSerial`.
 
-- `stock` has as many slots as the inventory had when it was rolled; each is `{ defId, quantity, unitPrice }` or `null` (empty or bought out). The price is fixed when the stock is rolled (from the catalog `buyPrice`).
-- `rollStock(capacity)` fills the first slots with `MERCHANT.pool` in order: Health Potion ×10, Iron Axe ×1, Iron Pickaxe ×1 (1.9.0), Iron Sword ×1, Iron Helm ×1; the rest stay empty. No randomness yet; a seeded, rarity-tiered roll will replace it (it will take the RNG from state).
+- `stock` has one entry per slot; each is `{ defId, quantity, unitPrice }` or `null` (empty or bought out). The price is fixed when the stock is rolled (from the catalog `buyPrice`).
+- **Random stock (1.10.0).** `rollStock(rng, slots)`: slot 1 is always `MERCHANT.fixed` (Health Potion ×10); the other `slots − 1` are drawn from `MERCHANT.pool` with the seeded RNG, one draw per pick from the entries still left, so **no duplicates** (slots beyond the pool stay empty). The pool: Iron Axe, Iron Pickaxe, Iron Sword, Iron Helm, Iron Chestplate, Iron Shield, Iron Gloves, Iron Boots, Greater Health Potion ×5, Steel Axe, Steel Pickaxe, Steel Sword. The slot count comes from the Merchant building's level: **5 + 2 × (level − 1)** (13 at Lv5 = the whole pool). `REFRESH_MERCHANT` rolls a new stock and stores the advanced RNG.
+- A **new save** starts with `starterStock(5)`: Health Potion ×10, Iron Axe, Iron Pickaxe, Iron Sword, Iron Helm, not rolled (newGame draws nothing), so a new hero always finds the iron tools that open the second tree and rock.
+- When the Merchant reaches a level with more slots, `growStock()` fills the new slots at once from the pool (seeded, no duplicate of a listing still in stock). A pre-1.10.0 stock (20 slots, 5 listings) is kept as it is until the next refresh.
 - Bought unique items get the instance id `<defId>#<n>` from `nextItemSerial`, which only goes up.
 
 ### Refresh charges
@@ -197,9 +206,9 @@ Every buyable item sells for less than it costs (tested), so no buy→sell loop 
 
 | Command | Effect | Errors (nothing changes) |
 | --- | --- | --- |
-| `REFRESH_MERCHANT` | −1 charge, `stock = rollStock(inventory.capacity)` | `NO_REFRESH_CHARGES` |
+| `REFRESH_MERCHANT` | −1 charge, `stock = rollStock(rng, merchant stock slots)` (seeded) | `NO_REFRESH_CHARGES` |
 | `BUY_ITEM {slot, defId, quantity, maxUnitPrice}` | gold −= unitPrice × quantity; stackables merge into their stack, unique items each take a slot; the listing's quantity drops, a bought-out slot becomes `null` | `UNKNOWN_SLOT`, `SLOT_EMPTY`, `STOCK_CHANGED` (another item is in the slot now), `INVALID_AMOUNT` (quantity outside 1..left), `PRICE_CHANGED` (price above `maxUnitPrice`), `NOT_ENOUGH_GOLD`, `INVENTORY_FULL` |
-| `SELL_ITEM {itemId, quantity}` | gold += sellPrice × quantity; the stack shrinks or goes | `ITEM_EQUIPPED` (unequip first), `NOT_IN_INVENTORY`, `NOT_SELLABLE` (unknown to the catalog), `INVALID_AMOUNT` (outside 1..owned) |
+| `SELL_ITEM {itemId, quantity}` | gold += sellPriceOf(defId) × quantity (catalog price + building bonus, floored); the stack shrinks or goes | `ITEM_EQUIPPED` (unequip first), `NOT_IN_INVENTORY`, `NOT_SELLABLE` (unknown to the catalog), `INVALID_AMOUNT` (outside 1..owned) |
 | `EQUIP_ITEM {itemId}` | the item moves to its catalog slot; the item that was there takes its inventory place (no free slot needed, nothing lost) | `NOT_IN_INVENTORY`, `NOT_EQUIPPABLE` |
 | `UNEQUIP_ITEM {slot}` | the item moves to the end of the inventory | `UNKNOWN_SLOT`, `SLOT_EMPTY`, `INVENTORY_FULL` |
 | `USE_ITEM {itemId}` | potions: hp = min(max, hp + heal), −1 unit; at max the regen remainder is cleared | `NOT_IN_INVENTORY`, `NOT_USABLE`, `HP_FULL` |
@@ -368,19 +377,20 @@ WS = 10 × woodcutting level + effective STR (base + trained) + axe bonus
 
 | # | id | Name | Req. level | Req. WS | Base time / log | At DEX 10 | XP / log | Log item |
 | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| 1 | `oak` | Oak | 1 | 0 | 2:00 | 1:50 | 25 | `oak_logs` |
+| 1 | `oak` | Oak | 1 | 20 | 2:00 | 1:50 | 25 | `oak_logs` |
 | 2 | `birch` | Birch | 5 | 100 | 5:00 | 4:50 | 119 | `birch_logs` |
 | 3 | `maple` | Maple | 15 | 450 | 10:00 | 9:50 | 369 | `maple_logs` |
 | 4 | `yew` | Yew | 28 | 905 | 18:00 | 17:50 | 853 | `yew_logs` |
 | 5 | `ironwood` | Ironwood | 42 | 1395 | 30:00 | 29:50 | 1672 | `ironwood_logs` |
 
 ```
-required WS    = max(0, 35 × reqLevel − 75)            (Oak: 0)
-XP per log     = round(12.5 × base minutes × reqLevel^0.4)
-cut time / log = max(10 s, base − 1 s × effective DEX)
+required WS    = max(20, 35 × reqLevel − 75)           (Oak: 20 since 1.10.0; was 0)
+XP per cut     = round(12.5 × base minutes × reqLevel^0.4)
+cut time       = max(10 s, base − 1 s × effective DEX)
+logs per cut   = WS ÷ required WS × yield multiplier    (see "Gathering yield")
 ```
 
-Required WS and XP per log are **stored precomputed** in `TREES` (the engine bans `Math.pow`); `tests/woodcutting.test.ts` asserts both formulas against the stored values. Every log also rolls the **Bird Nest at 1/200** (seeded RNG), on every tree. Log items are stackable commons.
+Required WS and XP per cut are **stored precomputed** in `TREES` (the engine bans `Math.pow`); `tests/woodcutting.test.ts` asserts both formulas against the stored values. Every cut also rolls the **Bird Nest at 1/200** (seeded RNG, one roll per cut whatever the yield), on every tree. Log items are stackable commons. Woodcutting XP is per cut, not per log.
 
 ### Rules
 
@@ -397,21 +407,22 @@ Data: `src/engine/config/mining.ts` (`MINING`, `ROCKS`). Rules: `src/engine/mini
 
 ```
 MS (mining strength) = 10 × mining level + effective STR + pickaxe bonus (catalog `miningStrength`)
-required MS          = max(0, 35 × reqLevel − 75)                 (stored precomputed)
+required MS          = max(20, 35 × reqLevel − 75)                (stored precomputed; Stone 20 since 1.10.0)
+ores per action      = MS ÷ required MS × yield multiplier        (see "Gathering yield")
 XP per ore           = round(12.5 × base minutes × reqLevel^0.4)  (stored precomputed)
 time / ore           = max(10 s, base − 1 s × effective DEX)
 ```
 
 | # | id | Rock | Req. level | Req. MS | Base time / ore | At DEX 10 | XP / ore | Ore item (sell) |
 | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| 1 | `stone` | Stone | 1 | 0 | 2:00 | 1:50 | 25 | `stone` (1) |
+| 1 | `stone` | Stone | 1 | 20 | 2:00 | 1:50 | 25 | `stone` (1) |
 | 2 | `copper` | Copper | 5 | 100 | 5:00 | 4:50 | 119 | `copper_ore` (3) |
 | 3 | `iron` | Iron | 15 | 450 | 10:00 | 9:50 | 369 | `iron_ore` (8) |
 | 4 | `silver` | Silver | 28 | 905 | 18:00 | 17:50 | 853 | `silver_ore` (20) |
 | 5 | `gold` | Gold | 42 | 1395 | 30:00 | 29:50 | 1672 | `gold_ore` (50) |
 
 - New **`pickaxe`** equipment slot: new saves start with the **Wooden Pickaxe** (+1 MS), so a new hero has MS 21. The **Iron Pickaxe** (+40 MS, buy 600, sell 180) is in the merchant stock right after the Iron Axe.
-- Every ore rolls the **Geode** at 1/200 (uncommon, sell 30), seeded RNG.
+- Every mining action rolls the **Geode** at 1/200 (uncommon, sell 30), seeded RNG, once per action whatever the yield.
 - `START_ACTIVITY {kind:'mining', rockId}`: `BUILDING_LOCKED` (Mine Shaft not built), `UNKNOWN_ROCK`, `ROCK_LOCKED` (level or MS missing; the message says what). Same rock again keeps the ore in progress; another rock starts from 0. One activity at a time, like every activity.
 - Ores are mined back-to-back live and offline, same `simulate()` and clock rules (8 h cap, backward = pause). Many small ticks equal one big resume (tested).
 - **Skip:** `SKIP_MINE {ore, maxCost}`: `ceil(remaining min)` stamina (at least 1) completes exactly the current ore. `ore` = `MineActivityView.ore` (lifetime gathering actions + 1; `stats.totalActions` counts logs and ores). Already finished or a higher real cost → **`ORE_CHANGED`**; also `NOT_MINING`, `NOT_ENOUGH_STAMINA`, `INVALID_AMOUNT`.
@@ -420,23 +431,112 @@ time / ore           = max(10 s, base − 1 s × effective DEX)
 - Views: `miningView(state)` (level, XP, MS + breakdown, one `RockView` per rock, `focusRockId`, the ore in progress), `mineActivityView(state)` (rock, time per ore, fraction, remaining, ore number, skip cost). `activityView()` returns it with `kind: 'mining'`.
 - Debug: `DEBUG_ADD_MINING_LEVEL {levels}` (1–100 per command, level at most 1,000, XP kept).
 
+## Gathering yield (1.10.0)
+
+Rules: `src/engine/gathering.ts` (shared math), used by woodcutting, mining and the worker crews; each skill keeps its own config. Owner-approved 2026-10-28.
+
+```
+yield (basis points) = floor(power × multiplierBp ÷ requirement)        10 000 bp = 1 item
+items per action     = whole part + 1 more when a roll in [0, 9 999] < fraction part   (rollYield: one seeded draw, always)
+```
+
+- Hero power = WS / MS as before (10 × skill level + effective STR + axe / pickaxe). Example: WS 30 on Oak (20) = 15 000 bp = 1 log + 50% chance of a second.
+- The requirement is the divisor, so no node has a requirement of 0 any more (Oak and Stone: 20; the others keep 100 / 450 / 905 / 1395). Below the requirement the node can't be worked (unchanged gate).
+- Integer math only: the fraction is compared with a whole roll, so no float decides an outcome (`Math.pow` and friends stay banned).
+- Skill XP stays **per action**, the rare drop (nest / geode) is **one roll per action**, action time is unchanged (DEX). The roll order per action: yield, then the rare drop. A stamina skip of one log / ore also rolls the yield.
+- `multiplierBp` = `yieldMultiplierBp(state, skill)` (see "Building bonuses"); 10 000 with no bonus.
+- Views: `TreeView.yieldBp` / `RockView.yieldBp` (expected items per action for this hero right now).
+
 ## Buildings
 
-Data: `src/engine/config/buildings.ts` (`BUILDINGS`, `BUILDING_IDS`). Rules: `src/engine/buildings.ts`. Owner-approved 2026-10-28, engine 1.9.0, save v10.
+Data: `src/engine/config/buildings.ts` (`BUILDINGS`, `BUILDING_IDS`, `TOWN_HALL_UPGRADES`, `BUILDING_UPGRADES`, per-level bonuses). Rules: `src/engine/buildings.ts`, `src/engine/bonuses.ts`. Owner-approved 2026-10-28, engine 1.9.0, save v10; upgrades, the builder and bonuses in engine 1.10.0, save v11.
 
-`state.buildings = { woodcutting, mine_shaft, town_hall, training_grounds }`, each `{ state: 'locked' | 'built', level }` (level 0 while locked, 1 once built; the Town Hall is the one planned to upgrade). Dungeon, Merchant and Storage are **always built** and are not stored. A new save has all four locked.
+`state.buildings = { woodcutting, mine_shaft, town_hall, training_grounds, merchant }`, each `{ state: 'locked' | 'built', level }` (level 0 while locked, 1 once built, up to 5 with upgrades). The Merchant is a stored building since save v11 (`startsBuilt`: built at Lv1 on every save, `BUILD` answers `ALREADY_BUILT`). Dungeon and Storage are always there and are not stored (not upgradable). A new save has the four others locked.
 
 | Building | Requirements (data) | Unlocks |
 | --- | --- | --- |
 | Woodcutting | 50 gold | `START_ACTIVITY` woodcutting |
 | Mine Shaft | 50 gold | `START_ACTIVITY` mining |
-| Town Hall | hero Lv5, 20 Oak Logs, 20 Stone, 100 gold | the Town Hall modal ("Coming soon: automated workers and building upgrades") |
+| Town Hall | hero Lv5, 20 Oak Logs, 20 Stone, 100 gold | the Town Hall modal: upgrades and workers (1.10.0) |
 | Training Grounds | hero Lv10, Town Hall Lv1, 50 Oak Logs, 50 Stone, 250 gold | `START_ACTIVITY` training and `UNLOCK_TRAINING_TIER`; **comes with Tier 1** (`grantsTrainingTier`), so Tier 1 costs no extra 100 gold; Tier 2+ is paid as before (a hero already above Tier 1 keeps his tier) |
 
 - **`BUILD {buildingId}`**: checks **every** requirement first, then consumes the items (from the inventory stacks) and the gold and builds at once (level 1, event `BUILDING_BUILT`; the Training Grounds also emit `TRAINING_TIER_UNLOCKED` when they raise the tier). Errors change nothing: `ALREADY_BUILT` (so a double tap never pays twice), `REQUIREMENTS_NOT_MET` (the message lists what is missing), `UNKNOWN_BUILDING` (also for Dungeon / Merchant / Storage). It is a logged command, replayed like any other, and not an activity.
 - **`BUILDING_LOCKED`**: `START_ACTIVITY` for woodcutting, mining and training, and `UNLOCK_TRAINING_TIER`, refuse while their building is locked. The lock is checked before anything else.
 - **`DEBUG_BUILD {buildingId}`**: builds for free, ignoring the requirements (effects still apply), sets `debugUsed`. The Build sheet shows it as "Build free (debug)".
-- View: `buildingView(state, id)` → name, icon, description, built, level, `requirements` (each `{kind, need, have, met}` in the order hero level, buildings, items, gold), `canBuild`, `grantsTrainingTier`. `isBuilt(state, id)`, `buildingLevel(state, id)`.
+- View: `buildingView(state, id)` → name, icon, description, built, level, `requirements` (each `{kind, need, have, met}` in the order hero level, buildings, items, gold), `canBuild`, `grantsTrainingTier`, `upgrade` (below). `isBuilt(state, id)`, `buildingLevel(state, id)`.
+
+### Upgrades and the builder (1.10.0)
+
+| To level | Town Hall (`TOWN_HALL_UPGRADES`) | Every other building (`BUILDING_UPGRADES`: half, rounded up) |
+| ---: | --- | --- |
+| 2 | 500 g, 50 Oak Logs, 50 Stone, 30 min | 250 g, 25 Oak Logs, 25 Stone, 15 min |
+| 3 | 2,000 g, 100 Birch Logs, 100 Copper Ore, 2 h | 1,000 g, 50 Birch Logs, 50 Copper Ore, 1 h |
+| 4 | 8,000 g, 200 Maple Logs, 200 Iron Ore, 8 h | 4,000 g, 100 Maple Logs, 100 Iron Ore, 4 h |
+| 5 | 32,000 g, 400 Yew Logs, 400 Silver Ore, 24 h | 16,000 g, 200 Yew Logs, 200 Silver Ore, 12 h |
+
+- `state.construction = { buildingId, level, durationMs, progressMs, startedAt } | null`: the **one builder**'s job (`durationMs` fixed when it starts, so a config change never alters a job in progress).
+- **`UPGRADE_BUILDING {buildingId, level}`**: `level` is the target the player saw (current + 1). Checks, in order, before anything is paid: `UNKNOWN_BUILDING`, `BUILDING_LOCKED`, `MAX_LEVEL` (5), `LEVEL_CHANGED` (not current + 1: a double tap never pays twice), `TOWN_HALL_TOO_LOW` (every building but the Town Hall stays ≤ the Town Hall's level), `BUILDER_BUSY` (one construction at a time), `REQUIREMENTS_NOT_MET` (gold and items, the message lists what is missing). Then gold and items are consumed **atomically** and the builder starts (event `CONSTRUCTION_STARTED`). No cancel.
+- The job progresses in `simulate()` on the **granted (capped)** time, in the world walk (below), and completes when `progressMs ≥ durationMs`: the level rises, event `BUILDING_UPGRADED`, `SimulationSummary.buildingsUpgraded`, and `onUpgraded()` applies stored effects (the Merchant's new stock slots). It never blocks or touches the hero's activity.
+- **`DEBUG_FINISH_CONSTRUCTION`**: completes the job now, sets `debugUsed`; `NO_CONSTRUCTION` when the builder is idle. The Upgrade sheet shows it as "Finish now (debug)".
+- Views: `upgradeView(state, id)` → level, max, next level, cost lines (have / need / met), builder time, `block` (`locked` | `max_level` | `town_hall` | `builder_busy` | `cost` | null), `townHallNeeded`, `upgrading`, current and next-level `bonuses`. `constructionView(state)` → the job with `remainingMs` and `fraction` (the Village sign shows "Upgrading 12:34"; with no activity the activity strip shows it).
+
+### Building bonuses (1.10.0)
+
+Data per building **level** (`BuildingDef.levels[level − 1]`, totals for that level, not increments): `yieldBp` per skill, `sellPriceBp`, `workerCap`, `stockSlots`. A locked building gives nothing. Bonuses from different buildings **add**:
+
+```
+yield multiplier = 10 000 + Σ yieldBp[skill]          (hero and workers; bonuses.ts yieldMultiplierBp)
+sell price       = floor(sellPrice × (10 000 + Σ sellPriceBp) / 10 000)
+worker cap       = the Town Hall level's workerCap (0 while locked)
+stock slots      = the Merchant level's stockSlots
+```
+
+| Building | Lv1 | Lv2 | Lv3 | Lv4 | Lv5 |
+| --- | --- | --- | --- | --- | --- |
+| Town Hall | cap 5 | +2000 bp wood & mining yield, +2000 bp sell, cap 7 | same, cap 9 | same, cap 12 | same, cap 15 |
+| Woodcutting | — | +2000 bp woodcutting | +4000 | +6000 | +8000 |
+| Mine Shaft | — | +2000 bp mining | +4000 | +6000 | +8000 |
+| Merchant | 5 slots | 7 | 9 | 11 | 13 |
+| Training Grounds | — | — | — | — | — |
+
+## The world walk (1.10.0)
+
+Rules: `src/engine/world.ts`. `simulate()` runs the hero's activity side by side with the village's own timers (the builder and the worker crews) over the **granted** time.
+
+- With no construction and no crew, the walk is one step: exactly the hero's activity over the whole granted time (the 1.9.0 path).
+- Otherwise the granted time is cut into **steps** ending at the next village event: the upgrade completing, a crew action completing, the paid upkeep minute running out, and, while a crew is idle or the workforce is paused, the hero's next event (it can make a node workable again or bring dungeon gold). Inside a step nothing in the village changes, so the hero's activity advances by the step; every activity is already split-invariant, so cutting it at extra points changes nothing.
+- **Order at one instant:** (1) the hero's events due then (a log, a strike, a fight ending with its gold, a training level); (2) the upgrade completing (its bonus counts for the crews right after); (3) the crews' actions due then, in `WORKER_NODE_IDS` order (trees, then rocks), each drawing its yield roll; (4) at the start of the next step, `settleWorkers()`: idle flags follow the hero, and the next minute of upkeep is charged (or the crews pause / resume). So dungeon gold earned at a minute boundary counts before that minute is charged.
+- HP regen: dungeon and training steps regenerate HP inside their own walk; gathering and no activity regenerate once at the end. Beyond the cap only a dungeon fight in progress is finished (and HP regenerates); the village does not move.
+- Many small simulate calls equal one big one, byte for byte, with crews, upkeep, pauses and the builder (tested with 1 s ticks, 7 s and 13 s splits, dungeon gold resuming paused crews and a level-up resuming an idle crew).
+
+## Workers (1.10.0)
+
+Data: `src/engine/config/workers.ts` (`WORKERS`); the cap per Town Hall level is a building bonus. Rules: `src/engine/workers.ts`. Owner-approved 2026-10-28.
+
+```
+state.workers = { list: [{id: 'w<n>', node: TreeId | RockId | null}], nextSerial, crews: {[node]: {progressMs, workMs, idle}},
+                  paused, minuteLeftMs, paidPerMin }
+hire cost      = 100 × 2^(workers owned)                     (doubling loop, no Math.pow)
+crew power     = hero power × 25% × average workers over the action     (average = workMs ÷ base time)
+crew yield     = crew power ÷ node requirement × yield multiplier       (integer bp, staged far below 2^53)
+action time    = the node's base time (no DEX)
+upkeep         = Σ working workers × tier upkeep (1 / 5 / 15 / 40 / 100 gold per minute, tier 1 = Oak / Stone)
+```
+
+| Command | Effect | Errors (nothing changes) |
+| --- | --- | --- |
+| `HIRE_WORKER {maxCost}` | pays the hire cost, adds an unassigned worker (event `WORKER_HIRED`). `maxCost` is the price shown | `BUILDING_LOCKED` (no Town Hall), `WORKER_CAP`, `COST_CHANGED`, `NOT_ENOUGH_GOLD`, `INVALID_AMOUNT` |
+| `DISMISS_WORKER {workerId}` | removes the worker, no refund | `UNKNOWN_WORKER` |
+| `ASSIGN_WORKER {workerId, node}` | puts the worker on a tree or rock **the hero can work now** (skill level and power at the requirement) whose building is built; same node = no-op; another node moves it | `UNKNOWN_WORKER`, `UNKNOWN_NODE`, `BUILDING_LOCKED`, `NODE_LOCKED` |
+| `UNASSIGN_WORKER {workerId}` | back to unassigned (free); already unassigned = no-op | `UNKNOWN_WORKER` |
+
+- **Crews.** All workers on a node form its crew; it works on its own timer, independent of the hero's activity, live and offline, on the granted time. The hero working the same node is separate and additive (own timer, own yield). Workers give **no XP** and **no rare drops**. Output goes to the inventory; what doesn't fit is lost (`workerItemsLost`). Crew power reads the hero's **current** power, so better gear counts at once.
+- **Average crew size.** `workMs` adds worker·ms while the crew works; at completion the yield uses `workMs ÷ base time` workers (= n when the crew did not change). A crew keeps its progress when workers join or leave, and goes away (progress dropped) with its last worker. So moving workers onto a node just before its action ends gains nothing.
+- **Idle.** When the hero no longer qualifies for a node (an equip change), its crew goes idle: still assigned, no work, no upkeep (event `CREW_IDLE`); it resumes when he qualifies again (`CREW_ACTIVE`), also mid-simulate after a level-up. Hero power never drops inside simulate.
+- **Upkeep.** Charged per started minute: when the paid minute runs out (or when work starts) the next minute is paid in full for every working worker; a rise mid-minute (a worker joining, a crew resuming) pays the difference at once; a fall is not refunded. If gold can't cover what is due, **every** crew pauses (`WORKERS_PAUSED`, nothing charged, `workers.paused`), and resumes as soon as gold covers it (`WORKERS_RESUMED`): at the next world-walk step (dungeon gold) or at the end of any command (a sale). Gold never goes negative. Idle and unassigned workers cost nothing.
+- **After every command** `settleWorkers()` runs once, so the workforce follows equip changes, sales and assignments at once.
+- Summary: `workerActions`, `workerItemsGained`, `workerItemsLost`, `upkeepPaid` (shown in "While you were away").
+- Views: `workersView(state)` (hired / cap, hire cost, paused, upkeep per minute, each worker's status, crews), `crewViews(state, skill?)` (per node: workers, status, expected yield and items per minute, upkeep), `nodeChoices(state)` (the picker: tier, upkeep per worker, items per minute for one more worker, available / why not).
 
 ## Training
 
@@ -532,7 +632,7 @@ The repository talks to a small `SqlDatabase` interface. The app passes `expo-sq
 
 `GameState.saveVersion` plus ordered pure migrations in `src/engine/migrations.ts` (`MIGRATIONS[n]` upgrades v`n` to v`n+1`). A save newer than the app is refused instead of being overwritten. To change the shape: bump `CURRENT_SAVE_VERSION`, add the migration and a frozen fixture of the old version under `tests/fixtures/`.
 
-Current version: **10**.
+Current version: **11**.
 
 - v1 → v2 adds `flags.debugUsed` (set to `false` for old saves).
 - v2 → v3 (2026-10-26): attributes become strength→strength, dexterity→dexterity, constitution→endurance, intelligence→intelligence, each set to **max(old value, 10)** so old heroes match the new-hero baseline (owner decision); agility and charisma are dropped; `character.hp`/`maxHp` are dropped; `stamina` is added full (100/100); every equipped and inventory item gets a `defId` (stackables: their id; starting gear: `start-<defId>`). Literals in the migration are frozen on purpose, so later config changes cannot change what it produces.
@@ -543,11 +643,12 @@ Current version: **10**.
 - v7 → v8 (2026-10-27): merchant. `merchant = {charges: 5, chargeProgressMs: 0, stock}` with the 4 listings (Health Potion ×10 at 12, Iron Axe 600, Iron Sword 500, Iron Helm 400) in the first slots and as many slots as `inventory.capacity` (20 when missing); `nextItemSerial = 1`; the stale per-instance `rarity` is dropped from every equipped and inventory item. Frozen literals. Everything else is kept.
 - v8 → v9 (2026-10-27): live combat and the XP rebalance. **Hero XP rule: the level is kept; XP is clamped into progress toward the next level on the new curve, `xp = min(xp, newXpToNext(level) − 1)`, and `xpToNext` becomes the new curve's value.** Nobody loses a level; XP beyond the new requirement is dropped (under the new curve it would have been a level-up, but granting levels in a migration was not asked for). A dungeon run in progress becomes its **search** phase with `progressMs` kept and `fight: null`; when the kept time already covers the new, shorter search, the fight starts on the next simulate (the frozen v8 fixture is such a case: 3:27 banked vs a 1:50 search). The last fight's log gets each strike's time and number (v8 round n → `atMs = n × 1000`, `strike = n`, which is exactly when it would land under 1.8.0), `rounds` becomes `durationMs = rounds × 1000`, and `round_cap` becomes `time_limit`. Frozen literals (the base-100 curve and its segments, 1000 ms per v8 round). Everything else is kept.
 - v9 → v10 (2026-10-28): buildings, mining, the pickaxe slot. Owner decision (wiping was fine): existing saves get buildings **exactly like a new save**: Woodcutting, Mine Shaft, Town Hall and Training Grounds all locked. A running **woodcutting or training** activity stops cleanly (`activity = null`; logs and training XP kept, the log in progress dropped); a dungeon run is kept. The `pickaxe` slot gets the Wooden Pickaxe (`start-wooden_pickaxe`); `skills.mining` is added at Lv1 when missing (kept when present); the Iron Pickaxe listing goes in merchant stock slot 4 when that slot exists and is empty (v9 stocked 4 listings), so it can be bought before the next refresh. The training tier already bought is kept. Frozen literals. Everything else is kept.
+- v10 → v11 (2026-10-28): building upgrades, the builder, workers. Buildings keep their state and level (built = Lv1); the Merchant becomes a stored building, built at Lv1; `construction = null` (idle builder); `workers` empty; the merchant stock is kept as it is until the next refresh. Frozen literals. Everything else is kept.
 - v4 → v5 (2026-10-26): dungeon tiers. The dungeon id `rat_cellar_1` becomes `rat_cellar` (running activity and last fight). Every v4 run was a Rat Cellar run, so `dungeon.byDungeon = {rat_cellar: totals}` (empty when there were no runs) and the old wins count toward the Bat Cave unlock. `totals` is kept. Frozen literals again.
 
-Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests/fixtures/save-v2.json` (made with the 1.1.0 engine: hero Lv4, woodcutting Lv8, 3785 logs, banked progress), `tests/fixtures/save-v3.json` (made with the 1.2.0 engine before the dungeon: hero Lv5, DEX 15, END 12, woodcutting running, 68 stamina), and `tests/fixtures/save-v4.json` + `log-v4.json` (made with the 1.3.0 engine before the tiers: hero Lv3, DEX 13, END 12, Rat Cellar running mid-run, 19 runs / 18 wins / 1 loss, plus the action log that produced it, all rows at engine 1.3.0), and `tests/fixtures/save-v5.json` + `log-v5.json` (made with the 1.4.0 engine before training: hero Lv4, 198 gold, DEX 12, END 13, Bat Cave running mid-run, Rat Cellar 25 wins, Bat Cave 8 wins, plus its 11-row action log, all at engine 1.4.0), and `tests/fixtures/save-v6.json` + `log-v6.json` (made with the 1.5.0 engine before the trees: woodcutting Lv5 running mid-action, 1,338 Oak Logs, 9 nests, STR trained to 4, 94 stamina, plus its 10-row action log, all at engine 1.5.0), and `tests/fixtures/save-v7.json` + `log-v7.json` (made with the 1.6.0 engine before the merchant: Oak running mid-log, 1,120 gold, 123 Oak Logs, 12 Rat Skins, 24 Rat Cellar wins, plus its 9-row action log, all at engine 1.6.0), and `tests/fixtures/save-v8.json` + `log-v8.json` (made with the 1.7.0 engine before live combat: hero Lv3 with 1,182 XP, Rat Cellar running 3:27 into a run, 37 wins, 2 Health Potions bought, plus its 6-row action log, all at engine 1.7.0), and `tests/fixtures/save-v9.json` + `log-v9.json` (made with the 1.8.0 engine before buildings: hero Lv6, 265 gold, Training Tier 1, 36 Oak Logs, Oak running 1:47 into a log, 95 Rat Cellar wins, plus its 7-row action log, all at engine 1.8.0).
+Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests/fixtures/save-v2.json` (made with the 1.1.0 engine: hero Lv4, woodcutting Lv8, 3785 logs, banked progress), `tests/fixtures/save-v3.json` (made with the 1.2.0 engine before the dungeon: hero Lv5, DEX 15, END 12, woodcutting running, 68 stamina), and `tests/fixtures/save-v4.json` + `log-v4.json` (made with the 1.3.0 engine before the tiers: hero Lv3, DEX 13, END 12, Rat Cellar running mid-run, 19 runs / 18 wins / 1 loss, plus the action log that produced it, all rows at engine 1.3.0), and `tests/fixtures/save-v5.json` + `log-v5.json` (made with the 1.4.0 engine before training: hero Lv4, 198 gold, DEX 12, END 13, Bat Cave running mid-run, Rat Cellar 25 wins, Bat Cave 8 wins, plus its 11-row action log, all at engine 1.4.0), and `tests/fixtures/save-v6.json` + `log-v6.json` (made with the 1.5.0 engine before the trees: woodcutting Lv5 running mid-action, 1,338 Oak Logs, 9 nests, STR trained to 4, 94 stamina, plus its 10-row action log, all at engine 1.5.0), and `tests/fixtures/save-v7.json` + `log-v7.json` (made with the 1.6.0 engine before the merchant: Oak running mid-log, 1,120 gold, 123 Oak Logs, 12 Rat Skins, 24 Rat Cellar wins, plus its 9-row action log, all at engine 1.6.0), and `tests/fixtures/save-v8.json` + `log-v8.json` (made with the 1.7.0 engine before live combat: hero Lv3 with 1,182 XP, Rat Cellar running 3:27 into a run, 37 wins, 2 Health Potions bought, plus its 6-row action log, all at engine 1.7.0), and `tests/fixtures/save-v9.json` + `log-v9.json` (made with the 1.8.0 engine before buildings: hero Lv6, 265 gold, Training Tier 1, 36 Oak Logs, Oak running 1:47 into a log, 95 Rat Cellar wins, plus its 7-row action log, all at engine 1.8.0), and `tests/fixtures/save-v10.json` + `log-v10.json` (made with the 1.9.0 engine before workers: hero Lv6, 141 gold, Woodcutting, Mine Shaft and Town Hall built, 4 Oak Logs, 5 Stone, 2 Health Potions, Stone running 0:17 into an ore, 95 Rat Cellar wins, a 20-slot stock, plus its 12-row action log, all at engine 1.9.0).
 
-**Rules version.** `ENGINE_VERSION` (`src/engine/version.ts`) is written on every log row. Bump it whenever rules change outcomes. **Every save-version bump also bumps `ENGINE_VERSION`** (`RELEASED_ENGINES` in `src/engine/version.ts`: save v1 → 1.0.0, v2 → 1.1.0, v3 → 1.2.0, v4 → 1.3.0, v5 → 1.4.0, v6 → 1.5.0, v7 → 1.6.0, v8 → 1.7.0, v9 → 1.8.0, v10 → 1.9.0; a guard test in `tests/golden.test.ts` checks it), so a replay span never mixes two save shapes under one engine version. `tests/golden.test.ts` pins the final state hash of a fixed seed and script, so an unintended rules change fails CI. 1.1.0: XP curve uses `L × √L`, and `flags.debugUsed` was added. 1.2.0 (2026-10-26): save v3, stamina regen in `simulate()`, stamina/attribute debug commands; woodcutting outcomes unchanged (same actions, levels and drops in the golden script). The golden script now also spends stamina and adds STR, so the hash changed. 1.3.0 (2026-10-26): save v4, HP regen, dungeon runs and combat. Woodcutting outcomes unchanged (same actions, levels, nests and stamina in the golden script); the script gained a dungeon segment (start, skip, HP debug, 3 h of runs, woodcutting cancelling a run), so the hash changed. 1.4.0 (2026-10-26): save v5, dungeon tiers 1–5, per-dungeon counters, unlocks, `DEBUG_ADD_DUNGEON_WINS`, MIGRATE anchors. Rat Cellar outcomes unchanged (a golden test pins the 1.3.0 part of the script: same runs, gold, HP, stamina, level); the hash changed because of `byDungeon` and the id rename. The script gained a tier segment (debug wins, Bat Cave runs). 1.5.0 (2026-10-26): save v6, training (tiers, per-attribute levels, effective attributes in every rule), `UNLOCK_TRAINING_TIER`, `DEBUG_ADD_TRAINING_XP`, `DEBUG_ADD_GOLD`. Every 1.4.0 outcome is unchanged (a golden test pins the whole 1.4.0 script: actions, runs, gold, HP, stamina, levels, loot); the hash changed because of the `training` field. The script gained a training segment (Tier 1, STR, switch to END, debug XP and gold, Tier 2, 10 h capped, debug XP to the cap, a Rat Cellar hour with trained attributes). 1.6.0 (2026-10-27): save v7, woodcutting trees, WS, axe slot, `SKIP_WOODCUT`, `SPEEDUP_TRAINING`, `DEBUG_ADD_WOODCUTTING_LEVEL`. Woodcutting outcomes changed on purpose (Oak 1:50 / 25 XP instead of 3 s / 10 XP), so far fewer nest rolls happen and the RNG stream shifts: the earlier golden pins were re-pinned (dungeon runs, wins, levels, HP, stamina unchanged; gold differs). The script gained a 1.6.0 segment (Oak, bound skip, +4 WC levels, Birch, STR speed-up +10 min and to next level). 1.7.0 (2026-10-27): save v8, merchant (refresh charges, stock, `BUY_ITEM`, `SELL_ITEM`, `REFRESH_MERCHANT`), `EQUIP_ITEM`, `UNEQUIP_ITEM`, `USE_ITEM`, `DEBUG_ADD_MERCHANT_CHARGE`, item quality and prices in the catalog. Every 1.6.0 outcome is unchanged (a golden test pins the whole 1.6.0 script); the hash changed because of the new fields and the dropped `rarity`. The script gained a 1.7.0 segment (debug gold, buy potions and the Iron Axe, equip it, potion, sell logs and the Wooden Axe, refreshes, 5 h of charge regen, debug charge, a buy and equip while woodcutting). 1.8.0 (2026-10-27): save v9, live combat (a run = search + a fight played in engine time; per-side attack intervals, hero first on ties; `maxFightMs` 60 s replaces 50 rounds; `FIGHT_IN_PROGRESS`; the skip ends the search only), searches 2/3/5/8/12 min, hero XP curve base 100, Rat XP 35, attack interval as a derived stat. Outcomes changed on purpose, so every golden pin was re-pinned; the script's first skip now sends what the screen shows mid-search, its debug XP grant is 16k instead of 250k (still about Lv11), and a 1.8.0 segment was added (Rat Cellar, search skip, a simulate boundary and a debug HP change mid-fight, 1 h of runs). 1.9.0 (2026-10-28): save v10, buildings (`BUILD`, `DEBUG_BUILD`, `BUILDING_LOCKED`), mining (`SKIP_MINE`, `DEBUG_ADD_MINING_LEVEL`, pickaxe slot, Iron Pickaxe in the stock), a fight in progress at the offline cap is finished. The script builds Woodcutting with `DEBUG_BUILD` before its first log and the Training Grounds with `DEBUG_BUILD` instead of buying Tier 1, so every later gold value is 100 higher and nothing else changed (a golden test pins the whole 1.8.0 script); the Iron Helm buy names slot 4. A 1.9.0 segment was added (real BUILD of the Mine Shaft, 1 h of Stone, a bound SKIP_MINE, debug mining levels, the Iron Pickaxe for Copper, the Wooden Pickaxe re-equipped (Copper stops), a real BUILD of the Town Hall, then the Rat Cellar and 20 h away).
+**Rules version.** `ENGINE_VERSION` (`src/engine/version.ts`) is written on every log row. Bump it whenever rules change outcomes. **Every save-version bump also bumps `ENGINE_VERSION`** (`RELEASED_ENGINES` in `src/engine/version.ts`: save v1 → 1.0.0, v2 → 1.1.0, v3 → 1.2.0, v4 → 1.3.0, v5 → 1.4.0, v6 → 1.5.0, v7 → 1.6.0, v8 → 1.7.0, v9 → 1.8.0, v10 → 1.9.0, v11 → 1.10.0; a guard test in `tests/golden.test.ts` checks it), so a replay span never mixes two save shapes under one engine version. `tests/golden.test.ts` pins the final state hash of a fixed seed and script, so an unintended rules change fails CI. 1.1.0: XP curve uses `L × √L`, and `flags.debugUsed` was added. 1.2.0 (2026-10-26): save v3, stamina regen in `simulate()`, stamina/attribute debug commands; woodcutting outcomes unchanged (same actions, levels and drops in the golden script). The golden script now also spends stamina and adds STR, so the hash changed. 1.3.0 (2026-10-26): save v4, HP regen, dungeon runs and combat. Woodcutting outcomes unchanged (same actions, levels, nests and stamina in the golden script); the script gained a dungeon segment (start, skip, HP debug, 3 h of runs, woodcutting cancelling a run), so the hash changed. 1.4.0 (2026-10-26): save v5, dungeon tiers 1–5, per-dungeon counters, unlocks, `DEBUG_ADD_DUNGEON_WINS`, MIGRATE anchors. Rat Cellar outcomes unchanged (a golden test pins the 1.3.0 part of the script: same runs, gold, HP, stamina, level); the hash changed because of `byDungeon` and the id rename. The script gained a tier segment (debug wins, Bat Cave runs). 1.5.0 (2026-10-26): save v6, training (tiers, per-attribute levels, effective attributes in every rule), `UNLOCK_TRAINING_TIER`, `DEBUG_ADD_TRAINING_XP`, `DEBUG_ADD_GOLD`. Every 1.4.0 outcome is unchanged (a golden test pins the whole 1.4.0 script: actions, runs, gold, HP, stamina, levels, loot); the hash changed because of the `training` field. The script gained a training segment (Tier 1, STR, switch to END, debug XP and gold, Tier 2, 10 h capped, debug XP to the cap, a Rat Cellar hour with trained attributes). 1.6.0 (2026-10-27): save v7, woodcutting trees, WS, axe slot, `SKIP_WOODCUT`, `SPEEDUP_TRAINING`, `DEBUG_ADD_WOODCUTTING_LEVEL`. Woodcutting outcomes changed on purpose (Oak 1:50 / 25 XP instead of 3 s / 10 XP), so far fewer nest rolls happen and the RNG stream shifts: the earlier golden pins were re-pinned (dungeon runs, wins, levels, HP, stamina unchanged; gold differs). The script gained a 1.6.0 segment (Oak, bound skip, +4 WC levels, Birch, STR speed-up +10 min and to next level). 1.7.0 (2026-10-27): save v8, merchant (refresh charges, stock, `BUY_ITEM`, `SELL_ITEM`, `REFRESH_MERCHANT`), `EQUIP_ITEM`, `UNEQUIP_ITEM`, `USE_ITEM`, `DEBUG_ADD_MERCHANT_CHARGE`, item quality and prices in the catalog. Every 1.6.0 outcome is unchanged (a golden test pins the whole 1.6.0 script); the hash changed because of the new fields and the dropped `rarity`. The script gained a 1.7.0 segment (debug gold, buy potions and the Iron Axe, equip it, potion, sell logs and the Wooden Axe, refreshes, 5 h of charge regen, debug charge, a buy and equip while woodcutting). 1.8.0 (2026-10-27): save v9, live combat (a run = search + a fight played in engine time; per-side attack intervals, hero first on ties; `maxFightMs` 60 s replaces 50 rounds; `FIGHT_IN_PROGRESS`; the skip ends the search only), searches 2/3/5/8/12 min, hero XP curve base 100, Rat XP 35, attack interval as a derived stat. Outcomes changed on purpose, so every golden pin was re-pinned; the script's first skip now sends what the screen shows mid-search, its debug XP grant is 16k instead of 250k (still about Lv11), and a 1.8.0 segment was added (Rat Cellar, search skip, a simulate boundary and a debug HP change mid-fight, 1 h of runs). 1.9.0 (2026-10-28): save v10, buildings (`BUILD`, `DEBUG_BUILD`, `BUILDING_LOCKED`), mining (`SKIP_MINE`, `DEBUG_ADD_MINING_LEVEL`, pickaxe slot, Iron Pickaxe in the stock), a fight in progress at the offline cap is finished. The script builds Woodcutting with `DEBUG_BUILD` before its first log and the Training Grounds with `DEBUG_BUILD` instead of buying Tier 1, so every later gold value is 100 higher and nothing else changed (a golden test pins the whole 1.8.0 script); the Iron Helm buy names slot 4. A 1.9.0 segment was added (real BUILD of the Mine Shaft, 1 h of Stone, a bound SKIP_MINE, debug mining levels, the Iron Pickaxe for Copper, the Wooden Pickaxe re-equipped (Copper stops), a real BUILD of the Town Hall, then the Rat Cellar and 20 h away). 1.10.0 (2026-10-28): save v11, power-based yield (one more RNG draw per log and ore; Oak and Stone need 20), `UPGRADE_BUILDING` / `DEBUG_FINISH_CONSTRUCTION` and the builder, building bonuses, the merchant's random stock (seeded) and new items, workers (`HIRE_WORKER`, `DISMISS_WORKER`, `ASSIGN_WORKER`, `UNASSIGN_WORKER`, crews, upkeep), the world walk. Outcomes changed on purpose (more logs per cut, shifted RNG stream), so every golden pin was re-pinned; the Iron Helm buy after the refreshes became the Iron Gloves the rolled stock holds in that slot. A 1.10.0 segment was added (two hires, crews on Oak and Stone beside Rat Cellar runs, the hero on Oak beside the Oak crew, a real Town Hall upgrade with a simulate boundary mid-build, a third worker, ~10 h away; the crews end paused for gold).
 
 **Known limit, still open:**
 - The SQL schema has only `schema_version = 1` in `meta` and `CREATE TABLE IF NOT EXISTS`. Add ordered SQL schema migrations keyed on `meta.schema_version` before the first table change.
@@ -559,7 +660,7 @@ Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests
 | type | When | Payload |
 | --- | --- | --- |
 | `NEW_GAME` | First launch, Reset save | `{ seed }` (`+ reason, debugUsed: true` after Reset save) |
-| `START_ACTIVITY`, `STOP_ACTIVITY`, `SKIP_DUNGEON_RUN` (search only), `SKIP_WOODCUT`, `SKIP_MINE`, `BUILD`, `DEBUG_BUILD`, `DEBUG_ADD_MINING_LEVEL`, `SPEEDUP_TRAINING`, `DEBUG_ADD_WOODCUTTING_LEVEL`, `EQUIP_ITEM`, `UNEQUIP_ITEM`, `USE_ITEM`, `REFRESH_MERCHANT`, `BUY_ITEM`, `SELL_ITEM`, `DEBUG_ADD_MERCHANT_CHARGE`, `UNLOCK_TRAINING_TIER`, `DEBUG_ADD_TRAINING_XP`, `DEBUG_ADD_GOLD`, `DEBUG_GRANT_HERO_XP`, `DEBUG_SPEND_STAMINA`, `DEBUG_REFILL_STAMINA`, `DEBUG_ADD_ATTRIBUTE`, `DEBUG_SET_HERO_HP`, `DEBUG_FINISH_DUNGEON_RUN`, `DEBUG_ADD_DUNGEON_WINS` | Player/debug commands; `command_id` = command id | the command |
+| `START_ACTIVITY`, `STOP_ACTIVITY`, `SKIP_DUNGEON_RUN` (search only), `SKIP_WOODCUT`, `SKIP_MINE`, `BUILD`, `DEBUG_BUILD`, `UPGRADE_BUILDING`, `DEBUG_FINISH_CONSTRUCTION`, `HIRE_WORKER`, `DISMISS_WORKER`, `ASSIGN_WORKER`, `UNASSIGN_WORKER`, `DEBUG_ADD_MINING_LEVEL`, `SPEEDUP_TRAINING`, `DEBUG_ADD_WOODCUTTING_LEVEL`, `EQUIP_ITEM`, `UNEQUIP_ITEM`, `USE_ITEM`, `REFRESH_MERCHANT`, `BUY_ITEM`, `SELL_ITEM`, `DEBUG_ADD_MERCHANT_CHARGE`, `UNLOCK_TRAINING_TIER`, `DEBUG_ADD_TRAINING_XP`, `DEBUG_ADD_GOLD`, `DEBUG_GRANT_HERO_XP`, `DEBUG_SPEND_STAMINA`, `DEBUG_REFILL_STAMINA`, `DEBUG_ADD_ATTRIBUTE`, `DEBUG_SET_HERO_HP`, `DEBUG_FINISH_DUNGEON_RUN`, `DEBUG_ADD_DUNGEON_WINS` | Player/debug commands; `command_id` = command id | the command |
 | `MIGRATE` | `load()` found a save that needed a migration, or `meta.engine_version` ≠ `ENGINE_VERSION`. Written in the same transaction as the migrated state and the new `engine_version` | `{ fromSave, toSave, fromEngine, toEngine, snapshot }` (snapshot = full post-migration GameState) |
 | `RESUME` | App start, back from background, debug clock change. Skipped when no time passed and there was no anomaly | `{ summary }` |
 | `SIMULATE` | Live-play checkpoint: every 30 s while an activity runs (every 10 min when idle), before any other row, on background | `{ checkpoint: true }` or `{ summary }` |
@@ -594,10 +695,10 @@ Frozen fixtures that must keep loading: `tests/fixtures/save-v1.json` and `tests
 
 ## "While you were away"
 
-Shown after app start, a return from background or a debug clock change when **at least 60 s of real time passed and there was at least one log cut, ore mined, dungeon run, training XP point or training cap reached** (`AWAY_SUMMARY_MIN_MS` in `config/time.ts`), or when there was **any clock anomaly**. A quick app switch is still simulated and logged, but opens no modal. It lists logs cut and the count per log type, dungeon runs (won/lost), dungeons unlocked, hero XP, gold and loot next to gathering results, plus training XP and levels per attribute and a "maxed — unlock Tier N" note for each attribute that hit its cap.
+Shown after app start, a return from background or a debug clock change when **at least 60 s of real time passed and there was at least one log cut, ore mined, dungeon run, training XP point, training cap reached, worker action or upgrade finished** (`AWAY_SUMMARY_MIN_MS` in `config/time.ts`), or when there was **any clock anomaly**. A quick app switch is still simulated and logged, but opens no modal. It lists logs cut and the count per log type, dungeon runs (won/lost), dungeons unlocked, hero XP, gold and loot next to gathering results, plus training XP and levels per attribute and a "maxed — unlock Tier N" note for each attribute that hit its cap; since 1.10.0 also the workers' items, the upkeep paid and the upgrades finished.
 
 The summary is an RN `<Modal>`. On iOS it presents from the view controller that owns it, and the root controller cannot present while a full-screen village modal is up, so each village modal route renders its own `<AwayModal />` and the root one hides on those routes (`RootAwayModal` in `src/app/_layout.tsx`).
 
 ## Debug tools
 
-`DEV_TOOLS_ENABLED` in `src/engine/config/dev.ts` shows a Debug panel on the Hero tab. It stays on for the POC. Any `DEBUG_*` action sets `state.flags.debugUsed = true` forever (it survives later play, Reset save and replay), so a future server can tell debugged saves apart. The clock buttons change a persisted **offset** on the client clock (`SystemClock.offsetMs`), then resume, so the engine sees exactly what a player who changed the phone clock would produce. "+10k hero XP" is a real logged command (`DEBUG_GRANT_HERO_XP`), and so are "Spend 10 stamina" (`DEBUG_SPEND_STAMINA`, refused with `NOT_ENOUGH_STAMINA` below 10), "Refill stamina" (`DEBUG_REFILL_STAMINA`), "+1 STR / DEX / END / INT" (`DEBUG_ADD_ATTRIBUTE`, 1–1000 per command, an attribute can reach at most 1,000,000), "Hero HP → 1" (`DEBUG_SET_HERO_HP`, 0..max, clears the regen remainder) and "End search now (free)" (`DEBUG_FINISH_DUNGEON_RUN`, ends the current search like a skip without stamina, so the fight starts; refused with `FIGHT_IN_PROGRESS` during the fight and `NO_DUNGEON_RUN` when no dungeon runs). In a dungeon's detail view, "+10 wins (debug)" (`DEBUG_ADD_DUNGEON_WINS`, 1–1000 per command, unlocked dungeons only) adds wins and runs to that dungeon's counters with no fight and no rewards, so unlocks can be tested on the phone. "+60 min training XP" (`DEBUG_ADD_TRAINING_XP {xp}`, 1–100,000 per command) adds training XP to the attribute being trained right away, with the same level-ups and cap rule as real time (refused with `NOT_TRAINING` when nothing trains); "+1 WC level" (`DEBUG_ADD_WOODCUTTING_LEVEL {levels}`, 1–100 per command, level at most 1,000, XP toward the next level kept) to test tree unlocks; "+1 Mining level" (`DEBUG_ADD_MINING_LEVEL`, same bounds) to test rock unlocks; "Build free (debug)" in a locked building's Build sheet (`DEBUG_BUILD`, requirements ignored, effects applied, refused with `ALREADY_BUILT`); "+1,000 gold" (`DEBUG_ADD_GOLD {amount}`, 1–1,000,000 per command, gold at most 10¹²). In the Merchant's Buy tab, "+1 merchant refresh (debug)" (`DEBUG_ADD_MERCHANT_CHARGE`, never above max; refused with `CHARGES_FULL`). "Reset save" logs `DEBUG_RESET_SAVE` + `NEW_GAME` and clears the offset; it never deletes log rows. None of them change engine rules.
+`DEV_TOOLS_ENABLED` in `src/engine/config/dev.ts` shows a Debug panel on the Hero tab. It stays on for the POC. Any `DEBUG_*` action sets `state.flags.debugUsed = true` forever (it survives later play, Reset save and replay), so a future server can tell debugged saves apart. The clock buttons change a persisted **offset** on the client clock (`SystemClock.offsetMs`), then resume, so the engine sees exactly what a player who changed the phone clock would produce. "+10k hero XP" is a real logged command (`DEBUG_GRANT_HERO_XP`), and so are "Spend 10 stamina" (`DEBUG_SPEND_STAMINA`, refused with `NOT_ENOUGH_STAMINA` below 10), "Refill stamina" (`DEBUG_REFILL_STAMINA`), "+1 STR / DEX / END / INT" (`DEBUG_ADD_ATTRIBUTE`, 1–1000 per command, an attribute can reach at most 1,000,000), "Hero HP → 1" (`DEBUG_SET_HERO_HP`, 0..max, clears the regen remainder) and "End search now (free)" (`DEBUG_FINISH_DUNGEON_RUN`, ends the current search like a skip without stamina, so the fight starts; refused with `FIGHT_IN_PROGRESS` during the fight and `NO_DUNGEON_RUN` when no dungeon runs). In a dungeon's detail view, "+10 wins (debug)" (`DEBUG_ADD_DUNGEON_WINS`, 1–1000 per command, unlocked dungeons only) adds wins and runs to that dungeon's counters with no fight and no rewards, so unlocks can be tested on the phone. "+60 min training XP" (`DEBUG_ADD_TRAINING_XP {xp}`, 1–100,000 per command) adds training XP to the attribute being trained right away, with the same level-ups and cap rule as real time (refused with `NOT_TRAINING` when nothing trains); "+1 WC level" (`DEBUG_ADD_WOODCUTTING_LEVEL {levels}`, 1–100 per command, level at most 1,000, XP toward the next level kept) to test tree unlocks; "+1 Mining level" (`DEBUG_ADD_MINING_LEVEL`, same bounds) to test rock unlocks; "Build free (debug)" in a locked building's Build sheet (`DEBUG_BUILD`, requirements ignored, effects applied, refused with `ALREADY_BUILT`); "+1,000 gold" (`DEBUG_ADD_GOLD {amount}`, 1–1,000,000 per command, gold at most 10¹²). "Finish now (debug)" in the Upgrade sheet while that building upgrades (`DEBUG_FINISH_CONSTRUCTION`, refused with `NO_CONSTRUCTION` when the builder is idle). In the Merchant's Buy tab, "+1 merchant refresh (debug)" (`DEBUG_ADD_MERCHANT_CHARGE`, never above max; refused with `CHARGES_FULL`). "Reset save" logs `DEBUG_RESET_SAVE` + `NEW_GAME` and clears the offset; it never deletes log rows. None of them change engine rules.
