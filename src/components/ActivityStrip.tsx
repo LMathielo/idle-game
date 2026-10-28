@@ -124,5 +124,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.parchment },
   count: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold, marginLeft: 8 },
-  paused: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.gold },
+  paused: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.gold },
 });

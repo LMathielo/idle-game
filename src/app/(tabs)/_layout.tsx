@@ -35,7 +35,7 @@ export default function TabsLayout() {
           borderTopWidth: 3,
           borderTopColor: colors.wood,
         },
-        tabBarLabelStyle: { fontFamily: fonts.title, fontSize: 18 },
+        tabBarLabelStyle: { fontFamily: fonts.title, fontSize: 14 },
       }}
     >
       <Tabs.Screen

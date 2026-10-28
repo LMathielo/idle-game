@@ -275,9 +275,9 @@ const styles = StyleSheet.create({
   attrTop: { flexDirection: 'row', justifyContent: 'space-between' },
   attrShort: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
   attrValue: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
-  attrEffect: { fontFamily: fonts.body, fontSize: 12, color: colors.skill },
-  attrEffectNone: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft },
-  attrSplit: { fontFamily: fonts.body, fontSize: 12, color: colors.ink, marginTop: 2 },
+  attrEffect: { fontFamily: fonts.body, fontSize: 13, color: colors.skill },
+  attrEffectNone: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
+  attrSplit: { fontFamily: fonts.body, fontSize: 13, color: colors.ink, marginTop: 2 },
 
   statList: { marginTop: 10 },
   statRow: {
@@ -290,10 +290,10 @@ const styles = StyleSheet.create({
   statLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   statLabel: { fontFamily: fonts.body, fontSize: 16, color: colors.ink },
   statValue: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.ink },
-  statNote: { fontFamily: fonts.body, fontSize: 12, color: colors.skill, textAlign: 'right' },
+  statNote: { fontFamily: fonts.body, fontSize: 13, color: colors.skill, textAlign: 'right' },
   statDetail: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, marginTop: 4 },
 
   stamina: { marginTop: 12, gap: 4 },
-  staminaCaption: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.inkSoft },
+  staminaCaption: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.inkSoft },
   staminaTimer: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
 });

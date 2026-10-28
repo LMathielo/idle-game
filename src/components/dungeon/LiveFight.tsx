@@ -60,6 +60,6 @@ const styles = StyleSheet.create({
   bars: { flexDirection: 'row', gap: 10 },
   log: { gap: 3, minHeight: 40 },
   wait: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
-  more: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft },
-  note: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft, textAlign: 'center' },
+  more: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
+  note: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, textAlign: 'center' },
 });

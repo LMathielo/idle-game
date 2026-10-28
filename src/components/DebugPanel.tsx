@@ -91,7 +91,7 @@ export function DebugPanel() {
 }
 
 const styles = StyleSheet.create({
-  header: { fontFamily: fonts.title, fontSize: 26, color: colors.ink },
+  header: { fontFamily: fonts.title, fontSize: 20, color: colors.ink },
   body: { marginTop: 8, gap: 8 },
   info: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },

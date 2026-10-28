@@ -19,6 +19,16 @@ export function formatDuration(ms: number): string {
   return `${s}s`;
 }
 
+/** Time away, coarse: 9h 12m · 9h · 35m · 40s. Seconds only show under a minute. */
+export function formatAwayDuration(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  if (m > 0) return `${m}m`;
+  return `${total}s`;
+}
+
 /** Countdown as m:ss, rounded up to the next whole second (5:00, 0:07). Hours fold into minutes. */
 export function formatClock(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000));

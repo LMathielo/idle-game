@@ -16,10 +16,12 @@ type Props = {
   sublabel?: string;
   /** Takes an equal share of a row (flex: 1) with centered text, for button rows that must not wrap. */
   stretch?: boolean;
+  /** Village sign: pixel title font. Other buttons use the readable body font. */
+  sign?: boolean;
 };
 
 /** Wooden sign button with hard pixel bevels (no rounded corners). */
-export function PixelButton({ label, icon, onPress, active, disabled, accessibilityLabel, accessibilityHint, sublabel, stretch }: Props) {
+export function PixelButton({ label, icon, onPress, active, disabled, accessibilityLabel, accessibilityHint, sublabel, stretch, sign }: Props) {
   return (
     <Pressable
       onPress={onPress}
@@ -43,7 +45,7 @@ export function PixelButton({ label, icon, onPress, active, disabled, accessibil
             ]}
           >
             {icon ? <Text style={styles.icon}>{icon}</Text> : null}
-            <Text style={[styles.label, disabled && styles.labelDisabled]} numberOfLines={1}>
+            <Text style={[styles.label, sign && styles.labelSign, disabled && styles.labelDisabled]} numberOfLines={1}>
               {label}
             </Text>
             {sublabel ? (
@@ -95,13 +97,14 @@ const styles = StyleSheet.create({
   innerDisabled: { backgroundColor: colors.slot, borderTopColor: colors.slotBorder, borderLeftColor: colors.slotBorder },
   icon: { fontSize: 14 },
   label: {
-    fontFamily: fonts.title,
-    fontSize: 22,
+    fontFamily: fonts.bodyBold,
+    fontSize: 16,
     color: colors.gold,
     textShadowColor: colors.woodDark,
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 0,
   },
+  labelSign: { fontFamily: fonts.title, fontSize: 18 },
   stretch: { flex: 1 },
   innerStacked: { flexDirection: 'column', justifyContent: 'center', gap: 0, paddingHorizontal: 4 },
   sublabel: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.parchment },

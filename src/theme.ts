@@ -37,8 +37,9 @@ export const qualityColors = {
 } as const;
 
 export const fonts = {
-  // Blackletter pixel font for titles and signs
-  title: 'Jacquard12_400Regular',
-  body: 'PixelifySans_400Regular',
-  bodyBold: 'PixelifySans_700Bold',
+  // Pixel font for titles, village signs, tab labels and headings only.
+  title: 'PixelifySans_700Bold',
+  // Inter for everything players read: body text, numbers, stats, logs, buttons and descriptions.
+  body: 'Inter_400Regular',
+  bodyBold: 'Inter_600SemiBold',
 } as const;

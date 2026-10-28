@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, fonts } from '../theme';
 
-/** Parchment panel with a dark pixel frame and a blackletter title. */
+/** Parchment panel with a dark pixel frame and a pixel-font title. */
 export function Panel({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <View style={styles.frame}>
@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.parchmentDark,
     borderRightColor: colors.parchmentDark,
   },
-  title: { fontFamily: fonts.title, fontSize: 26, color: colors.ink, marginBottom: 8 },
+  title: { fontFamily: fonts.title, fontSize: 20, color: colors.ink, marginBottom: 8 },
   barOuter: {
     height: 16,
     backgroundColor: colors.slot,
@@ -52,6 +52,7 @@ const styles = StyleSheet.create({
   barLabel: {
     fontFamily: fonts.bodyBold,
     fontSize: 11,
+    lineHeight: 12,
     color: '#fff',
     textAlign: 'center',
     textShadowColor: '#000',

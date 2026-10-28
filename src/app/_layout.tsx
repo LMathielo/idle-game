@@ -1,5 +1,5 @@
-import { Jacquard12_400Regular } from '@expo-google-fonts/jacquard-12';
-import { PixelifySans_400Regular, PixelifySans_700Bold } from '@expo-google-fonts/pixelify-sans';
+import { Inter_400Regular, Inter_600SemiBold } from '@expo-google-fonts/inter';
+import { PixelifySans_700Bold } from '@expo-google-fonts/pixelify-sans';
 import { useFonts } from 'expo-font';
 import { usePathname } from 'expo-router';
 import { Stack } from 'expo-router/stack';
@@ -33,7 +33,7 @@ function RootAwayModal() {
  * (a fade when the system asks to reduce motion).
  */
 export default function RootLayout() {
-  const [loaded] = useFonts({ Jacquard12_400Regular, PixelifySans_400Regular, PixelifySans_700Bold });
+  const [loaded] = useFonts({ PixelifySans_700Bold, Inter_400Regular, Inter_600SemiBold });
   // Reduce Motion: a fade instead of the slide-up (iOS also cross-dissolves for 'fade' on modals).
   const reducedMotion = useReducedMotion();
   if (!loaded) return <View style={styles.blank} />;

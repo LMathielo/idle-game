@@ -91,6 +91,6 @@ const styles = StyleSheet.create({
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   closeText: { fontFamily: fonts.bodyBold, fontSize: 26, color: colors.parchment },
-  title: { flex: 1, fontFamily: fonts.title, fontSize: 34, color: colors.gold },
+  title: { flex: 1, fontFamily: fonts.title, fontSize: 24, color: colors.gold },
   body: { flex: 1 },
 });

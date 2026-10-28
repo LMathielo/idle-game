@@ -78,7 +78,7 @@ export const VillageScene = memo(function VillageScene({
             const cy = Math.min(Math.max(top + s.y * imgH, minY), maxY);
             return (
               <View key={s.key} style={[styles.sign, { left: cx - SIGN_BOX_W / 2, top: cy - SIGN_BOX_H / 2 }]} pointerEvents="box-none">
-                <PixelButton label={s.label} icon={s.icon} active={active === s.key} onPress={() => onAction?.(s.key)} />
+                <PixelButton sign label={s.label} icon={s.icon} active={active === s.key} onPress={() => onAction?.(s.key)} />
               </View>
             );
           })}
