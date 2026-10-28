@@ -71,6 +71,20 @@ function msToNextLevel(t: AttributeTraining): number {
   return (trainingXpToNext(t.level) - t.xp) * TRAINING.msPerXp - t.progressMs;
 }
 
+/**
+ * Wall ms until the attribute being trained reaches its next level (its next event in simulate), or Infinity when
+ * nothing trains or no time counts. Used by the world walk to stop at hero events (world.ts).
+ */
+export function trainingNextEventMs(state: GameState): number {
+  const a = state.activity;
+  if (a?.kind !== 'training') return Number.POSITIVE_INFINITY;
+  const speed = trainingSpeed(state, a.attribute);
+  if (!(speed > 0)) return Number.POSITIVE_INFINITY;
+  const t = state.training.attributes[a.attribute];
+  if (t.level >= trainingCap(state.training.tier)) return 0;
+  return Math.ceil(msToNextLevel(t) / speed);
+}
+
 /** Adds trained time below the next level-up (`ms` < msToNextLevel). Mutates `t`. */
 function bank(t: AttributeTraining, attribute: AttributeKey, ms: number, summary: SimulationSummary | null) {
   const total = t.progressMs + ms;

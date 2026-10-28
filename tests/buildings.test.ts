@@ -350,7 +350,7 @@ describe('frozen v9 save (tests/fixtures/save-v9.json) → v10', () => {
     expect(BUILDING_IDS.map((id) => s.buildings[id].state)).toEqual(['locked', 'locked', 'locked', 'locked', 'built']); // v11: the Merchant
     expect(s.character.equipment.pickaxe?.defId).toBe('wooden_pickaxe');
     expect(s.merchant.stock[4]).toEqual({ defId: 'iron_pickaxe', quantity: 1, unitPrice: 600 });
-    const { activity: _a, buildings: _b, construction: _k, merchant, character, saveVersion: _v, ...rest } = s;
+    const { activity: _a, buildings: _b, construction: _k, workers: _w, merchant, character, saveVersion: _v, ...rest } = s;
     const { activity: _ra, merchant: rm, character: rc, saveVersion: _rv, ...rawRest } = V9_SAVE;
     expect(rest).toEqual(rawRest);
     const { pickaxe: _p, ...equipment } = character.equipment;

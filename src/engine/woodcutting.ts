@@ -149,6 +149,14 @@ export function advanceWoodcutting(draft: GameState, activity: WoodcuttingActivi
   }
 }
 
+/** Wall ms until the item in progress is done (the hero's next woodcutting event), or Infinity when not woodcutting. */
+export function woodcuttingNextEventMs(state: GameState): number {
+  const a = state.activity;
+  const efficiency = state.offline.efficiency;
+  if (a?.kind !== 'woodcutting' || !(efficiency > 0)) return Number.POSITIVE_INFINITY;
+  return Math.ceil(Math.max(0, logMsFor(a.treeId, effectiveAttributes(state)) - a.progressMs) / efficiency);
+}
+
 // ---------- read-only views for the UI ----------
 
 export type TreeView = TreeCheck & {

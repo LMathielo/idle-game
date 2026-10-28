@@ -290,6 +290,37 @@ export type BuildingState = { state: BuildingStatus; level: number };
  */
 export type Construction = { buildingId: BuildingId; level: number; durationMs: number; progressMs: number; startedAt: number };
 
+// ---------- Workers (save v11) ----------
+
+/** A node workers can be assigned to: any tree or rock (tree and rock ids never overlap). */
+export type WorkerNodeId = TreeId | RockId;
+
+/** One hired worker. `node` null = unassigned (costs nothing). */
+export type Worker = { id: string; node: WorkerNodeId | null };
+
+/**
+ * The crew on one node (every worker assigned to it). It works on the node's base action time (no DEX); its timer
+ * only runs while it works. `workMs` = worker·ms worked during the current action, so the yield reflects the
+ * average crew size over the action. `idle` = the hero can't work this node right now (power or level below its
+ * requirement): the crew stays assigned and waits.
+ */
+export type CrewState = { progressMs: number; workMs: number; idle: boolean };
+
+export type WorkersState = {
+  /** Hired workers, in hiring order. */
+  list: Worker[];
+  /** Serial for worker ids (`w<n>`). Only goes up. */
+  nextSerial: number;
+  /** One entry per node with at least one assigned worker. */
+  crews: Partial<Record<WorkerNodeId, CrewState>>;
+  /** Upkeep could not be paid: every crew waits until gold covers it again. */
+  paused: boolean;
+  /** Paid work left in the current upkeep minute, ms (0 = the next minute is due). */
+  minuteLeftMs: number;
+  /** Upkeep per minute already paid for the current minute (a crew joining mid-minute pays the difference). */
+  paidPerMin: number;
+};
+
 // ---------- Merchant ----------
 
 /** One merchant stock slot: `quantity` left of `defId` at `unitPrice` gold each (fixed when the stock was rolled). */
@@ -326,6 +357,8 @@ export type GameState = {
   buildings: Record<BuildingId, BuildingState>;
   /** Save v11. The one builder's current upgrade, or null when the builder is idle. */
   construction: Construction | null;
+  /** Save v11. Hired workers and their crews (Town Hall). */
+  workers: WorkersState;
   /** Save v8. Serial for unique item instance ids (bought gear: `<defId>#<n>`). Only goes up. */
   nextItemSerial: number;
   stats: GameStats;
@@ -361,7 +394,16 @@ export type GameEvent =
   /** UPGRADE_BUILDING paid and the builder started. */
   | { type: 'CONSTRUCTION_STARTED'; buildingId: BuildingId; level: number }
   /** The builder finished: the building is now at `level`. */
-  | { type: 'BUILDING_UPGRADED'; buildingId: BuildingId; level: number };
+  | { type: 'BUILDING_UPGRADED'; buildingId: BuildingId; level: number }
+  | { type: 'WORKER_HIRED'; workerId: string }
+  /** The hero can no longer work this node (an equip change): its crew waits, still assigned. */
+  | { type: 'CREW_IDLE'; node: WorkerNodeId }
+  /** The hero can work this node again: its idle crew resumes. */
+  | { type: 'CREW_ACTIVE'; node: WorkerNodeId }
+  /** Gold can't cover the next minute of upkeep: every crew waits. */
+  | { type: 'WORKERS_PAUSED'; upkeepDue: number }
+  /** Upkeep is covered again: the crews resume. */
+  | { type: 'WORKERS_RESUMED' };
 
 /** What happened during one simulate() call. Shown in the "While you were away" modal. */
 export type SimulationSummary = {
@@ -393,5 +435,12 @@ export type SimulationSummary = {
   trainingMaxed: AttributeKey[];
   /** Upgrades the builder finished during this period, in order (save v11). */
   buildingsUpgraded: { buildingId: BuildingId; level: number }[];
+  /** Actions completed by worker crews (save v11). Their items are under workerItemsGained / workerItemsLost. */
+  workerActions: number;
+  workerItemsGained: Record<string, number>;
+  /** Worker items that did not fit (inventory full). */
+  workerItemsLost: Record<string, number>;
+  /** Gold paid in worker upkeep during this period. */
+  upkeepPaid: number;
   anomalies: ClockAnomalyEvent[];
 };

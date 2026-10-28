@@ -20,6 +20,10 @@ export function emptySummary(): SimulationSummary {
     trainingLevelsGained: {},
     trainingMaxed: [],
     buildingsUpgraded: [],
+    workerActions: 0,
+    workerItemsGained: {},
+    workerItemsLost: {},
+    upkeepPaid: 0,
     anomalies: [],
   };
 }
@@ -54,6 +58,10 @@ export function mergeSummaries(a: SimulationSummary, b: SimulationSummary): Simu
     trainingLevelsGained: addMaps(a.trainingLevelsGained, b.trainingLevelsGained),
     trainingMaxed: [...a.trainingMaxed, ...b.trainingMaxed],
     buildingsUpgraded: [...a.buildingsUpgraded, ...b.buildingsUpgraded],
+    workerActions: a.workerActions + b.workerActions,
+    workerItemsGained: addMaps(a.workerItemsGained, b.workerItemsGained),
+    workerItemsLost: addMaps(a.workerItemsLost, b.workerItemsLost),
+    upkeepPaid: a.upkeepPaid + b.upkeepPaid,
     anomalies: [...a.anomalies, ...b.anomalies],
   };
 }
@@ -65,11 +73,12 @@ export function trainingXpTotal(s: Pick<SimulationSummary, 'trainingXpGained'>):
 
 /**
  * Worth showing in "While you were away": any clock anomaly, or at least AWAY_SUMMARY_MIN_MS of real time
- * away with at least one log cut, ore mined, dungeon run, training XP point, training cap reached or upgrade finished. A quick
+ * away with at least one log cut, ore mined, dungeon run, training XP point, training cap reached, upgrade finished or
+ * worker action. A quick
  * app switch never opens the modal.
  */
 export function isNoteworthy(s: SimulationSummary, minAwayMs: number = AWAY_SUMMARY_MIN_MS): boolean {
   const progressed =
-    s.actions > 0 || s.oresMined > 0 || s.dungeon.runs > 0 || trainingXpTotal(s) > 0 || s.trainingMaxed.length > 0 || s.buildingsUpgraded.length > 0;
+    s.actions > 0 || s.oresMined > 0 || s.dungeon.runs > 0 || trainingXpTotal(s) > 0 || s.trainingMaxed.length > 0 || s.buildingsUpgraded.length > 0 || s.workerActions > 0;
   return s.anomalies.length > 0 || (s.requestedMs >= minAwayMs && progressed);
 }

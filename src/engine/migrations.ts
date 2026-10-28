@@ -337,12 +337,13 @@ function migrateV9toV10(doc: SaveDoc): SaveDoc {
 // ---- v10 → v11 (2026-10-28): building upgrades, the builder, workers, the Merchant as a building ----
 // Frozen literals: the Merchant as a v11 building (built, level 1) and the empty v11 village state.
 const V11_MERCHANT_BUILDING = { state: 'built', level: 1 } as const;
+const V11_WORKERS = { list: [], nextSerial: 1, crews: {}, paused: false, minuteLeftMs: 0, paidPerMin: 0 } as const;
 
 /**
  * Owner-approved (2026-10-28):
  * - buildings keep their state and level (built = level 1; nothing was upgradable before); the Merchant becomes a
  *   stored building, built at level 1 (it was always built).
- * - the builder is idle (`construction = null`).
+ * - the builder is idle (`construction = null`); no workers (`workers` empty).
  * - the merchant stock is kept as it is until the next refresh.
  * - everything else is kept.
  */
@@ -353,6 +354,7 @@ function migrateV10toV11(doc: SaveDoc): SaveDoc {
     saveVersion: 11,
     buildings: { ...buildings, merchant: { ...V11_MERCHANT_BUILDING } },
     construction: null,
+    workers: { ...V11_WORKERS, list: [], crews: {} },
   };
 }
 

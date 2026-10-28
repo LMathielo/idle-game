@@ -34,7 +34,9 @@ import {
   type RockId,
   type SimulationSummary,
   type TreeId,
+  type WorkerNodeId,
 } from './types';
+import { assignWorker, dismissWorker, hireWorker, settleWorkers, unassignWorker, type WorkerErrorCode } from './workers';
 
 export type Command =
   /** Cuts logs from one tree back-to-back. Needs the tree's level and WS. Same tree again = no-op; another tree switches (the log in progress restarts). */
@@ -82,6 +84,17 @@ export type Command =
   | { id: string; type: 'UPGRADE_BUILDING'; buildingId: BuildingId; level: number }
   /** Finishes the builder's current upgrade now, for free. */
   | { id: string; type: 'DEBUG_FINISH_CONSTRUCTION' }
+  /**
+   * Hires one worker (Town Hall built, below its level's cap) for 100 × 2^(workers owned) gold. `maxCost` is the
+   * price the player saw: a double tap never pays the doubled price (COST_CHANGED).
+   */
+  | { id: string; type: 'HIRE_WORKER'; maxCost: number }
+  /** Dismisses a worker for good. No refund. */
+  | { id: string; type: 'DISMISS_WORKER'; workerId: string }
+  /** Puts a worker on a tree or rock the HERO can work now. Same node again = no-op. */
+  | { id: string; type: 'ASSIGN_WORKER'; workerId: string; node: WorkerNodeId }
+  /** Takes a worker off its node (unassigned workers cost nothing). Already unassigned = no-op. */
+  | { id: string; type: 'UNASSIGN_WORKER'; workerId: string }
   /** Adds mining levels (XP toward the next level is kept), so rock unlocks can be tested on a phone. */
   | { id: string; type: 'DEBUG_ADD_MINING_LEVEL'; levels: number }
   /**
@@ -143,6 +156,7 @@ export type CommandErrorCode =
   | 'REQUIREMENTS_NOT_MET'
   | UpgradeErrorCode
   | 'NO_CONSTRUCTION'
+  | WorkerErrorCode
   | 'COST_CHANGED'
   | 'DUNGEON_LOCKED'
   | 'NO_ACTIVE_ACTIVITY'
@@ -396,6 +410,26 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       completeConstruction(draft, events, null, onUpgraded);
       break;
     }
+    case 'HIRE_WORKER': {
+      const e = hireWorker(draft, cmd.maxCost, events);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'DISMISS_WORKER': {
+      const e = dismissWorker(draft, cmd.workerId);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'ASSIGN_WORKER': {
+      const e = assignWorker(draft, cmd.workerId, cmd.node);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'UNASSIGN_WORKER': {
+      const e = unassignWorker(draft, cmd.workerId);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
     case 'DEBUG_ADD_MINING_LEVEL': {
       if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
       const { levels } = cmd;
@@ -584,6 +618,9 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
     }
   }
 
+  // The workforce follows the command at once: crews go idle / active with the hero's power (an equip change), a
+  // crew that starts working pays its first minute, and paused crews resume when gold now covers the upkeep.
+  settleWorkers(draft, events, null);
   return { ok: true, state: draft, events, summary: sim.summary };
 }
 

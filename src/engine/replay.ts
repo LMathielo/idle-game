@@ -48,6 +48,10 @@ export const LOG_TYPES = [
   'DEBUG_ADD_MINING_LEVEL',
   'UPGRADE_BUILDING',
   'DEBUG_FINISH_CONSTRUCTION',
+  'HIRE_WORKER',
+  'DISMISS_WORKER',
+  'ASSIGN_WORKER',
+  'UNASSIGN_WORKER',
   'MIGRATE',
   'RESUME',
   'SIMULATE',
@@ -174,7 +178,11 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'DEBUG_BUILD':
     case 'DEBUG_ADD_MINING_LEVEL':
     case 'UPGRADE_BUILDING':
-    case 'DEBUG_FINISH_CONSTRUCTION': {
+    case 'DEBUG_FINISH_CONSTRUCTION':
+    case 'HIRE_WORKER':
+    case 'DISMISS_WORKER':
+    case 'ASSIGN_WORKER':
+    case 'UNASSIGN_WORKER': {
       const res = applyCommand(state, payload as Command, clientTime, { allowDebug: true });
       if (!res.ok) throw new ReplayError(`${type} rejected on replay: ${res.error.code}`);
       return res.state;

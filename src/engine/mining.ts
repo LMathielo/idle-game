@@ -151,6 +151,14 @@ export function advanceMining(draft: GameState, activity: MiningActivity, grante
   }
 }
 
+/** Wall ms until the item in progress is done (the hero's next mining event), or Infinity when not mining. */
+export function miningNextEventMs(state: GameState): number {
+  const a = state.activity;
+  const efficiency = state.offline.efficiency;
+  if (a?.kind !== 'mining' || !(efficiency > 0)) return Number.POSITIVE_INFINITY;
+  return Math.ceil(Math.max(0, oreMsFor(a.rockId, effectiveAttributes(state)) - a.progressMs) / efficiency);
+}
+
 // ---------- read-only views for the UI ----------
 
 export type RockView = RockCheck & {

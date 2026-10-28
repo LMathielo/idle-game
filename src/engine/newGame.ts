@@ -11,6 +11,7 @@ import { newMerchantState } from './merchant';
 import { newProgress } from './progression';
 import { createRng } from './rng';
 import { newTrainingState } from './training';
+import { newWorkersState } from './workers';
 import type { Character, GameState, Item, SkillKey } from './types';
 import { CURRENT_SAVE_VERSION } from './migrations';
 
@@ -47,6 +48,7 @@ export function newGame(seed: number, now: number): GameState {
     merchant: newMerchantState(merchantStockSlots({ buildings })),
     buildings,
     construction: null,
+    workers: newWorkersState(),
     nextItemSerial: 1,
     stats: { totalActions: 0, itemsGathered: {} },
     flags: { debugUsed: false },

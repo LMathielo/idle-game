@@ -654,7 +654,7 @@ describe('golden', () => {
         },
         "engineVersion": "1.10.0",
         "gold": 1552,
-        "hash": "2165cabd",
+        "hash": "6fb66807",
         "helmet": undefined,
         "heroLevel": 15,
         "hp": [
@@ -852,7 +852,7 @@ describe('golden', () => {
     });
     expect(axe?.defId).toBe('wooden_axe');
     expect(pickaxe?.defId).toBe('wooden_pickaxe');
-    const { dungeon, training, activity, merchant, nextItemSerial, inventory, buildings: _b, construction: _k, character: _c, saveVersion: _v, ...rest } = s;
+    const { dungeon, training, activity, merchant, nextItemSerial, inventory, buildings: _b, construction: _k, workers: _w, character: _c, saveVersion: _v, ...rest } = s;
     expect(merchant.charges).toBe(5);
     expect(nextItemSerial).toBe(1);
     expect(inventory).toEqual({ ...raw.inventory, items: raw.inventory.items.map(noRarity) });
