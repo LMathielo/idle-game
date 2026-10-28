@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   cardActive: { borderColor: colors.gold, backgroundColor: '#f7ecd0' },
   cardLocked: { opacity: 0.6 },
   rockIcon: { fontSize: 56, textAlign: 'center' },
-  rockName: { fontFamily: fonts.title, fontSize: 36, color: colors.ink, textAlign: 'center' },
+  rockName: { fontFamily: fonts.title, fontSize: 26, color: colors.ink, textAlign: 'center' },
   reqs: { flexDirection: 'row', justifyContent: 'center', gap: 14, flexWrap: 'wrap' },
   req: { fontFamily: fonts.bodyBold, fontSize: 15 },
   reqOk: { color: colors.dangerEasy },

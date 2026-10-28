@@ -35,6 +35,6 @@ const styles = StyleSheet.create({
     borderColor: colors.parchmentDark,
   },
   icon: { fontSize: 56 },
-  title: { fontFamily: fonts.title, fontSize: 36, color: colors.ink, textAlign: 'center' },
+  title: { fontFamily: fonts.title, fontSize: 26, color: colors.ink, textAlign: 'center' },
   body: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.inkSoft, textAlign: 'center' },
 });
