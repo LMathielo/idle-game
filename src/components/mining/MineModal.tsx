@@ -3,13 +3,14 @@
 // miningView() and dispatches START_ACTIVITY {kind:'mining', rockId} / STOP_ACTIVITY / SKIP_MINE. Locked rocks are
 // refused by the engine too (ROCK_LOCKED).
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, type ListRenderItem, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, FlatList, ScrollView, type ListRenderItem, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
-import { type MineActivityView, miningView, type RockId, type RockView } from '../../engine';
+import { type CrewView, crewViews, type MineActivityView, miningView, type RockId, type RockView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { confirmCancelRun } from '../dungeon/confirmCancelRun';
-import { formatClock, formatNumber, itemIcon, itemName } from '../format';
+import { formatBp, formatClock, formatNumber, formatPerMin, itemIcon, itemName } from '../format';
+import { UpgradeEntry } from '../buildings/UpgradeEntry';
 import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
 import { Bar } from '../Panel';
@@ -70,6 +71,7 @@ export function MineModal() {
   const onSkip = useCallback((ore: number, cost: number) => send({ type: 'SKIP_MINE', ore, maxCost: cost }), [send]);
 
   const current = view.current;
+  const crewOf = useMemo(() => new Map(crewViews(state, 'mining').map((c) => [c.node, c])), [state]);
   const stamina = state.stamina.current;
   const otherActivity = state.activity && state.activity.kind !== 'mining' ? state.activity.kind : null;
 
@@ -77,6 +79,7 @@ export function MineModal() {
     ({ item }) => (
       <RockCard
         rock={item}
+        crew={crewOf.get(item.rockId) ?? null}
         width={cardWidth}
         current={item.active ? current : null}
         stamina={stamina}
@@ -88,7 +91,7 @@ export function MineModal() {
         onSkip={onSkip}
       />
     ),
-    [cardWidth, current, stamina, clockPaused, view.level, view.ms.value, onStart, onStop, onSkip],
+    [cardWidth, crewOf, current, stamina, clockPaused, view.level, view.ms.value, onStart, onStop, onSkip],
   );
   const getItemLayout = useCallback((_: unknown, index: number) => ({ length: step, offset: step * index, index }), [step]);
   const separator = useCallback(() => <View style={styles.gap} />, []);
@@ -117,32 +120,35 @@ export function MineModal() {
       }
     >
       {clockPaused ? <Text style={styles.paused}>⏸ Paused: your device clock moved back. Ores wait until it catches up.</Text> : null}
-      <FlatList
-        data={view.rocks}
-        keyExtractor={(r) => r.rockId}
-        renderItem={renderItem}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={step}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        disableIntervalMomentum
-        getItemLayout={getItemLayout}
-        initialScrollIndex={initialIndex}
-        ItemSeparatorComponent={separator}
-        contentContainerStyle={contentStyle}
-        onMomentumScrollEnd={onScrollEnd}
-        style={styles.list}
-      />
-      <View style={styles.dots} accessibilityRole="text" accessibilityLabel={`Rock ${page + 1} of ${view.rocks.length}`}>
-        {view.rocks.map((r, i) => (
-          <View key={r.rockId} style={[styles.dot, i === page && styles.dotActive, r.active && styles.dotRunning]} />
-        ))}
-      </View>
-      <Text style={styles.note}>Ores are mined one after another, also while the app is closed (up to {formatNumber(state.offline.capMs / 3_600_000)}h).</Text>
-      {otherActivity === 'training' ? <Text style={styles.note}>Starting stops training (your training XP is kept).</Text> : null}
-      {otherActivity === 'woodcutting' ? <Text style={styles.note}>Starting stops woodcutting (your logs are kept).</Text> : null}
-      {otherActivity === 'dungeon' ? <Text style={styles.note}>Starting stops the dungeon: the run in progress is lost.</Text> : null}
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <FlatList
+          data={view.rocks}
+          keyExtractor={(r) => r.rockId}
+          renderItem={renderItem}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={step}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          disableIntervalMomentum
+          getItemLayout={getItemLayout}
+          initialScrollIndex={initialIndex}
+          ItemSeparatorComponent={separator}
+          contentContainerStyle={contentStyle}
+          onMomentumScrollEnd={onScrollEnd}
+          style={styles.list}
+        />
+        <View style={styles.dots} accessibilityRole="text" accessibilityLabel={`Rock ${page + 1} of ${view.rocks.length}`}>
+          {view.rocks.map((r, i) => (
+            <View key={r.rockId} style={[styles.dot, i === page && styles.dotActive, r.active && styles.dotRunning]} />
+          ))}
+        </View>
+        <Text style={styles.note}>Ores are mined one after another, also while the app is closed (up to {formatNumber(state.offline.capMs / 3_600_000)}h).</Text>
+        {otherActivity === 'training' ? <Text style={styles.note}>Starting stops training (your training XP is kept).</Text> : null}
+        {otherActivity === 'woodcutting' ? <Text style={styles.note}>Starting stops woodcutting (your logs are kept).</Text> : null}
+        {otherActivity === 'dungeon' ? <Text style={styles.note}>Starting stops the dungeon: the run in progress is lost.</Text> : null}
+        <UpgradeEntry buildingId="mine_shaft" />
+      </ScrollView>
     </ModalScreen>
   );
 }
@@ -151,6 +157,8 @@ export function MineModal() {
 
 type CardProps = {
   rock: RockView;
+  /** The workers on this node, or null. */
+  crew: CrewView | null;
   width: number;
   /** The ore in progress when this rock is being mined. */
   current: MineActivityView | null;
@@ -163,7 +171,7 @@ type CardProps = {
   onSkip: (ore: number, cost: number) => void;
 };
 
-const RockCard = memo(function RockCard({ rock, width, current, stamina, paused, level, ms, onStart, onStop, onSkip }: CardProps) {
+const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, paused, level, ms, onStart, onStop, onSkip }: CardProps) {
   const start = useCallback(() => onStart(rock.rockId, rock.name), [onStart, rock.rockId, rock.name]);
   const skip = useCallback(() => current && onSkip(current.ore, current.skipCost), [current, onSkip]);
   const geode = rock.rareDrops[0];
@@ -187,16 +195,25 @@ const RockCard = memo(function RockCard({ rock, width, current, stamina, paused,
         <Req ok={rock.msOk} label={`MS ${formatNumber(rock.reqMs)}`} detail={`you ${formatNumber(ms)}`} />
       </View>
       <View style={styles.facts}>
-        <Fact label="Time per ore" value={formatClock(rock.oreMs)} />
-        <Fact label="XP per ore" value={formatNumber(rock.xpPerOre)} />
+        <Fact label="Time per swing" value={formatClock(rock.oreMs)} />
+        <Fact label="Ores per swing" value={`×${formatBp(rock.yieldBp)}`} />
+        <Fact label="XP per swing" value={formatNumber(rock.xpPerOre)} />
         <Fact label="Ore" value={`${itemIcon(rock.oreItemId)} ${itemName(rock.oreItemId)}`} />
         {geode ? <Fact label={`${itemIcon(geode.itemId)} ${itemName(geode.itemId)}`} value={`1 in ${formatNumber(Math.round(1 / geode.chance))}`} /> : null}
       </View>
 
+      <Text style={styles.yieldNote}>Ores per swing = your MS ÷ the MS needed; the decimals are the chance of one more.</Text>
+      {crew ? (
+        <Text style={[styles.crew, crew.status !== 'working' && styles.crewOff]} accessibilityLabel={`${crew.workers} workers here, ${crew.status === 'working' ? `about ${formatPerMin(crew.itemsPerMin)} per minute` : crew.status}`}>
+          👷 {crew.workers} {crew.workers === 1 ? 'worker' : 'workers'} ·{' '}
+          {crew.status === 'working' ? `${formatPerMin(crew.itemsPerMin)} ${itemName(crew.itemId)}/min` : crew.status === 'idle' ? 'idle (you can’t work it now)' : 'paused (upkeep)'}
+        </Text>
+      ) : null}
+
       {current ? (
         <View style={styles.running}>
           <Text style={styles.countdown} accessibilityLabel={`${formatClock(current.remainingMs)} left on this ore`}>
-            Next ore in {formatClock(current.remainingMs)}
+            Next swing in {formatClock(current.remainingMs)}
           </Text>
           <LiveBar fraction={current.fraction} remainingMs={current.remainingMs} paused={paused} color={colors.skill} style={styles.bar} />
         </View>
@@ -242,6 +259,10 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  scroll: { paddingBottom: 24 },
+  yieldNote: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, textAlign: 'center' },
+  crew: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerEasy, textAlign: 'center' },
+  crewOff: { color: colors.dangerDeadly },
   stamina: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.stamina },
   headerBelow: { paddingHorizontal: 12, gap: 4 },
   ms: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.parchment },

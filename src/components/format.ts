@@ -81,3 +81,24 @@ export function formatQty(n: number): string {
   if (n < 1_000_000) return `${Math.floor(n / 1000)}k`;
   return `${(Math.floor(n / 100_000) / 10).toFixed(1)}M`;
 }
+
+/** Countdown that stays short for long jobs: m:ss under an hour, h:mm:ss above (0:42, 12:34, 23:59:59). */
+export function formatCountdown(ms: number): string {
+  return ms >= 3_600_000 ? formatHms(ms) : formatClock(ms);
+}
+
+/** Basis points as a multiplier with 2 decimals: 10 500 → "1.05". Display only. */
+export function formatBp(bp: number): string {
+  return (Math.floor(bp / 100) / 100).toFixed(2);
+}
+
+/** Basis points as a percent bonus: 2000 → "+20%". */
+export function formatBonusBp(bp: number): string {
+  return `${bp >= 0 ? '+' : ''}${Math.round(bp / 100)}%`;
+}
+
+/** Items per minute with one decimal (two under 1): 0.13, 1.6, 12.4. Display only. */
+export function formatPerMin(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0';
+  return n < 1 ? n.toFixed(2) : n.toFixed(1);
+}

@@ -50,6 +50,7 @@ export const VillageScene = memo(function VillageScene({
   onAction,
   active,
   locked,
+  badge,
   topReserve = 0,
   bottomReserve = 0,
 }: {
@@ -58,6 +59,8 @@ export const VillageScene = memo(function VillageScene({
   active?: VillageAction | null;
   /** Signs of buildings not built yet: greyed with 🔒, still tappable (they open the Build sheet). */
   locked?: ReadonlySet<VillageAction>;
+  /** One sign with a second line (the building being upgraded: "Upgrading 12:34"). */
+  badge?: { key: VillageAction; text: string } | null;
   topReserve?: number;
   bottomReserve?: number;
 }) {
@@ -85,6 +88,7 @@ export const VillageScene = memo(function VillageScene({
             const cx = left + s.x * imgW;
             const cy = Math.min(Math.max(top + s.y * imgH, minY), maxY);
             const isLocked = !!locked?.has(s.key);
+            const sub = badge?.key === s.key ? badge.text : undefined;
             return (
               <View key={s.key} style={[styles.sign, { left: cx - SIGN_BOX_W / 2, top: cy - SIGN_BOX_H / 2 }]} pointerEvents="box-none">
                 <PixelButton
@@ -93,8 +97,9 @@ export const VillageScene = memo(function VillageScene({
                   icon={isLocked ? '🔒' : s.icon}
                   muted={isLocked}
                   active={!isLocked && active === s.key}
+                  sublabel={sub}
                   onPress={() => onAction?.(s.key)}
-                  accessibilityLabel={isLocked ? `${s.label}, not built` : s.label}
+                  accessibilityLabel={isLocked ? `${s.label}, not built` : sub ? `${s.label}, ${sub}` : s.label}
                   accessibilityHint={isLocked ? 'Shows what it needs to build' : undefined}
                 />
               </View>

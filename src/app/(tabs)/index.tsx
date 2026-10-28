@@ -7,8 +7,8 @@ import { useGameState } from '../../client/GameProvider';
 import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
 import { BuildSheet } from '../../components/buildings/BuildSheet';
 import { type VillageAction, VillageScene } from '../../components/VillageScene';
-import { formatNumber } from '../../components/format';
-import { type ActivityKind, type BuildingId, isBuilt } from '../../engine';
+import { formatCountdown, formatNumber } from '../../components/format';
+import { type ActivityKind, type BuildingId, constructionView, isBuilt } from '../../engine';
 import { colors, fonts } from '../../theme';
 
 const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'mine' | 'town_hall' | 'dungeon' | 'training' | 'merchant'>, string> = {
@@ -21,6 +21,15 @@ const SIGN_BUILDING: Partial<Record<VillageAction, BuildingId>> = {
   mine: 'mine_shaft',
   town_hall: 'town_hall',
   training: 'training_grounds',
+};
+
+/** The sign of each building, for the "Upgrading 12:34" line. */
+const BUILDING_SIGN: Record<BuildingId, VillageAction> = {
+  woodcutting: 'woodcutting',
+  mine_shaft: 'mine',
+  town_hall: 'town_hall',
+  training_grounds: 'training',
+  merchant: 'merchant',
 };
 
 /** The full-screen modal each built sign opens. */
@@ -51,6 +60,10 @@ export default function VillageScreen() {
     for (const [sign, id] of Object.entries(SIGN_BUILDING) as [VillageAction, BuildingId][]) if (!isBuilt({ buildings }, id)) out.add(sign);
     return out;
   }, [buildings]);
+  const job = constructionView(state);
+  const badgeText = job ? `Upgrading ${formatCountdown(job.remainingMs)}` : null;
+  const badgeKey = job ? BUILDING_SIGN[job.buildingId] : null;
+  const badge = useMemo(() => (badgeKey && badgeText ? { key: badgeKey, text: badgeText } : null), [badgeKey, badgeText]);
   /** Bottom edge of the top HUD (safe area included); signs are kept below it. */
   const [hudBottom, setHudBottom] = useState(0);
   const onHudLayout = useCallback((e: LayoutChangeEvent) => {
@@ -101,6 +114,7 @@ export default function VillageScreen() {
         onAction={onAction}
         active={activity ? ACTIVITY_SIGN[activity.kind] : null}
         locked={locked}
+        badge={badge}
         topReserve={hudBottom}
         bottomReserve={ACTIVITY_STRIP_HEIGHT}
       />
