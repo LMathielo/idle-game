@@ -475,10 +475,10 @@ Data: `src/engine/config/buildings.ts` (`BUILDINGS`, `BUILDING_IDS`, `TOWN_HALL_
 | 5 | 32,000 g, 400 Yew Logs, 400 Silver Ore, 24 h | 16,000 g, 200 Yew Logs, 200 Silver Ore, 12 h |
 
 - `state.construction = { buildingId, level, durationMs, progressMs, startedAt } | null`: the **one builder**'s job (`durationMs` fixed when it starts, so a config change never alters a job in progress).
-- **`UPGRADE_BUILDING {buildingId, level}`**: `level` is the target the player saw (current + 1). Checks, in order, before anything is paid: `UNKNOWN_BUILDING`, `BUILDING_LOCKED`, `MAX_LEVEL` (5), `LEVEL_CHANGED` (not current + 1: a double tap never pays twice), `TOWN_HALL_TOO_LOW` (every building but the Town Hall stays ≤ the Town Hall's level), `BUILDER_BUSY` (one construction at a time), `REQUIREMENTS_NOT_MET` (gold and items, the message lists what is missing). Then gold and items are consumed **atomically** and the builder starts (event `CONSTRUCTION_STARTED`). No cancel.
+- **`UPGRADE_BUILDING {buildingId, level}`**: `level` is the target the player saw (current + 1). Checks, in order, before anything is paid: `UNKNOWN_BUILDING`, `BUILDING_LOCKED`, `MAX_LEVEL` (5), `NOT_UPGRADABLE` (the next level has no bonus data, `hasLevelBonuses`: the Training Grounds today), `LEVEL_CHANGED` (not current + 1: a double tap never pays twice), `TOWN_HALL_TOO_LOW` (every building but the Town Hall stays ≤ the Town Hall's level), `BUILDER_BUSY` (one construction at a time), `REQUIREMENTS_NOT_MET` (gold and items, the message lists what is missing). Then gold and items are consumed **atomically** and the builder starts (event `CONSTRUCTION_STARTED`). No cancel.
 - The job progresses in `simulate()` on the **granted (capped)** time, in the world walk (below), and completes when `progressMs ≥ durationMs`: the level rises, event `BUILDING_UPGRADED`, `SimulationSummary.buildingsUpgraded`, and `onUpgraded()` applies stored effects (the Merchant's new stock slots). It never blocks or touches the hero's activity.
 - **`DEBUG_FINISH_CONSTRUCTION`**: completes the job now, sets `debugUsed`; `NO_CONSTRUCTION` when the builder is idle. The Upgrade sheet shows it as "Finish now (debug)".
-- Views: `upgradeView(state, id)` → level, max, next level, cost lines (have / need / met), builder time, `block` (`locked` | `max_level` | `town_hall` | `builder_busy` | `cost` | null), `townHallNeeded`, `upgrading`, current and next-level `bonuses`. `constructionView(state)` → the job with `remainingMs` and `fraction` (the Village sign shows "Upgrading 12:34"; with no activity the activity strip shows it).
+- Views: `upgradeView(state, id)` → level, max, next level, cost lines (have / need / met), builder time, `block` (`locked` | `max_level` | `not_upgradable` | `town_hall` | `builder_busy` | `cost` | null), `townHallNeeded`, `upgrading`, current and next-level `bonuses`. `constructionView(state)` → the job with `remainingMs` and `fraction` (the Village sign shows "Upgrading 12:34"; with no activity the activity strip shows it).
 
 ### Building bonuses (1.10.0)
 
@@ -497,7 +497,7 @@ stock slots      = the Merchant level's stockSlots
 | Woodcutting | — | +2000 bp woodcutting | +4000 | +6000 | +8000 |
 | Mine Shaft | — | +2000 bp mining | +4000 | +6000 | +8000 |
 | Merchant | 5 slots | 7 | 9 | 11 | 13 |
-| Training Grounds | — | — | — | — | — |
+| Training Grounds | — | (no data: not upgradable) | | | |
 
 ## The world walk (1.10.0)
 

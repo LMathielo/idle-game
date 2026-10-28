@@ -76,6 +76,7 @@ export function UpgradeSheet({ buildingId, onClose }: Props) {
   else if (view.block === 'town_hall') blockText = `Upgrade the Town Hall to Lv ${view.townHallNeeded} first: no building goes above it.`;
   else if (view.block === 'builder_busy' && job && !mine) blockText = `The builder is busy: ${job.name} → Lv ${job.level} (${formatCountdown(job.remainingMs)} left). One upgrade at a time.`;
   else if (view.block === 'locked') blockText = 'Build it first.';
+  else if (view.block === 'not_upgradable') blockText = "Can't be upgraded yet: its next level gives nothing.";
 
   return (
     <Modal visible={!awaySummary} transparent animationType="slide" onRequestClose={close}>

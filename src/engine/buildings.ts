@@ -49,6 +49,8 @@ export type UpgradeBlock =
   | 'locked'
   /** Already at BUILDING_MAX_LEVEL. */
   | 'max_level'
+  /** The next level has no bonus data: nothing to upgrade to (Training Grounds, for now). */
+  | 'not_upgradable'
   /** The Town Hall's level caps this building: upgrade the Town Hall first. */
   | 'town_hall'
   /** The builder is busy with an upgrade (this building's or another's). */
@@ -129,6 +131,14 @@ export function upgradeCost(buildingId: BuildingId, level: number): UpgradeCost 
   return BUILDINGS[buildingId].upgrades[level - 2] ?? null;
 }
 
+/**
+ * Data-driven: a level is only worth building when its bonus data says what it gives. A building whose next level has
+ * no bonus (an empty LevelBonuses) can't be upgraded to it (Training Grounds today, until it gets a bonus).
+ */
+export function hasLevelBonuses(buildingId: BuildingId, level: number): boolean {
+  return Object.keys(bonusesAt(buildingId, level)).length > 0;
+}
+
 /** Highest level this building may reach right now: 5 for the Town Hall, else the Town Hall's level (at most 5). */
 export function levelCap(state: Pick<GameState, 'buildings'>, buildingId: BuildingId): number {
   return BUILDINGS[buildingId].cappedByTownHall ? Math.min(BUILDING_MAX_LEVEL, buildingLevel(state, 'town_hall')) : BUILDING_MAX_LEVEL;
@@ -144,6 +154,7 @@ export function upgradeView(state: GameState, buildingId: BuildingId): UpgradeVi
   let block: UpgradeBlock | null = null;
   if (!built) block = 'locked';
   else if (nextLevel === null) block = 'max_level';
+  else if (!hasLevelBonuses(buildingId, nextLevel)) block = 'not_upgradable';
   else if (capped) block = 'town_hall';
   else if (state.construction) block = 'builder_busy';
   else if (!costViews.every((c) => c.met)) block = 'cost';
@@ -237,7 +248,7 @@ export function build(draft: GameState, buildingId: BuildingId, events: GameEven
   return null;
 }
 
-export type UpgradeErrorCode = 'BUILDING_LOCKED' | 'MAX_LEVEL' | 'LEVEL_CHANGED' | 'TOWN_HALL_TOO_LOW' | 'BUILDER_BUSY' | 'REQUIREMENTS_NOT_MET';
+export type UpgradeErrorCode = 'BUILDING_LOCKED' | 'MAX_LEVEL' | 'NOT_UPGRADABLE' | 'LEVEL_CHANGED' | 'TOWN_HALL_TOO_LOW' | 'BUILDER_BUSY' | 'REQUIREMENTS_NOT_MET';
 
 /**
  * UPGRADE_BUILDING on `draft` (a full copy). `level` is the target level the player saw (current + 1), so a double
@@ -249,6 +260,7 @@ export function startUpgrade(draft: GameState, buildingId: BuildingId, level: un
   if (!isBuilt(draft, buildingId)) return { code: 'BUILDING_LOCKED', message: `Build the ${def.name} first` };
   const current = buildingLevel(draft, buildingId);
   if (current >= BUILDING_MAX_LEVEL) return { code: 'MAX_LEVEL', message: `${def.name} is already at level ${BUILDING_MAX_LEVEL}` };
+  if (!hasLevelBonuses(buildingId, current + 1)) return { code: 'NOT_UPGRADABLE', message: `${def.name} can't be upgraded yet: its next level gives nothing` };
   if (level !== current + 1) return { code: 'LEVEL_CHANGED', message: `${def.name} is level ${current}: the next upgrade is level ${current + 1}` };
   if (level > levelCap(draft, buildingId)) {
     return { code: 'TOWN_HALL_TOO_LOW', message: `${def.name} can't go above the Town Hall's level: upgrade the Town Hall to level ${level} first` };

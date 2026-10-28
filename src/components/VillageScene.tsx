@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
-import { Image, LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { PixelButton } from './PixelButton';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 
 const village = require('../../assets/images/village.png');
 
@@ -21,7 +21,9 @@ export type VillageAction = 'storage' | 'merchant' | 'dungeon' | 'training' | 'w
  * - town_hall: on the hall's roof, under the bell tower (hall 110-142, 231-282)
  * - storage: in front of the barn (barn 22-56, 234-277)
  * - training: on the yard's top fence (yard 108-156, 286-314)
- * Keep x within ~0.2-0.8 so the longest label still fits on a 375pt-wide screen. Checked for overlaps at 320×568,
+ * Keep x within ~0.2-0.8 so the longest label still fits on a 375pt-wide screen. The upgrade timer pill (20pt under a
+ * sign) was checked at 375×667: on the right column (Merchant 204, Town Hall 305, Training 378 pt) a pill under the
+ * Town Hall ends at 349 and Training starts at 356; a pill under Training stays above the strip (clamped). Checked for overlaps at 320×568,
  * 375×667, 390×844 and 430×932 (the Town Hall sign sits between Merchant and Training on the right).
  */
 const SIGNS: { key: VillageAction; label: string; icon: string; x: number; y: number }[] = [
@@ -39,6 +41,13 @@ const SIGN_BOX_W = 200;
 const SIGN_BOX_H = 56;
 /** Gap kept between a sign and the HUD / bottom strip. */
 const SIGN_GAP = 4;
+/** The sign button itself: 38pt inner + 3pt frame each side (PixelButton), centred in the box. */
+const SIGN_BUTTON_H = 44;
+/** Timer pill under a sign (the building being upgraded): its height and the gap above it. */
+const BADGE_H = 20;
+const BADGE_GAP = 2;
+/** How far a badged sign reaches below its box, so the bottom clamp keeps the pill clear of the strip too. */
+const BADGE_EXTRA = Math.max(0, SIGN_BUTTON_H / 2 + BADGE_GAP + BADGE_H - SIGN_BOX_H / 2);
 
 /**
  * Village background that covers the available area (cropping the sky first),
@@ -59,7 +68,7 @@ export const VillageScene = memo(function VillageScene({
   active?: VillageAction | null;
   /** Signs of buildings not built yet: greyed with 🔒, still tappable (they open the Build sheet). */
   locked?: ReadonlySet<VillageAction>;
-  /** One sign with a second line (the building being upgraded: "Upgrading 12:34"). */
+  /** One sign with a timer pill under it (the building being upgraded: "Upgrading 12:34"). The sign itself keeps one row. */
   badge?: { key: VillageAction; text: string } | null;
   topReserve?: number;
   bottomReserve?: number;
@@ -86,9 +95,9 @@ export const VillageScene = memo(function VillageScene({
           <Image source={village} style={{ position: 'absolute', left, top, width: imgW, height: imgH }} resizeMode="stretch" />
           {SIGNS.map((s) => {
             const cx = left + s.x * imgW;
-            const cy = Math.min(Math.max(top + s.y * imgH, minY), maxY);
             const isLocked = !!locked?.has(s.key);
             const sub = badge?.key === s.key ? badge.text : undefined;
+            const cy = Math.min(Math.max(top + s.y * imgH, minY), maxY - (sub ? BADGE_EXTRA : 0));
             return (
               <View key={s.key} style={[styles.sign, { left: cx - SIGN_BOX_W / 2, top: cy - SIGN_BOX_H / 2 }]} pointerEvents="box-none">
                 <PixelButton
@@ -97,11 +106,17 @@ export const VillageScene = memo(function VillageScene({
                   icon={isLocked ? '🔒' : s.icon}
                   muted={isLocked}
                   active={!isLocked && active === s.key}
-                  sublabel={sub}
                   onPress={() => onAction?.(s.key)}
                   accessibilityLabel={isLocked ? `${s.label}, not built` : sub ? `${s.label}, ${sub}` : s.label}
                   accessibilityHint={isLocked ? 'Shows what it needs to build' : undefined}
                 />
+                {sub ? (
+                  <View style={styles.badge} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no">
+                    <Text style={styles.badgeText} numberOfLines={1}>
+                      🔨 {sub}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             );
           })}
@@ -115,4 +130,17 @@ const styles = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden', backgroundColor: colors.night },
   // fixed box centred on the anchor point; the button is centred inside it at its natural size
   sign: { position: 'absolute', width: SIGN_BOX_W, height: SIGN_BOX_H, alignItems: 'center', justifyContent: 'center' },
+  // Pinned just under the centred button; it may hang below the box (the clamp reserves BADGE_EXTRA for it).
+  badge: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: SIGN_BOX_H / 2 + SIGN_BUTTON_H / 2 + BADGE_GAP,
+    height: BADGE_H,
+    paddingHorizontal: 6,
+    justifyContent: 'center',
+    backgroundColor: colors.woodDark,
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  badgeText: { fontFamily: fonts.bodyBold, fontSize: 13, lineHeight: 16, color: colors.gold },
 });

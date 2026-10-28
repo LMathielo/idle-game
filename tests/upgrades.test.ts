@@ -103,7 +103,7 @@ describe('UPGRADE_BUILDING', () => {
 
   it('no building goes above the Town Hall level; the Town Hall caps at 5', () => {
     let s = rich();
-    for (const id of ['woodcutting', 'mine_shaft', 'training_grounds', 'merchant'] as const) {
+    for (const id of ['woodcutting', 'mine_shaft', 'merchant'] as const) {
       expect(run(s, { type: 'UPGRADE_BUILDING', buildingId: id, level: 2 })).toMatchObject({ ok: false, error: { code: 'TOWN_HALL_TOO_LOW' } });
       expect(upgradeView(s, id)).toMatchObject({ nextLevel: 2, block: 'town_hall', townHallNeeded: 2 });
     }
@@ -118,6 +118,21 @@ describe('UPGRADE_BUILDING', () => {
       expect(run(s, { type: 'UPGRADE_BUILDING', buildingId: id, level: 6 })).toMatchObject({ ok: false, error: { code: 'MAX_LEVEL' } });
       expect(upgradeView(s, id)).toMatchObject({ nextLevel: null, block: 'max_level', cost: [], durationMs: 0 });
     }
+  });
+
+  it('a building whose next level has no bonus data is not upgradable (Training Grounds): NOT_UPGRADABLE, nothing paid', async () => {
+    const { hasLevelBonuses } = await import('../src/engine');
+    // Data-driven: every level of every building with bonus data is reachable; the Training Grounds have none.
+    for (const id of BUILDING_IDS) {
+      for (let l = 2; l <= BUILDING_MAX_LEVEL; l += 1) expect(hasLevelBonuses(id, l)).toBe(id !== 'training_grounds');
+    }
+    let s = rich();
+    for (let l = 2; l <= 5; l += 1) s = upgraded(s, 'town_hall');
+    const r = run(s, { type: 'UPGRADE_BUILDING', buildingId: 'training_grounds', level: 2 }, s.time.lastSimulatedAt);
+    expect(r).toMatchObject({ ok: false, error: { code: 'NOT_UPGRADABLE' } });
+    expect(upgradeView(s, 'training_grounds')).toMatchObject({ nextLevel: 2, block: 'not_upgradable' });
+    // The other buildings still upgrade with the same Town Hall.
+    expect(run(s, { type: 'UPGRADE_BUILDING', buildingId: 'merchant', level: 2 }, s.time.lastSimulatedAt).ok).toBe(true);
   });
 
   it('one builder: a second upgrade is refused while one runs (BUILDER_BUSY), nothing paid', () => {

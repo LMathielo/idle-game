@@ -16,6 +16,8 @@ export const UpgradeEntry = memo(function UpgradeEntry({ buildingId }: { buildin
   const view = upgradeView(state, buildingId);
   const job = constructionView(state);
   const mine = job?.buildingId === buildingId ? job : null;
+  // Nothing to upgrade to (no bonus data for the next level): no entry at all.
+  if (view.block === 'not_upgradable' && !mine) return null;
   const sub = mine
     ? `Upgrading → Lv ${mine.level} · ${formatCountdown(mine.remainingMs)}`
     : view.nextLevel === null

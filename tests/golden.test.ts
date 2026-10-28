@@ -616,7 +616,7 @@ describe('golden', () => {
       woodcuttingXp: s.character.skills.woodcutting.xp,
       logs: Object.fromEntries(s.inventory.items.filter((i) => i.defId.endsWith('_logs')).map((i) => [i.defId, i.quantity])),
       axe: s.character.equipment.axe?.defId,
-      helmet: s.character.equipment.helmet?.id,
+      gloves: s.character.equipment.gloves?.id, // 1.10.0: the post-refresh buy is the Iron Gloves (was the Iron Helm)
       merchant: { charges: s.merchant.charges, chargeProgressMs: s.merchant.chargeProgressMs, stock: s.merchant.stock.slice(0, 5) },
       nextItemSerial: s.nextItemSerial,
       potions: s.inventory.items.find((i) => i.defId === 'health_potion_t1')?.quantity,
@@ -677,9 +677,9 @@ describe('golden', () => {
         },
         "dungeonActivity": null,
         "engineVersion": "1.10.0",
+        "gloves": "iron_gloves#2",
         "gold": 0,
         "hash": "1aed0f53",
-        "helmet": undefined,
         "heroLevel": 15,
         "hp": [
           190,

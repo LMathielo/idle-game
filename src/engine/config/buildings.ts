@@ -39,7 +39,7 @@ const gatheringLevels = (kind: GatheringKind): readonly LevelBonuses[] => [{}, {
 /** Merchant: stock slots = 5 + 2 × (level − 1). */
 const MERCHANT_LEVELS: readonly LevelBonuses[] = [{ stockSlots: 5 }, { stockSlots: 7 }, { stockSlots: 9 }, { stockSlots: 11 }, { stockSlots: 13 }];
 
-/** No passive bonus yet (the data shape is ready for one). */
+/** No passive bonus yet (the data shape is ready for one). A level with no bonus can't be upgraded to (buildings.ts). */
 const NO_BONUS_LEVELS: readonly LevelBonuses[] = [{}, {}, {}, {}, {}];
 
 /** What one upgrade costs, paid up front when it starts, and how long the builder takes. */
@@ -97,7 +97,10 @@ export type BuildingDef = {
   upgrades: readonly UpgradeCost[];
   /** Its level can never go above the Town Hall's (every building but the Town Hall itself). */
   cappedByTownHall: boolean;
-  /** levels[i] = the passive bonuses at level i + 1 (length BUILDING_MAX_LEVEL). A locked building gives none. */
+  /**
+   * levels[i] = the passive bonuses at level i + 1 (length BUILDING_MAX_LEVEL). A locked building gives none. An
+   * empty entry above level 1 makes that level unreachable (UPGRADE_BUILDING → NOT_UPGRADABLE).
+   */
   levels: readonly LevelBonuses[];
 };
 

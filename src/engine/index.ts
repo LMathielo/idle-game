@@ -104,6 +104,7 @@ export {
   buildingView,
   constructionRemainingMs,
   constructionView,
+  hasLevelBonuses,
   isBuilt,
   levelCap,
   newBuildingsState,
