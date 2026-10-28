@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.wood,
   },
-  hudName: { fontFamily: fonts.title, fontSize: 24, color: colors.parchment },
+  hudName: { fontFamily: fonts.title, fontSize: 20, color: colors.parchment },
   hudLevel: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold },
   hudGold: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.gold },
   toast: {

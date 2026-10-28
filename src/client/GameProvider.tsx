@@ -103,6 +103,6 @@ export function useGameState() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.night, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
-  text: { fontFamily: fonts.title, fontSize: 28, color: colors.parchment, textAlign: 'center' },
+  text: { fontFamily: fonts.title, fontSize: 22, color: colors.parchment, textAlign: 'center' },
   detail: { fontFamily: fonts.body, fontSize: 13, color: colors.parchmentDark, textAlign: 'center' },
 });

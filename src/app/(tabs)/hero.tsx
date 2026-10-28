@@ -243,15 +243,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   portraitIcon: { fontSize: 36 },
-  name: { fontFamily: fonts.title, fontSize: 34, color: colors.ink, lineHeight: 36 },
+  name: { fontFamily: fonts.title, fontSize: 26, color: colors.ink, lineHeight: 32 },
   subtitle: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
   gold: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.goldDark, marginTop: 2 },
   bars: { marginTop: 12, gap: 4 },
-  barCaption: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.inkSoft, marginTop: 4 },
+  barCaption: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.inkSoft, marginTop: 4 },
 
   equipRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
   equipCell: { width: 84, alignItems: 'center' },
-  slotLabel: { fontFamily: fonts.body, fontSize: 11, color: colors.inkSoft, marginTop: 3 },
+  slotLabel: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft, marginTop: 3 },
 
   invGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
   invCell: { padding: 3 },

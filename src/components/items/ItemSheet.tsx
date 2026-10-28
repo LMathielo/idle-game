@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
   quality: { fontFamily: fonts.body, fontSize: 13 },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   closeText: { fontFamily: fonts.bodyBold, fontSize: 24, color: colors.parchment },
-  description: { fontFamily: fonts.body, fontSize: 14, color: colors.parchmentDark },
+  description: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.parchmentDark },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 24 },
   label: { fontFamily: fonts.body, fontSize: 14, color: colors.parchmentDark },
   value: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.parchment },

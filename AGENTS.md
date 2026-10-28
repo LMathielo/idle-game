@@ -6,7 +6,7 @@ Guide for AI agents (and humans) working in this repo. Read it fully before chan
 
 Mobile idle/incremental RPG inspired by Gladiatus. POC scope: two tabs. **Village** (main screen: pixel village background with buttons for Storage, Merchant, Dungeon, Training, Woodcutting) and **Hero** (stats, XP, equipment slots, inventory, skills). Combat is automated and non-interactive; the UI only visualizes it.
 
-Visual style: medieval pixel art. Hard pixel bevels, no rounded corners. Fonts: Jacquard 12 (titles/signs) and Pixelify Sans (body). Colors and fonts live in `src/theme.ts`.
+Visual style: medieval pixel art. Hard pixel bevels, no rounded corners. Fonts: Pixelify Sans Bold (`fonts.title`: titles, village signs, tab labels, headings) and Inter (`fonts.body` / `fonts.bodyBold`: body text, numbers, stats, logs, buttons, descriptions); body text stays ≥ 13 (only bar labels and slot badges go smaller). Colors and fonts live in `src/theme.ts`.
 
 The owner works mostly from a phone. Keep that in mind:
 - Push your work to your own branch on GitHub and open a PR; there is no "local copy" the owner can open.

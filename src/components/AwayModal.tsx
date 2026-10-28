@@ -1,7 +1,7 @@
 // "While you were away" summary, shown after a resume with at least one action or any clock anomaly.
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
-import { ATTRIBUTE_NAMES, formatDuration, formatNumber, itemIcon, itemName } from './format';
+import { ATTRIBUTE_NAMES, formatAwayDuration, formatNumber, itemIcon, itemName } from './format';
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
 import { colors, fonts } from '../theme';
@@ -22,7 +22,7 @@ export function AwayModal() {
     <Modal transparent animationType="fade" onRequestClose={() => client.dismissAwaySummary()}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          <Panel title="While you were away">
+          <Panel title={awayTitle(awaySummary.requestedMs)}>
             <ScrollView style={styles.scroll}>
               <SummaryBody summary={awaySummary} capHours={state.offline.capMs / 3_600_000} tier={state.training.tier} />
             </ScrollView>
@@ -36,9 +36,15 @@ export function AwayModal() {
   );
 }
 
+/** Total real time away (requestedMs), not the credited time: the cap line explains the difference. */
+function awayTitle(requestedMs: number): string {
+  return requestedMs > 0 ? `While you were away for ${formatAwayDuration(requestedMs)}` : 'While you were away';
+}
+
 function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; capHours: number; tier: number }) {
   const backward = summary.anomalies.some((a) => a.kind === 'backward');
-  const capped = summary.anomalies.some((a) => a.kind === 'forward_capped');
+  // Merged summaries add both fields, so this holds when any resume in the batch went over the cap.
+  const capped = summary.grantedMs < summary.requestedMs;
   const gained = Object.entries(summary.itemsGained);
   const lost = Object.entries(summary.itemsLost);
   const skills = Object.entries(summary.skillXpGained) as [SkillKey, number][];
@@ -48,8 +54,9 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
 
   return (
     <View style={styles.body}>
-      {summary.grantedMs > 0 ? <Line label="Time away" value={formatDuration(summary.grantedMs)} /> : null}
-      {capped ? <Text style={styles.warn}>Rewards capped at {formatNumber(capHours)}h.</Text> : null}
+      {capped ? (
+        <Text style={styles.warn}>Progress is capped at {formatNumber(capHours)}h; time beyond that was not counted.</Text>
+      ) : null}
       {backward ? <Text style={styles.warn}>Your device clock moved back — progress is paused until it catches up.</Text> : null}
 
       {summary.dungeon.runs > 0 ? (
@@ -128,7 +135,7 @@ const styles = StyleSheet.create({
   },
   label: { fontFamily: fonts.body, fontSize: 15, color: colors.ink },
   value: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.skill },
-  warn: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.goldDark },
+  warn: { fontFamily: fonts.bodyBold, fontSize: 14, lineHeight: 19, color: colors.goldDark },
   lost: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.hp },
   muted: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft },
   actions: { alignItems: 'center', marginTop: 12 },
