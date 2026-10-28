@@ -3,11 +3,14 @@
 //   XP to reach training level n   = firstLevelXp + perLevelXp × (n − 1)      (5 + 10(n − 1) minutes)
 //   cap of tier t                  = levelsPerTier × t                          (20t, tier 0 = nothing)
 //   price of tier t                = tierPriceBase × t³                         (100 · t³ gold)
-//   trained ms                     = granted ms × efficiency × rateMultiplier   (1 XP per trained minute)
+//   XP per minute                  = Training Grounds level × rateMultiplier    (Lv1 = 1 … Lv5 = 5, since 1.11.0)
+//   trained ms                     = granted ms × efficiency × XP per minute    (msPerXp = 1 XP)
+//   stamina speed-up               = 1 stamina per minute, worth XP per minute × msPerXp
 //
 // Training progress lives per attribute in state.training, never on the activity, so pausing, switching
 // attribute or starting another activity keeps it. Integer math only; no RNG.
 import { effectiveAttributes } from './attributes';
+import { trainingXpPerMinute as buildingXpPerMinute } from './bonuses';
 import { cloneState } from './clone';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { TRAINING } from './config/training';
@@ -54,9 +57,24 @@ export function trainingRateMultiplier(_state: Pick<GameState, 'character' | 'tr
   return TRAINING.rateMultiplier;
 }
 
-/** Trained ms per ms of granted time. */
+type RateInput = Pick<GameState, 'character' | 'training' | 'buildings'>;
+
+/**
+ * Training XP per trained minute right now: the Training Grounds' level bonus (1 XP/min at Lv1, +1 per level) × the
+ * rate hook. Read whenever XP is credited, so an upgrade that completes mid-training counts from that instant.
+ */
+export function trainingXpPerMinute(state: RateInput, attribute: AttributeKey): number {
+  return buildingXpPerMinute(state) * trainingRateMultiplier(state, attribute);
+}
+
+/** Trained ms per ms of granted time (the offline efficiency × XP per minute). */
 function trainingSpeed(state: GameState, attribute: AttributeKey): number {
-  return state.offline.efficiency * trainingRateMultiplier(state, attribute);
+  return state.offline.efficiency * trainingXpPerMinute(state, attribute);
+}
+
+/** Trained ms one speed-up step (1 minute, 1 stamina) is worth right now. */
+export function speedupStepMs(state: RateInput, attribute: AttributeKey): number {
+  return TRAINING.speedup.msPerStep * trainingXpPerMinute(state, attribute);
 }
 
 /** Fresh training state: tier 0 (nothing trainable), every attribute at level 0 with no XP. */
@@ -170,7 +188,12 @@ export function advanceTraining(
     }
     regen(wallNeed);
     wallLeft -= wallNeed;
-    completeLevel(draft, attribute, summary, events); // at speed 1 the level used exactly wallNeed: nothing left over
+    // Above 1 XP/min the last wall ms trains a little past the level (less than `speed` ms): carried into the next
+    // level, so no trained time is lost. Split-invariant: the level-up instant and the overflow do not depend on
+    // where simulate() calls are split.
+    const overflow = wallNeed * speed - needMs;
+    const capped = completeLevel(draft, attribute, summary, events);
+    if (!capped && overflow > 0) bank(t, attribute, overflow, summary);
     guard += 1;
   }
   regen(regenLeft);
@@ -215,13 +238,16 @@ export function trainingMsToCap(state: Pick<GameState, 'training'>, attribute: A
   return ms;
 }
 
-/** Speed-up steps (minutes) still worth buying: ceil(ms to the cap / step). Steps beyond the cap are never charged. */
-export function speedupStepsToCap(state: Pick<GameState, 'training'>, attribute: AttributeKey): number {
-  return Math.ceil(trainingMsToCap(state, attribute) / TRAINING.speedup.msPerStep);
+/**
+ * Speed-up steps (minutes) still worth buying: ceil(ms to the cap / one step's trained ms). Steps beyond the cap are
+ * never charged.
+ */
+export function speedupStepsToCap(state: RateInput, attribute: AttributeKey): number {
+  return Math.ceil(trainingMsToCap(state, attribute) / speedupStepMs(state, attribute));
 }
 
 /** What a speed-up of `minutes` would really do: minutes clamped to what is still trainable, and its stamina cost. */
-export function speedupPlan(state: Pick<GameState, 'training'>, attribute: AttributeKey, minutes: number): { minutes: number; cost: number } {
+export function speedupPlan(state: RateInput, attribute: AttributeKey, minutes: number): { minutes: number; cost: number } {
   const clamped = Math.max(0, Math.min(minutes, speedupStepsToCap(state, attribute)));
   return { minutes: clamped, cost: clamped * TRAINING.speedup.staminaPerStep };
 }
@@ -257,7 +283,9 @@ export type AttributeTrainingView = {
   maxed: boolean;
   /** Being trained right now. */
   active: boolean;
-  /** Speed-up minutes to the next level: ceil(trained time left / 1 min) (0 when maxed). */
+  /** Training XP per trained minute for this attribute right now (Training Grounds level × rate hook). */
+  xpPerMinute: number;
+  /** Speed-up minutes to the next level: ceil(trained time left / one step's trained time) (0 when maxed). */
   speedupToNextLevel: number;
   /** Speed-up minutes still worth buying before the tier cap (0 when maxed). */
   speedupToCap: number;
@@ -271,6 +299,8 @@ export type TrainingView = {
   nextTier: { tier: number; price: number; cap: number; affordable: boolean; missing: number } | null;
   /** The attribute being trained, if any. */
   active: AttributeKey | null;
+  /** Training XP per trained minute right now (Training Grounds level; also what one speed-up minute gives). */
+  xpPerMinute: number;
   /** In ATTRIBUTE_KEYS order. */
   attributes: AttributeTrainingView[];
 };
@@ -295,7 +325,8 @@ export function attributeTrainingView(state: GameState, attribute: AttributeKey)
     remainingMs: maxed ? 0 : speed > 0 ? Math.ceil(needMs / speed) : Number.POSITIVE_INFINITY,
     maxed,
     active: state.activity?.kind === 'training' && state.activity.attribute === attribute,
-    speedupToNextLevel: maxed ? 0 : Math.ceil(needMs / TRAINING.speedup.msPerStep),
+    xpPerMinute: trainingXpPerMinute(state, attribute),
+    speedupToNextLevel: maxed ? 0 : Math.ceil(needMs / speedupStepMs(state, attribute)),
     speedupToCap: maxed ? 0 : speedupStepsToCap(state, attribute),
   };
 }
@@ -314,6 +345,7 @@ export function trainingView(state: GameState): TrainingView {
     cap: trainingCap(tier),
     nextTier,
     active: state.activity?.kind === 'training' ? state.activity.attribute : null,
+    xpPerMinute: trainingXpPerMinute(state, state.activity?.kind === 'training' ? state.activity.attribute : 'strength'),
     attributes: ATTRIBUTE_KEYS.map((k) => attributeTrainingView(state, k)),
   };
 }

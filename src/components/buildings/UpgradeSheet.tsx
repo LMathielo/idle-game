@@ -12,7 +12,7 @@ import { BUILDINGS, type BuildingId, constructionView, DEV_TOOLS_ENABLED, type R
 import { colors, fonts } from '../../theme';
 import { formatCountdown, formatHoursMinutes, formatNumber, itemIcon, itemName } from '../format';
 import { PixelButton } from '../PixelButton';
-import { bonusLines } from './bonusText';
+import { bonusLines, trainingRateStep } from './bonusText';
 
 /** Met / unmet text on the dark sheet (same values as the Build sheet; both pass 4.5:1 on colors.sheet). */
 const MET = '#7fd17a';
@@ -69,6 +69,7 @@ export function UpgradeSheet({ buildingId, onClose }: Props) {
   const def = BUILDINGS[buildingId];
   const now = bonusLines(view.bonuses);
   const next = view.nextBonuses ? bonusLines(view.nextBonuses) : [];
+  const rateStep = trainingRateStep(view.bonuses, view.nextBonuses);
   const mine = job && job.buildingId === buildingId ? job : null;
 
   let blockText: string | null = null;
@@ -113,6 +114,7 @@ export function UpgradeSheet({ buildingId, onClose }: Props) {
             <>
               <Text style={styles.section}>Next (Lv {view.nextLevel})</Text>
               {next.length > 0 ? next.map((l) => <Text key={l} style={styles.bonusNext}>• {l}</Text>) : <Text style={styles.note}>No new passive bonus yet.</Text>}
+              {rateStep ? <Text style={styles.note}>{rateStep}</Text> : null}
               <Text style={styles.section}>Cost</Text>
               {view.cost.map((r, i) => {
                 const t = costText(r);

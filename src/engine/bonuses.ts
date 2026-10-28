@@ -5,6 +5,7 @@
 //   sell price        = floor(catalog sellPrice × (1 + sell bonus))
 //   worker cap        = the Town Hall level's workerCap (0 before the Town Hall is built)
 //   stock slots       = the Merchant level's stockSlots
+//   training XP / min = the Training Grounds level's trainingXpPerMin (1 … 5)
 import { BUILDING_IDS, BUILDINGS, type LevelBonuses } from './config/buildings';
 import { getItemDef } from './config/items';
 import { BASIS_POINTS } from './config/stats';
@@ -68,4 +69,13 @@ export function workerCap(state: Buildings): number {
 /** Merchant stock slots per refresh at its current level. */
 export function merchantStockSlots(state: Buildings): number {
   return levelBonuses(state, 'merchant').stockSlots ?? BUILDINGS.merchant.levels[0].stockSlots ?? 0;
+}
+
+/**
+ * Training XP per trained minute from the Training Grounds' level (Lv1 = 1 … Lv5 = 5). Read at the moment the XP is
+ * credited, so an upgrade that completes mid-training counts from that instant (the world walk splits at it). The
+ * Lv1 value applies when the building gives none (training needs it built anyway).
+ */
+export function trainingXpPerMinute(state: Buildings): number {
+  return levelBonuses(state, 'training_grounds').trainingXpPerMin ?? BUILDINGS.training_grounds.levels[0].trainingXpPerMin ?? 1;
 }

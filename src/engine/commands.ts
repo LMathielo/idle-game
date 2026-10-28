@@ -19,7 +19,7 @@ import { maxHpOf } from './hp';
 import { simulate } from './simulate';
 import { refillStamina, spendStamina } from './stamina';
 import { TRAINING } from './config/training';
-import { grantTrainingMs, grantTrainingXp, speedupPlan, trainingBlock, trainingCap, trainingTierPrice } from './training';
+import { grantTrainingMs, grantTrainingXp, speedupPlan, speedupStepMs, trainingBlock, trainingCap, trainingTierPrice } from './training';
 import { cutLog, logMsFor, treeCheck, woodcutSkipCost, woodcuttingStrength } from './woodcutting';
 import { mineOre, mineSkipCost, miningStrength, oreMsFor, rockCheck } from './mining';
 import {
@@ -462,7 +462,8 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       const spent = spendStamina(draft, plan.cost);
       if (!spent.ok) return fail(spent.error.code, spent.error.message);
       draft = spent.state;
-      grantTrainingMs(draft, a.attribute, plan.minutes * TRAINING.speedup.msPerStep, events);
+      // 1 stamina = 1 minute at the current XP/min (Training Grounds level, read now).
+      grantTrainingMs(draft, a.attribute, plan.minutes * speedupStepMs(draft, a.attribute), events);
       break;
     }
     case 'DEBUG_ADD_WOODCUTTING_LEVEL': {
