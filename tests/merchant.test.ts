@@ -30,7 +30,7 @@ import {
   STARTING_HERO,
   woodcuttingStrength,
 } from '../src/engine';
-import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0 } from './helpers';
+import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, builtGame } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v7 save + its action log, written by the 1.6.0 engine before the merchant (tests/fixtures). */
@@ -59,7 +59,7 @@ function code(state: GameState, c: CommandInput, now?: number) {
 }
 
 const richHero = (gold = 5000) => {
-  const s = newGame(7, T0);
+  const s = builtGame(7, T0);
   s.character.gold = gold;
   return s;
 };
@@ -125,24 +125,25 @@ describe('catalog: quality and prices (config/items.ts)', () => {
 });
 
 describe('merchant stock and refresh charges', () => {
-  it('a new hero: 5/5 charges, inventory-sized stock, the 4 listings first, the rest empty', () => {
-    const s = newGame(1, T0);
+  it('a new hero: 5/5 charges, inventory-sized stock, the 5 listings first (Iron Pickaxe after the Iron Axe), the rest empty', () => {
+    const s = builtGame(1, T0);
     expect(s.merchant.charges).toBe(5);
     expect(s.merchant.stock).toHaveLength(s.inventory.capacity);
-    expect(s.merchant.stock.slice(0, 4)).toEqual([
+    expect(s.merchant.stock.slice(0, 5)).toEqual([
       { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
       { defId: 'iron_axe', quantity: 1, unitPrice: 600 },
+      { defId: 'iron_pickaxe', quantity: 1, unitPrice: 600 },
       { defId: 'iron_sword', quantity: 1, unitPrice: 500 },
       { defId: 'iron_helm', quantity: 1, unitPrice: 400 },
     ]);
-    expect(s.merchant.stock.slice(4).every((x) => x === null)).toBe(true);
+    expect(s.merchant.stock.slice(5).every((x) => x === null)).toBe(true);
     expect(rollStock(2)).toHaveLength(2);
   });
 
-  it('REFRESH_MERCHANT spends 1 charge, restocks the first 4, starts the 2 h timer; errors at 0', () => {
+  it('REFRESH_MERCHANT spends 1 charge, restocks the first 5, starts the 2 h timer; errors at 0', () => {
     let s = richHero();
     s = apply(s, { type: 'BUY_ITEM', slot: 0, defId: 'health_potion_t1', quantity: 10, maxUnitPrice: 12 }, T0);
-    s = apply(s, { type: 'BUY_ITEM', slot: 2, defId: 'iron_sword', quantity: 1, maxUnitPrice: 500 }, T0);
+    s = apply(s, { type: 'BUY_ITEM', slot: 3, defId: 'iron_sword', quantity: 1, maxUnitPrice: 500 }, T0);
     expect(s.merchant.stock[0]).toBeNull();
     s = apply(s, { type: 'REFRESH_MERCHANT' }, T0);
     expect(s.merchant.charges).toBe(4);
@@ -154,7 +155,7 @@ describe('merchant stock and refresh charges', () => {
   });
 
   it('+1 charge per 2 h, remainder kept, max 5 (extras lost, no banked time at max)', () => {
-    let s = newGame(1, T0);
+    let s = builtGame(1, T0);
     for (let i = 0; i < 5; i++) s = apply(s, { type: 'REFRESH_MERCHANT' }, T0);
     s = simulate(s, T0 + CHARGE_MS - 1).state;
     expect(s.merchant).toMatchObject({ charges: 0, chargeProgressMs: CHARGE_MS - 1 });
@@ -171,7 +172,7 @@ describe('merchant stock and refresh charges', () => {
   });
 
   it('not limited by the 8 h offline cap; the backward clock pauses regen', () => {
-    let s = newGame(1, T0);
+    let s = builtGame(1, T0);
     for (let i = 0; i < 5; i++) s = apply(s, { type: 'REFRESH_MERCHANT' }, T0);
     const long = simulate(s, T0 + 9 * HOUR);
     expect(long.summary.grantedMs).toBe(8 * HOUR);
@@ -223,7 +224,7 @@ describe('BUY_ITEM', () => {
   it('inventory capacity: a new stack or a unique item needs a free slot; an existing stack merges when full', () => {
     const full = fill(richHero());
     expect(code(full, potions(1))).toBe('INVENTORY_FULL');
-    expect(code(full, { type: 'BUY_ITEM', slot: 2, defId: 'iron_sword', quantity: 1, maxUnitPrice: 500 })).toBe('INVENTORY_FULL');
+    expect(code(full, { type: 'BUY_ITEM', slot: 3, defId: 'iron_sword', quantity: 1, maxUnitPrice: 500 })).toBe('INVENTORY_FULL');
     expect(maxBuyable(full, 0)).toBe(0);
     const withStack = fill(apply(richHero(), potions(1), T0));
     expect(withStack.inventory.items.length).toBe(withStack.inventory.capacity);
@@ -240,7 +241,7 @@ describe('BUY_ITEM', () => {
   it('unique items get their own instance ids from a serial that only goes up', () => {
     let s = richHero();
     s = apply(s, { type: 'BUY_ITEM', slot: 1, defId: 'iron_axe', quantity: 1, maxUnitPrice: 600 }, T0);
-    s = apply(s, { type: 'BUY_ITEM', slot: 2, defId: 'iron_sword', quantity: 1, maxUnitPrice: 500 }, T0);
+    s = apply(s, { type: 'BUY_ITEM', slot: 3, defId: 'iron_sword', quantity: 1, maxUnitPrice: 500 }, T0);
     expect(s.inventory.items.map((i) => i.id)).toEqual(['bread', 'iron_axe#1', 'iron_sword#2']);
     expect(s.nextItemSerial).toBe(3);
     expect(s.character.gold).toBe(5000 - 1100);
@@ -249,7 +250,7 @@ describe('BUY_ITEM', () => {
 
 describe('SELL_ITEM', () => {
   it('sells 10 Oak Logs for 10 g; quantity 1..owned; the stack goes when sold out', () => {
-    let s = newGame(1, T0);
+    let s = builtGame(1, T0);
     s.inventory.items.push({ id: 'oak_logs', defId: 'oak_logs', name: 'Oak Logs', icon: '🪵', stackable: true, quantity: 12 });
     const gold = s.character.gold;
     expect(code(s, { type: 'SELL_ITEM', itemId: 'oak_logs', quantity: 13 })).toBe('INVALID_AMOUNT');
@@ -263,7 +264,7 @@ describe('SELL_ITEM', () => {
   });
 
   it('equipped items are refused until unequipped; then they sell at their sellPrice', () => {
-    let s = newGame(1, T0);
+    let s = builtGame(1, T0);
     expect(code(s, { type: 'SELL_ITEM', itemId: 'start-rusty_gladius', quantity: 1 })).toBe('ITEM_EQUIPPED');
     s = apply(s, { type: 'UNEQUIP_ITEM', slot: 'weapon' }, T0);
     expect(code(s, { type: 'SELL_ITEM', itemId: 'start-rusty_gladius', quantity: 2 })).toBe('INVALID_AMOUNT');
@@ -272,7 +273,7 @@ describe('SELL_ITEM', () => {
   });
 
   it('an item the catalog does not know cannot be sold', () => {
-    const s = fill(newGame(1, T0), 18);
+    const s = fill(builtGame(1, T0), 18);
     expect(code(s, { type: 'SELL_ITEM', itemId: 'junk-0', quantity: 1 })).toBe('NOT_SELLABLE');
   });
 });
@@ -281,7 +282,7 @@ describe('EQUIP_ITEM / UNEQUIP_ITEM', () => {
   const bought = () => {
     let s = richHero();
     s = apply(s, { type: 'BUY_ITEM', slot: 1, defId: 'iron_axe', quantity: 1, maxUnitPrice: 600 }, T0);
-    return apply(s, { type: 'BUY_ITEM', slot: 3, defId: 'iron_helm', quantity: 1, maxUnitPrice: 400 }, T0);
+    return apply(s, { type: 'BUY_ITEM', slot: 4, defId: 'iron_helm', quantity: 1, maxUnitPrice: 400 }, T0);
   };
 
   it('equipping the Iron Axe swaps the Wooden Axe back into its inventory place; WS +39 (40 − 1)', () => {
@@ -362,7 +363,7 @@ describe('woodcutting stops when an equipment change drops WS below the tree req
 
   it('staying at or above the requirement keeps it running, progress kept', () => {
     // WC 9 + STR 10 + Wooden Axe 1 = 101; without the axe 100, still enough for Birch.
-    let s = newGame(1, T0);
+    let s = builtGame(1, T0);
     s.character.skills.woodcutting = { ...s.character.skills.woodcutting, level: 9 };
     s = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
     const r = applyCommand(s, cmd({ type: 'UNEQUIP_ITEM', slot: 'axe' }), T0 + MIN);
@@ -370,7 +371,7 @@ describe('woodcutting stops when an equipment change drops WS below the tree req
     expect(r.state.activity).toMatchObject({ kind: 'woodcutting', treeId: 'birch', progressMs: MIN });
     expect(r.events.some((e) => e.type === 'ACTIVITY_STOPPED')).toBe(false);
     // Other activities are never stopped by an equipment change.
-    const d = apply(newGame(1, T0), { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0);
+    const d = apply(builtGame(1, T0), { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0);
     expect(apply(d, { type: 'UNEQUIP_ITEM', slot: 'axe' }, T0 + MIN).activity?.kind).toBe('dungeon');
   });
 });
@@ -405,7 +406,7 @@ describe('USE_ITEM', () => {
     const s = withPotions(50);
     expect(code(s, { type: 'USE_ITEM', itemId: 'health_potion_t1' })).toBe('HP_FULL');
     expect(code(withPotions(1), { type: 'USE_ITEM', itemId: 'bread' })).toBe('NOT_USABLE');
-    expect(code(newGame(1, T0), { type: 'USE_ITEM', itemId: 'health_potion_t1' })).toBe('NOT_IN_INVENTORY');
+    expect(code(builtGame(1, T0), { type: 'USE_ITEM', itemId: 'health_potion_t1' })).toBe('NOT_IN_INVENTORY');
   });
 });
 
@@ -423,7 +424,7 @@ describe('the merchant is not an activity', () => {
       s = simulate(s, T0 + MIN).state;
       const activity = s.activity;
       s = apply(s, { type: 'BUY_ITEM', slot: 0, defId: 'health_potion_t1', quantity: 2, maxUnitPrice: 12 }, T0 + MIN);
-      s = apply(s, { type: 'BUY_ITEM', slot: 2, defId: 'iron_sword', quantity: 1, maxUnitPrice: 500 }, T0 + MIN);
+      s = apply(s, { type: 'BUY_ITEM', slot: 3, defId: 'iron_sword', quantity: 1, maxUnitPrice: 500 }, T0 + MIN);
       s = apply(s, { type: 'EQUIP_ITEM', itemId: 'iron_sword#1' }, T0 + MIN);
       s = apply(s, { type: 'SELL_ITEM', itemId: 'start-rusty_gladius', quantity: 1 }, T0 + MIN);
       s = apply(s, { type: 'REFRESH_MERCHANT' }, T0 + MIN);
@@ -436,7 +437,7 @@ describe('the merchant is not an activity', () => {
 
 describe('debug: +1 merchant refresh', () => {
   it('adds a charge, sets debugUsed, refuses at max', () => {
-    let s = newGame(1, T0);
+    let s = builtGame(1, T0);
     expect(code(s, { type: 'DEBUG_ADD_MERCHANT_CHARGE' })).toBe('CHARGES_FULL');
     s = apply(s, { type: 'REFRESH_MERCHANT' }, T0);
     s = simulate(s, T0 + HOUR).state;

@@ -21,6 +21,7 @@ export const SLOT_LABELS: Record<EquipmentSlot, string> = {
   ring2: 'Ring',
   boots: 'Boots',
   axe: 'Axe',
+  pickaxe: 'Pickaxe',
 };
 
 /** Fallback for a stored item whose defId the catalog does not know: shown, never usable or sellable. */
@@ -58,6 +59,9 @@ export function statLines(def: ItemDef, equipped?: ItemDef | null): StatLine[] {
   if (def.armor !== undefined) lines.push({ label: 'Armor', value: signed(def.armor), delta: cmp ? def.armor - (equipped?.armor ?? 0) : undefined });
   if (def.woodcuttingStrength !== undefined) {
     lines.push({ label: 'Woodcutting', value: `${signed(def.woodcuttingStrength)} WS`, delta: cmp ? def.woodcuttingStrength - (equipped?.woodcuttingStrength ?? 0) : undefined });
+  }
+  if (def.miningStrength !== undefined) {
+    lines.push({ label: 'Mining', value: `${signed(def.miningStrength)} MS`, delta: cmp ? def.miningStrength - (equipped?.miningStrength ?? 0) : undefined });
   }
   if (def.heal) lines.push({ label: 'Heals', value: `${def.heal} HP` });
   return lines;

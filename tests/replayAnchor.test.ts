@@ -350,9 +350,9 @@ describe('replay with anchors', () => {
 
     it('a label newer than this engine is rejected (this engine is the last released one)', async () => {
       expect(RELEASED_ENGINES.at(-1)!.engine).toBe(ENGINE_VERSION);
-      expect(releasedEngineIndex('1.9.0')).toBe(-1);
+      expect(releasedEngineIndex('1.10.0')).toBe(-1);
       const { rows } = await currentLog();
-      expect(() => replayLogReport(rows.map((r) => ({ ...r, engineVersion: '1.9.0' })))).toThrow(/1\.9\.0, which never shipped/);
+      expect(() => replayLogReport(rows.map((r) => ({ ...r, engineVersion: '1.10.0' })))).toThrow(/1\.10\.0, which never shipped/);
     });
 
     it('labels never go back along the log: a 1.3.0 row after 1.4.0 rows is rejected', async () => {

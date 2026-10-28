@@ -268,9 +268,16 @@ function stepFight(draft: GameState, activity: DungeonActivity, fight: ActiveFig
  * search (the fight starts), each strike, the fight's end (outcome applied, the next search starts at once).
  * HP regenerates between events at the rate of the moment, during the search and during the fight. Every event
  * due at or before the end of the granted time happens. Time is split only at events, so many small ticks and
- * one big resume give the same state, also when a call ends in the middle of a fight. Regen then continues over
- * the rest of the sanitized, uncapped time (`requestedMs`): the forfeited part of a capped absence counts for
- * regen only (a fight in progress stays paused at the cap, like a search).
+ * one big resume give the same state, also when a call ends in the middle of a fight.
+ *
+ * **Offline cap mid-fight (1.9.0):** when the cap ends the granted time while a fight is active (phase `fight`),
+ * that fight is finished with the time beyond the cap: its strikes keep landing at their exact times until it
+ * ends (at most `COMBAT.maxFightMs`, and never past the time that really passed). Nothing else progresses: the
+ * next search starts and stays at 0. A search in progress at the cap still pauses there. The fight plays the
+ * same events and RNG draws as live play, so its outcome does not depend on where the cap fell.
+ *
+ * Regen then continues over the rest of the sanitized, uncapped time (`requestedMs`): the forfeited part of a
+ * capped absence counts for regen only.
  *
  * `draft` comes from simulate(): `draft.activity` is already a copy; its fight, and character/inventory/dungeon/rng,
  * may still be shared with the input, so they are copied before the first change.
@@ -303,31 +310,43 @@ export function advanceDungeon(
   };
   if (activity.fight) activity.fight = cloneState(activity.fight);
 
-  let wallLeft = grantedMs;
   let guard = 0;
-  while (efficiency > 0 && guard < MAX_ACTIONS_PER_SIMULATION) {
-    const fight = activity.phase === 'fight' ? activity.fight : null;
-    const ev = fight ? nextFightEvent(fight, COMBAT.maxFightMs) : null;
-    const need = fight && ev ? Math.max(0, ev.atMs - fight.elapsedMs) : Math.max(0, searchMs - activity.progressMs);
-    const wallNeed = Math.ceil(need / efficiency);
-    if (wallNeed > wallLeft) {
-      if (fight) fight.elapsedMs += wallLeft * efficiency;
-      else activity.progressMs += wallLeft * efficiency;
-      regen(wallLeft);
-      wallLeft = 0;
-      break;
+  /**
+   * Walks up to `wallBudget` ms of wall time event by event. With `fightOnly`, stops as soon as no fight is
+   * active (a search never starts or progresses). Returns the wall time left unused.
+   */
+  const walk = (wallBudget: number, fightOnly: boolean): number => {
+    let wallLeft = wallBudget;
+    while (efficiency > 0 && guard < MAX_ACTIONS_PER_SIMULATION) {
+      const fight = activity.phase === 'fight' ? activity.fight : null;
+      if (fightOnly && !fight) break;
+      const ev = fight ? nextFightEvent(fight, COMBAT.maxFightMs) : null;
+      const need = fight && ev ? Math.max(0, ev.atMs - fight.elapsedMs) : Math.max(0, searchMs - activity.progressMs);
+      const wallNeed = Math.ceil(need / efficiency);
+      if (wallNeed > wallLeft) {
+        if (fight) fight.elapsedMs += wallLeft * efficiency;
+        else activity.progressMs += wallLeft * efficiency;
+        regen(wallLeft);
+        return 0;
+      }
+      regen(wallNeed);
+      wallLeft -= wallNeed;
+      own();
+      if (fight && ev) {
+        fight.elapsedMs = ev.atMs;
+        stepFight(draft, activity, fight, ev, summary, events);
+      } else {
+        beginFight(draft, activity, summary, events);
+      }
+      guard += 1;
     }
-    regen(wallNeed);
-    wallLeft -= wallNeed;
-    own();
-    if (fight && ev) {
-      fight.elapsedMs = ev.atMs;
-      stepFight(draft, activity, fight, ev, summary, events);
-    } else {
-      beginFight(draft, activity, summary, events);
-    }
-    guard += 1;
-  }
+    return wallLeft;
+  };
+
+  walk(grantedMs, false);
+  // The cap fell inside a fight: finish it with the time beyond the cap (bounded by the time that really passed).
+  const beyondCap = requestedMs - grantedMs;
+  if (beyondCap > 0 && activity.phase === 'fight') walk(beyondCap, true);
   regen(regenLeft);
 }
 

@@ -33,7 +33,7 @@ import {
   woodcuttingStrength,
   woodcuttingView,
 } from '../src/engine';
-import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, woodcuttingGame, progressMs } from './helpers';
+import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, woodcuttingGame, progressMs, builtGame, debugBuild } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v6 save + its action log, written by the 1.5.0 engine before the woodcutting rework (tests/fixtures). */
@@ -95,13 +95,13 @@ describe('config: tree table and formulas', () => {
 
 describe('woodcutting strength (WS = 10 × level + effective STR + axe)', () => {
   it('a new hero has WS 21 (10 + 10 + 1) with the Wooden Axe equipped', () => {
-    const s = newGame(1, T0);
+    const s = builtGame(1, T0);
     expect(s.character.equipment.axe).toMatchObject({ id: 'start-wooden_axe', defId: 'wooden_axe', slot: 'axe' });
     expect(woodcuttingStrength(s)).toEqual({ value: 21, breakdown: { level: 10, strength: 10, axe: 1, axeDefId: 'wooden_axe' } });
   });
 
   it('level 5 base hero = 61; trained STR counts (effective); no axe or an unknown axe gives 0', () => {
-    const s = withWc(newGame(1, T0), 5);
+    const s = withWc(builtGame(1, T0), 5);
     expect(woodcuttingStrength(s).value).toBe(61);
     const trained = { ...s, training: { ...s.training, attributes: { ...s.training.attributes, strength: { level: 39, xp: 0, progressMs: 0 } } } };
     expect(woodcuttingStrength(trained).breakdown).toMatchObject({ level: 50, strength: 49, axe: 1 });
@@ -127,7 +127,7 @@ describe('cut time = max(10 s, base − 1 s × effective DEX)', () => {
 
 describe('starting a tree', () => {
   it('TREE_LOCKED when the level or the WS is missing; nothing changes', () => {
-    const s = newGame(1, T0);
+    const s = builtGame(1, T0);
     const lvl = run(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
     expect(lvl).toMatchObject({ ok: false, error: { code: 'TREE_LOCKED' } });
     // Level 5: level ✓, WS 61 < 100 ✗.
@@ -142,7 +142,7 @@ describe('starting a tree', () => {
   });
 
   it('unknown or missing tree → UNKNOWN_TREE', () => {
-    const s = newGame(1, T0);
+    const s = builtGame(1, T0);
     expect(run(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'palm' as never }, T0)).toMatchObject({ ok: false, error: { code: 'UNKNOWN_TREE' } });
     expect(run(s, { type: 'START_ACTIVITY', kind: 'woodcutting' } as never, T0)).toMatchObject({ ok: false, error: { code: 'UNKNOWN_TREE' } });
   });
@@ -156,7 +156,7 @@ describe('starting a tree', () => {
   });
 
   it('a Birch log gives Birch Logs and 119 XP every 4:50 at DEX 10', () => {
-    const s = apply(withWc(newGame(3, T0), 5, { strength: 49 }), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
+    const s = apply(withWc(builtGame(3, T0), 5, { strength: 49 }), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
     const r = simulate(s, T0 + 2 * 290 * SEC);
     expect(r.summary.actions).toBe(2);
     expect(r.summary.itemsGained.birch_logs).toBe(2);
@@ -214,7 +214,7 @@ describe('SKIP_WOODCUT', () => {
   });
 
   it('typed errors: not woodcutting, not enough stamina, invalid amounts; nothing changes', () => {
-    expect(run(newGame(1, T0), { type: 'SKIP_WOODCUT', log: 1, maxCost: 2 }, T0)).toMatchObject({ ok: false, error: { code: 'NOT_WOODCUTTING' } });
+    expect(run(builtGame(1, T0), { type: 'SKIP_WOODCUT', log: 1, maxCost: 2 }, T0)).toMatchObject({ ok: false, error: { code: 'NOT_WOODCUTTING' } });
     const poor = { ...woodcuttingGame(), stamina: { current: 1, max: 100, progressMs: 0 } };
     expect(skip(poor, T0 + SEC)).toMatchObject({ ok: false, error: { code: 'NOT_ENOUGH_STAMINA' } });
     expect(skip(woodcuttingGame(), T0, { maxCost: 0 })).toMatchObject({ ok: false, error: { code: 'INVALID_AMOUNT' } });
@@ -225,7 +225,7 @@ describe('SKIP_WOODCUT', () => {
 describe('SPEEDUP_TRAINING', () => {
   /** Tier `tier`, training `strength`, stamina full. */
   function training(tier = 1): GameState {
-    const s = newGame(9, T0);
+    const s = builtGame(9, T0);
     return apply({ ...s, training: { ...s.training, tier } }, { type: 'START_ACTIVITY', kind: 'training', attribute: 'strength' }, T0);
   }
   const speed = (s: GameState, minutes: number, maxCost = minutes) => run(s, { type: 'SPEEDUP_TRAINING', minutes, maxCost }, T0);
@@ -269,7 +269,7 @@ describe('SPEEDUP_TRAINING', () => {
   it('maxCost guard and typed errors; nothing changes', () => {
     const s = training();
     expect(speed(s, 10, 9)).toMatchObject({ ok: false, error: { code: 'COST_CHANGED' } });
-    expect(speed(newGame(1, T0), 10)).toMatchObject({ ok: false, error: { code: 'NOT_TRAINING' } });
+    expect(speed(builtGame(1, T0), 10)).toMatchObject({ ok: false, error: { code: 'NOT_TRAINING' } });
     expect(speed(woodcuttingGame(), 10)).toMatchObject({ ok: false, error: { code: 'NOT_TRAINING' } });
     expect(speed({ ...s, stamina: { current: 9, max: 100, progressMs: 0 } }, 10)).toMatchObject({ ok: false, error: { code: 'NOT_ENOUGH_STAMINA' } });
     for (const bad of [0, -1, 1.5, Number.NaN, TRAINING.speedup.maxStepsPerCommand + 1]) {
@@ -306,8 +306,8 @@ describe('one activity at a time (woodcutting, dungeon, training)', () => {
 
 describe('views', () => {
   it('the carousel opens on the active tree, else the highest unlocked tree', () => {
-    expect(woodcuttingView(newGame(1, T0)).focusTreeId).toBe('oak');
-    const big = withWc(newGame(1, T0), 20, { strength: 400 }); // WS 601: Maple
+    expect(woodcuttingView(builtGame(1, T0)).focusTreeId).toBe('oak');
+    const big = withWc(builtGame(1, T0), 20, { strength: 400 }); // WS 601: Maple
     expect(woodcuttingView(big).focusTreeId).toBe('maple');
     const cutting = apply(big, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
     expect(woodcuttingView(cutting)).toMatchObject({ focusTreeId: 'birch', activeTreeId: 'birch' });
@@ -333,14 +333,14 @@ describe('DEBUG_ADD_WOODCUTTING_LEVEL', () => {
   it('client: the debug level, a skip and a speed-up are logged and the whole log replays', async () => {
     const { repo, clock, client } = makeClient({ prefix: 'wcdbg' });
     await client.load();
+    await debugBuild(client, ['woodcutting', 'training_grounds']);
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     clock.advance(30 * SEC);
     const v = woodcutActivityView(client.getState())!;
     expect((await client.dispatch({ type: 'SKIP_WOODCUT', log: v.log, maxCost: 2 })).ok).toBe(true);
     expect((await client.debug.addWoodcuttingLevel()).ok).toBe(true);
     await client.debug.addGold(100);
-    await client.dispatch({ type: 'UNLOCK_TRAINING_TIER', tier: 1 });
-    await client.dispatch({ type: 'START_ACTIVITY', kind: 'training', attribute: 'dexterity' });
+    await client.dispatch({ type: 'START_ACTIVITY', kind: 'training', attribute: 'dexterity' }); // Tier 1 came with the Training Grounds
     expect((await client.dispatch({ type: 'SPEEDUP_TRAINING', minutes: 10, maxCost: 10 })).ok).toBe(true);
     clock.advance(5 * MIN);
     await client.resume();
@@ -407,11 +407,15 @@ describe('frozen v6 save (tests/fixtures/save-v6.json) → v7', () => {
       snapshot: undefined,
     });
     expect(p.snapshot).toEqual(loadSave(V6_SAVE));
-    // 3 minutes passed before load: one Oak log (DEX 10), from progress 0.
-    expect(qty(client.getState(), 'oak_logs')).toBe(1339);
+    // 1.9.0 (save v10): woodcutting stops on migration (its building starts locked), so the 3 minutes before load
+    // cut nothing. Built again (debug) and restarted, Oak cuts from progress 0.
+    expect(client.getState().activity).toBeNull();
+    expect(qty(client.getState(), 'oak_logs')).toBe(1338);
+    await debugBuild(client, ['woodcutting']);
+    expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' })).ok).toBe(true);
     clock.advance(HOUR);
     await client.resume();
-    expect(client.getState().stats.totalActions).toBe(V6_SAVE.stats.totalActions + Math.floor((HOUR + 3 * MIN) / OAK_MS));
+    expect(client.getState().stats.totalActions).toBe(V6_SAVE.stats.totalActions + Math.floor(HOUR / OAK_MS));
     const report = replayLogReport(entries(await repo.getAllLog()));
     expect(report).toMatchObject({ anchors: 1, skippedOldEngine: V6_LOG.length });
     expect(hashState(report.state)).toBe(hashState(client.getState()));

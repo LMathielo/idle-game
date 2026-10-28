@@ -1,11 +1,12 @@
 // Read-only helpers for UIs (pure).
 import { dungeonRunView, type DungeonRunView } from './dungeon';
+import { mineActivityView, type MineActivityView } from './mining';
 import { attributeTrainingView, type AttributeTrainingView } from './training';
 import type { GameState } from './types';
 import { woodcutActivityView, type WoodcutActivityView } from './woodcutting';
 
-/** The log being cut (woodcutting). */
-export type GatheringView = WoodcutActivityView;
+/** The log being cut (woodcutting) or the ore being mined (mining). */
+export type GatheringView = WoodcutActivityView | MineActivityView;
 
 /** The attribute being trained (progress toward its next level). */
 export type TrainingActivityView = AttributeTrainingView & { kind: 'training' };
@@ -17,6 +18,7 @@ export function activityView(state: GameState): ActivityView | null {
   if (!a) return null;
   if (a.kind === 'dungeon') return dungeonRunView(state);
   if (a.kind === 'training') return { kind: 'training', ...attributeTrainingView(state, a.attribute) };
+  if (a.kind === 'mining') return mineActivityView(state);
   return woodcutActivityView(state);
 }
 

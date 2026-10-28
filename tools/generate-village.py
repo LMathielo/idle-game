@@ -97,6 +97,33 @@ for (sx, sy) in [(58, 206), (68, 200)]:
     rect(sx - 2, sy, sx + 2, sy + 2, (120, 84, 52)); rect(sx - 1, sy, sx + 1, sy, (190, 150, 96))
 rect(70, 208, 80, 211, (120, 84, 52)); rect(72, 205, 78, 207, (132, 92, 56))
 
+# --- mine shaft entrance (mining), in the foot of the left mountain above the forest
+mine_x, mine_y = 38, 129                                 # bottom centre of the opening
+timber, timber_dark = (110, 74, 44), (84, 56, 32)
+for y in range(mine_y - 13, mine_y + 1):                 # dark opening, arched top
+    w = 3 if y < mine_y - 11 else 5 if y < mine_y - 9 else 6
+    rect(mine_x - w, y, mine_x + w, y, (22, 18, 20))
+for x in (mine_x - 8, mine_x + 7):                       # timber posts
+    rect(x, mine_y - 13, x + 1, mine_y, timber)
+    px(x, mine_y - 13, timber_dark)
+rect(mine_x - 10, mine_y - 16, mine_x + 10, mine_y - 14, timber)   # lintel
+rect(mine_x - 10, mine_y - 16, mine_x + 10, mine_y - 16, timber_dark)
+rect(mine_x - 2, mine_y - 9, mine_x + 2, mine_y - 9, (60, 50, 44))  # inner beam
+px(mine_x + 9, mine_y - 12, (255, 170, 40)); px(mine_x + 9, mine_y - 13, (255, 230, 120))  # lantern
+for i in range(0, 13):                                   # rails onto the grass, with sleepers
+    y = mine_y + 1 + i
+    off = i // 4
+    if i % 3 == 0: rect(mine_x - 5 + off, y, mine_x + 4 + off, y, timber_dark)
+    px(mine_x - 3 + off, y, (160, 160, 170)); px(mine_x + 2 + off, y, (160, 160, 170))
+cart_x, cart_y = 52, 133                                 # ore cart beside the rails
+rect(cart_x - 4, cart_y - 4, cart_x + 4, cart_y, (96, 100, 112))
+rect(cart_x - 4, cart_y - 4, cart_x + 4, cart_y - 4, (130, 134, 146))
+for x, c in ((cart_x - 2, (200, 110, 60)), (cart_x, (150, 150, 156)), (cart_x + 2, (220, 190, 80))):
+    px(x, cart_y - 5, c)
+px(cart_x - 3, cart_y + 1, (40, 40, 44)); px(cart_x + 3, cart_y + 1, (40, 40, 44))
+for (rx, ry) in [(24, 131), (27, 130), (25, 129), (29, 132)]:   # rock pile
+    rect(rx - 1, ry - 1, rx + 1, ry, (128, 128, 136)); px(rx, ry - 1, (168, 168, 176))
+
 # --- house helper
 def house(x, y, w, h, wall, roof, door=(80, 52, 32)):
     rect(x, y, x + w, y + h, wall)
@@ -146,6 +173,38 @@ for dx in (-12, 0, 12):                                  # training dummies
 rect(tx + 18, ty - 9, tx + 21, ty - 9, (100, 66, 40));
 for x in (tx + 18, tx + 21): rect(x, ty - 10, x, ty - 3, (190, 196, 206))
 
+# --- town hall, in the middle of the town (between the stall and the training yard, right of the path)
+hx, hy = 126, 282                                        # bottom centre of the front wall
+stone, stone_dark, slate, slate_dark = (196, 188, 172), (160, 150, 136), (70, 78, 118), (52, 58, 92)
+rect(hx - 16, hy - 20, hx + 16, hy, stone)               # main hall walls
+for y in range(hy - 18, hy, 4):                          # brick courses
+    for x in range(hx - 16 + (y // 4) % 2 * 3, hx + 16, 6):
+        px(x, y, stone_dark)
+for i in range(19):                                      # slate gable roof
+    x0, x1 = hx - 18 + i, hx + 18 - i
+    if x0 > x1: break
+    rect(x0, hy - 21 - i // 2, x1, hy - 21 - i // 2, slate if i % 3 else slate_dark)
+rect(hx - 5, hy - 40, hx + 5, hy - 20, stone)            # bell tower
+rect(hx - 5, hy - 40, hx + 5, hy - 40, stone_dark)
+rect(hx - 2, hy - 36, hx + 2, hy - 32, (30, 26, 30))     # belfry opening
+px(hx, hy - 33, (230, 190, 70))                          # bell
+for i in range(6):                                       # tower spire
+    rect(hx - 6 + i, hy - 41 - i, hx + 6 - i, hy - 41 - i, slate_dark if i == 0 else slate)
+rect(hx, hy - 51, hx, hy - 47, (90, 60, 34))             # flag pole + banner
+rect(hx + 1, hy - 51, hx + 4, hy - 49, (196, 54, 54))
+rect(hx - 3, hy - 10, hx + 3, hy, (80, 52, 32))          # double door, arched
+rect(hx - 2, hy - 11, hx + 2, hy - 11, (80, 52, 32))
+rect(hx, hy - 10, hx, hy, (56, 36, 22))
+for x in (hx - 12, hx + 9):                              # windows
+    rect(x, hy - 15, x + 3, hy - 12, (250, 220, 120))
+    rect(x, hy - 16, x + 3, hy - 16, stone_dark)
+for x in (hx - 7, hx + 6):                               # red banners beside the door
+    rect(x, hy - 18, x + 1, hy - 12, (176, 40, 40)); px(x, hy - 11, (176, 40, 40))
+rect(hx - 6, hy + 1, hx + 6, hy + 1, (150, 146, 140))    # steps
+rect(hx - 16, hy + 2, hx + 16, hy + 2, (60, 90, 44))     # shadow
+for x in range(101, hx - 5):                             # short path from the main path to the steps
+    rect(x, hy + 1, x, hy + 2, path); px(x, hy + 3, path_dark)
+
 # extra cottages for village feel
 house(20, 322, 22, 16, (214, 196, 160), (110, 60, 46))
 house(150, 346, 22, 16, (196, 178, 140), (90, 70, 60))
@@ -161,6 +220,7 @@ for _ in range(60):
 
 out = sys.argv[1]
 img.resize((W * S, H * S), Image.NEAREST).save(out, optimize=True)
-anchors = {"dungeon": (cave_x, cave_y), "woodcutting": (34, 168), "merchant": (mx, my), "storage": (bx + 17, by), "training": (tx, ty)}
+anchors = {"dungeon": (cave_x, cave_y), "woodcutting": (34, 168), "merchant": (mx, my), "storage": (bx + 17, by), "training": (tx, ty),
+           "mine": (mine_x, mine_y - 8), "town_hall": (hx, hy - 20)}
 for k, (x, y) in anchors.items():
     print(f"{k}: x={x/W:.3f} y={y/H:.3f}")

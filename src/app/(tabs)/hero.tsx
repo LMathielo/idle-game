@@ -28,7 +28,7 @@ const EQUIPMENT_GRID: (EquipmentSlot | null)[][] = [
   [null, 'helmet', 'amulet'],
   ['weapon', 'armor', 'shield'],
   ['ring1', 'gloves', 'ring2'],
-  ['axe', 'boots', null],
+  ['axe', 'boots', 'pickaxe'],
 ];
 
 /** What the item sheet shows: an inventory item (by id) or an equipment slot. */

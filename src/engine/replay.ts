@@ -42,6 +42,10 @@ export const LOG_TYPES = [
   'BUY_ITEM',
   'SELL_ITEM',
   'DEBUG_ADD_MERCHANT_CHARGE',
+  'SKIP_MINE',
+  'BUILD',
+  'DEBUG_BUILD',
+  'DEBUG_ADD_MINING_LEVEL',
   'MIGRATE',
   'RESUME',
   'SIMULATE',
@@ -162,7 +166,11 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'REFRESH_MERCHANT':
     case 'BUY_ITEM':
     case 'SELL_ITEM':
-    case 'DEBUG_ADD_MERCHANT_CHARGE': {
+    case 'DEBUG_ADD_MERCHANT_CHARGE':
+    case 'SKIP_MINE':
+    case 'BUILD':
+    case 'DEBUG_BUILD':
+    case 'DEBUG_ADD_MINING_LEVEL': {
       const res = applyCommand(state, payload as Command, clientTime, { allowDebug: true });
       if (!res.ok) throw new ReplayError(`${type} rejected on replay: ${res.error.code}`);
       return res.state;

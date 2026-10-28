@@ -14,7 +14,7 @@ import { colors } from '../theme';
 export const unstable_settings = { anchor: '(tabs)' };
 
 /** Village modal routes. Each one renders its own <AwayModal /> (see RootAwayModal). */
-const VILLAGE_MODAL_PATHS: readonly string[] = ['/dungeon', '/training', '/woodcutting', '/merchant'];
+const VILLAGE_MODAL_PATHS: readonly string[] = ['/dungeon', '/training', '/woodcutting', '/mine', '/merchant', '/town-hall'];
 
 /**
  * iOS presents an RN <Modal> from the view controller that owns it. Mounted here it belongs to the
@@ -27,7 +27,8 @@ function RootAwayModal() {
 }
 
 /**
- * Root stack: the tabs group, plus one full-screen modal per village sign (Dungeon, Training, Woodcutting and Merchant today).
+ * Root stack: the tabs group, plus one full-screen modal per village sign (Dungeon, Training, Woodcutting, Mine Shaft,
+ * Merchant and Town Hall today).
  * fullScreenModal: iOS covers the whole screen with no swipe-to-dismiss (the modal's ✕ closes it);
  * Android has no such style and falls back to 'modal', so the slide-up is set explicitly to match
  * (a fade when the system asks to reduce motion).
@@ -46,7 +47,9 @@ export default function RootLayout() {
         <Stack.Screen name="dungeon" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
         <Stack.Screen name="training" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
         <Stack.Screen name="woodcutting" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
+        <Stack.Screen name="mine" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
         <Stack.Screen name="merchant" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
+        <Stack.Screen name="town-hall" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
       </Stack>
       <RootAwayModal />
     </GameProvider>

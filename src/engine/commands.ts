@@ -1,7 +1,10 @@
 // Player commands. Serializable, validated here (never in the UI), applied after simulating to `now`.
 import { grantHeroXp } from './activities';
 import { effectiveAttributes } from './attributes';
+import { build, buildingForActivity, completeBuilding, isBuilt } from './buildings';
 import { cloneState } from './clone';
+import { BUILDINGS, isBuildingId } from './config/buildings';
+import { isRockId, ROCKS } from './config/mining';
 import { isGatheringKind, isTreeId, TREES } from './config/woodcutting';
 import { SKILL_XP_CURVE } from './config/xpCurve';
 import { xpToNext } from './progression';
@@ -17,14 +20,17 @@ import { refillStamina, spendStamina } from './stamina';
 import { TRAINING } from './config/training';
 import { grantTrainingMs, grantTrainingXp, speedupPlan, trainingBlock, trainingCap, trainingTierPrice } from './training';
 import { cutLog, logMsFor, treeCheck, woodcutSkipCost, woodcuttingStrength } from './woodcutting';
+import { mineOre, mineSkipCost, miningStrength, oreMsFor, rockCheck } from './mining';
 import {
   type Activity,
   ATTRIBUTE_KEYS,
   type AttributeKey,
+  type BuildingId,
   type DungeonId,
   type EquipmentSlot,
   type GameEvent,
   type GameState,
+  type RockId,
   type SimulationSummary,
   type TreeId,
 } from './types';
@@ -32,6 +38,8 @@ import {
 export type Command =
   /** Cuts logs from one tree back-to-back. Needs the tree's level and WS. Same tree again = no-op; another tree switches (the log in progress restarts). */
   | { id: string; type: 'START_ACTIVITY'; kind: 'woodcutting'; treeId: TreeId }
+  /** Mines ores from one rock back-to-back. Needs the Mine Shaft built and the rock's level and MS. Same rock = no-op. */
+  | { id: string; type: 'START_ACTIVITY'; kind: 'mining'; rockId: RockId }
   /** Starts auto-repeating runs. Only one activity at a time: a running one is stopped (a dungeon run in progress is lost). */
   | { id: string; type: 'START_ACTIVITY'; kind: 'dungeon'; dungeonId: DungeonId }
   /**
@@ -56,6 +64,17 @@ export type Command =
    * real cost is higher, it fails with LOG_CHANGED and nothing changes.
    */
   | { id: string; type: 'SKIP_WOODCUT'; log: number; maxCost: number }
+  /** Same as SKIP_WOODCUT for the ore being mined; `ore` is MineActivityView.ore. Fails with ORE_CHANGED. */
+  | { id: string; type: 'SKIP_MINE'; ore: number; maxCost: number }
+  /**
+   * Builds a locked building: every requirement is checked, then gold and items are consumed and it is built at
+   * once (level 1). ALREADY_BUILT / REQUIREMENTS_NOT_MET change nothing.
+   */
+  | { id: string; type: 'BUILD'; buildingId: BuildingId }
+  /** Builds a locked building for free, ignoring its requirements (its effects still apply), to test on a phone. */
+  | { id: string; type: 'DEBUG_BUILD'; buildingId: BuildingId }
+  /** Adds mining levels (XP toward the next level is kept), so rock unlocks can be tested on a phone. */
+  | { id: string; type: 'DEBUG_ADD_MINING_LEVEL'; levels: number }
   /**
    * Spends 1 stamina per minute to add that much training progress to the attribute being trained right away.
    * Minutes beyond the tier cap are never charged (clamped). `maxCost` is the cost the button showed:
@@ -105,6 +124,14 @@ export type CommandErrorCode =
   | 'TREE_LOCKED'
   | 'NOT_WOODCUTTING'
   | 'LOG_CHANGED'
+  | 'UNKNOWN_ROCK'
+  | 'ROCK_LOCKED'
+  | 'NOT_MINING'
+  | 'ORE_CHANGED'
+  | 'UNKNOWN_BUILDING'
+  | 'BUILDING_LOCKED'
+  | 'ALREADY_BUILT'
+  | 'REQUIREMENTS_NOT_MET'
   | 'COST_CHANGED'
   | 'DUNGEON_LOCKED'
   | 'NO_ACTIVE_ACTIVITY'
@@ -146,6 +173,10 @@ export const MAX_DEBUG_TRAINING_XP = 100_000;
 export const MAX_DEBUG_WOODCUTTING_LEVELS = 100;
 export const MAX_DEBUG_WOODCUTTING_LEVEL = 1000;
 
+/** Debug mining levels per command, and the highest level the debug grant may reach. */
+export const MAX_DEBUG_MINING_LEVELS = 100;
+export const MAX_DEBUG_MINING_LEVEL = 1000;
+
 /** Debug gold grant per command, and the most gold a save may reach that way. */
 export const MAX_DEBUG_GOLD_GRANT = 1_000_000;
 export const MAX_DEBUG_GOLD_VALUE = 1_000_000_000_000;
@@ -182,6 +213,9 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
 
   switch (cmd.type) {
     case 'START_ACTIVITY': {
+      // A locked building can't be used: the activity it hosts refuses to start.
+      const needs = typeof cmd.kind === 'string' ? buildingForActivity(cmd.kind) : null;
+      if (needs && !isBuilt(draft, needs)) return fail('BUILDING_LOCKED', `Build the ${BUILDINGS[needs].name} first`);
       let next: Activity;
       if (cmd.kind === 'training') {
         const { attribute } = cmd;
@@ -200,6 +234,21 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
         // Already running this dungeon: keep the current run.
         if (draft.activity?.kind === 'dungeon' && draft.activity.dungeonId === cmd.dungeonId) break;
         next = { kind: 'dungeon', dungeonId: cmd.dungeonId, startedAt: now, phase: 'search', progressMs: 0, fight: null };
+      } else if (cmd.kind === 'mining') {
+        const { rockId } = cmd;
+        if (!isRockId(rockId)) return fail('UNKNOWN_ROCK', `Unknown rock ${String(rockId)}`);
+        const check = rockCheck(draft, rockId);
+        if (!check.unlocked) {
+          const rock = ROCKS[rockId];
+          const missing = [
+            check.levelOk ? null : `mining level ${rock.reqLevel}`,
+            check.msOk ? null : `${rock.reqMs} mining strength (you have ${miningStrength(draft).value})`,
+          ].filter(Boolean);
+          return fail('ROCK_LOCKED', `${rock.name} needs ${missing.join(' and ')}`);
+        }
+        // Already mining this rock: keep the ore in progress.
+        if (draft.activity?.kind === 'mining' && draft.activity.rockId === rockId) break;
+        next = { kind: 'mining', rockId, startedAt: now, progressMs: 0 };
       } else {
         if (!isGatheringKind(cmd.kind)) return fail('UNKNOWN_ACTIVITY', `Unknown activity ${String(cmd.kind)}`);
         const { treeId } = cmd;
@@ -226,6 +275,8 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       const { tier } = cmd;
       if (typeof tier !== 'number' || !Number.isSafeInteger(tier)) return fail('INVALID_COMMAND', `Invalid tier ${String(tier)}`);
       const current = draft.training.tier;
+      // Tiers are bought at the Training Grounds: a locked building can't be used.
+      if (!isBuilt(draft, 'training_grounds')) return fail('BUILDING_LOCKED', `Build the ${BUILDINGS.training_grounds.name} first`);
       if (current >= TRAINING.maxTier) return fail('MAX_TIER', `Training is already at the max tier (${TRAINING.maxTier})`);
       // Bound to what the player saw: only the next tier, so a repeated tap never buys a second one.
       if (tier !== current + 1) return fail('TIER_NOT_NEXT', `Tier ${tier} is not the next tier (${current + 1})`);
@@ -282,6 +333,58 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       draft = spent.state;
       cutLog(draft, a.treeId, null, events);
       if (draft.activity?.kind === 'woodcutting') draft.activity.progressMs = 0;
+      break;
+    }
+    case 'SKIP_MINE': {
+      const a = draft.activity;
+      if (a?.kind !== 'mining') return fail('NOT_MINING', 'No rock is being mined');
+      const { ore, maxCost } = cmd;
+      if (typeof maxCost !== 'number' || !Number.isSafeInteger(maxCost) || maxCost <= 0) {
+        return fail('INVALID_AMOUNT', `Invalid maxCost ${String(maxCost)}`);
+      }
+      if (typeof ore !== 'number' || !Number.isSafeInteger(ore) || ore <= 0) return fail('INVALID_COMMAND', `Invalid ore ${String(ore)}`);
+      // The ore the player saw finished (simulating to now, or earlier): never finish the next one instead.
+      if (ore !== draft.stats.totalActions + 1) return fail('ORE_CHANGED', 'That ore already finished');
+      const remainingMs = Math.max(0, oreMsFor(a.rockId, effectiveAttributes(draft)) - a.progressMs);
+      const cost = mineSkipCost(remainingMs);
+      if (cost > maxCost) return fail('ORE_CHANGED', `Skipping now costs ${cost}, more than the ${maxCost} shown`);
+      const spent = spendStamina(draft, cost);
+      if (!spent.ok) return fail(spent.error.code, spent.error.message);
+      draft = spent.state;
+      mineOre(draft, a.rockId, null, events);
+      if (draft.activity?.kind === 'mining') draft.activity.progressMs = 0;
+      break;
+    }
+    case 'BUILD': {
+      const { buildingId } = cmd;
+      if (!isBuildingId(buildingId)) return fail('UNKNOWN_BUILDING', `Unknown building ${String(buildingId)}`);
+      const e = build(draft, buildingId, events);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'DEBUG_BUILD': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const { buildingId } = cmd;
+      if (!isBuildingId(buildingId)) return fail('UNKNOWN_BUILDING', `Unknown building ${String(buildingId)}`);
+      if (isBuilt(draft, buildingId)) return fail('ALREADY_BUILT', `${BUILDINGS[buildingId].name} is already built`);
+      draft = markDebugUsed(draft);
+      completeBuilding(draft, buildingId, events);
+      break;
+    }
+    case 'DEBUG_ADD_MINING_LEVEL': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const { levels } = cmd;
+      if (typeof levels !== 'number' || !Number.isSafeInteger(levels) || levels <= 0 || levels > MAX_DEBUG_MINING_LEVELS) {
+        return fail('INVALID_AMOUNT', `Invalid level amount ${String(levels)}`);
+      }
+      const skill = draft.character.skills.mining;
+      const level = skill.level + levels;
+      if (level > MAX_DEBUG_MINING_LEVEL) return fail('INVALID_AMOUNT', `Mining would exceed level ${MAX_DEBUG_MINING_LEVEL}`);
+      draft = markDebugUsed(draft);
+      const next = xpToNext(SKILL_XP_CURVE, level);
+      // The curve only grows, so the XP already earned stays below the new level's requirement.
+      draft.character.skills.mining = { level, xp: Math.min(skill.xp, next - 1), xpToNext: next };
+      events.push({ type: 'SKILL_LEVEL_UP', skill: 'mining', level });
       break;
     }
     case 'SPEEDUP_TRAINING': {
@@ -414,13 +517,13 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
     case 'EQUIP_ITEM': {
       const e = equipItem(draft, cmd.itemId);
       if (e) return fail(e.code, e.message);
-      stopWoodcuttingIfTooWeak(draft, events);
+      stopGatheringIfTooWeak(draft, events);
       break;
     }
     case 'UNEQUIP_ITEM': {
       const e = unequipItem(draft, cmd.slot);
       if (e) return fail(e.code, e.message);
-      stopWoodcuttingIfTooWeak(draft, events);
+      stopGatheringIfTooWeak(draft, events);
       break;
     }
     case 'USE_ITEM': {
@@ -474,14 +577,16 @@ function stopActivity(draft: GameState, events: GameEvent[]) {
 }
 
 /**
- * Product rule (2026-10-27): woodcutting stops when an equipment change drops woodcutting strength below the
- * current tree's requirement. Logs finished before the command are already banked (applyCommand simulated to
- * `now` first); the log in progress is dropped like any stop. Only equipment changes WS in a command (selling
- * an equipped item is refused; STR only goes up), so EQUIP_ITEM and UNEQUIP_ITEM call this.
+ * Product rule (2026-10-27, mining 2026-10-28): gathering stops when an equipment change drops woodcutting
+ * strength below the current tree's requirement, or mining strength below the current rock's. Items finished
+ * before the command are already banked (applyCommand simulated to `now` first); the one in progress is dropped
+ * like any stop. Only equipment changes WS / MS in a command (selling an equipped item is refused; STR only goes
+ * up), so EQUIP_ITEM and UNEQUIP_ITEM call this.
  */
-function stopWoodcuttingIfTooWeak(draft: GameState, events: GameEvent[]) {
+function stopGatheringIfTooWeak(draft: GameState, events: GameEvent[]) {
   const a = draft.activity;
   if (a?.kind === 'woodcutting' && !treeCheck(draft, a.treeId).wsOk) stopActivity(draft, events);
+  else if (a?.kind === 'mining' && !rockCheck(draft, a.rockId).msOk) stopActivity(draft, events);
 }
 
 /**

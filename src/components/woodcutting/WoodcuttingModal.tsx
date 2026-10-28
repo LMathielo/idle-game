@@ -141,6 +141,7 @@ export function WoodcuttingModal() {
       </View>
       <Text style={styles.note}>Logs are cut one after another, also while the app is closed (up to {formatNumber(state.offline.capMs / 3_600_000)}h).</Text>
       {otherActivity === 'training' ? <Text style={styles.note}>Starting stops training (your training XP is kept).</Text> : null}
+      {otherActivity === 'mining' ? <Text style={styles.note}>Starting stops mining (your ores are kept).</Text> : null}
       {otherActivity === 'dungeon' ? <Text style={styles.note}>Starting stops the dungeon: the run in progress is lost.</Text> : null}
     </ModalScreen>
   );

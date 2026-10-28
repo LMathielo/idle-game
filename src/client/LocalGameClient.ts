@@ -10,6 +10,7 @@
 import {
   applyCommand,
   type AttributeKey,
+  type BuildingId,
   type Command,
   CURRENT_SAVE_VERSION,
   type DungeonId,
@@ -253,6 +254,10 @@ export class LocalGameClient implements GameClient {
     addGold: (amount = 1000): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_GOLD', amount }),
     addWoodcuttingLevel: (levels = 1): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_WOODCUTTING_LEVEL', levels }),
     addMerchantCharge: (): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_MERCHANT_CHARGE' }),
+    /** Builds a locked building for free (requirements ignored). Logged as DEBUG_BUILD. */
+    build: (buildingId: BuildingId): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_BUILD', buildingId }),
+    /** Adds mining levels (default 1), to test rock unlocks. Logged as DEBUG_ADD_MINING_LEVEL. */
+    addMiningLevel: (levels = 1): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_MINING_LEVEL', levels }),
 
     resetSave: (): Promise<void> =>
       this.serial(async () => {

@@ -37,7 +37,7 @@ import {
   trainingXpToNext,
   trainingXpToReach,
 } from '../src/engine';
-import { apply, cmd, HOUR, makeClient, MIN, SEC, T0 } from './helpers';
+import { apply, cmd, HOUR, makeClient, MIN, SEC, T0, builtGame, debugBuild } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v5 save + its action log, written by the 1.4.0 engine before training (tests/fixtures). */
@@ -55,8 +55,12 @@ const cumulative = (level: number) => {
 };
 
 /** New hero with `gold` and `tier` already bought (set directly: tier purchases are tested on their own). */
+/**
+ * Buildings built, training at an explicit `tier`. Since 1.9.0 the Training Grounds come with Tier 1, so tier 0 with
+ * the building built can't happen in play; tier-0 cases here only pin the price and lock rules, which still apply.
+ */
 function heroAtTier(tier: number, gold = 0): GameState {
-  const s = newGame(7, T0);
+  const s = builtGame(7, T0);
   return { ...s, character: { ...s.character, gold }, training: { ...s.training, tier } };
 }
 
@@ -115,8 +119,9 @@ describe('curve, caps and prices (config/training.ts)', () => {
     expect(Number.isInteger(TRAINING.rateMultiplier)).toBe(true);
   });
 
-  it('a new hero starts at tier 0 with every attribute untrained', () => {
+  it('a new hero starts at tier 0 with every attribute untrained (Training Grounds not built yet)', () => {
     const s = newGame(1, T0);
+    expect(s.buildings.training_grounds.state).toBe('locked');
     expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
     expect(s.training).toEqual({
       tier: 0,
@@ -149,12 +154,12 @@ describe('UNLOCK_TRAINING_TIER', () => {
   });
 
   it('not enough gold → NOT_ENOUGH_GOLD with what is missing; gold and tier untouched', () => {
-    const s = newGame(1, T0); // 25 gold
-    const r = applyCommand(s, cmd({ type: 'UNLOCK_TRAINING_TIER', tier: 1 }), T0);
+    const s = builtGame(1, T0); // 25 gold, Tier 1 from the Training Grounds
+    const r = applyCommand(s, cmd({ type: 'UNLOCK_TRAINING_TIER', tier: 2 }), T0);
     expect(r).toMatchObject({ ok: false, error: { code: 'NOT_ENOUGH_GOLD' } });
-    expect(!r.ok && r.error.message).toContain('75 missing');
+    expect(!r.ok && r.error.message).toContain('775 missing');
     expect(s.character.gold).toBe(25);
-    expect(s.training.tier).toBe(0);
+    expect(s.training.tier).toBe(1);
   });
 
   it('exactly the price leaves 0 gold; gold is never negative over every tier purchase', () => {
@@ -177,7 +182,7 @@ describe('UNLOCK_TRAINING_TIER', () => {
 
 describe('START_ACTIVITY training', () => {
   it('tier 0 → TRAINING_LOCKED; unknown attribute → UNKNOWN_ATTRIBUTE', () => {
-    const s = newGame(1, T0);
+    const s = heroAtTier(0);
     expect(applyCommand(s, cmd({ type: 'START_ACTIVITY', kind: 'training', attribute: 'strength' }), T0)).toMatchObject({
       ok: false,
       error: { code: 'TRAINING_LOCKED' },
@@ -370,10 +375,12 @@ describe('effective attributes feed every rule', () => {
 });
 
 describe('views', () => {
-  it('tier 0: Tier 1 for 100 g, unaffordable with 25 g (75 missing), nothing trainable', () => {
+  it('new hero: tier 0, nothing trainable; Training Grounds built: Tier 1, next Tier 2 for 800 g (775 missing)', () => {
     const v = trainingView(newGame(1, T0));
     expect(v).toMatchObject({ tier: 0, cap: 0, active: null, nextTier: { tier: 1, price: 100, cap: 20, affordable: false, missing: 75 } });
     expect(v.attributes.map((a) => [a.attribute, a.effective, a.trained, a.maxed])).toEqual(ATTRIBUTE_KEYS.map((k) => [k, 10, 0, false]));
+    const built = trainingView(builtGame(1, T0));
+    expect(built).toMatchObject({ tier: 1, cap: 20, active: null, nextTier: { tier: 2, price: 800, cap: 40, affordable: false, missing: 775 } });
   });
 
   it('active attribute: fraction and minutes left; the strip view matches', () => {
@@ -409,7 +416,7 @@ describe('debug rows', () => {
   });
 
   it('+1,000 gold; bounded', () => {
-    const s = apply(newGame(1, T0), { type: 'DEBUG_ADD_GOLD', amount: 1000 }, T0);
+    const s = apply(builtGame(1, T0), { type: 'DEBUG_ADD_GOLD', amount: 1000 }, T0);
     expect(s.character.gold).toBe(1025);
     expect(s.flags.debugUsed).toBe(true);
     expect(applyCommand(s, cmd({ type: 'DEBUG_ADD_GOLD', amount: -5 }), T0)).toMatchObject({ ok: false, error: { code: 'INVALID_AMOUNT' } });
@@ -419,7 +426,8 @@ describe('debug rows', () => {
     const { repo, clock, client } = makeClient({ prefix: 'tr' });
     await client.load();
     expect((await client.debug.addGold()).ok).toBe(true);
-    expect((await client.dispatch({ type: 'UNLOCK_TRAINING_TIER', tier: 1 })).ok).toBe(true);
+    await debugBuild(client, ['training_grounds']); // 1.9.0: the Training Grounds come with Tier 1
+    expect((await client.dispatch({ type: 'UNLOCK_TRAINING_TIER', tier: 2 })).ok).toBe(true);
     expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'training', attribute: 'strength' })).ok).toBe(true);
     for (let i = 0; i < 70; i++) {
       clock.advance(SEC);
@@ -430,7 +438,7 @@ describe('debug rows', () => {
     await client.resume();
     await client.persist();
     const rows = await repo.getAllLog();
-    expect(rows.map((r) => r.type)).toEqual(expect.arrayContaining(['DEBUG_ADD_GOLD', 'UNLOCK_TRAINING_TIER', 'DEBUG_ADD_TRAINING_XP']));
+    expect(rows.map((r) => r.type)).toEqual(expect.arrayContaining(['DEBUG_ADD_GOLD', 'DEBUG_BUILD', 'UNLOCK_TRAINING_TIER', 'DEBUG_ADD_TRAINING_XP']));
     const report = replayLogReport(entries(rows));
     expect(hashState(report.state)).toBe(hashState(client.getState()));
     expect(report.state?.flags.debugUsed).toBe(true);
@@ -441,8 +449,7 @@ describe('client: away summary', () => {
   it('2 h away while training: 120 XP credited, levels gained in the summary', async () => {
     const { clock, client } = makeClient({ prefix: 'away' });
     await client.load();
-    await client.debug.addGold(1000);
-    await client.dispatch({ type: 'UNLOCK_TRAINING_TIER', tier: 1 });
+    await debugBuild(client, ['training_grounds']); // Tier 1 comes with the building
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'training', attribute: 'strength' });
     await client.persist();
     clock.advance(2 * HOUR);
@@ -508,9 +515,10 @@ describe('frozen v5 save (tests/fixtures/save-v5.json) → v6', () => {
     });
     expect(p.snapshot).toEqual(loadSave(V5_SAVE));
 
-    // Plays on with training: the fixture's 198 gold buys Tier 1; training cancels the Bat Cave run.
-    expect((await client.dispatch({ type: 'UNLOCK_TRAINING_TIER', tier: 1 })).ok).toBe(true);
-    expect(client.getState().character.gold).toBeGreaterThanOrEqual(98);
+    // Plays on with training (1.9.0: the Training Grounds, built here with debug, come with Tier 1); training
+    // cancels the Bat Cave run.
+    await debugBuild(client, ['training_grounds']);
+    expect(client.getState().training.tier).toBe(1);
     expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'training', attribute: 'endurance' })).ok).toBe(true);
     clock.advance(30 * MIN);
     await client.resume();

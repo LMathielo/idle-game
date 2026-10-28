@@ -28,6 +28,7 @@ import {
   HERO_XP_CURVE,
   loadSave,
   type MigratePayload,
+  migrateDoc,
   MIGRATIONS,
   newFight,
   newGame,
@@ -41,7 +42,7 @@ import {
   SKILL_XP_CURVE,
   xpToNext,
 } from '../src/engine';
-import { apply, HOUR, makeClient, MIN, SEC, T0, progressMs } from './helpers';
+import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, progressMs } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v8 save + its action log, written by the 1.7.0 engine before live combat (tests/fixtures). */
@@ -62,7 +63,7 @@ function fightOf(s: GameState): ActiveFight | null {
 
 /** A game with every dungeon unlocked and `id` running from T0. */
 function runningIn(id: DungeonId, seed = 5, tweak: (s: GameState) => GameState = (s) => s): GameState {
-  const g = newGame(seed, T0);
+  const g = builtGame(seed, T0);
   g.dungeon.byDungeon = { rat_cellar: { runs: 10, wins: 10, losses: 0 }, bat_cave: { runs: 15, wins: 15, losses: 0 }, wolf_den: { runs: 25, wins: 25, losses: 0 }, forgotten_crypt: { runs: 40, wins: 40, losses: 0 } };
   g.dungeon.totals = { runs: 90, wins: 90, losses: 0 };
   return apply(tweak(g), { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: id }, T0);
@@ -267,51 +268,83 @@ describe('determinism across simulate boundaries', () => {
     }
   });
 
-  it('the 8 h cap can land mid-fight: the fight pauses there and continues exactly on the next resume', () => {
-    // Shift the timeline (initial search progress) until T0 + 8 h falls inside a fight with strikes already
-    // landed and at least one more second of fight to go.
+  /**
+   * Shifts the timeline (initial search progress) until T0 + 8 h falls inside a fight with strikes already landed
+   * and at least one more second of fight to go. `s` is the state at exactly 8 h (no cap: requested = 8 h).
+   */
+  function capInsideFight(): { g: GameState; s: GameState } {
     const base = rat();
-    const at8h = (p: number) => {
+    for (let p = 0; p < SEARCH_MS; p += 250) {
       const g = structuredClone(base);
       if (g.activity?.kind === 'dungeon') g.activity.progressMs = p;
-      return { g, s: simulate(g, T0 + 8 * HOUR).state };
-    };
-    let pick: { g: GameState; s: GameState } | null = null;
-    for (let p = 0; p < SEARCH_MS && !pick; p += 250) {
-      const c = at8h(p);
-      const f = fightOf(c.s);
-      if (f && f.log.length >= 2 && f.elapsedMs % 1000 !== 0 && fightOf(simulate(c.s, T0 + 8 * HOUR + 1000).state)) pick = c;
+      const s = simulate(g, T0 + 8 * HOUR).state;
+      const f = fightOf(s);
+      if (f && f.log.length >= 2 && f.elapsedMs % 1000 !== 0 && fightOf(simulate(s, T0 + 8 * HOUR + 1000).state)) return { g, s };
     }
-    if (!pick) throw new Error('no timeline with the cap inside a fight');
-    const uncapped = fightOf(pick.s)!;
+    throw new Error('no timeline with the cap inside a fight');
+  }
 
-    // 20 h away: granted exactly 8 h, so play stops at the same point inside the same fight.
+  it('the 8 h cap lands mid-fight: that fight is finished past the cap, exactly as live play; nothing else progresses', () => {
+    const pick = capInsideFight();
+    const atCap = fightOf(pick.s)!;
+    // A player who never hit the cap: the same fight ends within maxFightMs of the cap, before the next 1:50 search ends.
+    const live = simulate(pick.s, T0 + 8 * HOUR + COMBAT.maxFightMs).state;
+    expect(fightOf(live)).toBeNull();
+    expect(live.dungeon.totals.runs).toBe(pick.s.dungeon.totals.runs + 1);
+
+    // 20 h away: granted 8 h, then the fight in progress plays to its end with the time beyond the cap.
     const capped = simulate(pick.g, T0 + 20 * HOUR);
     expect(capped.summary).toMatchObject({ requestedMs: 20 * HOUR, grantedMs: 8 * HOUR });
-    const f = fightOf(capped.state)!;
-    expect(f.elapsedMs).toBe(uncapped.elapsedMs);
-    expect(f.log).toHaveLength(uncapped.log.length);
-    expect(f).toEqual(uncapped);
-    expect(capped.state.rng).toEqual(pick.s.rng);
-    expect(capped.state.dungeon).toEqual(pick.s.dungeon);
-
-    // Resume 1 s later: exactly 1 s more of the same fight, the strikes due in that second and nothing else,
-    // the same as a player who never hit the cap.
-    const resumed = simulate(capped.state, T0 + 20 * HOUR + 1000).state;
-    const expected = simulate(pick.s, T0 + 8 * HOUR + 1000).state;
-    const rf = fightOf(resumed)!;
-    expect(rf.elapsedMs).toBe(f.elapsedMs + 1000);
-    const due = (n: number, every: number) => Math.floor((f.elapsedMs + 1000) / every) - n;
-    expect(rf.log).toHaveLength(f.log.length + due(f.heroStrikes, f.hero.attackIntervalMs) + due(f.enemyStrikes, f.enemy.attackIntervalMs));
-    expect(rf.log.slice(0, f.log.length)).toEqual(f.log);
-    // Same strikes (times, rolls, damage), enemy HP and RNG as the player who never hit the cap. Only the hero's HP
-    // differs: HP regen is not capped (it ran over the whole 20 h, so the hero is full), by the regen rule.
-    const noHeroHp = (x: ActiveFight) => ({ ...x, log: x.log.map((e) => (e.actor === 'enemy' ? { ...e, targetHpAfter: 0 } : e)) });
-    expect(noHeroHp(rf)).toEqual(noHeroHp(fightOf(expected)!));
-    expect(resumed.rng).toEqual(expected.rng);
+    expect(capped.state.activity).toMatchObject({ kind: 'dungeon', phase: 'search', progressMs: 0, fight: null });
+    // Same strikes (times, rolls, damage, HP after each), same outcome, same rewards and RNG as live play.
+    expect(capped.state.dungeon).toEqual(live.dungeon);
+    expect(capped.state.dungeon.lastFight!.log.slice(0, atCap.log.length)).toEqual(atCap.log);
+    expect(capped.state.dungeon.lastFight!.log.length).toBeGreaterThan(atCap.log.length);
+    expect(capped.state.rng).toEqual(live.rng);
+    expect(capped.state.character.gold).toBe(live.character.gold);
+    expect(capped.state.character.xp).toBe(live.character.xp);
+    expect(capped.events).toContainEqual({ type: 'FIGHT_RESOLVED', dungeonId: 'rat_cellar', won: capped.state.dungeon.lastFight!.won });
+    expect(capped.summary.dungeon.runs).toBe(live.dungeon.totals.runs - pick.g.dungeon.totals.runs);
+    // HP regen is not capped (it ran over the whole 20 h), so the hero comes back full, by the regen rule.
     expect(capped.state.character.hp).toBe(getDerivedStats(capped.state).maxHp.value);
-    const lastHit = rf.log.filter((e) => e.actor === 'enemy').at(-1)!;
-    expect(lastHit.targetHpAfter).toBe(capped.state.character.hp - rf.log.filter((e) => e.actor === 'enemy' && e.atMs > f.elapsedMs).reduce((n, e) => n + e.dealt, 0));
+
+    // The next search stays at 0 until the next resume, which is live play again.
+    const next = simulate(capped.state, T0 + 20 * HOUR + 30 * SEC).state;
+    expect(next.activity).toMatchObject({ phase: 'search', progressMs: 30 * SEC });
+  });
+
+  it('past the cap: deterministic, independent of how long beyond the cap, and never past the real time', () => {
+    const pick = capInsideFight();
+    const atCap = fightOf(pick.s)!;
+    const runs = [9 * HOUR, 20 * HOUR, 72 * HOUR].map((away) => simulate(pick.g, T0 + away).state);
+    for (const r of runs) {
+      expect(r.dungeon).toEqual(runs[0].dungeon);
+      expect(r.rng).toEqual(runs[0].rng);
+      expect(r.activity).toEqual(runs[0].activity);
+    }
+    expect(hashState(simulate(pick.g, T0 + 20 * HOUR).state)).toBe(hashState(runs[1]));
+
+    // Only 0.5 s beyond the cap really passed: the fight gets exactly that, and continues live on the next resume.
+    const short = simulate(pick.g, T0 + 8 * HOUR + 500).state;
+    expect(fightOf(short)!.elapsedMs).toBe(atCap.elapsedMs + 500);
+    expect(fightOf(short)!.log).toEqual(fightOf(simulate(pick.s, T0 + 8 * HOUR + 500).state)!.log);
+  });
+
+  it('the 8 h cap during a search still pauses the search there', () => {
+    // Shift the timeline until T0 + 8 h falls inside a search with time banked.
+    const base = rat();
+    let pick: { g: GameState; s: GameState } | null = null;
+    for (let p = 0; p < SEARCH_MS && !pick; p += 1000) {
+      const g = structuredClone(base);
+      if (g.activity?.kind === 'dungeon') g.activity.progressMs = p;
+      const s = simulate(g, T0 + 8 * HOUR).state;
+      if (s.activity?.kind === 'dungeon' && s.activity.phase === 'search' && s.activity.progressMs > 10 * SEC) pick = { g, s };
+    }
+    if (!pick) throw new Error('no timeline with the cap inside a search');
+    const capped = simulate(pick.g, T0 + 20 * HOUR).state;
+    expect(capped.activity).toEqual(pick.s.activity);
+    expect(capped.dungeon).toEqual(pick.s.dungeon);
+    expect(capped.rng).toEqual(pick.s.rng);
   });
 
   it('closing the app mid-fight: the next launch catches up to the same state and the log replays', async () => {
@@ -528,7 +561,7 @@ describe('frozen v8 save (tests/fixtures/save-v8.json) → v9', () => {
   });
 
   it('migrates: level kept, XP clamped (1182 → 519 of 520), the run kept as its search, everything else kept', () => {
-    const s = loadSave(V8_SAVE);
+    const s = migrateDoc(V8_SAVE, MIGRATIONS, 9) as unknown as GameState; // the v8 → v9 step only (v10 has its own test)
     expect(s.saveVersion).toBe(9);
     expect(s.character).toMatchObject({ level: 3, xp: 519, xpToNext: 520 });
     expect(s.activity).toEqual({ ...V8_SAVE.activity, phase: 'search', fight: null });
@@ -538,7 +571,7 @@ describe('frozen v8 save (tests/fixtures/save-v8.json) → v9', () => {
     expect(rest).toEqual(rawRest);
     expect({ ...character, xp: 0, xpToNext: 0 }).toEqual({ ...rc, xp: 0, xpToNext: 0 });
     expect({ ...dungeon, lastFight: null }).toEqual({ ...rd, lastFight: null });
-    expect(hashState(loadSave(V8_SAVE))).toBe(hashState(s)); // deterministic
+    expect(hashState(migrateDoc(V8_SAVE, MIGRATIONS, 9) as unknown as GameState)).toBe(hashState(s)); // deterministic
   });
 
   it('the kept 3:27 already covers the new 1:50 search: the fight starts on the next simulate and plays live', () => {

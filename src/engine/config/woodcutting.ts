@@ -56,8 +56,8 @@ export function isTreeId(id: unknown): id is TreeId {
   return typeof id === 'string' && Object.prototype.hasOwnProperty.call(TREES, id);
 }
 
-/** Gathering skills. Woodcutting is the only one today. */
-export const GATHERING_KINDS = ['woodcutting'] as const satisfies readonly GatheringKind[];
+/** Gathering skills: woodcutting (this file) and mining (config/mining.ts). */
+export const GATHERING_KINDS = ['woodcutting', 'mining'] as const satisfies readonly GatheringKind[];
 
 export function isGatheringKind(kind: unknown): kind is GatheringKind {
   return typeof kind === 'string' && (GATHERING_KINDS as readonly string[]).includes(kind);

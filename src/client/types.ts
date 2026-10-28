@@ -1,5 +1,5 @@
 // Contracts between the UI, the client and storage. No React, no Expo.
-import type { AttributeKey, Command, CommandError, DungeonId, GameState, LogType, SimulationSummary } from '../engine';
+import type { AttributeKey, BuildingId, Command, CommandError, DungeonId, GameState, LogType, SimulationSummary } from '../engine';
 
 /** Wall clock. The app uses SystemClock; tests use a fake. */
 export interface Clock {
@@ -111,6 +111,10 @@ export interface GameClient {
     addWoodcuttingLevel(levels?: number): Promise<DispatchResult>;
     /** +1 merchant refresh charge (never above max). Logged as DEBUG_ADD_MERCHANT_CHARGE. */
     addMerchantCharge(): Promise<DispatchResult>;
+    /** Builds a locked building for free (requirements ignored, effects applied). Logged as DEBUG_BUILD. */
+    build(buildingId: BuildingId): Promise<DispatchResult>;
+    /** Adds mining levels (default 1), to test rock unlocks. Logged as DEBUG_ADD_MINING_LEVEL. */
+    addMiningLevel(levels?: number): Promise<DispatchResult>;
     /** New game with a new seed and a real clock (offset 0). Logged, never deletes the log. */
     resetSave(): Promise<void>;
   };

@@ -15,7 +15,7 @@ export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
  */
 export type Attributes = Record<AttributeKey, number>;
 
-export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots' | 'axe';
+export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots' | 'axe' | 'pickaxe';
 
 /**
  * Item quality (catalog only, by defId). `junk` is sell-only; `common` has a game use (gear, logs, potions);
@@ -25,7 +25,7 @@ export const ITEM_QUALITIES = ['junk', 'common', 'uncommon', 'rare', 'epic', 'le
 
 export type ItemQuality = (typeof ITEM_QUALITIES)[number];
 
-export const EQUIPMENT_SLOTS = ['helmet', 'amulet', 'armor', 'weapon', 'shield', 'gloves', 'ring1', 'ring2', 'boots', 'axe'] as const satisfies readonly EquipmentSlot[];
+export const EQUIPMENT_SLOTS = ['helmet', 'amulet', 'armor', 'weapon', 'shield', 'gloves', 'ring1', 'ring2', 'boots', 'axe', 'pickaxe'] as const satisfies readonly EquipmentSlot[];
 
 export type Item = {
   /** Stackable items use their definition id (e.g. `oak_logs`); unique items use an instance id. */
@@ -83,11 +83,14 @@ export type Inventory = {
 /** Seeded PRNG state (mulberry32). `seed` is a uint32 that advances on every draw. */
 export type RngState = { seed: number };
 
-/** Gathering skills (config/woodcutting.ts). */
-export type GatheringKind = 'woodcutting';
+/** Gathering skills (config/woodcutting.ts, config/mining.ts). */
+export type GatheringKind = 'woodcutting' | 'mining';
 
 /** Woodcutting trees 1–5, in order. Data lives in config/woodcutting.ts. */
 export type TreeId = 'oak' | 'birch' | 'maple' | 'yew' | 'ironwood';
+
+/** Mine Shaft rocks 1–5, in order. Data lives in config/mining.ts. */
+export type RockId = 'stone' | 'copper' | 'iron' | 'silver' | 'gold';
 
 /** Only one activity runs at a time: a gathering skill, auto-repeating dungeon runs, or training one attribute. */
 export type ActivityKind = GatheringKind | 'dungeon' | 'training';
@@ -101,7 +104,7 @@ type ActivityBase = {
   /** Engine time (epoch ms) the activity started. Informational only. */
   startedAt: number;
   /**
-   * Time banked into the current log (woodcutting) or the current search (dungeon, search phase; 0 during the
+   * Time banked into the current log (woodcutting), the current ore (mining) or the current search (dungeon, search phase; 0 during the
    * fight, whose time is `fight.elapsedMs`), in ms. Never lost between resumes.
    */
   progressMs: number;
@@ -110,7 +113,10 @@ type ActivityBase = {
 /** Cuts logs from one tree back-to-back until stopped. Switching tree starts a new log. */
 export type WoodcuttingActivity = ActivityBase & { kind: 'woodcutting'; treeId: TreeId };
 
-export type GatheringActivity = WoodcuttingActivity;
+/** Mines one rock back-to-back until stopped. Switching rock starts a new ore. */
+export type MiningActivity = ActivityBase & { kind: 'mining'; rockId: RockId };
+
+export type GatheringActivity = WoodcuttingActivity | MiningActivity;
 
 /** A run is a search for an opponent, then a live fight. */
 export type DungeonPhase = 'search' | 'fight';
@@ -263,6 +269,19 @@ export type Stamina = {
   progressMs: number;
 };
 
+// ---------- Buildings (save v10) ----------
+
+/**
+ * Village buildings that have to be built before use. Dungeon, Merchant and Storage are always built and are not
+ * stored. Requirements are data (config/buildings.ts).
+ */
+export type BuildingId = 'woodcutting' | 'mine_shaft' | 'town_hall' | 'training_grounds';
+
+export type BuildingStatus = 'locked' | 'built';
+
+/** `level` is 0 while locked and 1 once built (upgrades later raise it; only the Town Hall plans any). */
+export type BuildingState = { state: BuildingStatus; level: number };
+
 // ---------- Merchant ----------
 
 /** One merchant stock slot: `quantity` left of `defId` at `unitPrice` gold each (fixed when the stock was rolled). */
@@ -278,7 +297,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 9;
+  saveVersion: 10;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -295,6 +314,8 @@ export type GameState = {
   training: TrainingState;
   /** Save v8. Not an activity: buying and selling work while any activity runs. */
   merchant: MerchantState;
+  /** Save v10. Every building that has to be built (BuildingId), locked or built. */
+  buildings: Record<BuildingId, BuildingState>;
   /** Save v8. Serial for unique item instance ids (bought gear: `<defId>#<n>`). Only goes up. */
   nextItemSerial: number;
   stats: GameStats;
@@ -325,7 +346,8 @@ export type GameEvent =
   /** One per level gained, also when several levels come in one simulate() call. */
   | { type: 'TRAINING_LEVEL_UP'; attribute: AttributeKey; level: number }
   /** The attribute reached its tier's cap: training stopped by itself. */
-  | { type: 'TRAINING_MAXED'; attribute: AttributeKey };
+  | { type: 'TRAINING_MAXED'; attribute: AttributeKey }
+  | { type: 'BUILDING_BUILT'; buildingId: BuildingId };
 
 /** What happened during one simulate() call. Shown in the "While you were away" modal. */
 export type SimulationSummary = {
@@ -333,8 +355,10 @@ export type SimulationSummary = {
   requestedMs: number;
   /** Time actually credited (after the offline cap). */
   grantedMs: number;
-  /** Gathering actions (logs cut). Per log type: itemsGained / itemsLost under each tree's log item. */
+  /** Logs cut (woodcutting). Per log type: itemsGained / itemsLost under each tree's log item. */
   actions: number;
+  /** Ores mined (mining, save v10). Per ore type: itemsGained / itemsLost under each rock's ore item. */
+  oresMined: number;
   itemsGained: Record<string, number>;
   /** Items that did not fit because the inventory had no free slot. */
   itemsLost: Record<string, number>;

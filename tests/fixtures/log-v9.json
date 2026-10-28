@@ -1,0 +1,167 @@
+[
+  {
+    "commandId": "v9fx-2",
+    "type": "NEW_GAME",
+    "payload": {
+      "seed": 3554416254
+    },
+    "clientTime": 1793188800000,
+    "engineVersion": "1.8.0",
+    "stateHash": "60b40d71",
+    "seq": 1,
+    "synced": false
+  },
+  {
+    "commandId": "v9fx-3",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "dungeon",
+      "dungeonId": "rat_cellar",
+      "id": "v9fx-3"
+    },
+    "clientTime": 1793188800000,
+    "engineVersion": "1.8.0",
+    "stateHash": "6736aa2c",
+    "seq": 2,
+    "synced": false
+  },
+  {
+    "commandId": "v9fx-4",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 10800000,
+        "grantedMs": 10800000,
+        "actions": 0,
+        "itemsGained": {
+          "rat_skin": 46
+        },
+        "itemsLost": {},
+        "skillXpGained": {},
+        "skillLevelsGained": {},
+        "heroXpGained": 3325,
+        "heroLevelsGained": 5,
+        "goldGained": 340,
+        "dungeon": {
+          "runs": 95,
+          "wins": 95,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [
+          "bat_cave"
+        ],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1793199600000,
+    "engineVersion": "1.8.0",
+    "stateHash": "e6e7ed1e",
+    "seq": 3,
+    "synced": false
+  },
+  {
+    "commandId": "v9fx-5",
+    "type": "UNLOCK_TRAINING_TIER",
+    "payload": {
+      "type": "UNLOCK_TRAINING_TIER",
+      "tier": 1,
+      "id": "v9fx-5"
+    },
+    "clientTime": 1793199600000,
+    "engineVersion": "1.8.0",
+    "stateHash": "ef9c92f8",
+    "seq": 4,
+    "synced": false
+  },
+  {
+    "commandId": "v9fx-6",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "woodcutting",
+      "treeId": "oak",
+      "id": "v9fx-6"
+    },
+    "clientTime": 1793199600000,
+    "engineVersion": "1.8.0",
+    "stateHash": "64f7dd9e",
+    "seq": 5,
+    "synced": false
+  },
+  {
+    "commandId": "v9fx-7",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 4020000,
+        "grantedMs": 4020000,
+        "actions": 36,
+        "itemsGained": {
+          "oak_logs": 36
+        },
+        "itemsLost": {},
+        "skillXpGained": {
+          "woodcutting": 900
+        },
+        "skillLevelsGained": {
+          "woodcutting": 1
+        },
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1793203620000,
+    "engineVersion": "1.8.0",
+    "stateHash": "6d3763b8",
+    "seq": 6,
+    "synced": false
+  },
+  {
+    "commandId": "v9fx-8",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 47000,
+        "grantedMs": 47000,
+        "actions": 0,
+        "itemsGained": {},
+        "itemsLost": {},
+        "skillXpGained": {},
+        "skillLevelsGained": {},
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1793203667000,
+    "engineVersion": "1.8.0",
+    "stateHash": "043e6414",
+    "seq": 7,
+    "synced": false
+  }
+]

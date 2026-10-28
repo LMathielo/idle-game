@@ -1,8 +1,8 @@
-// Status strip shown above the tab bar while an activity runs (woodcutting, dungeon runs or training).
+// Status strip shown above the tab bar while an activity runs (woodcutting, mining, dungeon runs or training).
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useGameSnapshot } from '../client/GameProvider';
-import { activityView, DUNGEONS, ENEMIES, hpView, itemQuantity, TREES } from '../engine';
+import { activityView, DUNGEONS, ENEMIES, hpView, itemQuantity, ROCKS, TREES } from '../engine';
 import { colors, fonts } from '../theme';
 import { ATTRIBUTE_NAMES, formatClock, formatNumber, formatTrainingLeft } from './format';
 import { LiveBar } from './LiveBar';
@@ -58,6 +58,22 @@ export function ActivityStrip() {
         title={`🏋️ Training ${names.short} · Lv ${view.trained} · ${left} to next`}
         right={`${names.short} ${formatNumber(view.effective)}`}
         a11y={`Training ${names.label}, level ${view.trained} of ${view.cap}, ${left} to the next level, ${names.label} ${view.effective}${clockPaused ? PAUSED_A11Y : ''}`}
+        fraction={view.fraction}
+        remainingMs={view.remainingMs}
+        paused={clockPaused}
+        color={colors.skill}
+      />
+    );
+  }
+
+  if (view.kind === 'mining') {
+    const rock = ROCKS[view.rockId];
+    const ores = itemQuantity(state, rock.oreItemId);
+    return (
+      <StripView
+        title={`⛏️ ${rock.name} · ${formatClock(view.remainingMs)} · Lv ${view.skillLevel}`}
+        right={`${rock.icon} ${formatNumber(ores)}`}
+        a11y={`Mining ${rock.name}, ${formatClock(view.remainingMs)} to the next ore, mining level ${view.skillLevel}, ${ores} ${rock.name}${clockPaused ? PAUSED_A11Y : ''}`}
         fraction={view.fraction}
         remainingMs={view.remainingMs}
         paused={clockPaused}
