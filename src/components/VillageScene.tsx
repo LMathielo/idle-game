@@ -1,165 +1,215 @@
-import { memo, useCallback, useRef, useState } from 'react';
-import { type HostInstance, Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
-import { PixelButton } from './PixelButton';
+// The village map: the artwork (assets/images/village.png, bigger than the screen) can be dragged in any direction and
+// pinch-zoomed (about the fingers' midpoint), clamped so it always covers the screen (no empty bars), from about the
+// whole width up to 2.5× the starting zoom. It starts centred on the core village. Signs keep their on-screen size while
+// zooming; their positions follow the map. A drag starting on a sign pans; a tap on a sign still opens it (the pan only
+// activates after the finger moves, and then cancels the press).
+//
+// Gestures and the camera live on the UI thread (Reanimated shared values + Gesture Handler v3 hooks); React only
+// re-renders when the game state changes. The HUD and the activity strip are overlays drawn by the screens above this.
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { type HostInstance, Image, type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { GestureDetector, usePanGesture, usePinchGesture, useSimultaneousGestures } from 'react-native-gesture-handler';
+import Animated, { type SharedValue, useAnimatedStyle, useSharedValue, withDecay } from 'react-native-reanimated';
 import { colors, fonts } from '../theme';
+import { PixelButton } from './PixelButton';
+import { clampCamera, mapLimits, SIGNS, type VillageAction, WORLD } from './village/villageMap';
+
+export type { VillageAction } from './village/villageMap';
 
 const village = require('../../assets/images/village.png');
-
-// Base pixel size of the artwork (rendered at 4x in the PNG).
-const ART_W = 180;
-const ART_H = 390;
-
-export type VillageAction = 'storage' | 'merchant' | 'dungeon' | 'training' | 'woodcutting' | 'mine' | 'town_hall';
-
-/**
- * Where the CENTRE of each sign sits on the artwork, as fractions of the image (base px / 180, base px / 390).
- * Landmarks come from tools/generate-village.py (anchors printed by the script):
- * - dungeon: just under the cave mouth (cave 150,104-119)
- * - mine: just under the mine entrance (opening 32-44, 116-129; rails to y 142)
- * - woodcutting: at the foot of the forest, by the stumps (trees x 0-70, y 150-209)
- * - merchant: over the stall's awning (stall 114-150, 204-226)
- * - town_hall: on the hall's roof, under the bell tower (hall 110-142, 231-282)
- * - storage: in front of the barn (barn 22-56, 234-277)
- * - training: on the yard's top fence (yard 108-156, 286-314)
- * Keep x within ~0.2-0.8 so the longest label still fits on a 375pt-wide screen. The upgrade timer pill (20pt under a
- * sign) was checked at 375×667: on the right column (Merchant 204, Town Hall 305, Training 378 pt) a pill under the
- * Town Hall ends at 349 and Training starts at 356; a pill under Training stays above the strip (clamped). Checked for overlaps at 320×568,
- * 375×667, 390×844 and 430×932 (the Town Hall sign sits between Merchant and Training on the right).
- */
-const SIGNS: { key: VillageAction; label: string; icon: string; x: number; y: number }[] = [
-  { key: 'dungeon', label: 'Dungeon', icon: '💀', x: 0.8, y: 0.336 },
-  { key: 'mine', label: 'Mine Shaft', icon: '⛏️', x: 0.25, y: 0.335 },
-  { key: 'woodcutting', label: 'Woodcutting', icon: '🪓', x: 0.25, y: 0.55 },
-  { key: 'merchant', label: 'Merchant', icon: '💰', x: 0.733, y: 0.49 },
-  { key: 'town_hall', label: 'Town Hall', icon: '🏛️', x: 0.71, y: 0.615 },
-  { key: 'storage', label: 'Storage', icon: '📦', x: 0.217, y: 0.74 },
-  { key: 'training', label: 'Training', icon: '⚔️', x: 0.733, y: 0.705 },
-];
 
 /** Box each sign is centred in. Wider than any label so the text never wraps or gets squeezed. */
 const SIGN_BOX_W = 200;
 const SIGN_BOX_H = 56;
-/** Gap kept between a sign and the HUD / bottom strip. */
-const SIGN_GAP = 4;
 /** The sign button itself: 38pt inner + 3pt frame each side (PixelButton), centred in the box. */
 const SIGN_BUTTON_H = 44;
-/** Timer pill under a sign (the building being upgraded): its height and the gap above it. */
+/** Timer pill under a sign (the building being upgraded). */
 const BADGE_H = 20;
 const BADGE_GAP = 2;
-/** How far a badged sign reaches below its box, so the bottom clamp keeps the pill clear of the strip too. */
-const BADGE_EXTRA = Math.max(0, SIGN_BUTTON_H / 2 + BADGE_GAP + BADGE_H - SIGN_BOX_H / 2);
+/** The finger must move this far before a drag starts, so a tap on a sign stays a tap. */
+const PAN_MIN_DISTANCE = 10;
 
-/**
- * Village background that covers the available area (cropping the sky first),
- * with signs pinned to the buildings regardless of screen size.
- * `topReserve` / `bottomReserve`: screen space covered by overlays (HUD, activity strip); a sign whose
- * landmark falls under one is pushed just clear of it, so every sign stays visible and tappable.
- */
-export const VillageScene = memo(function VillageScene({
-  onAction,
-  active,
-  locked,
-  badge,
-  topReserve = 0,
-  bottomReserve = 0,
-}: {
+type Props = {
   /** A sign was tapped; `node` is its button (InfoPopover anchors on it). */
   onAction?: (a: VillageAction, node: HostInstance | null) => void;
   /** Sign of the running activity, drawn highlighted. */
   active?: VillageAction | null;
-  /** Signs of buildings not built yet: greyed with 🔒, still tappable (they open the Build sheet). */
+  /** Signs of buildings not built yet: greyed with 🔒, still tappable (they open the Build box). */
   locked?: ReadonlySet<VillageAction>;
-  /** One sign with a timer pill under it (the building being upgraded: "Upgrading 12:34"). The sign itself keeps one row. */
+  /** One sign with a timer pill under it (the building being upgraded: "Upgrading 12:34"). */
   badge?: { key: VillageAction; text: string } | null;
+  /** Screen space covered by overlays (HUD, activity strip): the start view centres the core between them. */
   topReserve?: number;
   bottomReserve?: number;
-}) {
-  const [box, setBox] = useState({ w: 0, h: 0 });
-  const onLayout = (e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout;
-    setBox({ w: width, h: height });
-  };
+};
 
-  // "cover" scale, anchored to the bottom so the village stays visible on short screens
-  const scale = Math.max(box.w / ART_W, box.h / ART_H);
-  const imgW = ART_W * scale;
-  const imgH = ART_H * scale;
-  const left = (box.w - imgW) / 2;
-  const top = box.h - imgH;
-  const minY = topReserve + SIGN_GAP + SIGN_BOX_H / 2;
-  const maxY = box.h - bottomReserve - SIGN_GAP - SIGN_BOX_H / 2;
+export const VillageScene = memo(function VillageScene({ onAction, active, locked, badge, topReserve = 0, bottomReserve = 0 }: Props) {
+  const zoom = useSharedValue(1);
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const viewW = useSharedValue(0);
+  const viewH = useSharedValue(0);
+  const minZoom = useSharedValue(1);
+  const maxZoom = useSharedValue(1);
+  /** True once the player panned or zoomed: later layout changes then keep their view. */
+  const moved = useSharedValue(false);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0) setSize((cur) => (cur && cur.w === width && cur.h === height ? cur : { w: width, h: height }));
+  }, []);
+
+  // Set up (or re-centre) the camera for this size and these overlays. The HUD's height arrives after the first
+  // layout, so this runs again then; once the player has moved the map, only the limits change and the view is clamped.
+  useEffect(() => {
+    if (!size) return;
+    const lim = mapLimits(size, topReserve, bottomReserve);
+    viewW.set(size.w);
+    viewH.set(size.h);
+    minZoom.set(lim.minZoom);
+    maxZoom.set(lim.maxZoom);
+    const c = moved.get()
+      ? clampCamera({ zoom: Math.min(lim.maxZoom, Math.max(lim.minZoom, zoom.get())), tx: tx.get(), ty: ty.get() }, size)
+      : lim.camera;
+    zoom.set(c.zoom);
+    tx.set(c.tx);
+    ty.set(c.ty);
+  }, [size, topReserve, bottomReserve, viewW, viewH, minZoom, maxZoom, moved, zoom, tx, ty]);
+  const ready = !!size;
+
+  const pan = usePanGesture({
+    minDistance: PAN_MIN_DISTANCE,
+    maxPointers: 2,
+    onActivate: () => {
+      moved.set(true);
+      cancelDecay(tx, ty);
+    },
+    onUpdate: (e) => {
+      const c = clampCamera({ zoom: zoom.get(), tx: tx.get() + e.changeX, ty: ty.get() + e.changeY }, { w: viewW.get(), h: viewH.get() });
+      tx.set(c.tx);
+      ty.set(c.ty);
+    },
+    onDeactivate: (e) => {
+      // A flick glides on and stops at the map's edge.
+      const z = zoom.get();
+      tx.set(withDecay({ velocity: e.velocityX, clamp: [viewW.get() - WORLD.w * z, 0] }));
+      ty.set(withDecay({ velocity: e.velocityY, clamp: [viewH.get() - WORLD.h * z, 0] }));
+    },
+  });
+
+  const pinch = usePinchGesture({
+    onActivate: () => {
+      moved.set(true);
+      cancelDecay(tx, ty);
+    },
+    onUpdate: (e) => {
+      const z0 = zoom.get();
+      const z1 = Math.min(maxZoom.get(), Math.max(minZoom.get(), z0 * e.scaleChange));
+      // Zoom about the fingers' midpoint: the world point under it stays under it.
+      const k = z1 / z0;
+      const c = clampCamera(
+        { zoom: z1, tx: e.focalX - (e.focalX - tx.get()) * k, ty: e.focalY - (e.focalY - ty.get()) * k },
+        { w: viewW.get(), h: viewH.get() },
+      );
+      zoom.set(c.zoom);
+      tx.set(c.tx);
+      ty.set(c.ty);
+    },
+  });
+
+  const gesture = useSimultaneousGestures(pan, pinch);
+
+  // Transform only (no layout per frame): the map is laid out at 1 pt per base px and scaled from its top-left corner,
+  // so world point p lands at (tx + p.x × zoom, ty + p.y × zoom), the same formula the signs use.
+  const mapStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tx.get() }, { translateY: ty.get() }, { scale: zoom.get() }],
+  }));
 
   return (
-    <View style={styles.root} onLayout={onLayout}>
-      {box.w > 0 && (
-        <>
-          <Image source={village} style={{ position: 'absolute', left, top, width: imgW, height: imgH }} resizeMode="stretch" />
-          {SIGNS.map((s) => {
-            const cx = left + s.x * imgW;
-            const isLocked = !!locked?.has(s.key);
-            const sub = badge?.key === s.key ? badge.text : undefined;
-            const cy = Math.min(Math.max(top + s.y * imgH, minY), maxY - (sub ? BADGE_EXTRA : 0));
-            return (
-              <View key={s.key} style={[styles.sign, { left: cx - SIGN_BOX_W / 2, top: cy - SIGN_BOX_H / 2 }]} pointerEvents="box-none">
-                <SignButton
-                  sign={s}
-                  locked={isLocked}
-                  active={!isLocked && active === s.key}
-                  sub={sub}
-                  onAction={onAction}
-                />
-                {sub ? (
-                  <View style={styles.badge} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no">
-                    <Text style={styles.badgeText} numberOfLines={1}>
-                      🔨 {sub}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            );
-          })}
-        </>
-      )}
-    </View>
+    <GestureDetector gesture={gesture}>
+      <View style={styles.root} onLayout={onLayout} accessible={false}>
+        {ready ? (
+          <>
+            <Animated.View style={[styles.map, mapStyle]} pointerEvents="none">
+              <Image source={village} style={styles.image} resizeMode="stretch" accessibilityIgnoresInvertColors />
+            </Animated.View>
+            {SIGNS.map((s) => (
+              <Sign
+                key={s.key}
+                sign={s}
+                zoom={zoom}
+                tx={tx}
+                ty={ty}
+                locked={!!locked?.has(s.key)}
+                active={active === s.key}
+                badge={badge?.key === s.key ? badge.text : undefined}
+                onAction={onAction}
+              />
+            ))}
+          </>
+        ) : null}
+      </View>
+    </GestureDetector>
   );
 });
 
-/** One sign button; hands its own view to onAction so the Build box can anchor on it. */
-function SignButton({
-  sign,
-  locked,
-  active,
-  sub,
-  onAction,
-}: {
+/** Stops a running flick (withDecay) so a new touch takes over at once. */
+function cancelDecay(tx: SharedValue<number>, ty: SharedValue<number>) {
+  'worklet';
+  tx.set(tx.get());
+  ty.set(ty.get());
+}
+
+type SignProps = {
   sign: (typeof SIGNS)[number];
+  zoom: SharedValue<number>;
+  tx: SharedValue<number>;
+  ty: SharedValue<number>;
   locked: boolean;
   active: boolean;
-  sub?: string;
+  badge?: string;
   onAction?: (a: VillageAction, node: HostInstance | null) => void;
-}) {
+};
+
+/** One sign: a constant-size button whose box follows its anchor on the map. */
+const Sign = memo(function Sign({ sign, zoom, tx, ty, locked, active, badge, onAction }: SignProps) {
   const ref = useRef<HostInstance>(null);
   const press = useCallback(() => onAction?.(sign.key, ref.current), [onAction, sign.key]);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: tx.get() + sign.x * zoom.get() - SIGN_BOX_W / 2 }, { translateY: ty.get() + sign.y * zoom.get() - SIGN_BOX_H / 2 }],
+  }));
   return (
-    <PixelButton
-      ref={ref}
-      sign
-      label={sign.label}
-      icon={locked ? '🔒' : sign.icon}
-      muted={locked}
-      active={active}
-      onPress={press}
-      accessibilityLabel={locked ? `${sign.label}, not built` : sub ? `${sign.label}, ${sub}` : sign.label}
-      accessibilityHint={locked ? 'Shows what it needs to build' : undefined}
-    />
+    <Animated.View style={[styles.sign, style]} pointerEvents="box-none">
+      <PixelButton
+        ref={ref}
+        sign
+        label={sign.label}
+        icon={locked ? '🔒' : sign.icon}
+        muted={locked}
+        active={!locked && active}
+        onPress={press}
+        accessibilityLabel={locked ? `${sign.label}, not built` : badge ? `${sign.label}, ${badge}` : sign.label}
+        accessibilityHint={locked ? 'Shows what it needs to build' : undefined}
+      />
+      {badge ? (
+        <View style={styles.badge} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no">
+          <Text style={styles.badgeText} numberOfLines={1}>
+            🔨 {badge}
+          </Text>
+        </View>
+      ) : null}
+    </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden', backgroundColor: colors.night },
+  map: { position: 'absolute', left: 0, top: 0, width: WORLD.w, height: WORLD.h, transformOrigin: 'left top' },
+  image: { width: '100%', height: '100%' },
   // fixed box centred on the anchor point; the button is centred inside it at its natural size
-  sign: { position: 'absolute', width: SIGN_BOX_W, height: SIGN_BOX_H, alignItems: 'center', justifyContent: 'center' },
-  // Pinned just under the centred button; it may hang below the box (the clamp reserves BADGE_EXTRA for it).
+  sign: { position: 'absolute', left: 0, top: 0, width: SIGN_BOX_W, height: SIGN_BOX_H, alignItems: 'center', justifyContent: 'center' },
+  // Pinned just under the centred button; it may hang below the box.
   badge: {
     position: 'absolute',
     alignSelf: 'center',

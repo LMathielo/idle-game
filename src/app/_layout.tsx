@@ -5,6 +5,7 @@ import { usePathname } from 'expo-router';
 import { Stack } from 'expo-router/stack';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useReducedMotion } from 'react-native-reanimated';
 import { GameProvider } from '../client/GameProvider';
 import { AwayModal } from '../components/AwayModal';
@@ -42,7 +43,7 @@ export default function RootLayout() {
   if (!loaded) return <View style={styles.blank} />;
 
   return (
-    <>
+    <GestureHandlerRootView style={styles.root}>
       <GameProvider>
         <DialogProvider>
           <StatusBar style="light" />
@@ -59,11 +60,12 @@ export default function RootLayout() {
           <RootDialogHost />
         </DialogProvider>
       </GameProvider>
-    </>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
   blank: { flex: 1, backgroundColor: colors.night },
+  root: { flex: 1, backgroundColor: colors.night },
   content: { backgroundColor: colors.night },
 });

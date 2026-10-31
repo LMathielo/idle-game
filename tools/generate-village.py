@@ -1,18 +1,196 @@
-"""Procedural pixel-art village, 180x390 base, upscaled x4 nearest-neighbour.
+"""Procedural pixel-art village map, upscaled x4 nearest-neighbour.
 
-Landmark anchor points (base px) are printed so UI buttons can be placed on them.
+The world is WORLD_W x WORLD_H base px. The original 180x390 village (the "core") is drawn unchanged at (CORE_X, CORE_Y);
+around it: more sky and mountains to the north, a western forest and lake, eastern hills, fields and an orchard, and a
+river with a bridge to the south. A few clearly empty plots (cleared dirt with corner stakes and a rope) wait for future
+buildings; they have no signs yet.
+
+Prints the sign anchors (world px, from the core's landmarks) and the plot rectangles, which the app keeps as data in
+src/components/village/villageMap.ts.
+
+Usage: python3 tools/generate-village.py assets/images/village.png
 """
 import random, sys
 from PIL import Image, ImageDraw
 
-W, H, S = 180, 390, 4
+W, H, S = 180, 390, 4                 # the core village (unchanged since the first map)
+WORLD_W, WORLD_H = 360, 560           # the whole map
+CORE_X, CORE_Y = 90, 40               # where the core sits in the world
 random.seed(7)
-img = Image.new("RGB", (W, H))
+img = Image.new("RGB", (WORLD_W, WORLD_H))
 d = ImageDraw.Draw(img)
 
-def rect(x0, y0, x1, y1, c): d.rectangle([x0, y0, x1, y1], fill=c)
+# Drawing helpers take coordinates in the current layer: world px for the surroundings, core px for the core (the
+# offset is added here, so the core code below is the original village code). px() and gp() clip to the layer.
+OFF = [0, 0]
+BOUNDS = [WORLD_W, WORLD_H]
+def rect(x0, y0, x1, y1, c): d.rectangle([x0 + OFF[0], y0 + OFF[1], x1 + OFF[0], y1 + OFF[1]], fill=c)
 def px(x, y, c):
-    if 0 <= x < W and 0 <= y < H: img.putpixel((x, y), c)
+    if 0 <= x < BOUNDS[0] and 0 <= y < BOUNDS[1]: img.putpixel((x + OFF[0], y + OFF[1]), c)
+def gp(x, y): return img.getpixel((x + OFF[0], y + OFF[1]))
+def line(x0, y0, x1, y1, c): d.line([x0 + OFF[0], y0 + OFF[1], x1 + OFF[0], y1 + OFF[1]], fill=c)
+
+GRASS = (88, 140, 64)
+GRASS_TEX = [(78, 128, 56), (100, 152, 72), (70, 118, 52)]
+PATH, PATH_DARK = (166, 132, 92), (140, 108, 74)
+LAND_Y = CORE_Y + 130                 # where the grass starts (the core's horizon)
+
+def in_core(x, y): return CORE_X <= x < CORE_X + W and CORE_Y <= y < CORE_Y + H
+
+# ================= world layer (drawn first; the core is painted over its own rectangle) =================
+# --- sky across the whole width: two darker bands above the core's sky, then the core's bands
+world_bands = [(76, 124, 184), (84, 132, 190)]
+core_bands = [(92, 140, 196), (108, 156, 206), (126, 172, 214), (148, 188, 220), (172, 204, 222), (198, 214, 214)]
+for i, c in enumerate(world_bands): rect(0, i * 20, WORLD_W, (i + 1) * 20, c)
+for i, c in enumerate(core_bands): rect(0, CORE_Y + i * 18, WORLD_W, CORE_Y + (i + 1) * 18, c)
+rect(0, CORE_Y + len(core_bands) * 18, WORLD_W, LAND_Y, core_bands[-1])
+def wcloud(cx, cy, w):
+    for dx in range(-w, w + 1):
+        hgt = 3 if abs(dx) < w // 2 else 2
+        rect(cx + dx, cy - hgt, cx + dx, cy, (244, 244, 236))
+    rect(cx - w, cy + 1, cx + w, cy + 1, (214, 220, 226))
+wcloud(36, 52, 10); wcloud(318, 34, 13); wcloud(300, 96, 8); wcloud(170, 14, 9)
+
+# --- far mountains on both sides (behind the core's own range, which overlaps them)
+def wmountain(cx, base, h, half, c, snow=None):
+    for y in range(h):
+        w = int(half * y / h)
+        rect(cx - w, base - h + y, cx + w, base - h + y, c)
+        if snow and y < h // 4: rect(cx - w, base - h + y, cx + w, base - h + y, snow)
+wmountain(26, LAND_Y, 62, 44, (98, 106, 130), (226, 232, 240))
+wmountain(336, LAND_Y + 2, 84, 52, (86, 92, 114), (226, 232, 240))
+wmountain(298, LAND_Y + 2, 36, 24, (110, 118, 142))
+
+# --- grass over all the land, with the core's diagonal texture near the horizon and random speckles
+rect(0, LAND_Y, WORLD_W, WORLD_H, GRASS)
+for y in range(LAND_Y, LAND_Y + 16):
+    for x in range(WORLD_W):
+        if (x + y) % 5 == 0: px(x, y, (104, 156, 76))
+for _ in range(4200):
+    x, y = random.randrange(WORLD_W), random.randrange(LAND_Y + 10, WORLD_H)
+    if not in_core(x, y): px(x, y, random.choice(GRASS_TEX))
+
+# --- the river to the south, flowing east, with a plank bridge where the path crosses
+WATER, WATER_LIGHT, BANK = (64, 112, 172), (112, 160, 212), (66, 108, 50)
+RIVER_Y = 470
+def river_y(x): return RIVER_Y + (3 if (x // 24) % 2 else 0) + (1 if (x // 9) % 3 == 0 else 0)
+for x in range(WORLD_W):
+    y0 = river_y(x)
+    rect(x, y0 - 1, x, y0 - 1, BANK); rect(x, y0, x, y0 + 9, WATER); rect(x, y0 + 10, x, y0 + 10, BANK)
+    if x % 7 == 0: px(x, y0 + 3 + (x % 3), WATER_LIGHT)
+    if x % 11 == 4: px(x, y0 + 6, WATER_LIGHT)
+
+# --- the main path, from the core's south edge to the bottom of the map, over the bridge
+def wpath(pts, wide=7):
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        steps = max(abs(y1 - y0), abs(x1 - x0))
+        for i in range(steps + 1):
+            x = round(x0 + (x1 - x0) * i / steps); y = round(y0 + (y1 - y0) * i / steps)
+            if abs(y1 - y0) >= abs(x1 - x0):
+                rect(x - wide, y, x + wide, y, PATH); px(x - wide, y, PATH_DARK); px(x + wide, y, PATH_DARK)
+            else:
+                rect(x, y - wide, x, y + wide, PATH); px(x, y - wide, PATH_DARK); px(x, y + wide, PATH_DARK)
+main = [(CORE_X + 90, CORE_Y + H), (CORE_X + 92, 452), (CORE_X + 94, 500), (CORE_X + 88, WORLD_H)]
+wpath(main)
+for _ in range(90):                                       # pebbles
+    y = random.randrange(CORE_Y + H, WORLD_H)
+    if abs(y - RIVER_Y - 5) > 8: px(CORE_X + 91 + random.randint(-4, 4), y, PATH_DARK)
+bx0, bx1 = CORE_X + 82, CORE_X + 102                      # bridge
+for x in range(bx0, bx1 + 1):
+    y0 = river_y(x)
+    rect(x, y0 - 2, x, y0 + 11, (150, 104, 62) if x % 3 else (112, 74, 42))
+for x in (bx0, bx1):
+    rect(x, RIVER_Y - 4, x, RIVER_Y + 15, (96, 64, 38))
+rect(bx0, RIVER_Y - 4, bx1, RIVER_Y - 4, (120, 84, 50)); rect(bx0, RIVER_Y + 15, bx1, RIVER_Y + 15, (120, 84, 50))
+# side paths south of the river to the two southern plots
+wpath([(CORE_X + 86, 512), (150, 512)], wide=3)
+wpath([(CORE_X + 96, 512), (210, 512)], wide=3)
+
+# --- empty plots: cleared dirt with corner stakes and a rope, waiting for a building
+PLOTS = {}
+def plot(name, x0, y0, x1, y1):
+    rect(x0, y0, x1, y1, (150, 118, 80))
+    for _ in range((x1 - x0) * (y1 - y0) // 14):
+        px(random.randint(x0 + 1, x1 - 1), random.randint(y0 + 1, y1 - 1), random.choice([(170, 138, 96), (132, 102, 68)]))
+    for y in range(y0 + 3, y1 - 2, 4):                    # faint furrows
+        for x in range(x0 + 2, x1 - 1, 2): px(x, y, (138, 108, 72))
+    rect(x0, y0, x1, y0, (120, 92, 60)); rect(x0, y1, x1, y1, (120, 92, 60))
+    rect(x0, y0, x0, y1, (120, 92, 60)); rect(x1, y0, x1, y1, (120, 92, 60))
+    for x in range(x0, x1 + 1, 2):                        # rope, one px outside the dirt
+        px(x, y0 - 2, (226, 206, 150)); px(x, y1 + 2, (226, 206, 150))
+    for y in range(y0, y1 + 1, 2):
+        px(x0 - 2, y, (226, 206, 150)); px(x1 + 2, y, (226, 206, 150))
+    for (sx, sy) in ((x0 - 2, y0 - 2), (x1 + 2, y0 - 2), (x0 - 2, y1 + 2), (x1 + 2, y1 + 2)):  # stakes
+        rect(sx - 1, sy - 4, sx, sy + 1, (110, 74, 44)); rect(sx - 1, sy - 4, sx, sy - 4, (176, 132, 84))
+    PLOTS[name] = (x0, y0, x1, y1)
+
+# --- west: more forest beside the core's, a lake, a clearing
+def wtree(x, y, s=1):
+    trunk = (96, 64, 40)
+    rect(x - 1, y - 2, x + 1, y + 4, trunk)
+    greens = [(40, 92, 48), (52, 110, 56), (66, 128, 64)]
+    for i, r in enumerate([7, 6, 4, 2]):
+        r = r * s
+        ty = y - 3 - i * 4 * s
+        rect(x - r, ty - 3, x + r, ty, greens[min(i, 2)])
+        px(x - r, ty - 3, greens[0]); px(x + r, ty - 3, greens[0])
+for (tx, ty) in [(10, 206), (26, 198), (44, 210), (62, 202), (78, 214), (16, 226), (36, 232), (56, 228), (72, 240), (8, 250), (28, 258), (48, 252), (66, 264)]:
+    wtree(tx, ty)
+plot("west", 18, 292, 62, 318)
+lake = (40, 368, 30, 18)                                  # centre x, y, half-width, half-height
+for y in range(-lake[3], lake[3] + 1):
+    w = int(lake[2] * (1 - (y / lake[3]) ** 2) ** 0.5)
+    rect(lake[0] - w - 1, lake[1] + y, lake[0] + w + 1, lake[1] + y, BANK)
+    rect(lake[0] - w, lake[1] + y, lake[0] + w, lake[1] + y, WATER)
+for (lx, ly) in [(30, 362), (46, 372), (38, 380), (52, 360)]:
+    rect(lx, ly, lx + 3, ly, WATER_LIGHT)
+for (rx, ry) in [(12, 356), (14, 352), (70, 382), (68, 386), (72, 378)]:   # reeds
+    rect(rx, ry, rx, ry + 4, (60, 100, 40)); px(rx, ry - 1, (130, 90, 50))
+for (tx, ty) in [(18, 500), (36, 492), (54, 504), (26, 520), (46, 524), (70, 516), (12, 540), (62, 544)]:  # SW grove
+    wtree(tx, ty)
+
+# --- east: hills, fields, a clearing, an orchard
+for (cx, cy, rw, rh) in [(300, 196, 30, 10), (344, 204, 26, 9), (318, 216, 22, 7)]:
+    for y in range(-rh, 1):
+        w = int(rw * (1 - (y / rh) ** 2) ** 0.5)
+        rect(cx - w, cy + y, cx + w, cy + y, (100, 154, 72))
+    rect(cx - rw, cy + 1, cx + rw, cy + 1, (72, 120, 54))
+for i, (fx0, fy0, fx1, fy1, crop) in enumerate([(282, 238, 314, 262, (196, 176, 84)), (320, 238, 352, 262, (96, 150, 70)),
+                                                 (282, 268, 314, 292, (96, 150, 70)), (320, 268, 352, 292, (196, 176, 84))]):
+    rect(fx0, fy0, fx1, fy1, (128, 96, 62))
+    for y in range(fy0 + 2, fy1, 3): rect(fx0 + 1, y, fx1 - 1, y, crop)
+for x in range(279, 356, 3):                              # field fence
+    rect(x, 234, x, 236, (130, 92, 56)); rect(x, 295, x, 297, (130, 92, 56))
+rect(279, 235, 355, 235, (150, 108, 66)); rect(279, 296, 355, 296, (150, 108, 66))
+plot("east", 292, 314, 336, 340)
+def fruit_tree(x, y):
+    rect(x - 1, y, x + 1, y + 5, (96, 64, 40))
+    for yy in range(-6, 1):
+        w = 5 - abs(yy + 3)
+        rect(x - w - 1, y + yy, x + w + 1, y + yy, (58, 120, 58))
+    for (fx, fy) in ((x - 3, y - 3), (x + 2, y - 5), (x + 1, y - 1)): px(fx, fy, (210, 60, 50))
+for (tx, ty) in [(288, 368), (306, 364), (324, 370), (342, 366), (296, 388), (314, 392), (332, 388), (350, 394), (290, 412), (322, 414), (344, 418)]:
+    fruit_tree(tx, ty)
+for (rx, ry) in [(300, 506), (306, 510), (330, 500), (344, 526), (318, 532)]:  # boulders south-east
+    rect(rx - 3, ry - 2, rx + 3, ry + 2, (128, 128, 136)); rect(rx - 2, ry - 2, rx + 1, ry - 2, (168, 168, 176))
+
+# --- south: two plots on either side of the path, a hedge at the edge of the map
+plot("south_west", 106, 496, 148, 528)
+plot("south_east", 214, 496, 256, 528)
+for x in range(0, WORLD_W, 1):
+    if (x // 6) % 2 == 0: rect(x, 551, x, 555, (48, 96, 46))
+    else: rect(x, 552, x, 555, (56, 108, 52))
+# reeds by the river and flowers everywhere outside the core
+for x in range(4, WORLD_W, 13):
+    if not (bx0 - 4 <= x <= bx1 + 4): rect(x, river_y(x) - 4, x, river_y(x) - 2, (60, 100, 40))
+for _ in range(140):
+    x, y = random.randrange(WORLD_W), random.randrange(LAND_Y + 8, WORLD_H)
+    if not in_core(x, y) and gp(x, y)[1] > 110 and gp(x, y)[2] < 120:
+        px(x, y, random.choice([(240, 220, 90), (230, 120, 140), (240, 240, 240)]))
+
+# ================= the core: the original village, unchanged, drawn in its own coordinates =================
+OFF[0], OFF[1] = CORE_X, CORE_Y
+BOUNDS[0], BOUNDS[1] = W, H
 
 # --- sky: banded dusk-ish gradient
 bands = [(92, 140, 196), (108, 156, 206), (126, 172, 214), (148, 188, 220), (172, 204, 222), (198, 214, 214)]
@@ -152,8 +330,8 @@ house(150, 236, 20, 14, (204, 186, 150), (128, 62, 52))
 bx, by = 22, 254
 house(bx, by, 34, 22, (150, 74, 54), (92, 52, 40), door=(60, 36, 24))
 rect(bx + 11, by + 8, bx + 23, by + 22, (70, 42, 28))   # big barn doors
-d.line([bx + 11, by + 8, bx + 23, by + 22], fill=(170, 120, 70))
-d.line([bx + 23, by + 8, bx + 11, by + 22], fill=(170, 120, 70))
+line(bx + 11, by + 8, bx + 23, by + 22, (170, 120, 70))
+line(bx + 23, by + 8, bx + 11, by + 22, (170, 120, 70))
 for (cx, cy) in [(62, 270), (66, 274), (60, 276)]:       # crates / barrels
     rect(cx - 2, cy - 2, cx + 2, cy + 2, (160, 112, 64)); px(cx, cy, (110, 74, 40))
 
@@ -216,11 +394,27 @@ rect(108, 352, 108, 360, (100, 66, 40)); rect(118, 352, 118, 360, (100, 66, 40))
 # flowers
 for _ in range(60):
     x, y = random.randrange(W), random.randrange(150, H)
-    if img.getpixel((x, y))[1] > 110: px(x, y, random.choice([(240, 220, 90), (230, 120, 140), (240, 240, 240)]))
+    if gp(x, y)[1] > 110: px(x, y, random.choice([(240, 220, 90), (230, 120, 140), (240, 240, 240)]))
+
+# ================= foreground fixes in world coordinates =================
+OFF[0], OFF[1] = 0, 0
+BOUNDS[0], BOUNDS[1] = WORLD_W, WORLD_H
+# The core's mountains reach past its edges; cover their base rows outside the core with the horizon grass, as the
+# core does inside.
+for y in range(LAND_Y, LAND_Y + 4):
+    for x in range(WORLD_W):
+        if not in_core(x, y): px(x, y, (104, 156, 76) if (x + y) % 5 == 0 else GRASS)
 
 out = sys.argv[1]
-img.resize((W * S, H * S), Image.NEAREST).save(out, optimize=True)
+big = img.resize((WORLD_W * S, WORLD_H * S), Image.NEAREST)
+colors = big.getcolors(256)
+if colors is not None:  # few flat colours: an indexed PNG is lossless and much smaller
+    big = big.convert("P", palette=Image.Palette.ADAPTIVE, colors=len(colors), dither=Image.Dither.NONE)
+big.save(out, optimize=True)
 anchors = {"dungeon": (cave_x, cave_y), "woodcutting": (34, 168), "merchant": (mx, my), "storage": (bx + 17, by), "training": (tx, ty),
            "mine": (mine_x, mine_y - 8), "town_hall": (hx, hy - 20)}
+print(f"world {WORLD_W}x{WORLD_H}, core at ({CORE_X}, {CORE_Y}) size {W}x{H}")
 for k, (x, y) in anchors.items():
-    print(f"{k}: x={x/W:.3f} y={y/H:.3f}")
+    print(f"{k}: world x={x + CORE_X} y={y + CORE_Y}  (core fraction x={x/W:.3f} y={y/H:.3f})")
+for k, r in PLOTS.items():
+    print(f"plot {k}: {r}")
