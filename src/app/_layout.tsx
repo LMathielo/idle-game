@@ -8,12 +8,14 @@ import { StyleSheet, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { GameProvider } from '../client/GameProvider';
 import { AwayModal } from '../components/AwayModal';
+import { DialogProvider, RootDialogHost } from '../components/ui/GameDialog';
 import { colors } from '../theme';
 
 /** The tabs sit under every village modal, also when a modal is the first route opened. */
 export const unstable_settings = { anchor: '(tabs)' };
 
-/** Village modal routes. Each one renders its own <AwayModal /> (see RootAwayModal). */
+/** Village modal routes. Each one renders its own <AwayModal /> and <DialogHost /> (see RootAwayModal). Keep in sync with
+ * MODAL_PATHS in components/ui/GameDialog.tsx. */
 const VILLAGE_MODAL_PATHS: readonly string[] = ['/dungeon', '/training', '/woodcutting', '/mine', '/merchant', '/town-hall'];
 
 /**
@@ -40,19 +42,24 @@ export default function RootLayout() {
   if (!loaded) return <View style={styles.blank} />;
 
   return (
-    <GameProvider>
-      <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: styles.content }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="dungeon" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
-        <Stack.Screen name="training" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
-        <Stack.Screen name="woodcutting" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
-        <Stack.Screen name="mine" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
-        <Stack.Screen name="merchant" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
-        <Stack.Screen name="town-hall" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
-      </Stack>
-      <RootAwayModal />
-    </GameProvider>
+    <>
+      <GameProvider>
+        <DialogProvider>
+          <StatusBar style="light" />
+          <Stack screenOptions={{ headerShown: false, contentStyle: styles.content }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="dungeon" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
+            <Stack.Screen name="training" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
+            <Stack.Screen name="woodcutting" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
+            <Stack.Screen name="mine" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
+            <Stack.Screen name="merchant" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
+            <Stack.Screen name="town-hall" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
+          </Stack>
+          <RootAwayModal />
+          <RootDialogHost />
+        </DialogProvider>
+      </GameProvider>
+    </>
   );
 }
 

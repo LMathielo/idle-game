@@ -2,16 +2,18 @@
 // assign each one to a tree or rock (picker with tier, upkeep / min and expected items / min), unassign, dismiss;
 // the total upkeep per minute and a warning while the crews are paused for gold. Rules stay in the engine: this
 // reads workersView() / nodeChoices() and dispatches HIRE_WORKER / ASSIGN_WORKER / UNASSIGN_WORKER / DISMISS_WORKER.
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
+import { useGameSnapshot } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
 import { BUILDINGS, buildingLevel, type CrewView, type NodeChoice, nodeChoices, upgradeView, type WorkerNodeId, workersView, type WorkerView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { formatNumber, formatPerMin, itemIcon, itemName } from '../format';
 import { ModalScreen } from '../ModalScreen';
 import { PixelButton } from '../PixelButton';
+import { useDialogShowing } from '../ui/GameDialog';
+import { useCommand } from '../ui/useCommand';
 import { bonusLines } from './bonusText';
 import { UpgradeEntry } from './UpgradeEntry';
 
@@ -25,33 +27,22 @@ const STATUS_TEXT: Record<WorkerView['status'], string> = {
 const STATUS_SHORT: Record<WorkerView['status'], string> = { unassigned: 'Free', working: 'Working', idle: 'Idle', paused: 'Paused' };
 
 export function TownHallModal() {
-  const client = useGameClient();
   const { state } = useGameSnapshot();
   const level = buildingLevel(state, 'town_hall');
   const view = workersView(state);
   const bonuses = bonusLines(upgradeView(state, 'town_hall').bonuses);
   /** The worker whose node picker is open. */
   const [picking, setPicking] = useState<string | null>(null);
-  const inFlight = useRef(false);
-
-  /** One command at a time; a double tap never sends two. Engine refusals are shown. */
+  /**
+   * One command at a time; a double tap never sends two. Engine refusals are shown in a GameDialog, except
+   * COST_CHANGED: the price on screen was stale; the button already shows the new one.
+   */
+  const { send: dispatch, dialog } = useCommand({ silentCodes: ['COST_CHANGED'] });
   const send = useCallback(
     (cmd: CommandInput, then?: () => void) => {
-      if (inFlight.current) return;
-      inFlight.current = true;
-      client
-        .dispatch(cmd)
-        .then((res) => {
-          if (res.ok) then?.();
-          // COST_CHANGED: the price on screen was stale; the button already shows the new one.
-          else if (res.error.code !== 'COST_CHANGED') Alert.alert('Not possible', res.error.message);
-        })
-        .catch(() => Alert.alert('Could not save', 'Try again.'))
-        .finally(() => {
-          inFlight.current = false;
-        });
+      void dispatch(cmd).then((ok) => ok && then?.());
     },
-    [client],
+    [dispatch],
   );
 
   const hireCost = view.hireCost;
@@ -60,12 +51,17 @@ export function TownHallModal() {
   }, [hireCost, send]);
   const unassign = useCallback((workerId: string) => send({ type: 'UNASSIGN_WORKER', workerId }), [send]);
   const dismiss = useCallback(
-    (workerId: string, name: string) =>
-      Alert.alert(`Dismiss ${name}?`, 'They leave for good. The hiring price is not refunded.', [
-        { text: 'Keep', style: 'cancel' },
-        { text: 'Dismiss', style: 'destructive', onPress: () => send({ type: 'DISMISS_WORKER', workerId }) },
-      ]),
-    [send],
+    async (workerId: string, name: string) => {
+      const ok = await dialog.confirm({
+        title: `Dismiss ${name}?`,
+        message: 'They leave for good. The hiring price is not refunded.',
+        confirmLabel: 'Dismiss',
+        cancelLabel: 'Keep',
+        destructive: true,
+      });
+      if (ok) send({ type: 'DISMISS_WORKER', workerId });
+    },
+    [dialog, send],
   );
   const closePicker = useCallback(() => setPicking(null), []);
   const assign = useCallback(
@@ -194,10 +190,12 @@ const CrewLine = memo(function CrewLine({ crew }: { crew: CrewView }) {
 
 function NodePicker({ onPick, onClose, current }: { onPick: (node: WorkerNodeId) => void; onClose: () => void; current: WorkerNodeId | null }) {
   const { state, awaySummary } = useGameSnapshot();
+  // Steps aside for a GameDialog (e.g. "Not possible" after a pick): two RN modals never present at once.
+  const dialogShowing = useDialogShowing();
   const insets = useSafeAreaInsets();
   const choices = useMemo(() => nodeChoices(state), [state]);
   return (
-    <Modal visible={!awaySummary} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={!awaySummary && !dialogShowing} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close the node list" />
       <View style={[styles.sheet, { paddingBottom: 16 + insets.bottom }]}>
         <View style={styles.sheetHead}>

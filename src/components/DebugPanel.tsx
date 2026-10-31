@@ -1,11 +1,13 @@
 // Collapsible debug tools (Hero tab). Every button is logged as a DEBUG_* row; none changes engine rules.
-import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+// Every button but Reset save repeats while held (PixelButton `repeat`); a refused repeat stops silently.
+import { useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
 import { ATTRIBUTE_KEYS } from '../engine';
 import { ATTRIBUTE_NAMES, formatDuration } from './format';
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
+import { useDialog } from './ui/GameDialog';
 import { colors, fonts } from '../theme';
 
 const HOUR = 3_600_000;
@@ -19,31 +21,43 @@ function isRejected(result: unknown): result is { ok: false; error: { message: s
 
 export function DebugPanel() {
   const client = useGameClient();
+  const dialog = useDialog();
   const { clockOffsetMs } = useGameSnapshot();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [logInfo, setLogInfo] = useState<string | null>(null);
+  /** One debug call at a time (a ref: two taps in one frame never send two). */
+  const busy = useRef(false);
 
-  const run = (fn: () => Promise<unknown>) => async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const result = await fn();
-      if (isRejected(result)) Alert.alert('Not possible', result.error.message);
-      const { total, unsynced } = await client.countLog();
-      setLogInfo(`${total} log rows (${unsynced} unsynced)`);
-    } catch (err) {
-      Alert.alert('Debug action failed', err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
+  /**
+   * A debug action for a PixelButton `repeat`: resolves false when refused or failed, which stops a hold. Only the
+   * first press of a hold shows a dialog for it; repeat ticks stay quiet.
+   */
+  const run =
+    (fn: () => Promise<unknown>) =>
+    async ({ repeat }: { repeat: boolean }): Promise<boolean> => {
+      if (busy.current) return false;
+      busy.current = true;
+      try {
+        const result = await fn();
+        const { total, unsynced } = await client.countLog();
+        setLogInfo(`${total} log rows (${unsynced} unsynced)`);
+        if (isRejected(result)) {
+          if (!repeat) void dialog.notPossible(result.error.message);
+          return false;
+        }
+        return true;
+      } catch (err) {
+        if (!repeat) void dialog.alert({ title: 'Debug action failed', message: err instanceof Error ? err.message : String(err) });
+        return false;
+      } finally {
+        busy.current = false;
+      }
+    };
+
+  const confirmReset = async () => {
+    const ok = await dialog.confirm({ title: 'Reset save?', message: 'Starts a new level-1 hero. The action log is kept.', confirmLabel: 'Reset', destructive: true });
+    if (ok) await run(() => client.debug.resetSave())({ repeat: false });
   };
-
-  const confirmReset = () =>
-    Alert.alert('Reset save?', 'Starts a new level-1 hero. The action log is kept.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Reset', style: 'destructive', onPress: run(() => client.debug.resetSave()) },
-    ]);
 
   const sign = clockOffsetMs < 0 ? '−' : '+';
 
@@ -59,33 +73,33 @@ export function DebugPanel() {
           </Text>
           {logInfo ? <Text style={styles.info}>{logInfo}</Text> : null}
           <View style={styles.grid}>
-            <PixelButton label="+1h" onPress={run(() => client.debug.shiftClock(HOUR))} />
-            <PixelButton label="+8h" onPress={run(() => client.debug.shiftClock(8 * HOUR))} />
-            <PixelButton label="+24h" onPress={run(() => client.debug.shiftClock(24 * HOUR))} />
-            <PixelButton label="Clock −2h" onPress={run(() => client.debug.shiftClock(-2 * HOUR))} />
-            <PixelButton label="+10k hero XP" onPress={run(() => client.debug.grantHeroXp(10_000))} />
-            <PixelButton label="Spend 10 stamina" onPress={run(() => client.debug.spendStamina(10))} />
-            <PixelButton label="Refill stamina" onPress={run(() => client.debug.refillStamina())} />
-            <PixelButton label="Hero HP → 1" onPress={run(() => client.debug.setHeroHp(1))} />
-            <PixelButton label="End search now (free)" onPress={run(() => client.debug.finishDungeonRun())} />
+            <PixelButton label="+1h" repeat={run(() => client.debug.shiftClock(HOUR))} />
+            <PixelButton label="+8h" repeat={run(() => client.debug.shiftClock(8 * HOUR))} />
+            <PixelButton label="+24h" repeat={run(() => client.debug.shiftClock(24 * HOUR))} />
+            <PixelButton label="Clock −2h" repeat={run(() => client.debug.shiftClock(-2 * HOUR))} />
+            <PixelButton label="+10k hero XP" repeat={run(() => client.debug.grantHeroXp(10_000))} />
+            <PixelButton label="Spend 10 stamina" repeat={run(() => client.debug.spendStamina(10))} />
+            <PixelButton label="Refill stamina" repeat={run(() => client.debug.refillStamina())} />
+            <PixelButton label="Hero HP → 1" repeat={run(() => client.debug.setHeroHp(1))} />
+            <PixelButton label="End search now (free)" repeat={run(() => client.debug.finishDungeonRun())} />
             <PixelButton
               label="+60 min training XP"
-              onPress={run(() => client.debug.addTrainingXp(60))}
+              repeat={run(() => client.debug.addTrainingXp(60))}
               accessibilityHint="Debug: adds 60 training XP to the attribute being trained"
             />
             <PixelButton
               label="+1 WC level"
-              onPress={run(() => client.debug.addWoodcuttingLevel(1))}
+              repeat={run(() => client.debug.addWoodcuttingLevel(1))}
               accessibilityHint="Debug: adds one woodcutting level, to test tree unlocks"
             />
             <PixelButton
               label="+1 Mining level"
-              onPress={run(() => client.debug.addMiningLevel(1))}
+              repeat={run(() => client.debug.addMiningLevel(1))}
               accessibilityHint="Debug: adds one mining level, to test rock unlocks"
             />
-            <PixelButton label="+1,000 gold" onPress={run(() => client.debug.addGold(1000))} accessibilityHint="Debug: adds 1,000 gold" />
+            <PixelButton label="+1,000 gold" repeat={run(() => client.debug.addGold(1000))} accessibilityHint="Debug: adds 1,000 gold" />
             {ATTRIBUTE_BUTTONS.map((a) => (
-              <PixelButton key={a.key} label={a.label} onPress={run(() => client.debug.addAttribute(a.key))} />
+              <PixelButton key={a.key} label={a.label} repeat={run(() => client.debug.addAttribute(a.key))} />
             ))}
             <PixelButton label="Reset save" onPress={confirmReset} />
           </View>

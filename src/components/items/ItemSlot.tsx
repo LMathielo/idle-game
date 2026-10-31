@@ -1,7 +1,8 @@
 // One inventory / equipment / merchant slot: icon, stack count, quality-colored frame, optional price
-// caption, tap to open the item sheet. Memoized: grids re-render only the slots that changed.
-import { memo, useCallback } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+// caption, tap to open the item's info box (anchored on the slot). Memoized: grids re-render only the slots that changed.
+import { memo, useCallback, useRef } from 'react';
+import { type HostInstance, Pressable, StyleSheet, Text, View } from 'react-native';
+import { type AnchorRect, measureAnchor } from '../ui/InfoPopover';
 import { colors, fonts, qualityColors } from '../../theme';
 import { formatQty } from '../format';
 import { defOf } from './itemInfo';
@@ -15,14 +16,17 @@ type Props = {
   caption?: string;
   /** Opaque key handed back to onPress (slot index, item id, equipment slot). */
   pressKey?: string | number;
-  onPress?: (key: string | number) => void;
+  /** Called with the key and the slot's box on screen (for InfoPopover). */
+  onPress?: (key: string | number, anchor: AnchorRect) => void;
   /** Spoken suffix, e.g. ", sells for 10 gold". */
   hint?: string;
 };
 
 export const ItemSlot = memo(function ItemSlot({ item, size, caption, pressKey, onPress, hint }: Props) {
+  const ref = useRef<HostInstance>(null);
   const handle = useCallback(() => {
-    if (onPress && pressKey !== undefined) onPress(pressKey);
+    if (!onPress || pressKey === undefined) return;
+    void measureAnchor(ref.current).then((anchor) => anchor && onPress(pressKey, anchor));
   }, [onPress, pressKey]);
   const quality = item ? defOf(item.defId).quality : null;
   const label = item ? `${item.name}${item.quantity ? ` x${item.quantity}` : ''}${hint ?? ''}` : 'Empty slot';
@@ -35,7 +39,7 @@ export const ItemSlot = memo(function ItemSlot({ item, size, caption, pressKey, 
   return (
     <View style={styles.cell}>
       {item && onPress ? (
-        <Pressable onPress={handle} accessibilityRole="button" accessibilityLabel={label} hitSlop={2}>
+        <Pressable ref={ref} onPress={handle} accessibilityRole="button" accessibilityLabel={label} hitSlop={2}>
           {box}
         </Pressable>
       ) : (

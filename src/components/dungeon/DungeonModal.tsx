@@ -3,9 +3,8 @@
 // file only reads selectors (dungeonRunView, dungeonUnlockView, dangerHint, hpView, staminaView,
 // getDerivedStats) and dispatches commands. Locked dungeons can't be opened; the engine refuses them too.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
-import type { CommandInput } from '../../client/types';
+import { BackHandler, type HostInstance, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useGameSnapshot } from '../../client/GameProvider';
 import {
   type DangerLevel,
   COMBAT,
@@ -34,6 +33,8 @@ import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
 import { Bar, Panel } from '../Panel';
 import { PixelButton } from '../PixelButton';
+import { type AnchorRect, InfoPopover, measureAnchor, PopoverRow, PopoverText } from '../ui/InfoPopover';
+import { useCommand } from '../ui/useCommand';
 import { confirmCancelRun } from './confirmCancelRun';
 import { FightReplay } from './FightReplay';
 import { LiveFight } from './LiveFight';
@@ -107,12 +108,19 @@ function requirementText(req: { dungeonId: DungeonId; wins: number }, progress: 
 
 function DungeonList({ state, running, onPick }: { state: GameState; running: DungeonId | null; onPick: (id: DungeonId) => void }) {
   const attributes = effectiveAttributes(state); // search time uses the trained DEX
+  /** The locked dungeon whose info box is open, anchored on its card. */
+  const [info, setInfo] = useState<{ id: DungeonId; anchor: AnchorRect } | null>(null);
+  const explain = useCallback((id: DungeonId, node: HostInstance | null) => {
+    void measureAnchor(node).then((anchor) => anchor && setInfo({ id, anchor }));
+  }, []);
+  const closeInfo = useCallback(() => setInfo(null), []);
+  const infoUnlock = info ? dungeonUnlockView(state, info.id) : null;
   return (
     <View>
       {DUNGEON_IDS.map((id) => {
         const unlock = dungeonUnlockView(state, id);
         if (!unlock.unlocked && unlock.requirement) {
-          return <LockedCard key={id} id={id} requirement={requirementText(unlock.requirement, unlock.progress)} />;
+          return <LockedCard key={id} id={id} requirement={requirementText(unlock.requirement, unlock.progress)} onExplain={explain} />;
         }
         return (
           <DungeonCard
@@ -125,7 +133,26 @@ function DungeonList({ state, running, onPick }: { state: GameState; running: Du
           />
         );
       })}
+      {info && infoUnlock && !infoUnlock.unlocked && infoUnlock.requirement ? (
+        <LockedInfo id={info.id} anchor={info.anchor} requirement={requirementText(infoUnlock.requirement, infoUnlock.progress)} onClose={closeInfo} />
+      ) : null}
     </View>
+  );
+}
+
+/** What a locked dungeon holds and what opens it (InfoPopover, anchored on its card). */
+function LockedInfo({ id, anchor, requirement, onClose }: { id: DungeonId; anchor: AnchorRect; requirement: string; onClose: () => void }) {
+  const d = DUNGEONS[id];
+  const enemy = ENEMIES[d.enemyId];
+  return (
+    <InfoPopover anchor={anchor} onClose={onClose} title={d.name} icon="🔒" subtitle={`Tier ${d.tier} · locked`}>
+      <PopoverText tone="gold">{requirement}</PopoverText>
+      <PopoverRow label={`${enemy.icon} Enemy`} value={enemy.name} />
+      <PopoverRow label="Enemy HP / damage" value={`${enemy.hp} / ${range(enemy.damage.min, enemy.damage.max)}`} />
+      <PopoverRow label="✨ Hero XP per win" value={`+${d.rewards.heroXp}`} />
+      <PopoverRow label="🪙 Gold per win" value={range(d.rewards.gold.min, d.rewards.gold.max)} />
+      <PopoverText tone="note">Only wins count toward the unlock; it is permanent once reached.</PopoverText>
+    </InfoPopover>
   );
 }
 
@@ -167,13 +194,23 @@ const DungeonCard = memo(function DungeonCard({
   );
 });
 
-/** Dimmed, never opens the detail: a tap only repeats what unlocks it. */
-const LockedCard = memo(function LockedCard({ id, requirement }: { id: DungeonId; requirement: string }) {
+/** Dimmed, never opens the detail: a tap opens an info box with what unlocks it. */
+const LockedCard = memo(function LockedCard({
+  id,
+  requirement,
+  onExplain,
+}: {
+  id: DungeonId;
+  requirement: string;
+  onExplain: (id: DungeonId, node: HostInstance | null) => void;
+}) {
   const d = DUNGEONS[id];
   const enemy = ENEMIES[d.enemyId];
-  const explain = () => Alert.alert(`🔒 ${d.name}`, `Locked. ${requirement}.`);
+  const ref = useRef<HostInstance>(null);
+  const explain = useCallback(() => onExplain(id, ref.current), [onExplain, id]);
   return (
     <Pressable
+      ref={ref}
       onPress={explain}
       accessibilityRole="button"
       accessibilityLabel={`${d.name}, locked, ${enemy.name}. ${requirement}`}
@@ -210,7 +247,6 @@ function DungeonDetail({
   paused: boolean;
   onBack: () => void;
 }) {
-  const client = useGameClient();
   const d = DUNGEONS[id];
   const enemy = ENEMIES[d.enemyId];
   const { level, attributes, equipment } = state.character;
@@ -222,51 +258,41 @@ function DungeonDetail({
   const totals = dungeonTotals(state, id);
   const hp = hpView(state);
   const run = running ? dungeonRunView(state) : null;
-  const inFlight = useRef(false);
   const [replay, setReplay] = useState<FightRecord | null>(null);
   const [replayKey, setReplayKey] = useState(0);
   const lastFight = state.dungeon.lastFight?.dungeonId === id ? state.dungeon.lastFight : null;
 
-  /** One command at a time; a double tap never sends two. Engine refusals are shown, never hidden. */
-  const send = useCallback(
-    (cmd: CommandInput) => {
-      if (inFlight.current) return;
-      inFlight.current = true;
-      client
-        .dispatch(cmd)
-        .then((res) => {
-          // RUN_CHANGED / FIGHT_IN_PROGRESS: the search ended (or its cost changed) under the player's finger.
-          // Nothing was spent; the screen already shows the fight or the new cost, so no alert.
-          if (!res.ok && res.error.code !== 'RUN_CHANGED' && res.error.code !== 'FIGHT_IN_PROGRESS') Alert.alert('Not possible', res.error.message);
-        })
-        .catch(() => Alert.alert('Could not save', 'Try again.'))
-        .finally(() => {
-          inFlight.current = false;
-        });
-    },
-    [client],
-  );
+  /**
+   * One command at a time; a double tap never sends two. Engine refusals are shown in a GameDialog, except
+   * RUN_CHANGED / FIGHT_IN_PROGRESS: the search ended (or its cost changed) under the player's finger. Nothing was
+   * spent; the screen already shows the fight or the new cost.
+   */
+  const { send, run: runCall, dialog, client } = useCommand({ silentCodes: ['RUN_CHANGED', 'FIGHT_IN_PROGRESS'] });
 
-  const start = () => send({ type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: id });
-  /** Names the run and the cost the player saw, so the engine never charges more or skips a later run. */
-  const skip = useCallback((runNumber: number, maxCost: number) => send({ type: 'SKIP_DUNGEON_RUN', run: runNumber, maxCost }), [send]);
+  const start = () => void send({ type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: id });
+  /**
+   * Hold-to-repeat search skip. Each tick names the run and the cost on screen right now (live state), so the engine
+   * never charges more or skips a later run; the repeat ends by itself when the fight starts (no skip in a fight) or
+   * stamina runs out.
+   */
+  const skip = useCallback(
+    (repeat: boolean) => {
+      const live = dungeonRunView(client.getState());
+      if (!live || live.skipCost === null || client.getState().stamina.current < live.skipCost) return Promise.resolve(false);
+      return send({ type: 'SKIP_DUNGEON_RUN', run: live.run, maxCost: live.skipCost }, { quiet: repeat });
+    },
+    [client, send],
+  );
   const hits = strikeRange(enemy.damage, stats.defense.value);
-  const stop = useCallback(() => confirmCancelRun('Stop', () => send({ type: 'STOP_ACTIVITY' })), [send]);
-  const flee = useCallback(() => confirmCancelRun('Flee', () => send({ type: 'STOP_ACTIVITY' }), true), [send]);
+  const stop = useCallback(async () => {
+    if (await confirmCancelRun(dialog, 'Stop')) await send({ type: 'STOP_ACTIVITY' });
+  }, [dialog, send]);
+  const flee = useCallback(async () => {
+    if (await confirmCancelRun(dialog, 'Flee', true)) await send({ type: 'STOP_ACTIVITY' });
+  }, [dialog, send]);
   const otherActivity = state.activity && !running ? state.activity.kind : null;
-  const addWins = useCallback(() => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    client.debug
-      .addDungeonWins(id, 10)
-      .then((res) => {
-        if (!res.ok) Alert.alert('Not possible', res.error.message);
-      })
-      .catch(() => Alert.alert('Could not save', 'Try again.'))
-      .finally(() => {
-        inFlight.current = false;
-      });
-  }, [client, id]);
+  /** Debug, hold to repeat. */
+  const addWins = useCallback(({ repeat }: { repeat: boolean }) => runCall(() => client.debug.addDungeonWins(id, 10), { quiet: repeat }), [client, id, runCall]);
 
   return (
     <View>
@@ -361,7 +387,7 @@ function DungeonDetail({
         </Text>
         {DEV_TOOLS_ENABLED && unlock.unlocked ? (
           <View style={styles.debugRow}>
-            <PixelButton label="+10 wins (debug)" onPress={addWins} accessibilityHint="Debug: adds 10 wins here, to test unlocks" />
+            <PixelButton label="+10 wins (debug)" repeat={addWins} accessibilityHint="Debug: adds 10 wins here, to test unlocks. Hold to repeat" />
           </View>
         ) : null}
       </Panel>
@@ -415,7 +441,8 @@ const RunControls = memo(function RunControls({
   /** What one enemy strike deals to the hero after defense (engine strikeRange). */
   hitMin: number;
   hitMax: number;
-  onSkip: (run: number, maxCost: number) => void;
+  /** Hold-to-repeat search skip (reads the live run each tick). */
+  onSkip: (repeat: boolean) => Promise<boolean>;
   onStop: () => void;
   /** Stop during the fight: a forfeit (counts as a loss). */
   onFlee: () => void;
@@ -444,7 +471,7 @@ const RunControls = memo(function RunControls({
       <View style={styles.buttons}>
         <PixelButton
           label={`Skip (${cost} ⚡)`}
-          onPress={() => onSkip(run.run, cost)}
+          repeat={({ repeat }) => onSkip(repeat)}
           disabled={!canSkip}
           accessibilityLabel={`Skip the search for ${cost} stamina${noHp ? '. Certain loss, 0 HP' : ''}`}
           accessibilityHint={canSkip ? 'The fight starts now and plays out live. No HP regen for the skipped time' : `Not enough stamina: you have ${stamina}`}

@@ -2,7 +2,7 @@
 // the inventory; dispatches BUY_ITEM / SELL_ITEM / REFRESH_MERCHANT. The merchant is not an activity, so
 // nothing here stops what the hero is doing.
 import { memo, useCallback, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameState } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
 import { DEV_TOOLS_ENABLED, freeSlots, type GameState, type Item, maxBuyable, merchantView, sellPriceOf, slotsNeeded } from '../../engine';
@@ -15,6 +15,8 @@ import { QuantityStepper } from '../items/QuantityStepper';
 import { ModalScreen } from '../ModalScreen';
 import { PixelButton } from '../PixelButton';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
+import type { AnchorRect } from '../ui/InfoPopover';
+import { useCommand } from '../ui/useCommand';
 
 type Tab = 'buy' | 'sell';
 
@@ -76,10 +78,9 @@ function useSend(onDone: () => void) {
 // ---------- Buy ----------
 
 function BuyTab({ state }: { state: GameState }) {
-  const client = useGameClient();
   const view = merchantView(state);
-  const [selected, setSelected] = useState<{ slot: number; defId: string } | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [selected, setSelected] = useState<{ slot: number; defId: string; anchor: AnchorRect } | null>(null);
+  const { send, run, client } = useCommand();
 
   const slots = useMemo(
     () =>
@@ -91,40 +92,27 @@ function BuyTab({ state }: { state: GameState }) {
     [view.stock],
   );
   const open = useCallback(
-    (key: string | number) => {
+    (key: string | number, anchor: AnchorRect) => {
       const listing = view.stock[Number(key)];
-      if (listing) setSelected({ slot: Number(key), defId: listing.defId });
+      if (listing) setSelected({ slot: Number(key), defId: listing.defId, anchor });
     },
     [view.stock],
   );
   const close = useCallback(() => setSelected(null), []);
   const prices = useMemo(() => view.stock.map((l) => (l ? `${formatNumber(l.unitPrice)}g` : '')), [view.stock]);
 
+  /** Refusals and save failures show in a GameDialog. */
   const refresh = () => {
-    if (refreshing) return;
-    setRefreshing(true);
     setSelected(null);
-    client
-      .dispatch({ type: 'REFRESH_MERCHANT' })
-      .then((res) => {
-        if (!res.ok) Alert.alert('Not possible', res.error.message);
-      })
-      .catch((err: unknown) => Alert.alert('Refresh failed', err instanceof Error ? err.message : String(err)))
-      .finally(() => setRefreshing(false));
+    void send({ type: 'REFRESH_MERCHANT' });
   };
 
-  const addCharge = () => {
-    client.debug.addMerchantCharge().then(
-      (res) => {
-        if (!res.ok) Alert.alert('Not possible', res.error.message);
-      },
-      (err: unknown) => Alert.alert('Debug action failed', err instanceof Error ? err.message : String(err)),
-    );
-  };
+  /** Debug, hold to repeat (stops when the charges are full). */
+  const addCharge = useCallback(({ repeat }: { repeat: boolean }) => run(() => client.debug.addMerchantCharge(), { quiet: repeat }), [client, run]);
 
   // The sheet follows the live stock: it closes when the slot is bought out or restocked with something else.
   const listing = selected ? view.stock[selected.slot] : null;
-  const live = selected && listing && listing.defId === selected.defId ? { slot: selected.slot, listing } : null;
+  const live = selected && listing && listing.defId === selected.defId ? { slot: selected.slot, listing, anchor: selected.anchor } : null;
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -134,7 +122,7 @@ function BuyTab({ state }: { state: GameState }) {
         <PixelButton
           label={`Refresh (${view.charges}/${view.maxCharges})`}
           sublabel={view.full ? 'Charges full' : `+1 in ${formatHms(view.nextInMs)}`}
-          disabled={refreshing || view.charges <= 0}
+          disabled={view.charges <= 0}
           onPress={refresh}
           accessibilityHint="Spends one charge and restocks the merchant"
           stretch
@@ -142,16 +130,16 @@ function BuyTab({ state }: { state: GameState }) {
       </View>
       {DEV_TOOLS_ENABLED ? (
         <View style={styles.refreshRow}>
-          <PixelButton label="+1 merchant refresh (debug)" onPress={addCharge} disabled={view.full} stretch />
+          <PixelButton label="+1 merchant refresh (debug)" repeat={addCharge} disabled={view.full} stretch />
         </View>
       ) : null}
       <UpgradeEntry buildingId="merchant" />
-      {live ? <BuySheet key={`${live.slot}-${live.listing.defId}`} state={state} slot={live.slot} onClose={close} /> : null}
+      {live ? <BuySheet key={`${live.slot}-${live.listing.defId}`} state={state} slot={live.slot} anchor={live.anchor} onClose={close} /> : null}
     </ScrollView>
   );
 }
 
-function BuySheet({ state, slot, onClose }: { state: GameState; slot: number; onClose: () => void }) {
+function BuySheet({ state, slot, anchor, onClose }: { state: GameState; slot: number; anchor: AnchorRect; onClose: () => void }) {
   const listing = state.merchant.stock[slot]!;
   const def = defOf(listing.defId);
   const max = maxBuyable(state, slot);
@@ -169,6 +157,7 @@ function BuySheet({ state, slot, onClose }: { state: GameState; slot: number; on
   return (
     <ItemSheet
       def={def}
+      anchor={anchor}
       quantity={listing.quantity}
       equipped={def.slot ? (equipped ? defOf(equipped.defId, equipped) : null) : undefined}
       error={error}
@@ -194,7 +183,7 @@ function BuySheet({ state, slot, onClose }: { state: GameState; slot: number; on
 
 function SellTab({ state }: { state: GameState }) {
   const { inventory, buildings } = state;
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<{ id: string; anchor: AnchorRect } | null>(null);
   const slots = useMemo(() => Array.from({ length: inventory.capacity }, (_, i): Item | null => inventory.items[i] ?? null), [inventory]);
   const prices = useMemo(
     () =>
@@ -206,9 +195,9 @@ function SellTab({ state }: { state: GameState }) {
       }),
     [slots, buildings],
   );
-  const open = useCallback((key: string | number) => setSelectedId(String(key)), []);
-  const close = useCallback(() => setSelectedId(null), []);
-  const item = selectedId ? inventory.items.find((i) => i.id === selectedId) : undefined;
+  const open = useCallback((key: string | number, anchor: AnchorRect) => setSelected({ id: String(key), anchor }), []);
+  const close = useCallback(() => setSelected(null), []);
+  const item = selected ? inventory.items.find((i) => i.id === selected.id) : undefined;
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -216,7 +205,7 @@ function SellTab({ state }: { state: GameState }) {
         Your inventory {inventory.items.length}/{inventory.capacity} · equipped gear must be unequipped first
       </Text>
       <StockGrid slots={slots} prices={prices} onPress={open} keyOf={inventoryKey} />
-      {item ? <SellSheet key={item.id} item={item} unitPrice={sellPriceOf({ buildings }, item.defId)} onClose={close} /> : null}
+      {item && selected ? <SellSheet key={item.id} item={item} anchor={selected.anchor} unitPrice={sellPriceOf({ buildings }, item.defId)} onClose={close} /> : null}
     </ScrollView>
   );
 }
@@ -224,7 +213,7 @@ function SellTab({ state }: { state: GameState }) {
 /** Sell-tab slots hold inventory Items: tapping one opens it by item id. */
 const inventoryKey = (item: SlotItem | null, i: number): string | number => (item as Item | null)?.id ?? i;
 
-function SellSheet({ item, unitPrice, onClose }: { item: Item; unitPrice: number; onClose: () => void }) {
+function SellSheet({ item, anchor, unitPrice, onClose }: { item: Item; anchor: AnchorRect; unitPrice: number; onClose: () => void }) {
   const def = defOf(item.defId, item);
   const owned = item.stackable ? (item.quantity ?? 0) : 1;
   const [qty, setQty] = useState(1);
@@ -235,6 +224,7 @@ function SellSheet({ item, unitPrice, onClose }: { item: Item; unitPrice: number
   return (
     <ItemSheet
       def={def}
+      anchor={anchor}
       quantity={item.quantity}
       error={error}
       onClose={onClose}
@@ -259,7 +249,7 @@ function SellSheet({ item, unitPrice, onClose }: { item: Item; unitPrice: number
 type GridProps = {
   slots: (SlotItem | null)[];
   prices: string[];
-  onPress: (key: string | number) => void;
+  onPress: (key: string | number, anchor: AnchorRect) => void;
   /** Key passed to onPress for a filled slot (default: the slot index). */
   keyOf?: (item: SlotItem | null, index: number) => string | number;
 };

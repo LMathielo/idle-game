@@ -1,18 +1,22 @@
 // "Upgrade" entry for a building's modal: a button showing the level and what the builder is doing, opening the
-// UpgradeSheet. Read-only selectors only; the sheet dispatches.
-import { memo, useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+// upgrade info box (UpgradeSheet, an InfoPopover anchored on this button). Read-only selectors only; the box dispatches.
+import { memo, useCallback, useRef, useState } from 'react';
+import { type HostInstance, StyleSheet, View } from 'react-native';
 import { useGameState } from '../../client/GameProvider';
 import { type BuildingId, constructionView, upgradeView } from '../../engine';
 import { formatCountdown } from '../format';
 import { PixelButton } from '../PixelButton';
+import { type AnchorRect, measureAnchor } from '../ui/InfoPopover';
 import { UpgradeSheet } from './UpgradeSheet';
 
 export const UpgradeEntry = memo(function UpgradeEntry({ buildingId }: { buildingId: BuildingId }) {
   const state = useGameState();
-  const [open, setOpen] = useState(false);
-  const show = useCallback(() => setOpen(true), []);
-  const hide = useCallback(() => setOpen(false), []);
+  const [anchor, setAnchor] = useState<AnchorRect | null>(null);
+  const ref = useRef<HostInstance>(null);
+  const show = useCallback(() => {
+    void measureAnchor(ref.current).then(setAnchor);
+  }, []);
+  const hide = useCallback(() => setAnchor(null), []);
   const view = upgradeView(state, buildingId);
   const job = constructionView(state);
   const mine = job?.buildingId === buildingId ? job : null;
@@ -28,6 +32,7 @@ export const UpgradeEntry = memo(function UpgradeEntry({ buildingId }: { buildin
   return (
     <View style={styles.row}>
       <PixelButton
+        ref={ref}
         label={`🔨 Upgrade · Lv ${view.level}`}
         sublabel={sub}
         onPress={show}
@@ -36,7 +41,7 @@ export const UpgradeEntry = memo(function UpgradeEntry({ buildingId }: { buildin
         accessibilityLabel={`Upgrade, level ${view.level}, ${sub}`}
         accessibilityHint="Shows the next level's bonuses and cost"
       />
-      {open ? <UpgradeSheet buildingId={buildingId} onClose={hide} /> : null}
+      {anchor ? <UpgradeSheet buildingId={buildingId} anchor={anchor} onClose={hide} /> : null}
     </View>
   );
 });

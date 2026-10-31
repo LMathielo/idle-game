@@ -1,5 +1,5 @@
-import { memo, useState } from 'react';
-import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useRef, useState } from 'react';
+import { type HostInstance, Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { PixelButton } from './PixelButton';
 import { colors, fonts } from '../theme';
 
@@ -63,7 +63,8 @@ export const VillageScene = memo(function VillageScene({
   topReserve = 0,
   bottomReserve = 0,
 }: {
-  onAction?: (a: VillageAction) => void;
+  /** A sign was tapped; `node` is its button (InfoPopover anchors on it). */
+  onAction?: (a: VillageAction, node: HostInstance | null) => void;
   /** Sign of the running activity, drawn highlighted. */
   active?: VillageAction | null;
   /** Signs of buildings not built yet: greyed with 🔒, still tappable (they open the Build sheet). */
@@ -100,15 +101,12 @@ export const VillageScene = memo(function VillageScene({
             const cy = Math.min(Math.max(top + s.y * imgH, minY), maxY - (sub ? BADGE_EXTRA : 0));
             return (
               <View key={s.key} style={[styles.sign, { left: cx - SIGN_BOX_W / 2, top: cy - SIGN_BOX_H / 2 }]} pointerEvents="box-none">
-                <PixelButton
-                  sign
-                  label={s.label}
-                  icon={isLocked ? '🔒' : s.icon}
-                  muted={isLocked}
+                <SignButton
+                  sign={s}
+                  locked={isLocked}
                   active={!isLocked && active === s.key}
-                  onPress={() => onAction?.(s.key)}
-                  accessibilityLabel={isLocked ? `${s.label}, not built` : sub ? `${s.label}, ${sub}` : s.label}
-                  accessibilityHint={isLocked ? 'Shows what it needs to build' : undefined}
+                  sub={sub}
+                  onAction={onAction}
                 />
                 {sub ? (
                   <View style={styles.badge} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no">
@@ -125,6 +123,37 @@ export const VillageScene = memo(function VillageScene({
     </View>
   );
 });
+
+/** One sign button; hands its own view to onAction so the Build box can anchor on it. */
+function SignButton({
+  sign,
+  locked,
+  active,
+  sub,
+  onAction,
+}: {
+  sign: (typeof SIGNS)[number];
+  locked: boolean;
+  active: boolean;
+  sub?: string;
+  onAction?: (a: VillageAction, node: HostInstance | null) => void;
+}) {
+  const ref = useRef<HostInstance>(null);
+  const press = useCallback(() => onAction?.(sign.key, ref.current), [onAction, sign.key]);
+  return (
+    <PixelButton
+      ref={ref}
+      sign
+      label={sign.label}
+      icon={locked ? '🔒' : sign.icon}
+      muted={locked}
+      active={active}
+      onPress={press}
+      accessibilityLabel={locked ? `${sign.label}, not built` : sub ? `${sign.label}, ${sub}` : sign.label}
+      accessibilityHint={locked ? 'Shows what it needs to build' : undefined}
+    />
+  );
+}
 
 const styles = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden', backgroundColor: colors.night },

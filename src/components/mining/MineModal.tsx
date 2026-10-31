@@ -3,10 +3,9 @@
 // miningView() and dispatches START_ACTIVITY {kind:'mining', rockId} / STOP_ACTIVITY / SKIP_MINE. Locked rocks are
 // refused by the engine too (ROCK_LOCKED).
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, ScrollView, type ListRenderItem, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
-import type { CommandInput } from '../../client/types';
-import { type CrewView, crewViews, type MineActivityView, miningView, type RockId, type RockView } from '../../engine';
+import { FlatList, type HostInstance, ScrollView, type ListRenderItem, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useGameSnapshot } from '../../client/GameProvider';
+import { type CrewView, crewViews, mineActivityView, type MineActivityView, miningView, type RockId, type RockView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { confirmCancelRun } from '../dungeon/confirmCancelRun';
 import { formatBp, formatClock, formatNumber, formatPerMin, itemIcon, itemName } from '../format';
@@ -15,6 +14,8 @@ import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
 import { Bar } from '../Panel';
 import { PixelButton } from '../PixelButton';
+import { type AnchorRect, InfoPopover, measureAnchor, PopoverRow, PopoverText } from '../ui/InfoPopover';
+import { useCommand } from '../ui/useCommand';
 
 /** Width of the next card that shows at the right edge (the "peek"), and the gap between cards. */
 const PEEK = 28;
@@ -22,13 +23,11 @@ const GAP = 10;
 const SIDE = 16;
 
 export function MineModal() {
-  const client = useGameClient();
   const { state, clockPaused } = useGameSnapshot();
   const view = miningView(state); // cheap: 5 rocks, read-only
   const { width } = useWindowDimensions();
   const cardWidth = Math.max(240, width - 2 * SIDE - PEEK);
   const step = cardWidth + GAP;
-  const inFlight = useRef(false);
 
   /** Opens on the active rock, else the highest unlocked one. Fixed at mount so live ticks never scroll it. */
   const [initialIndex] = useState(() => Math.max(0, view.rocks.findIndex((r) => r.rockId === view.focusRockId)));
@@ -39,36 +38,37 @@ export function MineModal() {
   );
 
   /** One command at a time; a double tap never sends two. Engine refusals are shown, except a skip whose ore already ended. */
-  const send = useCallback(
-    (cmd: CommandInput) => {
-      if (inFlight.current) return;
-      inFlight.current = true;
-      client
-        .dispatch(cmd)
-        .then((res) => {
-          // ORE_CHANGED: that ore finished for free meanwhile; the card already shows the next one.
-          if (!res.ok && res.error.code !== 'ORE_CHANGED') Alert.alert('Not possible', res.error.message);
-        })
-        .catch(() => Alert.alert('Could not save', 'Try again.'))
-        .finally(() => {
-          inFlight.current = false;
-        });
-    },
-    [client],
-  );
+  // ORE_CHANGED: that ore finished for free meanwhile; the card already shows the next one.
+  const { send, dialog, client } = useCommand({ silentCodes: ['ORE_CHANGED'] });
+  /** The rock whose info box is open, anchored on its ⓘ button. */
+  const [info, setInfo] = useState<{ id: RockId; anchor: AnchorRect } | null>(null);
+  const openInfo = useCallback((id: RockId, node: HostInstance | null) => {
+    void measureAnchor(node).then((anchor) => anchor && setInfo({ id, anchor }));
+  }, []);
+  const closeInfo = useCallback(() => setInfo(null), []);
 
   const onStart = useCallback(
-    (rockId: RockId, name: string) => {
-      const go = () => send({ type: 'START_ACTIVITY', kind: 'mining', rockId });
+    async (rockId: RockId, name: string) => {
       // One activity at a time: mining would end the dungeon run in progress, so ask first.
       const a = client.getState().activity;
-      if (a?.kind === 'dungeon') confirmCancelRun(`Mine ${name}`, go, a.phase === 'fight');
-      else go();
+      if (a?.kind === 'dungeon' && !(await confirmCancelRun(dialog, `Mine ${name}`, a.phase === 'fight'))) return;
+      await send({ type: 'START_ACTIVITY', kind: 'mining', rockId });
+    },
+    [client, dialog, send],
+  );
+  const onStop = useCallback(() => void send({ type: 'STOP_ACTIVITY' }), [send]);
+  /**
+   * Hold-to-repeat skip. Each tick names the ore and the cost on screen right now (read from the live state), so it
+   * never pays more than shown or skips a later ore twice; it stops when stamina runs out or the activity ends.
+   */
+  const onSkip = useCallback(
+    (repeat: boolean) => {
+      const live = mineActivityView(client.getState());
+      if (!live || client.getState().stamina.current < live.skipCost) return Promise.resolve(false);
+      return send({ type: 'SKIP_MINE', ore: live.ore, maxCost: live.skipCost }, { quiet: repeat });
     },
     [client, send],
   );
-  const onStop = useCallback(() => send({ type: 'STOP_ACTIVITY' }), [send]);
-  const onSkip = useCallback((ore: number, cost: number) => send({ type: 'SKIP_MINE', ore, maxCost: cost }), [send]);
 
   const current = view.current;
   const crewOf = useMemo(() => new Map(crewViews(state, 'mining').map((c) => [c.node, c])), [state]);
@@ -89,9 +89,10 @@ export function MineModal() {
         onStart={onStart}
         onStop={onStop}
         onSkip={onSkip}
+        onInfo={openInfo}
       />
     ),
-    [cardWidth, crewOf, current, stamina, clockPaused, view.level, view.ms.value, onStart, onStop, onSkip],
+    [cardWidth, crewOf, current, stamina, clockPaused, view.level, view.ms.value, onStart, onStop, onSkip, openInfo],
   );
   const getItemLayout = useCallback((_: unknown, index: number) => ({ length: step, offset: step * index, index }), [step]);
   const separator = useCallback(() => <View style={styles.gap} />, []);
@@ -149,6 +150,7 @@ export function MineModal() {
         {otherActivity === 'dungeon' ? <Text style={styles.note}>Starting stops the dungeon: the run in progress is lost.</Text> : null}
         <UpgradeEntry buildingId="mine_shaft" />
       </ScrollView>
+      {info ? <RockInfo rock={view.rocks.find((t) => t.rockId === info.id) ?? null} anchor={info.anchor} onClose={closeInfo} /> : null}
     </ModalScreen>
   );
 }
@@ -168,12 +170,15 @@ type CardProps = {
   ms: number;
   onStart: (rockId: RockId, name: string) => void;
   onStop: () => void;
-  onSkip: (ore: number, cost: number) => void;
+  onSkip: (repeat: boolean) => Promise<boolean>;
+  onInfo: (id: RockId, node: HostInstance | null) => void;
 };
 
-const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, paused, level, ms, onStart, onStop, onSkip }: CardProps) {
+const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, paused, level, ms, onStart, onStop, onSkip, onInfo }: CardProps) {
   const start = useCallback(() => onStart(rock.rockId, rock.name), [onStart, rock.rockId, rock.name]);
-  const skip = useCallback(() => current && onSkip(current.ore, current.skipCost), [current, onSkip]);
+  const skip = useCallback(({ repeat }: { repeat: boolean }) => onSkip(repeat), [onSkip]);
+  const infoRef = useRef<HostInstance>(null);
+  const showInfo = useCallback(() => onInfo(rock.rockId, infoRef.current), [onInfo, rock.rockId]);
   const geode = rock.rareDrops[0];
   const missing = [
     rock.levelOk ? null : `Mining Lv ${rock.reqLevel}`,
@@ -187,9 +192,18 @@ const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, p
       <Text style={styles.rockIcon} accessibilityElementsHidden importantForAccessibility="no">
         {rock.icon}
       </Text>
-      <Text style={styles.rockName} accessibilityRole="header">
-        {rock.name}
-      </Text>
+      <View style={styles.titleRow}>
+        <Text style={styles.rockName} accessibilityRole="header">
+          {rock.name}
+        </Text>
+        <PixelButton
+          ref={infoRef}
+          label="ⓘ"
+          onPress={showInfo}
+          accessibilityLabel={`About ${rock.name}`}
+          accessibilityHint="Shows how yield, XP and drops work here"
+        />
+      </View>
       <View style={styles.reqs}>
         <Req ok={rock.levelOk} label={`Lv ${rock.reqLevel}`} detail={`you ${level}`} />
         <Req ok={rock.msOk} label={`MS ${formatNumber(rock.reqMs)}`} detail={`you ${formatNumber(ms)}`} />
@@ -202,7 +216,6 @@ const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, p
         {geode ? <Fact label={`${itemIcon(geode.itemId)} ${itemName(geode.itemId)}`} value={`1 in ${formatNumber(Math.round(1 / geode.chance))}`} /> : null}
       </View>
 
-      <Text style={styles.yieldNote}>Ores per swing = your MS ÷ the MS needed; the decimals are the chance of one more.</Text>
       {crew ? (
         <Text style={[styles.crew, crew.status !== 'working' && styles.crewOff]} accessibilityLabel={`${crew.workers} workers here, ${crew.status === 'working' ? `about ${formatPerMin(crew.itemsPerMin)} per minute` : crew.status}`}>
           👷 {crew.workers} {crew.workers === 1 ? 'worker' : 'workers'} ·{' '}
@@ -227,10 +240,10 @@ const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, p
             <PixelButton label="Stop" onPress={onStop} active accessibilityLabel={`Stop mining ${rock.name}`} accessibilityHint="Your ores are kept" />
             <PixelButton
               label={`Skip (${current.skipCost}⚡)`}
-              onPress={skip}
+              repeat={skip}
               disabled={!canSkip}
               accessibilityLabel={`Skip this ore for ${current.skipCost} stamina`}
-              accessibilityHint={canSkip ? 'Finishes the current ore now' : 'Not enough stamina'}
+              accessibilityHint={canSkip ? 'Finishes the current ore now. Hold to keep skipping' : 'Not enough stamina'}
             />
           </>
         ) : (
@@ -240,6 +253,22 @@ const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, p
     </View>
   );
 });
+
+/** The rock's info box (InfoPopover): yield math, XP, drops, crew and what it needs. */
+function RockInfo({ rock, anchor, onClose }: { rock: RockView | null; anchor: AnchorRect; onClose: () => void }) {
+  if (!rock) return null;
+  const drop = rock.rareDrops[0];
+  return (
+    <InfoPopover anchor={anchor} onClose={onClose} title={rock.name} icon={rock.icon} subtitle={`Needs Lv ${rock.reqLevel} and ${formatNumber(rock.reqMs)} MS`}>
+      <PopoverRow label="Time per swing" value={formatClock(rock.oreMs)} />
+      <PopoverRow label="Ores per swing" value={`×${formatBp(rock.yieldBp)}`} />
+      <PopoverRow label="XP per swing" value={formatNumber(rock.xpPerOre)} />
+      {drop ? <PopoverRow label={`${itemIcon(drop.itemId)} ${itemName(drop.itemId)}`} value={`1 in ${formatNumber(Math.round(1 / drop.chance))}`} /> : null}
+      <PopoverText tone="note">Ores per swing = your MS ÷ the MS needed, times your building bonuses; the decimals are the chance of one more. XP and the rare find are one per swing.</PopoverText>
+      {!rock.unlocked ? <PopoverText tone="bad">🔒 Not open yet: raise your level or MS.</PopoverText> : null}
+    </InfoPopover>
+  );
+}
 
 function Req({ ok, label, detail }: { ok: boolean; label: string; detail: string }) {
   return (
@@ -260,7 +289,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: 24 },
-  yieldNote: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, textAlign: 'center' },
+  titleRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
   crew: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerEasy, textAlign: 'center' },
   crewOff: { color: colors.dangerDeadly },
   stamina: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.stamina },
