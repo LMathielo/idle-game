@@ -10,14 +10,12 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { GameProvider } from '../client/GameProvider';
 import { AwayModal } from '../components/AwayModal';
 import { DialogProvider, RootDialogHost } from '../components/ui/GameDialog';
+import { VILLAGE_MODAL_PATHS } from '../components/village/modalPaths';
 import { colors } from '../theme';
 
 /** The tabs sit under every village modal, also when a modal is the first route opened. */
 export const unstable_settings = { anchor: '(tabs)' };
 
-/** Village modal routes. Each one renders its own <AwayModal /> and <DialogHost /> (see RootAwayModal). Keep in sync with
- * MODAL_PATHS in components/ui/GameDialog.tsx. */
-const VILLAGE_MODAL_PATHS: readonly string[] = ['/dungeon', '/training', '/woodcutting', '/mine', '/merchant', '/town-hall'];
 
 /**
  * iOS presents an RN <Modal> from the view controller that owns it. Mounted here it belongs to the

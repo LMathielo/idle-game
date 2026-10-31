@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type HostInstance, type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameState } from '../../client/GameProvider';
@@ -8,7 +8,7 @@ import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
 import { BuildSheet } from '../../components/buildings/BuildSheet';
 import { type VillageAction, VillageScene } from '../../components/VillageScene';
 import { formatCountdown, formatNumber } from '../../components/format';
-import { type AnchorRect, measureAnchor } from '../../components/ui/InfoPopover';
+import type { AnchorRect } from '../../components/ui/InfoPopover';
 import { type ActivityKind, type BuildingId, constructionView, isBuilt } from '../../engine';
 import { colors, fonts } from '../../theme';
 
@@ -84,10 +84,11 @@ export default function VillageScreen() {
   }, []);
 
   const onAction = useCallback(
-    (action: VillageAction, node: HostInstance | null) => {
+    (action: VillageAction, anchor: AnchorRect | null) => {
       const needs = SIGN_BUILDING[action];
       if (needs && locked.has(action)) {
-        void measureAnchor(node).then((anchor) => anchor && setBuilding({ id: needs, anchor }));
+        // The sign's box comes from the map camera (see VillageScene), so it is right after panning and zooming.
+        if (anchor) setBuilding({ id: needs, anchor });
         return;
       }
       const route = SIGN_ROUTE[action];

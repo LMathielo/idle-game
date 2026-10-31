@@ -607,7 +607,7 @@ describe('golden', () => {
     `);
   });
 
-  it('the 1.10.0 script is unchanged in 1.11.0 (its Training Grounds stay Lv1: 1 XP/min as before); re-pinned in 1.12.0', () => {
+  it('the 1.10.0 script: its hash re-pinned in 1.12.0 (faster skills); in 1.11.0 its Training Grounds stayed Lv1', () => {
     const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'p1')));
     expect(s.time.lastSimulatedAt).toBe(G);
     // 1.12.0: the skill curve (base 100) levels woodcutting and mining faster, so WS / MS and the yield rise. Was 1aed0f53.

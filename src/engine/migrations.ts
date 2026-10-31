@@ -406,7 +406,8 @@ export function v12SkillProgress(skill: unknown): { level: number; xp: number; x
   const oldLevel = typeof s.level === 'number' && Number.isSafeInteger(s.level) && s.level >= 1 ? s.level : 1;
   const oldM = [1, 1];
   let total = count(s.xp);
-  for (let l = 1; l < oldLevel; l++) total = Math.min(SAFE, total + frozenXpToNext(V11_SKILL_CURVE, l, oldM));
+  // A corrupt save can carry a huge level: once the total is clamped, more levels add nothing, so stop there.
+  for (let l = 1; l < oldLevel && total < SAFE; l++) total = Math.min(SAFE, total + frozenXpToNext(V11_SKILL_CURVE, l, oldM));
   const newM = [1, 1];
   let level = 1;
   let next = frozenXpToNext(V12_SKILL_CURVE, 1, newM);

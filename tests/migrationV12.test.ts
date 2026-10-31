@@ -95,6 +95,13 @@ describe('save v12 migration (v11 → v12): skills keep their total XP', () => {
     }
   });
 
+  it('a corrupt huge level returns quickly (the total stops at MAX_SAFE_INTEGER)', () => {
+    const t0 = Date.now();
+    const v = v12SkillProgress({ level: 1e15, xp: 0, xpToNext: 1 });
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(v.xp).toBeLessThan(v.xpToNext);
+  });
+
   it('broken or missing values count as Lv1 / 0 XP; huge totals clamp without looping forever', () => {
     expect(v12SkillProgress(undefined)).toEqual({ level: 1, xp: 0, xpToNext: 100 });
     expect(v12SkillProgress({ level: -3, xp: 'x' })).toEqual({ level: 1, xp: 0, xpToNext: 100 });

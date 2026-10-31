@@ -1,5 +1,6 @@
 // Collapsible debug tools (Hero tab). Every button is logged as a DEBUG_* row; none changes engine rules.
-// Every button but Reset save repeats while held (PixelButton `repeat`); a refused repeat stops silently.
+// Every button but Reset save and the clock shifts repeats while held (PixelButton `repeat`); a refused repeat stops
+// silently.
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
@@ -54,6 +55,9 @@ export function DebugPanel() {
       }
     };
 
+  /** A single debug action (no repeat): the clock shifts. */
+  const once = (fn: () => Promise<unknown>) => () => void run(fn)({ repeat: false });
+
   const confirmReset = async () => {
     const ok = await dialog.confirm({ title: 'Reset save?', message: 'Starts a new level-1 hero. The action log is kept.', confirmLabel: 'Reset', destructive: true });
     if (ok) await run(() => client.debug.resetSave())({ repeat: false });
@@ -73,10 +77,10 @@ export function DebugPanel() {
           </Text>
           {logInfo ? <Text style={styles.info}>{logInfo}</Text> : null}
           <View style={styles.grid}>
-            <PixelButton label="+1h" repeat={run(() => client.debug.shiftClock(HOUR))} />
-            <PixelButton label="+8h" repeat={run(() => client.debug.shiftClock(8 * HOUR))} />
-            <PixelButton label="+24h" repeat={run(() => client.debug.shiftClock(24 * HOUR))} />
-            <PixelButton label="Clock −2h" repeat={run(() => client.debug.shiftClock(-2 * HOUR))} />
+            <PixelButton label="+1h" onPress={once(() => client.debug.shiftClock(HOUR))} />
+            <PixelButton label="+8h" onPress={once(() => client.debug.shiftClock(8 * HOUR))} />
+            <PixelButton label="+24h" onPress={once(() => client.debug.shiftClock(24 * HOUR))} />
+            <PixelButton label="Clock −2h" onPress={once(() => client.debug.shiftClock(-2 * HOUR))} />
             <PixelButton label="+10k hero XP" repeat={run(() => client.debug.grantHeroXp(10_000))} />
             <PixelButton label="Spend 10 stamina" repeat={run(() => client.debug.spendStamina(10))} />
             <PixelButton label="Refill stamina" repeat={run(() => client.debug.refillStamina())} />

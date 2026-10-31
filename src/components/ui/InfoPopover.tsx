@@ -116,7 +116,7 @@ export function InfoPopover({ anchor, onClose, title, icon, titleColor, iconBord
         onLayout={onLayout}
         accessibilityViewIsModal
       >
-        <View style={overlayFrame.frame}>
+        <View style={[overlayFrame.frame, styles.shrink]}>
           <View style={[overlayFrame.box, styles.inner]}>
             <View style={styles.head}>
               {icon ? (
@@ -185,6 +185,8 @@ export const POPOVER_BAD = '#ff8a7a';
 
 const styles = StyleSheet.create({
   box: { position: 'absolute' },
+  // The frame and box must shrink, or the ScrollView inside is never bounded by the popover's maxHeight.
+  shrink: { flexShrink: 1 },
   inner: { flexShrink: 1, paddingTop: 8, paddingHorizontal: 12, paddingBottom: 12 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   flex: { flex: 1 },

@@ -17,6 +17,7 @@ import { AccessibilityInfo, Modal, Pressable, StyleSheet, Text, View } from 'rea
 import { useGameSnapshot } from '../../client/GameProvider';
 import { colors, fonts } from '../../theme';
 import { PixelButton } from '../PixelButton';
+import { VILLAGE_MODAL_PATHS } from '../village/modalPaths';
 import { useScreenInsets } from './insets';
 
 export type ConfirmOptions = {
@@ -89,13 +90,11 @@ export function useDialogShowing(): boolean {
   return !!useContext(DialogContext)?.current;
 }
 
-/** Village modal routes (each one mounts its own host through ModalScreen). Mirrors VILLAGE_MODAL_PATHS. */
-const MODAL_PATHS: readonly string[] = ['/dungeon', '/training', '/woodcutting', '/mine', '/merchant', '/town-hall'];
 
 /** The root layout's host: steps aside while a village modal (which has its own host) is open. */
 export function RootDialogHost() {
   const pathname = usePathname();
-  return MODAL_PATHS.includes(pathname) ? null : <DialogHost />;
+  return VILLAGE_MODAL_PATHS.includes(pathname) ? null : <DialogHost />;
 }
 
 /** Draws the current dialog. Mounted once per screen root (RootDialogHost, ModalScreen). */

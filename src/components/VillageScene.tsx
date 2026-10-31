@@ -8,6 +8,7 @@
 // re-renders when the game state changes. The HUD and the activity strip are overlays drawn by the screens above this.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { type HostInstance, Image, type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import type { AnchorRect } from './ui/InfoPopover';
 import { GestureDetector, usePanGesture, usePinchGesture, useSimultaneousGestures } from 'react-native-gesture-handler';
 import Animated, { type SharedValue, useAnimatedStyle, useSharedValue, withDecay } from 'react-native-reanimated';
 import { colors, fonts } from '../theme';
@@ -30,8 +31,11 @@ const BADGE_GAP = 2;
 const PAN_MIN_DISTANCE = 10;
 
 type Props = {
-  /** A sign was tapped; `node` is its button (InfoPopover anchors on it). */
-  onAction?: (a: VillageAction, node: HostInstance | null) => void;
+  /**
+   * A sign was tapped. `anchor` is its button's box on screen (window coordinates), computed from the camera, not
+   * measured: measureInWindow on a Reanimated-transformed view can return the pre-pan position under Fabric.
+   */
+  onAction?: (a: VillageAction, anchor: AnchorRect | null) => void;
   /** Sign of the running activity, drawn highlighted. */
   active?: VillageAction | null;
   /** Signs of buildings not built yet: greyed with 🔒, still tappable (they open the Build box). */
@@ -69,14 +73,30 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
     viewH.set(size.h);
     minZoom.set(lim.minZoom);
     maxZoom.set(lim.maxZoom);
-    const c = moved.get()
-      ? clampCamera({ zoom: Math.min(lim.maxZoom, Math.max(lim.minZoom, zoom.get())), tx: tx.get(), ty: ty.get() }, size)
-      : lim.camera;
+    const c = moved.get() ? clampCamera({ zoom: Math.min(lim.maxZoom, Math.max(lim.minZoom, zoom.get())), tx: tx.get(), ty: ty.get() }, size) : lim.camera;
     zoom.set(c.zoom);
     tx.set(c.tx);
     ty.set(c.ty);
   }, [size, topReserve, bottomReserve, viewW, viewH, minZoom, maxZoom, moved, zoom, tx, ty]);
   const ready = !!size;
+  /** The scene root's window position (it is never transformed, so measuring it is reliable). */
+  const rootRef = useRef<HostInstance>(null);
+  const rootOrigin = useRef({ x: 0, y: 0 });
+  const measureRoot = useCallback(() => {
+    rootRef.current?.measureInWindow((x, y) => {
+      rootOrigin.current = { x, y };
+    });
+  }, []);
+  /** A sign's button box on screen from the camera: root origin + camera position of its anchor, constant size. */
+  const anchorOf = useCallback(
+    (sign: (typeof SIGNS)[number], button: { w: number; h: number }): AnchorRect => ({
+      x: rootOrigin.current.x + tx.get() + sign.x * zoom.get() - button.w / 2,
+      y: rootOrigin.current.y + ty.get() + sign.y * zoom.get() - button.h / 2,
+      width: button.w,
+      height: button.h,
+    }),
+    [tx, ty, zoom],
+  );
 
   const pan = usePanGesture({
     minDistance: PAN_MIN_DISTANCE,
@@ -128,7 +148,15 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
 
   return (
     <GestureDetector gesture={gesture}>
-      <View style={styles.root} onLayout={onLayout} accessible={false}>
+      <View
+        ref={rootRef}
+        style={styles.root}
+        onLayout={(e) => {
+          onLayout(e);
+          measureRoot();
+        }}
+        accessible={false}
+      >
         {ready ? (
           <>
             <Animated.View style={[styles.map, mapStyle]} pointerEvents="none">
@@ -145,6 +173,8 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
                 active={active === s.key}
                 badge={badge?.key === s.key ? badge.text : undefined}
                 onAction={onAction}
+                anchorOf={anchorOf}
+                onPressStart={measureRoot}
               />
             ))}
           </>
@@ -169,29 +199,40 @@ type SignProps = {
   locked: boolean;
   active: boolean;
   badge?: string;
-  onAction?: (a: VillageAction, node: HostInstance | null) => void;
+  onAction?: (a: VillageAction, anchor: AnchorRect | null) => void;
+  anchorOf: (sign: (typeof SIGNS)[number], button: { w: number; h: number }) => AnchorRect;
+  /** Re-measures the scene root before a tap is handled (it can move, e.g. a tab bar change). */
+  onPressStart: () => void;
 };
 
 /** One sign: a constant-size button whose box follows its anchor on the map. */
-const Sign = memo(function Sign({ sign, zoom, tx, ty, locked, active, badge, onAction }: SignProps) {
-  const ref = useRef<HostInstance>(null);
-  const press = useCallback(() => onAction?.(sign.key, ref.current), [onAction, sign.key]);
+const Sign = memo(function Sign({ sign, zoom, tx, ty, locked, active, badge, onAction, anchorOf, onPressStart }: SignProps) {
+  /** The button's own size (layout, untransformed; it never changes with zoom). */
+  const button = useRef({ w: 0, h: SIGN_BUTTON_H });
+  const onButtonLayout = useCallback((e: LayoutChangeEvent) => {
+    button.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height };
+  }, []);
+  const press = useCallback(() => {
+    onPressStart();
+    onAction?.(sign.key, anchorOf(sign, button.current));
+  }, [onAction, onPressStart, anchorOf, sign]);
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.get() + sign.x * zoom.get() - SIGN_BOX_W / 2 }, { translateY: ty.get() + sign.y * zoom.get() - SIGN_BOX_H / 2 }],
   }));
   return (
     <Animated.View style={[styles.sign, style]} pointerEvents="box-none">
-      <PixelButton
-        ref={ref}
-        sign
-        label={sign.label}
-        icon={locked ? '🔒' : sign.icon}
-        muted={locked}
-        active={!locked && active}
-        onPress={press}
-        accessibilityLabel={locked ? `${sign.label}, not built` : badge ? `${sign.label}, ${badge}` : sign.label}
-        accessibilityHint={locked ? 'Shows what it needs to build' : undefined}
-      />
+      <View onLayout={onButtonLayout}>
+        <PixelButton
+          sign
+          label={sign.label}
+          icon={locked ? '🔒' : sign.icon}
+          muted={locked}
+          active={!locked && active}
+          onPress={press}
+          accessibilityLabel={locked ? `${sign.label}, not built` : badge ? `${sign.label}, ${badge}` : sign.label}
+          accessibilityHint={locked ? 'Shows what it needs to build' : undefined}
+        />
+      </View>
       {badge ? (
         <View style={styles.badge} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no">
           <Text style={styles.badgeText} numberOfLines={1}>
