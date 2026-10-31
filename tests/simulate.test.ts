@@ -48,9 +48,9 @@ describe('woodcutting rules (Oak)', () => {
 
   it('a level-up never changes the cut time (it depends on DEX only)', () => {
     const s = woodcuttingGame();
-    // 20 logs × 25 XP = 500 XP = Lv2 exactly at log 20; log 21 still takes 1:50.
-    const r = simulate(s, T0 + 21 * OAK_MS);
-    expect(r.summary.actions).toBe(21);
+    // 4 logs × 25 XP = 100 XP = Lv2 exactly at log 4 (skill curve base 100 since 1.12.0); log 5 still takes 1:50.
+    const r = simulate(s, T0 + 5 * OAK_MS);
+    expect(r.summary.actions).toBe(5);
     expect(r.summary.skillLevelsGained.woodcutting).toBe(1);
     expect(r.state.character.skills.woodcutting.level).toBe(2);
     expect(progressMs(r.state)).toBe(0);
@@ -65,13 +65,14 @@ describe('woodcutting rules (Oak)', () => {
         items: Array.from({ length: 20 }, (_, i) => ({ id: `junk-${i}`, defId: 'junk', name: 'Junk', icon: '?' })),
       },
     };
-    const r = simulate(full, T0 + 10 * OAK_MS);
-    expect(r.summary.actions).toBe(10);
-    expect(r.summary.itemsLost.oak_logs).toBe(10);
+    // 3 cuts stay at WC Lv1 (WS 21 on Oak's 20: 1 log + a 5% chance of a second); since 1.12.0 the 4th levels up.
+    const r = simulate(full, T0 + 3 * OAK_MS);
+    expect(r.summary.actions).toBe(3);
+    expect(r.summary.itemsLost.oak_logs).toBe(3);
     expect(r.summary.itemsGained.oak_logs).toBeUndefined();
     expect(r.state.inventory.items).toHaveLength(20);
     // skill XP still granted
-    expect(r.summary.skillXpGained.woodcutting).toBe(250);
+    expect(r.summary.skillXpGained.woodcutting).toBe(75);
 
     // With an existing logs stack, logs keep stacking even when every slot is taken.
     const withLogs: GameState = {
@@ -81,8 +82,8 @@ describe('woodcutting rules (Oak)', () => {
         items: [{ id: 'oak_logs', defId: 'oak_logs', name: 'Oak Logs', icon: '🪵', stackable: true, quantity: 5 }, ...full.inventory.items.slice(1)],
       },
     };
-    const r2 = simulate(withLogs, T0 + 10 * OAK_MS);
-    expect(qty(r2.state, 'oak_logs')).toBe(15);
+    const r2 = simulate(withLogs, T0 + 3 * OAK_MS);
+    expect(qty(r2.state, 'oak_logs')).toBe(8);
     expect(r2.summary.itemsLost.oak_logs).toBeUndefined();
 
     // Stacks are matched by defId, not by instance id.
@@ -93,9 +94,9 @@ describe('woodcutting rules (Oak)', () => {
         items: [{ ...withLogs.inventory.items[0], id: 'logs-stack-1' }, ...full.inventory.items.slice(1)],
       },
     };
-    const r3 = simulate(oddId, T0 + 10 * OAK_MS);
-    expect(r3.state.inventory.items[0]).toMatchObject({ id: 'logs-stack-1', defId: 'oak_logs', quantity: 15 });
-    expect(itemQuantity(r3.state, 'oak_logs')).toBe(15);
+    const r3 = simulate(oddId, T0 + 3 * OAK_MS);
+    expect(r3.state.inventory.items[0]).toMatchObject({ id: 'logs-stack-1', defId: 'oak_logs', quantity: 8 });
+    expect(itemQuantity(r3.state, 'oak_logs')).toBe(8);
     expect(r3.summary.itemsLost.oak_logs).toBeUndefined();
   });
 

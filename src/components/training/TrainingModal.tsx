@@ -1,10 +1,9 @@
 // Village → Training: full-screen modal. Buy training tiers with gold, then train one attribute at a time.
 // Rules stay in the engine: this file reads trainingView() and dispatches UNLOCK_TRAINING_TIER /
 // START_ACTIVITY {kind:'training'} / STOP_ACTIVITY / SPEEDUP_TRAINING. Locked and maxed attributes are refused by the engine too.
-import { memo, useCallback, useRef } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
-import type { CommandInput } from '../../client/types';
+import { memo, useCallback } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useGameSnapshot } from '../../client/GameProvider';
 import { type AttributeKey, type AttributeTrainingView, buildingLevel, TRAINING, type TrainingView, trainingView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { confirmCancelRun } from '../dungeon/confirmCancelRun';
@@ -14,52 +13,47 @@ import { ModalScreen } from '../ModalScreen';
 import { Panel } from '../Panel';
 import { PixelButton } from '../PixelButton';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
+import { useCommand } from '../ui/useCommand';
 
 export function TrainingModal() {
-  const client = useGameClient();
   const { state, clockPaused } = useGameSnapshot();
   const { character, activity, offline } = state;
   const view = trainingView(state); // cheap: 4 attributes, read-only
-  const inFlight = useRef(false);
-
-  /** One command at a time; a double tap never sends two. Engine refusals are shown, never hidden. */
-  const send = useCallback(
-    (cmd: CommandInput) => {
-      if (inFlight.current) return;
-      inFlight.current = true;
-      client
-        .dispatch(cmd)
-        .then((res) => {
-          if (!res.ok) Alert.alert('Not possible', res.error.message);
-        })
-        .catch(() => Alert.alert('Could not save', 'Try again.'))
-        .finally(() => {
-          inFlight.current = false;
-        });
-    },
-    [client],
-  );
+  /** One command at a time; a double tap never sends two. Engine refusals are shown in a GameDialog. */
+  const { send, dialog, client } = useCommand();
 
   const onTrain = useCallback(
-    (attribute: AttributeKey) => {
-      const go = () => send({ type: 'START_ACTIVITY', kind: 'training', attribute });
+    async (attribute: AttributeKey) => {
       // One activity at a time: training would end the dungeon run in progress, so ask first.
       const a = client.getState().activity;
-      if (a?.kind === 'dungeon') confirmCancelRun(`Train ${ATTRIBUTE_NAMES[attribute].short}`, go, a.phase === 'fight');
-      else go();
+      if (a?.kind === 'dungeon' && !(await confirmCancelRun(dialog, `Train ${ATTRIBUTE_NAMES[attribute].short}`, a.phase === 'fight'))) return;
+      await send({ type: 'START_ACTIVITY', kind: 'training', attribute });
+    },
+    [client, dialog, send],
+  );
+  const onPause = useCallback(() => void send({ type: 'STOP_ACTIVITY' }), [send]);
+  /**
+   * Hold-to-repeat: bound to the cost read from the live state at each tick (never more than the button shows; the
+   * engine refuses COST_CHANGED rather than charge more). A repeat tick is quiet: a refusal just stops the hold.
+   */
+  const onSpeedup = useCallback(
+    (key: SpeedupKey, repeat: boolean) => {
+      const option = speedupOptions(trainingView(client.getState())).find((o) => o.key === key);
+      if (!option || option.minutes <= 0 || client.getState().stamina.current < option.cost) return Promise.resolve(false);
+      return send({ type: 'SPEEDUP_TRAINING', minutes: option.minutes, maxCost: option.cost }, { quiet: repeat });
     },
     [client, send],
   );
-  const onPause = useCallback(() => send({ type: 'STOP_ACTIVITY' }), [send]);
-  /** Bound to the cost on the button: the engine refuses (COST_CHANGED) rather than charge more. */
-  const onSpeedup = useCallback((minutes: number, cost: number) => send({ type: 'SPEEDUP_TRAINING', minutes, maxCost: cost }), [send]);
   const onUnlock = useCallback(
-    (tier: number, price: number, cap: number) =>
-      Alert.alert(`Unlock Tier ${tier}?`, `Costs ${formatNumber(price)} gold. Attributes can then be trained up to level ${cap}.`, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: `Unlock · ${formatNumber(price)} g`, onPress: () => send({ type: 'UNLOCK_TRAINING_TIER', tier }) },
-      ]),
-    [send],
+    async (tier: number, price: number, cap: number) => {
+      const ok = await dialog.confirm({
+        title: `Unlock Tier ${tier}?`,
+        message: `Costs ${formatNumber(price)} gold. Attributes can then be trained up to level ${cap}.`,
+        confirmLabel: `Unlock · ${formatNumber(price)} g`,
+      });
+      if (ok) await send({ type: 'UNLOCK_TRAINING_TIER', tier });
+    },
+    [dialog, send],
   );
 
   const otherActivity = activity && activity.kind !== 'training' ? activity.kind : null;
@@ -150,7 +144,7 @@ type RowProps = {
   stamina: number;
   onTrain: (a: AttributeKey) => void;
   onPause: () => void;
-  onSpeedup: (minutes: number, cost: number) => void;
+  onSpeedup: OnSpeedup;
 };
 
 const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused, stamina, onTrain, onPause, onSpeedup }: RowProps) {
@@ -194,29 +188,47 @@ const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused
   );
 });
 
-/** Stamina speed-up on the active row: 1 stamina per minute (worth the current XP/min), never charged beyond the tier cap. */
-function SpeedupButtons({ view, stamina, onSpeedup }: { view: AttributeTrainingView; stamina: number; onSpeedup: (minutes: number, cost: number) => void }) {
+type SpeedupKey = '1' | '10' | 'next';
+type OnSpeedup = (key: SpeedupKey, repeat: boolean) => Promise<boolean>;
+
+/** The speed-up buttons of the attribute being trained, with what each would cost right now. */
+function speedupOptions(view: TrainingView) {
+  const active = view.attributes.find((a) => a.active);
+  if (!active) return [];
+  return attributeSpeedups(active);
+}
+
+function attributeSpeedups(view: AttributeTrainingView) {
   const per = TRAINING.speedup.staminaPerStep;
-  const options = [
-    { key: '1', minutes: 1, label: '+1m', spoken: '1 minute' },
-    { key: '10', minutes: 10, label: '+10m', spoken: '10 minutes' },
-    { key: 'next', minutes: view.speedupToNextLevel, label: 'Next Lv', spoken: 'To the next level' },
-  ].map((o) => {
+  return (
+    [
+      { key: '1', minutes: 1, label: '+1m', spoken: '1 minute' },
+      { key: '10', minutes: 10, label: '+10m', spoken: '10 minutes' },
+      { key: 'next', minutes: view.speedupToNextLevel, label: 'Next Lv', spoken: 'To the next level' },
+    ] as const
+  ).map((o) => {
     const minutes = Math.min(o.minutes, view.speedupToCap);
-    return { ...o, minutes, cost: minutes * per };
+    return { ...o, key: o.key as SpeedupKey, minutes, cost: minutes * per };
   });
+}
+
+/**
+ * Stamina speed-up on the active row: 1 stamina per minute (worth the current XP/min), never charged beyond the tier
+ * cap. Hold to repeat (each tick reads the cost again and stops when stamina runs out or the attribute maxes).
+ */
+function SpeedupButtons({ view, stamina, onSpeedup }: { view: AttributeTrainingView; stamina: number; onSpeedup: OnSpeedup }) {
   return (
     <View style={styles.speedup}>
-      {options.map((o) => (
+      {attributeSpeedups(view).map((o) => (
         <PixelButton
           key={o.key}
           label={o.label}
           sublabel={`${o.cost}⚡`}
           stretch
-          onPress={() => onSpeedup(o.minutes, o.cost)}
+          repeat={({ repeat }) => onSpeedup(o.key, repeat)}
           disabled={o.minutes <= 0 || stamina < o.cost}
           accessibilityLabel={`Speed up training: ${o.spoken}${o.key === 'next' ? ` (${o.minutes} minutes)` : ''}, costs ${o.cost} stamina`}
-          accessibilityHint={stamina < o.cost ? 'Not enough stamina' : `Adds the training time right away, ${view.xpPerMinute} XP per minute`}
+          accessibilityHint={stamina < o.cost ? 'Not enough stamina' : `Adds the training time right away, ${view.xpPerMinute} XP per minute. Hold to repeat`}
         />
       ))}
     </View>

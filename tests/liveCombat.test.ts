@@ -117,11 +117,11 @@ describe('rebalance (config)', () => {
 });
 
 describe('hero XP curve (base 100)', () => {
-  it('xpToNext = round(100 × L × √L × growth): 100, 283, 520, 800, 1118 …; skills unchanged (base 500)', () => {
+  it('xpToNext = round(100 × L × √L × growth): 100, 283, 520, 800, 1118 …; skills have their own curve (base 100 since 1.12.0)', () => {
     expect(HERO_XP_CURVE).toMatchObject({ base: 100, power: 1.5 });
     expect([1, 2, 3, 4, 5, 10, 20].map((l) => xpToNext(HERO_XP_CURVE, l))).toEqual([100, 283, 520, 800, 1118, 3162, 8944]);
-    expect(SKILL_XP_CURVE.base).toBe(500);
-    expect(xpToNext(SKILL_XP_CURVE, 1)).toBe(500);
+    expect(SKILL_XP_CURVE.base).toBe(100);
+    expect(xpToNext(SKILL_XP_CURVE, 1)).toBe(100);
   });
 
   it('Lv5 needs 1,703 XP: 49 Rat Cellar wins (48 is still Lv4)', () => {

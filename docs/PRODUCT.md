@@ -18,7 +18,7 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - iOS + Android via Expo (SDK 58), tested through Expo Go. No web.
 - Single player for now; multiplayer later via a server that reuses the engine.
 
-## Current state (2026-10-28, engine 1.11.0)
+## Current state (2026-10-31, engine 1.12.0)
 
 - Two tabs: **Village** (pixel village hub with signs: Storage, Merchant, Dungeon, Training, Woodcutting, Mine Shaft, Town Hall) and **Hero** (XP, Status panel with 4 attributes, derived damage/defense, current/max HP with regen, mana and stamina, 11 equipment slots (incl. the axe and the pickaxe), 20-slot inventory, 4 skills).
 - **Buildings (2026-10-28):** Woodcutting, Mine Shaft, Town Hall and Training Grounds start **locked** (greyed sign with 🔒); tapping one opens a Build sheet with each requirement (have / need) and a Build button. Dungeon, Merchant and Storage are always built. Table below.
@@ -30,9 +30,17 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - **M3 Training in progress:** the Training sign opens a full-screen modal. Gold buys training tiers (Tier 1 = 100 g, tier t = 100·t³, 10 tiers, each +20 max level for all four attributes); time trains one attribute at a time at 1 XP per minute, live and offline (8h cap). Effective attribute = base + training level, used by damage, defense, HP regen and the DEX run time. The Hero tab shows each attribute's base + trained split.
 - **Woodcutting (2026-10-27):** the Woodcutting sign opens a full-screen modal with **5 trees** (Oak, Birch, Maple, Yew, Ironwood) in a swipeable carousel. Each tree needs a woodcutting level and a **woodcutting strength** (WS = 10 × level + STR + axe). New **axe** equipment slot; everyone has the Wooden Axe (+1 WS). Logs every 1:50 on Oak at DEX 10, skippable with stamina. Training can be sped up with stamina (1 per minute).
 - **Merchant (2026-10-27):** the Merchant sign opens a full-screen modal with **Buy | Sell** tabs. Slot 1 is always Health Potion ×10; since 1.10.0 the other slots are rolled from a pool on each refresh (table below); 5 refresh charges (+1 per 2 h). Tapping an item on the Hero tab opens an info sheet with **Equip / Use / Unequip**. Item names are colored by quality.
+- **UI kit, village map, skill XP (2026-10-31, engine 1.12.0):** see "UI rules" below. Woodcutting / Mining Lv1 → 15 takes about a day of gathering (skill XP base 100, steeper from Lv15); existing saves keep their total skill XP and jump levels.
 - Storage shows "coming soon". No storage, crafting or item affixes yet.
 - Technical details: `docs/ENGINE.md`.
 - Delivery: PRs land on `dev` (test preview in Expo Go, EAS branch `dev`); the owner releases `dev` → `main` (EAS branch `main`) after testing.
+
+## UI rules (2026-10-31)
+
+- **Dialogs:** every confirmation and every alert ("Not possible", "Could not save", errors) is a **GameDialog**: pixel styled, Pixelify title, Inter body, red confirm when the action loses something. Android back or a tap outside = cancel. Never the native alert.
+- **Info:** tapping an item or anything with info opens an **InfoPopover**: a squared box next to the tapped element (above or below, kept on screen), with that element's actions as buttons inside. A tap outside closes it. Used for items (Equip / Use / Unequip / Buy / Sell), locked buildings (Build), upgrades (Upgrade), hero stats and attributes, locked dungeons, trees and rocks (ⓘ).
+- **Hold-to-repeat:** stamina skips (woodcutting, mining, dungeon search), training speed-ups and the debug buttons (not Reset save) repeat while held: one action on touch, then every 100 ms after 400 ms. A repeat stops on release, when stamina or gold runs out (silently, no dialog), or when the button turns off.
+- **Village map:** drag and pinch-zoom (up to 2.5×), never past the map's edge; it opens centred on the village. Signs keep their size; the HUD and the activity strip stay fixed on top. Empty roped plots are where future buildings go.
 
 ## Buildings (2026-10-28)
 
@@ -125,7 +133,7 @@ Moved to [`STATUS.md`](STATUS.md) (refined and unrefined roadmap, current versio
 | 2026-10-25 | On-device storage: SQLite (expo-sqlite) used as a document store, not MongoDB/Realm | Owner wanted a Mongo-like model because player attributes will grow. No Mongo/Realm option runs in Expo Go (Realm/Atlas Device Sync are end-of-life). The state is one JSON document (no schema change for new fields) with SQLite transactions and an append-only action log; the document maps 1:1 to a future server `players` document |
 | 2026-10-25 | Offline progress capped at 8h at 100% efficiency, stored per player | Keeps a reason to come back; per-player values let a future "offline cap upgrade" raise them |
 | 2026-10-25 | Device clock moved back = progress paused until real time catches up, no other penalty | Defeats "clock forward, collect, clock back, collect again" without punishing honest timezone/clock fixes |
-| 2026-10-25 | XP curve: `round(base × L^1.5 × multiplier)`, hero base 1500, skills base 500, growth 1.00 (1–19), 1.05 (20–39), 1.07 (40–99), 1.18 (100+), no level cap | Targets ~2 days to hero Lv20 and >1 year to Lv100; table in `docs/ENGINE.md` |
+| 2026-10-25 | XP curve (skills **superseded 2026-10-31**, hero base since 1.8.0): `round(base × L^1.5 × multiplier)`, hero base 1500, skills base 500, growth 1.00 (1–19), 1.05 (20–39), 1.07 (40–99), 1.18 (100+), no level cap | Targets ~2 days to hero Lv20 and >1 year to Lv100; table in `docs/ENGINE.md` |
 | 2026-10-25 | Hero XP comes from combat only; skills give skill XP + items | Keeps gathering and combat as separate progression tracks |
 | 2026-10-25 | "While you were away" opens only after ≥60 s of real time away (with at least one action) or on any clock anomaly | A quick app switch should not interrupt the player |
 | 2026-10-25 | Debug panel stays enabled for the POC; any DEBUG_* action permanently sets `flags.debugUsed` on the save | Owner tests on the phone; a future server can tell debugged saves apart. Debug log rows stay replayable in any build |
@@ -209,6 +217,9 @@ Moved to [`STATUS.md`](STATUS.md) (refined and unrefined roadmap, current versio
 | 2026-10-28 | Engineering choice (engineer, flagged): above 1 XP/min a level-up can land a fraction of a wall millisecond past the level; that sub-ms of trained time (less than the XP/min in ms) is carried into the next level instead of dropped. Speed-up "Next Lv" = ceil(XP left ÷ XP/min) stamina | Nothing lost; still split-invariant |
 | 2026-10-26 | Review council sized by risk: 2 reviewers normally, 5 for high-risk PRs; reviewers on Sonnet (medium reasoning); only findings ≥ 80 are fixed in the PR, one verification reviewer after fixes, lower findings batched into cleanup PRs | Token cost: the 5-reviewer council on every PR cost about as much as the coding itself |
 | 2026-10-28 | 320pt-wide screens not supported; a shared gathering core (with parity tests over every gathering skill) comes before any third gathering skill | Owner answer on PR #15; review of PR #15 found mining is a copy of woodcutting |
+| 2026-10-31 | **UI kit:** GameDialog for every dialog, InfoPopover for every info view (actions inside), hold-to-repeat (400 ms, then every 100 ms) on stamina skips, training speed-ups and debug buttons | One consistent pixel UI; no native alerts; fewer taps for repeated actions |
+| 2026-10-31 | **Village map:** pan + pinch-zoom, world 360×560 with the old village as its core and 4 empty plots for future buildings | Room to grow, testable now |
+| 2026-10-31 | **Skill XP rebalance (engine 1.12.0, save v12):** skill base 500 → 100, growth 1.07 from Lv15, 1.08 from Lv40, 1.18 from Lv100 (hero curve unchanged). Lv15 = 31,998 XP ≈ 23.5 h (Oak to Lv5, then Birch). Migration keeps each skill's total XP and recomputes the level | Lv15 took ~117 h; target was one day. Late game still long (Lv30 ≈ 215 h) |
 | 2026-10-31 | Review council sized by complexity: 1 reviewer (small: docs, small UI fixes), 2 (normal), 3 (high risk: save, time, formulas, replay, CI); Sonnet, medium. `docs/STATUS.md` added as the "where we are" page (version, release notes, refined/unrefined roadmap), updated by every feature PR | Token cost again; and one page lets a fresh session pick up without the chat history |
 
 ## Stamina projection (2026-10-27, search-only skip)

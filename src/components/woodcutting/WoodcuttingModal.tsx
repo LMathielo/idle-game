@@ -3,10 +3,9 @@
 // woodcuttingView() and dispatches START_ACTIVITY {kind:'woodcutting', treeId} / STOP_ACTIVITY / SKIP_WOODCUT.
 // Locked trees are refused by the engine too (TREE_LOCKED).
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, ScrollView, type ListRenderItem, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
-import type { CommandInput } from '../../client/types';
-import { type CrewView, crewViews, type TreeId, type TreeView, type WoodcutActivityView, woodcuttingView } from '../../engine';
+import { FlatList, type HostInstance, ScrollView, type ListRenderItem, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useGameSnapshot } from '../../client/GameProvider';
+import { type CrewView, crewViews, woodcutActivityView, type TreeId, type TreeView, type WoodcutActivityView, woodcuttingView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { confirmCancelRun } from '../dungeon/confirmCancelRun';
 import { formatBp, formatClock, formatNumber, formatPerMin, itemIcon, itemName } from '../format';
@@ -15,6 +14,8 @@ import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
 import { Bar } from '../Panel';
 import { PixelButton } from '../PixelButton';
+import { type AnchorRect, InfoPopover, measureAnchor, PopoverRow, PopoverText } from '../ui/InfoPopover';
+import { useCommand } from '../ui/useCommand';
 
 /** Width of the next card that shows at the right edge (the "peek"), and the gap between cards. */
 const PEEK = 28;
@@ -22,13 +23,11 @@ const GAP = 10;
 const SIDE = 16;
 
 export function WoodcuttingModal() {
-  const client = useGameClient();
   const { state, clockPaused } = useGameSnapshot();
   const view = woodcuttingView(state); // cheap: 5 trees, read-only
   const { width } = useWindowDimensions();
   const cardWidth = Math.max(240, width - 2 * SIDE - PEEK);
   const step = cardWidth + GAP;
-  const inFlight = useRef(false);
 
   /** Opens on the active tree, else the highest unlocked one. Fixed at mount so live ticks never scroll it. */
   const [initialIndex] = useState(() => Math.max(0, view.trees.findIndex((t) => t.treeId === view.focusTreeId)));
@@ -39,36 +38,37 @@ export function WoodcuttingModal() {
   );
 
   /** One command at a time; a double tap never sends two. Engine refusals are shown, except a skip whose log already ended. */
-  const send = useCallback(
-    (cmd: CommandInput) => {
-      if (inFlight.current) return;
-      inFlight.current = true;
-      client
-        .dispatch(cmd)
-        .then((res) => {
-          // LOG_CHANGED: that log finished for free meanwhile; the card already shows the next one.
-          if (!res.ok && res.error.code !== 'LOG_CHANGED') Alert.alert('Not possible', res.error.message);
-        })
-        .catch(() => Alert.alert('Could not save', 'Try again.'))
-        .finally(() => {
-          inFlight.current = false;
-        });
-    },
-    [client],
-  );
+  // LOG_CHANGED: that log finished for free meanwhile; the card already shows the next one.
+  const { send, dialog, client } = useCommand({ silentCodes: ['LOG_CHANGED'] });
+  /** The tree whose info box is open, anchored on its ⓘ button. */
+  const [info, setInfo] = useState<{ id: TreeId; anchor: AnchorRect } | null>(null);
+  const openInfo = useCallback((id: TreeId, node: HostInstance | null) => {
+    void measureAnchor(node).then((anchor) => anchor && setInfo({ id, anchor }));
+  }, []);
+  const closeInfo = useCallback(() => setInfo(null), []);
 
   const onStart = useCallback(
-    (treeId: TreeId, name: string) => {
-      const go = () => send({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId });
+    async (treeId: TreeId, name: string) => {
       // One activity at a time: woodcutting would end the dungeon run in progress, so ask first.
       const a = client.getState().activity;
-      if (a?.kind === 'dungeon') confirmCancelRun(`Cut ${name}`, go, a.phase === 'fight');
-      else go();
+      if (a?.kind === 'dungeon' && !(await confirmCancelRun(dialog, `Cut ${name}`, a.phase === 'fight'))) return;
+      await send({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId });
+    },
+    [client, dialog, send],
+  );
+  const onStop = useCallback(() => void send({ type: 'STOP_ACTIVITY' }), [send]);
+  /**
+   * Hold-to-repeat skip. Each tick names the log and the cost on screen right now (read from the live state), so it
+   * never pays more than shown or skips a later log twice; it stops when stamina runs out or the activity ends.
+   */
+  const onSkip = useCallback(
+    (repeat: boolean) => {
+      const live = woodcutActivityView(client.getState());
+      if (!live || client.getState().stamina.current < live.skipCost) return Promise.resolve(false);
+      return send({ type: 'SKIP_WOODCUT', log: live.log, maxCost: live.skipCost }, { quiet: repeat });
     },
     [client, send],
   );
-  const onStop = useCallback(() => send({ type: 'STOP_ACTIVITY' }), [send]);
-  const onSkip = useCallback((log: number, cost: number) => send({ type: 'SKIP_WOODCUT', log, maxCost: cost }), [send]);
 
   const current = view.current;
   const crewOf = useMemo(() => new Map(crewViews(state, 'woodcutting').map((c) => [c.node, c])), [state]);
@@ -89,9 +89,10 @@ export function WoodcuttingModal() {
         onStart={onStart}
         onStop={onStop}
         onSkip={onSkip}
+        onInfo={openInfo}
       />
     ),
-    [cardWidth, crewOf, current, stamina, clockPaused, view.level, view.ws.value, onStart, onStop, onSkip],
+    [cardWidth, crewOf, current, stamina, clockPaused, view.level, view.ws.value, onStart, onStop, onSkip, openInfo],
   );
   const getItemLayout = useCallback((_: unknown, index: number) => ({ length: step, offset: step * index, index }), [step]);
   const separator = useCallback(() => <View style={styles.gap} />, []);
@@ -149,6 +150,7 @@ export function WoodcuttingModal() {
         {otherActivity === 'dungeon' ? <Text style={styles.note}>Starting stops the dungeon: the run in progress is lost.</Text> : null}
         <UpgradeEntry buildingId="woodcutting" />
       </ScrollView>
+      {info ? <TreeInfo tree={view.trees.find((t) => t.treeId === info.id) ?? null} anchor={info.anchor} onClose={closeInfo} /> : null}
     </ModalScreen>
   );
 }
@@ -168,12 +170,15 @@ type CardProps = {
   ws: number;
   onStart: (treeId: TreeId, name: string) => void;
   onStop: () => void;
-  onSkip: (log: number, cost: number) => void;
+  onSkip: (repeat: boolean) => Promise<boolean>;
+  onInfo: (id: TreeId, node: HostInstance | null) => void;
 };
 
-const TreeCard = memo(function TreeCard({ tree, crew, width, current, stamina, paused, level, ws, onStart, onStop, onSkip }: CardProps) {
+const TreeCard = memo(function TreeCard({ tree, crew, width, current, stamina, paused, level, ws, onStart, onStop, onSkip, onInfo }: CardProps) {
   const start = useCallback(() => onStart(tree.treeId, tree.name), [onStart, tree.treeId, tree.name]);
-  const skip = useCallback(() => current && onSkip(current.log, current.skipCost), [current, onSkip]);
+  const skip = useCallback(({ repeat }: { repeat: boolean }) => onSkip(repeat), [onSkip]);
+  const infoRef = useRef<HostInstance>(null);
+  const showInfo = useCallback(() => onInfo(tree.treeId, infoRef.current), [onInfo, tree.treeId]);
   const nest = tree.rareDrops[0];
   const missing = [
     tree.levelOk ? null : `Woodcutting Lv ${tree.reqLevel}`,
@@ -187,9 +192,18 @@ const TreeCard = memo(function TreeCard({ tree, crew, width, current, stamina, p
       <Text style={styles.treeIcon} accessibilityElementsHidden importantForAccessibility="no">
         {tree.icon}
       </Text>
-      <Text style={styles.treeName} accessibilityRole="header">
-        {tree.name}
-      </Text>
+      <View style={styles.titleRow}>
+        <Text style={styles.treeName} accessibilityRole="header">
+          {tree.name}
+        </Text>
+        <PixelButton
+          ref={infoRef}
+          label="ⓘ"
+          onPress={showInfo}
+          accessibilityLabel={`About ${tree.name}`}
+          accessibilityHint="Shows how yield, XP and drops work here"
+        />
+      </View>
       <View style={styles.reqs}>
         <Req ok={tree.levelOk} label={`Lv ${tree.reqLevel}`} detail={`you ${level}`} />
         <Req ok={tree.wsOk} label={`WS ${formatNumber(tree.reqWs)}`} detail={`you ${formatNumber(ws)}`} />
@@ -202,7 +216,6 @@ const TreeCard = memo(function TreeCard({ tree, crew, width, current, stamina, p
         {nest ? <Fact label={`${itemIcon(nest.itemId)} ${itemName(nest.itemId)}`} value={`1 in ${formatNumber(Math.round(1 / nest.chance))}`} /> : null}
       </View>
 
-      <Text style={styles.yieldNote}>Logs per cut = your WS ÷ the WS needed; the decimals are the chance of one more.</Text>
       {crew ? (
         <Text style={[styles.crew, crew.status !== 'working' && styles.crewOff]} accessibilityLabel={`${crew.workers} workers here, ${crew.status === 'working' ? `about ${formatPerMin(crew.itemsPerMin)} per minute` : crew.status}`}>
           👷 {crew.workers} {crew.workers === 1 ? 'worker' : 'workers'} ·{' '}
@@ -227,10 +240,10 @@ const TreeCard = memo(function TreeCard({ tree, crew, width, current, stamina, p
             <PixelButton label="Stop" onPress={onStop} active accessibilityLabel={`Stop cutting ${tree.name}`} accessibilityHint="Your logs are kept" />
             <PixelButton
               label={`Skip (${current.skipCost}⚡)`}
-              onPress={skip}
+              repeat={skip}
               disabled={!canSkip}
               accessibilityLabel={`Skip this log for ${current.skipCost} stamina`}
-              accessibilityHint={canSkip ? 'Finishes the current log now' : 'Not enough stamina'}
+              accessibilityHint={canSkip ? 'Finishes the current log now. Hold to keep skipping' : 'Not enough stamina'}
             />
           </>
         ) : (
@@ -240,6 +253,22 @@ const TreeCard = memo(function TreeCard({ tree, crew, width, current, stamina, p
     </View>
   );
 });
+
+/** The tree's info box (InfoPopover): yield math, XP, drops, crew and what it needs. */
+function TreeInfo({ tree, anchor, onClose }: { tree: TreeView | null; anchor: AnchorRect; onClose: () => void }) {
+  if (!tree) return null;
+  const drop = tree.rareDrops[0];
+  return (
+    <InfoPopover anchor={anchor} onClose={onClose} title={tree.name} icon={tree.icon} subtitle={`Needs Lv ${tree.reqLevel} and ${formatNumber(tree.reqWs)} WS`}>
+      <PopoverRow label="Time per cut" value={formatClock(tree.logMs)} />
+      <PopoverRow label="Logs per cut" value={`×${formatBp(tree.yieldBp)}`} />
+      <PopoverRow label="XP per cut" value={formatNumber(tree.xpPerLog)} />
+      {drop ? <PopoverRow label={`${itemIcon(drop.itemId)} ${itemName(drop.itemId)}`} value={`1 in ${formatNumber(Math.round(1 / drop.chance))}`} /> : null}
+      <PopoverText tone="note">Logs per cut = your WS ÷ the WS needed, times your building bonuses; the decimals are the chance of one more. XP and the rare find are one per cut.</PopoverText>
+      {!tree.unlocked ? <PopoverText tone="bad">🔒 Not open yet: raise your level or WS.</PopoverText> : null}
+    </InfoPopover>
+  );
+}
 
 function Req({ ok, label, detail }: { ok: boolean; label: string; detail: string }) {
   return (
@@ -260,7 +289,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: 24 },
-  yieldNote: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, textAlign: 'center' },
+  titleRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
   crew: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerEasy, textAlign: 'center' },
   crewOff: { color: colors.dangerDeadly },
   stamina: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.stamina },

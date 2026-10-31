@@ -25,7 +25,7 @@ import {
   upgradeView,
 } from '../src/engine';
 import type { CommandInput } from '../src/client/types';
-import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0 } from './helpers';
+import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, v12Skills } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v11 save + its action log, written by the 1.10.0 engine before Training Grounds upgrades (tests/fixtures). */
@@ -254,15 +254,19 @@ describe('frozen v11 save (tests/fixtures/save-v11.json), 1.10.0 → 1.11.0 (eng
 
   it('is what the 1.10.0 engine wrote: Town Hall Lv2, Training Grounds Lv1, STR training, 52 Oak / 52 Stone', () => {
     expect(V11_SAVE.saveVersion).toBe(11);
-    expect(CURRENT_SAVE_VERSION).toBe(11); // the save shape did not change
     expect(V11_SAVE.buildings.town_hall).toEqual({ state: 'built', level: 2 });
     expect(V11_SAVE.buildings.training_grounds).toEqual({ state: 'built', level: 1 });
     expect(V11_SAVE.activity).toMatchObject({ kind: 'training', attribute: 'strength' });
     expect(new Set(V11_LOG.map((r) => r.engineVersion))).toEqual(new Set(['1.10.0']));
-    expect(hashState(loadSave(V11_SAVE))).toBe(V11_LOG.at(-1)!.stateHash); // loads unchanged
+    expect(hashState(V11_SAVE)).toBe(V11_LOG.at(-1)!.stateHash);
+    // Since 1.12.0 (save v12) it also runs the v11 → v12 skill migration: only the skills change.
+    const { character, saveVersion: _v, ...rest } = loadSave(V11_SAVE);
+    const { character: rc, saveVersion: _rv, ...rawRest } = V11_SAVE;
+    expect(rest).toEqual(rawRest);
+    expect(character).toEqual({ ...rc, skills: v12Skills(rc.skills) });
   });
 
-  it('loading writes an engine-only MIGRATE anchor (save 11 → 11, engine 1.10.0 → 1.11.0); the upgrade then doubles the rate; the whole log replays', async () => {
+  it('loading writes a MIGRATE anchor (engine 1.10.0 → current; save 11 → 12 since 1.12.0); the upgrade then doubles the rate; the whole log replays', async () => {
     const { repo, clock, client } = await v11Phone();
     await client.load();
     const m = (await repo.getAllLog()).filter((r) => r.type === 'MIGRATE');
@@ -270,13 +274,12 @@ describe('frozen v11 save (tests/fixtures/save-v11.json), 1.10.0 → 1.11.0 (eng
     const p = m[0].payload as MigratePayload;
     expect({ ...p, snapshot: undefined }).toEqual({
       fromSave: 11,
-      toSave: 11,
+      toSave: CURRENT_SAVE_VERSION,
       fromEngine: '1.10.0',
       toEngine: ENGINE_VERSION,
       fromHash: V11_LOG.at(-1)!.stateHash,
       snapshot: undefined,
     });
-    expect(ENGINE_VERSION).toBe('1.11.0');
 
     expect(trainingView(client.getState()).xpPerMinute).toBe(1);
     expect((await client.dispatch({ type: 'UPGRADE_BUILDING', buildingId: 'training_grounds', level: 2 })).ok).toBe(true);

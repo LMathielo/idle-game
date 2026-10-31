@@ -336,7 +336,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 11;
+  saveVersion: 12;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */

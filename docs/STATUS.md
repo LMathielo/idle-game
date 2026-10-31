@@ -8,17 +8,23 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.11.0** | 1.1.0 |
-| Save | **v11** | v2 |
-| Contents | Everything below, up to PR #17 | M1 only (PRs #1–#2) |
+| Engine | **1.12.0** | 1.1.0 |
+| Save | **v12** | v2 |
+| Contents | Everything below, up to PR #17 (+ the open UI kit / map / skill PR) | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is 15 PRs behind `dev` (#3–#17). The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
-- **Open PRs:** none.
+- **Open PRs:** `feat/ui-kit-map-skill-balance` (UI kit, village map, skill XP rebalance).
 - **Workflow:** product owner (orchestrator) → one `game-engineer` per feature → 1–3 reviewers by complexity (`.claude/skills/pr-review-council`) → owner merges.
 
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.12.0 · save v12
+- **UI kit, village map, skill XP rebalance** (PR pending):
+  - **GameDialog** replaces every native alert; **InfoPopover** (a box next to what you tapped, actions inside) replaces the item, build and upgrade sheets and the stat / locked-dungeon / tree / rock info; **hold-to-repeat** on stamina skips, training speed-ups and debug buttons.
+  - **Village map:** a bigger world (360×560) you can drag and pinch-zoom; signs keep their size; 4 empty plots for future buildings.
+  - **Skill XP:** base 500 → 100 with steeper segments from Lv15: woodcutting/mining Lv15 in ~23 h (was ~117 h). Save v12 keeps each skill's total XP and recomputes its level (testers jump levels).
 
 ### Engine 1.11.0 · save v11
 - **#17 Training Grounds upgrades:** upgradable to Lv5 (Town Hall cap, half the Town Hall's cost). Each level gives +1 training XP/min (Lv5 = 5/min), including the stamina speed-up.
@@ -80,12 +86,14 @@ Decided and scoped; ready to brief to an engineer. Top = next.
 Ideas and open questions. Each needs owner decisions before it can be briefed.
 
 **Balance**
+- **Skill XP after Lv15** (1.12.0): Lv20 ≈ 50 h, Lv30 ≈ 215 h on the Oak → Birch path; Maple and gear make it faster. Watch whether the late curve feels right.
 - **Early-game HP pace:** Lv5 takes about 17 min, limited by HP (each fight costs about 5 HP and skips give no regen). Options: more starting HP, faster regen, or cheaper potions.
 - **New long-term targets:** the old "Lv20 in about 2 days" target is obsolete since the 1.8.0 XP curve.
 - **Mid-game walls:** Wolf Den needs about Lv6–7, and training is the bottleneck for tiers 4–5 (Crypt/Troll).
 - **Worker upkeep:** it is expensive early (1g/min per worker against about 2g/min from dungeons). Watch how it feels.
 
 **Buildings and economy**
+- Future buildings go on the empty map plots (west of the barn, east by the fields, two south of the river).
 - Town Hall Lv3–5 passive bonuses (the data shape is ready).
 - Storage itself (capacity, a stash) is still "coming soon". Dungeon and Storage stay non-upgradable for now (owner decision 2026-10-28); revisit only if they get a bonus.
 - Cancelling an upgrade, and a second builder.

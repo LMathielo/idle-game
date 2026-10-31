@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 11 as const;
+export const CURRENT_SAVE_VERSION = 12 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -21,6 +21,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   8: migrateV8toV9,
   9: migrateV9toV10,
   10: migrateV10toV11,
+  11: migrateV11toV12,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -356,6 +357,82 @@ function migrateV10toV11(doc: SaveDoc): SaveDoc {
     construction: null,
     workers: { ...V11_WORKERS, list: [], crews: {} },
   };
+}
+
+// ---- v11 → v12 (2026-10-31): skill XP curve base 500 → 100 with its own growth segments ----
+// Frozen literals: the v11 skill curve (base 500, the hero's segments) and the v12 skill curve (base 100, skill
+// segments). A later change to config/xpCurve.ts cannot change what this migration produces.
+type FrozenCurve = { base: number; segments: readonly { fromLevel: number; growth: number }[] };
+const V11_SKILL_CURVE: FrozenCurve = {
+  base: 500,
+  segments: [
+    { fromLevel: 1, growth: 1.0 },
+    { fromLevel: 20, growth: 1.05 },
+    { fromLevel: 40, growth: 1.07 },
+    { fromLevel: 100, growth: 1.18 },
+  ],
+};
+const V12_SKILL_CURVE: FrozenCurve = {
+  base: 100,
+  segments: [
+    { fromLevel: 1, growth: 1.0 },
+    { fromLevel: 15, growth: 1.07 },
+    { fromLevel: 40, growth: 1.08 },
+    { fromLevel: 100, growth: 1.18 },
+  ],
+};
+const SAFE = Number.MAX_SAFE_INTEGER;
+
+/**
+ * xpToNext for every level from 1 up to `upTo` on a frozen curve: round(base × L × √L × Π growth(l < L)), clamped
+ * to MAX_SAFE_INTEGER. Same operations, in the same order, as progression.ts, so the result matches the engine bit for bit.
+ */
+function frozenXpToNext(curve: FrozenCurve, level: number, multipliers: number[]): number {
+  for (let l = multipliers.length; l <= level; l++) {
+    let growth = 1;
+    for (const seg of curve.segments) {
+      if (l - 1 >= seg.fromLevel) growth = seg.growth;
+      else break;
+    }
+    multipliers[l] = multipliers[l - 1] * growth;
+  }
+  const raw = Math.round(curve.base * (level * Math.sqrt(level)) * multipliers[level]);
+  return Number.isFinite(raw) && raw < SAFE ? raw : SAFE;
+}
+
+/** A skill's progress under v12: its total XP on the v11 curve, replayed onto the v12 curve. Exported for tests. */
+export function v12SkillProgress(skill: unknown): { level: number; xp: number; xpToNext: number } {
+  const s = isDoc(skill) ? skill : {};
+  const oldLevel = typeof s.level === 'number' && Number.isSafeInteger(s.level) && s.level >= 1 ? s.level : 1;
+  const oldM = [1, 1];
+  let total = count(s.xp);
+  // A corrupt save can carry a huge level: once the total is clamped, more levels add nothing, so stop there.
+  for (let l = 1; l < oldLevel && total < SAFE; l++) total = Math.min(SAFE, total + frozenXpToNext(V11_SKILL_CURVE, l, oldM));
+  const newM = [1, 1];
+  let level = 1;
+  let next = frozenXpToNext(V12_SKILL_CURVE, 1, newM);
+  while (total >= next && next < SAFE) {
+    total -= next;
+    level += 1;
+    next = frozenXpToNext(V12_SKILL_CURVE, level, newM);
+  }
+  return { level, xp: Math.min(total, next - 1), xpToNext: next };
+}
+
+/**
+ * Owner-approved (2026-10-31; testers jumping levels is fine):
+ * - every skill keeps its TOTAL XP (XP of every level below on the v11 curve + XP into the level) and gets the level
+ *   and XP-into-level that total gives on the v12 curve. The v12 curve is cheaper at every level, so nobody loses a
+ *   level; most skills gain some.
+ * - a running activity is kept as it is (a higher level never locks a tree or rock); its progress is kept.
+ * - everything else is kept.
+ */
+function migrateV11toV12(doc: SaveDoc): SaveDoc {
+  const character = isDoc(doc.character) ? doc.character : {};
+  const oldSkills = isDoc(character.skills) ? character.skills : {};
+  const skills: Doc = {};
+  for (const [key, skill] of Object.entries(oldSkills)) skills[key] = v12SkillProgress(skill);
+  return { ...doc, saveVersion: 12, character: { ...character, skills } };
 }
 
 export class SaveVersionError extends Error {}

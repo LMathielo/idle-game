@@ -19,7 +19,7 @@ import {
   type ReplayEntry,
   replayLogReport,
 } from '../src/engine';
-import { HOUR, makeClient, MIN, qty } from './helpers';
+import { HOUR, makeClient, MIN, qty, v12Skills } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v10 save + its action log, written by the 1.9.0 engine before workers (tests/fixtures). */
@@ -89,9 +89,11 @@ describe('frozen v10 save (tests/fixtures/save-v10.json) → v11', () => {
     expect(s.buildings).toEqual({ ...V10_SAVE.buildings, merchant: { state: 'built', level: 1 } });
     expect(s.construction).toBeNull();
     expect(s.workers).toEqual(newWorkersState());
-    const { buildings: _b, construction: _c, workers: _w, saveVersion: _v, ...rest } = s;
-    const { buildings: _rb, saveVersion: _rv, ...rawRest } = V10_SAVE;
+    const { buildings: _b, construction: _c, workers: _w, saveVersion: _v, character, ...rest } = s;
+    const { buildings: _rb, saveVersion: _rv, character: rc, ...rawRest } = V10_SAVE;
     expect(rest).toEqual(rawRest);
+    // v11 → v12 (1.12.0): skills keep their total XP, levels recomputed on the new skill curve.
+    expect(character).toEqual({ ...rc, skills: v12Skills(rc.skills) });
     expect(hashState(loadSave(V10_SAVE))).toBe(hashState(s));
   });
 

@@ -8,6 +8,7 @@ import { formatNumber } from '../../components/format';
 import { defOf, SLOT_LABELS } from '../../components/items/itemInfo';
 import { ItemSheet, type SheetAction } from '../../components/items/ItemSheet';
 import { ItemSlot } from '../../components/items/ItemSlot';
+import type { AnchorRect } from '../../components/ui/InfoPopover';
 import { Bar, Panel } from '../../components/Panel';
 import { StatusPanel } from '../../components/StatusPanel';
 import { type CommandInput } from '../../client/types';
@@ -31,14 +32,14 @@ const EQUIPMENT_GRID: (EquipmentSlot | null)[][] = [
   ['axe', 'boots', 'pickaxe'],
 ];
 
-/** What the item sheet shows: an inventory item (by id) or an equipment slot. */
-type Selection = { kind: 'inventory'; itemId: string } | { kind: 'equipment'; slot: EquipmentSlot } | null;
+/** What the item box shows: an inventory item (by id) or an equipment slot, anchored on the tapped slot. */
+type Selection = ({ kind: 'inventory'; itemId: string } | { kind: 'equipment'; slot: EquipmentSlot }) & { anchor: AnchorRect };
 
 export default function HeroScreen() {
   const { character, inventory, stamina, training } = useGameState();
-  const [selection, setSelection] = useState<Selection>(null);
-  const openInventory = useCallback((key: string | number) => setSelection({ kind: 'inventory', itemId: String(key) }), []);
-  const openEquipment = useCallback((key: string | number) => setSelection({ kind: 'equipment', slot: key as EquipmentSlot }), []);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const openInventory = useCallback((key: string | number, anchor: AnchorRect) => setSelection({ kind: 'inventory', itemId: String(key), anchor }), []);
+  const openEquipment = useCallback((key: string | number, anchor: AnchorRect) => setSelection({ kind: 'equipment', slot: key as EquipmentSlot, anchor }), []);
   const close = useCallback(() => setSelection(null), []);
 
   return (
@@ -97,7 +98,7 @@ const HeaderPanel = memo(function HeaderPanel({ character }: { character: Charac
   );
 });
 
-type PressHandler = (key: string | number) => void;
+type PressHandler = (key: string | number, anchor: AnchorRect) => void;
 
 const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress }: { equipment: Character['equipment']; onPress: PressHandler }) {
   return (
@@ -156,10 +157,10 @@ const SkillsPanel = memo(function SkillsPanel({ skills }: { skills: Character['s
 });
 
 /**
- * Item info sheet for the Hero tab: Equip for gear, Use for potions (inventory), Unequip (equipment).
- * Reads the item from the live state, so it closes by itself when the item leaves that place.
+ * Item info box for the Hero tab (InfoPopover on the tapped slot): Equip for gear, Use for potions (inventory),
+ * Unequip (equipment). Reads the item from the live state, so it closes by itself when the item leaves that place.
  */
-function HeroItemSheet({ selection, onClose }: { selection: Selection; onClose: () => void }) {
+function HeroItemSheet({ selection, onClose }: { selection: Selection | null; onClose: () => void }) {
   const state = useGameState();
   const client = useGameClient();
   const [error, setError] = useState<string | null>(null);
@@ -223,7 +224,7 @@ function HeroItemSheet({ selection, onClose }: { selection: Selection; onClose: 
     });
   }
 
-  return <ItemSheet def={def} quantity={item?.quantity} equipped={equipped} actions={actions} error={error} onClose={close} />;
+  return <ItemSheet def={def} anchor={selection?.anchor ?? null} quantity={item?.quantity} equipped={equipped} actions={actions} error={error} onClose={close} />;
 }
 
 const styles = StyleSheet.create({

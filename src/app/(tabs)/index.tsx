@@ -8,6 +8,7 @@ import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
 import { BuildSheet } from '../../components/buildings/BuildSheet';
 import { type VillageAction, VillageScene } from '../../components/VillageScene';
 import { formatCountdown, formatNumber } from '../../components/format';
+import type { AnchorRect } from '../../components/ui/InfoPopover';
 import { type ActivityKind, type BuildingId, constructionView, isBuilt } from '../../engine';
 import { colors, fonts } from '../../theme';
 
@@ -51,8 +52,8 @@ export default function VillageScreen() {
   const state = useGameState();
   const { character, activity } = state;
   const [toast, setToast] = useState<string | null>(null);
-  /** The locked building whose Build sheet is open. */
-  const [building, setBuilding] = useState<BuildingId | null>(null);
+  /** The locked building whose Build box is open, anchored on its sign. */
+  const [building, setBuilding] = useState<{ id: BuildingId; anchor: AnchorRect } | null>(null);
   // Building state is read through the engine selector; `state.buildings` keeps its identity until a build.
   const buildings = state.buildings;
   const locked = useMemo(() => {
@@ -83,10 +84,11 @@ export default function VillageScreen() {
   }, []);
 
   const onAction = useCallback(
-    (action: VillageAction) => {
+    (action: VillageAction, anchor: AnchorRect | null) => {
       const needs = SIGN_BUILDING[action];
       if (needs && locked.has(action)) {
-        setBuilding(needs);
+        // The sign's box comes from the map camera (see VillageScene), so it is right after panning and zooming.
+        if (anchor) setBuilding({ id: needs, anchor });
         return;
       }
       const route = SIGN_ROUTE[action];
@@ -109,7 +111,8 @@ export default function VillageScreen() {
 
   return (
     <View style={styles.root}>
-      {/* The activity strip is reserved even when hidden, so signs never move when an activity starts. */}
+      {/* The map: pan + pinch. The HUD and the activity strip stay fixed overlays above it; the start view centres the
+          village between them (the strip's slot is reserved even when hidden). */}
       <VillageScene
         onAction={onAction}
         active={activity ? ACTIVITY_SIGN[activity.kind] : null}
@@ -132,7 +135,7 @@ export default function VillageScreen() {
           </Animated.View>
         ) : null}
       </SafeAreaView>
-      <BuildSheet buildingId={building} onClose={closeSheet} onBuilt={onBuilt} />
+      <BuildSheet buildingId={building?.id ?? null} anchor={building?.anchor ?? null} onClose={closeSheet} onBuilt={onBuilt} />
     </View>
   );
 }
