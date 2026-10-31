@@ -1,9 +1,9 @@
 ---
 name: pr-review-council
-description: Run the 5-reviewer code review on an open pull request in this repo, score findings, post one consolidated review comment, and hand confirmed issues back to the coding agent. Use after every PR is opened, and again after fixes are pushed, until no confirmed issues remain.
+description: Run the 1–3 reviewer code review (sized by complexity) on an open pull request in this repo, score findings, post one consolidated review comment, and hand confirmed issues back to the coding agent. Use after every PR is opened, and again after fixes are pushed, until no confirmed issues remain.
 ---
 
-# PR review council (2 or 5 reviewers, by risk)
+# PR review council (1–3 reviewers, by complexity)
 
 Adapted from Anthropic's official `code-review` plugin for this repo. GitHub GraphQL (and so most `gh pr ...` subcommands) is blocked in this environment, so **use the REST API via `gh api`**.
 
@@ -23,10 +23,11 @@ gh api repos/$R/issues/$N/comments -f body="$(cat review.md)"         # post the
 1. **Eligibility:** skip if the PR is closed or merged. Feature/fix/chore PRs must have base `dev`; if one targets `main`, flag it in the review (only the owner's release PR `dev` → `main` targets `main`, and the council does not review it unless asked).
 2. **Fetch once, before launching reviewers:** `git -C /home/claude/idle-game fetch -q -f origin dev pull/$N/head:pr-$N` (the `-f` makes re-reviews after a rebase or force-push see the new head). Each reviewer then reads the PR only from its own detached worktree of `pr-$N` (`/tmp/wt/review-$N-<lens>`, see `.claude/agents/code-reviewer.md`), never from the shared checkout.
 3. **Context:** in your own worktree (`git -C /home/claude/idle-game worktree add --detach /tmp/wt/review-$N-council pr-$N`), read `/tmp/wt/review-$N-council/AGENTS.md`, `/tmp/wt/review-$N-council/docs/PRODUCT.md`, the task brief in the PR description, and the full diff (`git -C /tmp/wt/review-$N-council diff origin/dev...HEAD`). The working directory and shell variables reset between tool calls, so a `cd` in one Bash call does not carry over to the next: give every command an absolute path (`git -C <dir> ...`, `npm --prefix <dir> ...`) or put `cd <dir> && <cmd>` in the same call.
-4. **Pick the review size by risk, then launch reviewers in parallel** (`Agent` tool, `subagent_type: code-reviewer`, `model: sonnet`, `effort: medium`). Each gets the PR number, the brief and its lens(es); the reviewer agent creates its own worktree.
-   - **High risk → 5 reviewers, one lens each.** Any change to save shape or migrations, `simulate`/time rules, combat or economy formulas, replay/action log/anti-cheat, or the publish/CI workflows.
-   - **Normal → 2 reviewers.** Everything else (UI screens, new content in config, docs, small fixes). Reviewer A: lenses 1 + 4 (engine, architecture, game logic). Reviewer B: lenses 2 + 3 + 5 (correctness, React Native/Expo, tests).
-   - When unsure, state the choice and the reason in the review comment; the owner can ask for the full council.
+4. **Pick the review size by complexity, then launch reviewers in parallel** (`Agent` tool, `subagent_type: code-reviewer`, `model: sonnet`, `effort: medium`). Each gets the PR number, the brief and its lens(es); the reviewer agent creates its own worktree. (Owner decision 2026-10-31: 1–3 reviewers.)
+   - **High risk → 3 reviewers.** Any change to save shape or migrations, `simulate`/time rules, combat or economy formulas, replay/action log/anti-cheat, or the publish/CI workflows. Reviewer A: lenses 1 + 3 (architecture, React Native/Expo). Reviewer B: lens 2 (correctness, incl. time and split invariance). Reviewer C: lenses 4 + 5 (game logic/exploits, tests and frozen fixtures).
+   - **Normal → 2 reviewers.** New screens, new content with engine logic, engine-only bumps without save changes. Reviewer A: lenses 1 + 4. Reviewer B: lenses 2 + 3 + 5.
+   - **Small → 1 reviewer, all lenses.** Docs, small UI fixes, copy, config-only tweaks with no new rules.
+   - When unsure, state the choice and the reason in the review comment; the owner can ask for a bigger review.
 
    Lenses:
    1. **Architecture & AGENTS.md compliance:** engine purity (no React/IO/`Date.now`/`Math.random` in `src/engine`), commands-in/state-out, `GameClient` boundary, file layout, Expo Go compatibility, mobile-only.

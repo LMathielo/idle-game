@@ -19,9 +19,10 @@ The owner works mostly from a phone. Keep that in mind:
 
 - The orchestrating assistant is the **product owner**: it turns requests into task briefs, keeps `docs/PRODUCT.md` current and does not write game code. See `.claude/skills/product-owner/SKILL.md`.
 - Coding is done by the **`game-engineer`** agent (`.claude/agents/game-engineer.md`) on a `feat/`, `fix/` or `chore/` branch cut from `origin/dev`, ending in a PR with **base `dev`**.
-- Every PR into `dev` gets the **review council**: 2 reviewers for normal PRs, 5 for high-risk ones (save/migrations, simulate/time, combat/economy formulas, replay/anti-cheat, CI), reviewers on Sonnet (`.claude/skills/pr-review-council/SKILL.md`, reviewers in `.claude/agents/code-reviewer.md`). Confirmed issues go back to the engineer; repeat until clean.
+- Every PR into `dev` gets the **review council**, sized by complexity: 1 reviewer for small PRs (docs, small UI fixes), 2 for normal ones, 3 for high-risk ones (save/migrations, simulate/time, combat/economy formulas, replay/anti-cheat, CI), reviewers on Sonnet (`.claude/skills/pr-review-council/SKILL.md`, reviewers in `.claude/agents/code-reviewer.md`). Confirmed issues go back to the engineer; repeat until clean.
 - **Only the owner merges, into `dev` and into `main`.** After he merges into `dev`, the `dev` preview publishes and he tests it in Expo Go. When he is happy, he opens and merges a release PR `dev` → `main`.
 - Agents work in their own git worktree, push only to their branch with an explicit ref, and never merge, never push to `dev` or `main`, and never open the release PR unless the owner asks.
+- `docs/STATUS.md` is the "where we are" page: current version, release notes, refined and unrefined roadmap. Every feature PR updates it (version, a release-notes line, the roadmap item it closes). Read it first in a new session.
 - Skills live in `.claude/skills/`: `idle-rpg-game-design` (game knowledge), `product-owner`, `pr-review-council`, plus vendored official Expo skills (MIT, see `EXPO-SKILLS-LICENSE`).
 - GitHub GraphQL is blocked in the agent environment: use `gh api` REST calls for PRs and comments.
 
