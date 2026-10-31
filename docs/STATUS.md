@@ -2,7 +2,7 @@
 
 The "where we are" page. Read it first when starting a new session. Owned by the product owner. **Every feature PR updates it**: version, release notes and the roadmap item it closes.
 
-Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.md), engine rules in [`ENGINE.md`](ENGINE.md), workflow in [`../AGENTS.md`](../AGENTS.md).
+Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.md), engine rules in [`ENGINE.md`](ENGINE.md), deferred review findings in [`TECH_DEBT.md`](TECH_DEBT.md), workflow in [`../AGENTS.md`](../AGENTS.md).
 
 ## Current version (2026-10-31)
 
@@ -10,18 +10,21 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 | --- | --- | --- |
 | Engine | **1.12.0** | 1.1.0 |
 | Save | **v12** | v2 |
-| Contents | Everything below, up to PR #17 (+ the open UI kit / map / skill PR) | M1 only (PRs #1–#2) |
+| Contents | Everything below, up to PR #19 | M1 only (PRs #1–#2) |
 
-- **Release pending:** `main` is 15 PRs behind `dev` (#3–#17). The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
-- **Open PRs:** `feat/ui-kit-map-skill-balance` (UI kit, village map, skill XP rebalance).
+- **Release pending:** `main` is 17 PRs behind `dev` (#3–#19). The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
+- **Open PRs:** #20 (this tech-debt list, docs only).
 - **Workflow:** product owner (orchestrator) → one `game-engineer` per feature → 1–3 reviewers by complexity (`.claude/skills/pr-review-council`) → owner merges.
 
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
 
+### Docs only (engine 1.12.0)
+- **#20 Tech debt list:** new [`TECH_DEBT.md`](TECH_DEBT.md) gathers every below-bar review finding from PRs #2–#19; the review council now appends to it each round.
+
 ### Engine 1.12.0 · save v12
-- **UI kit, village map, skill XP rebalance** (PR pending):
+- **#19 UI kit, village map, skill XP rebalance:**
   - **GameDialog** replaces every native alert; **InfoPopover** (a box next to what you tapped, actions inside) replaces the item, build and upgrade sheets and the stat / locked-dungeon / tree / rock info; **hold-to-repeat** on stamina skips, training speed-ups and debug buttons.
   - **Village map:** a bigger world (360×560) you can drag and pinch-zoom; signs keep their size; 4 empty plots for future buildings.
   - **Skill XP:** base 500 → 100 with steeper segments from Lv15: woodcutting/mining Lv15 in ~23 h (was ~117 h). Save v12 keeps each skill's total XP and recomputes its level (testers jump levels).
@@ -74,12 +77,7 @@ Decided and scoped; ready to brief to an engineer. Top = next.
 
 1. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
 2. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
-3. **Cleanup PR** from deferred review notes (each below the fix bar):
-   - carousel memo comparator
-   - a bird-nest drop test
-   - Android double-read on the replay announcement
-   - read `fromEngine` from the last log row
-   - the stale-closure guards still on React state in older modals (Merchant)
+3. **Cleanup PR** working through [`TECH_DEBT.md`](TECH_DEBT.md) (review findings below the fix bar, from PRs #2–#19).
 
 ## Roadmap: unrefined
 
