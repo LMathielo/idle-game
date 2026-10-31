@@ -49,10 +49,12 @@ describe('hero XP curve', () => {
     expect(cumulativeXp(HERO_XP_CURVE, 400)).toBe(Number.MAX_SAFE_INTEGER);
   });
 
-  it('skill curve uses base 500 with the same shape (5× the hero numbers)', () => {
-    expect(xpToNext(SKILL_XP_CURVE, 1)).toBe(500);
-    expect(Math.abs(xpToNext(SKILL_XP_CURVE, 20) - 5 * 8944)).toBeLessThanOrEqual(5);
-    expect(xpToNext(SKILL_XP_CURVE, 20)).toBe(44721);
+  it('skill curve (1.12.0): base 100, same as the hero to Lv15, then its own steeper segments (1.07 from 15, 1.08 from 40)', () => {
+    expect([1, 2, 5, 10, 14].map((l) => xpToNext(SKILL_XP_CURVE, l))).toEqual([1, 2, 5, 10, 14].map((l) => xpToNext(HERO_XP_CURVE, l)));
+    expect([15, 16, 20, 30].map((l) => xpToNext(SKILL_XP_CURVE, l))).toEqual([5809, 6848, 12545, 45336]);
+    expect([5, 10, 15, 20, 30].map((l) => cumulativeXp(SKILL_XP_CURVE, l))).toEqual([1703, 11106, 31998, 72891, 317081]);
+    // Steeper than the hero from Lv16 on.
+    for (let l = 16; l <= 120; l += 1) expect(xpToNext(SKILL_XP_CURVE, l)).toBeGreaterThan(xpToNext(HERO_XP_CURVE, l));
   });
 
   it('rejects invalid levels', () => {
@@ -112,8 +114,8 @@ describe('addXp', () => {
   });
 
   it('skill multi level-up with carry-over', () => {
-    const amount = 500 + xpToNext(SKILL_XP_CURVE, 2) + xpToNext(SKILL_XP_CURVE, 3) + 9;
-    const res = addXp({ level: 1, xp: 0, xpToNext: 500 }, amount, SKILL_XP_CURVE);
+    const amount = 100 + xpToNext(SKILL_XP_CURVE, 2) + xpToNext(SKILL_XP_CURVE, 3) + 9;
+    const res = addXp({ level: 1, xp: 0, xpToNext: 100 }, amount, SKILL_XP_CURVE);
     expect(res.levelsGained).toBe(3);
     expect(res.progress.level).toBe(4);
     expect(res.progress.xp).toBe(9);

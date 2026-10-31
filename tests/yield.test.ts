@@ -68,14 +68,14 @@ describe('hero yield on the trees and rocks', () => {
     expect(TREES.oak.reqWs).toBe(20);
     expect(ROCKS.stone.reqMs).toBe(20);
     for (const kind of ['woodcutting', 'mining'] as const) {
-      // 19 actions stay at skill level 1 (the 20th reaches 500 XP), so WS stays 21.
-      const r = simulate(gatherer(kind), T0 + 19 * OAK_MS);
+      // 3 actions stay at skill level 1 (the 4th reaches 100 XP), so WS stays 21.
+      const r = simulate(gatherer(kind), T0 + 3 * OAK_MS);
       const item = kind === 'woodcutting' ? 'oak_logs' : 'stone';
       const actions = kind === 'woodcutting' ? r.summary.actions : r.summary.oresMined;
-      expect(actions).toBe(19);
+      expect(actions).toBe(3);
       const got = r.summary.itemsGained[item] ?? 0;
-      expect(got).toBeGreaterThanOrEqual(19);
-      expect(got).toBeLessThanOrEqual(19 + 6);
+      expect(got).toBeGreaterThanOrEqual(3);
+      expect(got).toBeLessThanOrEqual(3 + 3);
     }
   });
 

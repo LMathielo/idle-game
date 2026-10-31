@@ -2,7 +2,7 @@ import { FakeClock } from '../src/client/clock';
 import { LocalGameClient } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import type { CommandInput } from '../src/client/types';
-import { applyCommand, BUILDING_IDS, BUILDINGS, type BuildingId, type Command, ENGINE_VERSION, type GameState, newGame, type ReplayEntry } from '../src/engine';
+import { applyCommand, BUILDING_IDS, BUILDINGS, type BuildingId, type Command, ENGINE_VERSION, type GameState, newGame, type ReplayEntry, v12SkillProgress } from '../src/engine';
 
 export const T0 = Date.UTC(2026, 9, 25, 12, 0, 0); // fixed epoch for deterministic tests
 export const SEC = 1000;
@@ -86,4 +86,9 @@ export function current(rows: ReplayEntry[]): ReplayEntry[] {
 export function progressMs(state: GameState): number | undefined {
   const a = state.activity;
   return a && 'progressMs' in a ? a.progressMs : undefined;
+}
+
+/** Skills as the v11 → v12 migration leaves them (total XP kept, level recomputed on the 1.12.0 skill curve). */
+export function v12Skills<T extends Record<string, unknown>>(skills: T): T {
+  return Object.fromEntries(Object.entries(skills).map(([k, v]) => [k, v12SkillProgress(v)])) as T;
 }

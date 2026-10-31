@@ -77,7 +77,7 @@ import {
   woodcutActivityView,
   woodcuttingView,
 } from '../src/engine';
-import { HOUR, MIN, SEC, T0, withBuilt } from './helpers';
+import { HOUR, MIN, SEC, T0, v12Skills, withBuilt } from './helpers';
 
 /** End of the 1.5.0 script; the 1.6.0 segment starts here. */
 const B = T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC;
@@ -268,6 +268,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.9.0', 10],
       ['1.10.0', 11],
       ['1.11.0', 11],
+      ['1.12.0', 12],
     ]);
   });
 });
@@ -354,7 +355,7 @@ describe('golden', () => {
           "progressMs": 0,
         },
         "strength": 13,
-        "woodcutting": 5,
+        "woodcutting": 10,
       }
     `);
     expect(s.training).toEqual(newTrainingState());
@@ -449,8 +450,8 @@ describe('golden', () => {
           0,
         ],
         "logs": {
-          "birch_logs": 25,
-          "oak_logs": 1251,
+          "birch_logs": 37,
+          "oak_logs": 2072,
         },
         "rng": {
           "seed": 3241514865,
@@ -486,9 +487,9 @@ describe('golden', () => {
           "tier": 2,
         },
         "woodcutting": {
-          "level": 9,
-          "xp": 6619,
-          "xpToNext": 13500,
+          "level": 14,
+          "xp": 4025,
+          "xpToNext": 5238,
         },
       }
     `);
@@ -543,7 +544,7 @@ describe('golden', () => {
               "icon": "🪵",
               "id": "oak_logs",
               "name": "Oak Logs",
-              "quantity": 1151,
+              "quantity": 1972,
               "stackable": true,
             },
             {
@@ -575,7 +576,7 @@ describe('golden', () => {
               "icon": "🪵",
               "id": "birch_logs",
               "name": "Birch Logs",
-              "quantity": 41,
+              "quantity": 61,
               "stackable": true,
             },
             {
@@ -589,8 +590,8 @@ describe('golden', () => {
           ],
         },
         "logs": {
-          "birch_logs": 41,
-          "oak_logs": 1151,
+          "birch_logs": 61,
+          "oak_logs": 1972,
         },
         "nests": 2,
         "nextItemSerial": 3,
@@ -606,10 +607,11 @@ describe('golden', () => {
     `);
   });
 
-  it('the 1.10.0 script is unchanged in 1.11.0 (its Training Grounds stay Lv1: 1 XP/min as before)', () => {
+  it('the 1.10.0 script is unchanged in 1.11.0 (its Training Grounds stay Lv1: 1 XP/min as before); re-pinned in 1.12.0', () => {
     const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'p1')));
     expect(s.time.lastSimulatedAt).toBe(G);
-    expect(hashState(s)).toBe('1aed0f53'); // the 1.10.0 final pin
+    // 1.12.0: the skill curve (base 100) levels woodcutting and mining faster, so WS / MS and the yield rise. Was 1aed0f53.
+    expect(hashState(s)).toBe('d6b0bd86');
   });
 
   it('the 1.11.0 segment: Training Grounds Lv2 completes mid-training (1 → 2 XP/min at that instant), speed-up at 2 XP/min', () => {
@@ -715,10 +717,10 @@ describe('golden', () => {
           "wins": 503,
         },
         "dungeonActivity": null,
-        "engineVersion": "1.11.0",
+        "engineVersion": "1.12.0",
         "gloves": "iron_gloves#2",
         "gold": 1387,
-        "hash": "ee921fce",
+        "hash": "94897c6a",
         "heroLevel": 15,
         "hp": [
           190,
@@ -730,8 +732,8 @@ describe('golden', () => {
         },
         "lastFightMs": 2000,
         "logs": {
-          "birch_logs": 41,
-          "oak_logs": 5125,
+          "birch_logs": 61,
+          "oak_logs": 7500,
         },
         "merchant": {
           "chargeProgressMs": 0,
@@ -757,15 +759,15 @@ describe('golden', () => {
           ],
         },
         "mining": {
-          "level": 6,
-          "xp": 1753,
-          "xpToNext": 7348,
+          "level": 8,
+          "xp": 18,
+          "xpToNext": 2263,
         },
         "nests": 2,
         "nextItemSerial": 4,
         "ores": {
-          "copper_ore": 13,
-          "stone": 345,
+          "copper_ore": 16,
+          "stone": 450,
         },
         "pickaxe": "start-wooden_pickaxe",
         "potions": 2,
@@ -800,8 +802,8 @@ describe('golden', () => {
           },
           "tier": 2,
         },
-        "woodcutting": 10,
-        "woodcuttingXp": 2172,
+        "woodcutting": 16,
+        "woodcuttingXp": 2031,
         "woodenAxe": false,
         "workers": {
           "crews": {
@@ -871,8 +873,10 @@ describe('golden', () => {
     expect(raw.character.xp).toBeGreaterThan(799);
     expect([s.character.xp, s.character.xpToNext]).toEqual([799, 800]);
     expect(s.character.gold).toBe(raw.character.gold);
-    expect(s.character.skills).toEqual(raw.character.skills);
-    expect(s.character.skills.woodcutting.level).toBe(8);
+    // v12 (1.12.0): each skill keeps its total XP; levels recomputed on the base-100 skill curve (WC Lv8 → Lv16).
+    expect(s.character.skills).toEqual(v12Skills(raw.character.skills));
+    expect(raw.character.skills.woodcutting.level).toBe(8);
+    expect(s.character.skills.woodcutting).toEqual({ level: 16, xp: 43, xpToNext: 6848 });
     expect(s.activity).toBeNull(); // v10: woodcutting stops (its building starts locked)
     expect(s.stats).toEqual(raw.stats);
     expect(s.rng).toEqual(raw.rng);
@@ -911,8 +915,8 @@ describe('golden', () => {
     expect(next.summary.actions).toBe(2);
     // Logs keep stacking on the migrated stack (matched by defId).
     expect(next.state.inventory.items.filter((i) => i.defId === 'oak_logs')).toHaveLength(1);
-    // WC Lv8: WS 91 on Oak (20) = 4.55 logs per cut (1.10.0 yield), so 2 cuts give 9 or 10.
-    expect(next.summary.itemsGained.oak_logs).toBeGreaterThanOrEqual(9);
+    // WC Lv16 (1.12.0): WS 171 on Oak (20) = 8.55 logs per cut (1.10.0 yield), so 2 cuts give 17 or 18.
+    expect(next.summary.itemsGained.oak_logs).toBeGreaterThanOrEqual(17);
     expect(next.state.inventory.items.find((i) => i.defId === 'oak_logs')?.quantity).toBe(3785 + (next.summary.itemsGained.oak_logs ?? 0));
     // And commands work on the migrated save.
     const spent = applyCommand(next.state, { id: 'v2-spend', type: 'DEBUG_SPEND_STAMINA', amount: 10 }, s.time.lastSimulatedAt + 4 * MIN);
@@ -941,6 +945,7 @@ describe('golden', () => {
     };
     expect({ ...character, equipment }).toEqual({
       ...raw.character,
+      skills: v12Skills(raw.character.skills), // v12: levels recomputed from total XP (WC Lv8 → Lv16)
       xp: undefined,
       xpToNext: undefined,
       equipment: Object.fromEntries(Object.entries(raw.character.equipment).map(([k, v]) => [k, noRarity(v as Record<string, unknown>)])),

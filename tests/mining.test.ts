@@ -161,7 +161,7 @@ describe('starting a rock', () => {
   });
 
   it('mining levels up along the skill curve and emits SKILL_LEVEL_UP for mining', () => {
-    const r = simulate(miningGame(), T0 + 20 * STONE_MS); // 500 XP = Lv2
+    const r = simulate(miningGame(), T0 + 4 * STONE_MS); // 100 XP = Lv2 (skill curve base 100 since 1.12.0)
     expect(r.state.character.skills.mining).toMatchObject({ level: 2, xp: 0 });
     expect(r.events).toContainEqual({ type: 'SKILL_LEVEL_UP', skill: 'mining', level: 2 });
     expect(r.summary.skillLevelsGained).toEqual({ mining: 1 });
