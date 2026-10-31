@@ -87,7 +87,7 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 
 **Buildings and economy**
 - Town Hall Lv3–5 passive bonuses (the data shape is ready).
-- Dungeon and Storage upgrades (no bonus defined yet). Storage itself (capacity, a stash) is still "coming soon".
+- Storage itself (capacity, a stash) is still "coming soon". Dungeon and Storage stay non-upgradable for now (owner decision 2026-10-28); revisit only if they get a bonus.
 - Cancelling an upgrade, and a second builder.
 - Offline cap upgrade (8h → more), and a stamina max upgrade.
 - Bulk selling of logs and ore.
@@ -105,7 +105,6 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 
 **Gathering**
 - Fishing or a third gathering skill (after the gathering refactor).
-- A toast when a worker crew goes idle or pauses (today it shows in the Town Hall and node cards only).
 
 **Platform and server**
 - Server with `RemoteGameClient`: server-validated commands, action-log sync and server-owned time (closes the clock-forward offline farm).
