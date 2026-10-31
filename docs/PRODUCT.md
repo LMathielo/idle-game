@@ -109,15 +109,9 @@ Slot 1: Health Potion ×10. Other slots: rolled from the pool on each refresh (s
 
 Items per action = MS ÷ the rock's MS × bonus (whole part + the fraction as a chance). Geode: 1/200 per action on every rock (uncommon, sell 30). Pickaxes: Wooden +1 MS (sell 1), Iron +40 MS (buy 600, sell 180), Steel +120 MS (buy 2,500, sell 750).
 
-## Roadmap (proposed, not yet committed by the owner)
+## Roadmap
 
-**In progress: M3 Training (gold + time).** **Next: Merchant** (sell loot/logs, buy basics), which closes the first economy loop.
-
-- **M1 — Core engine & save (done, on `main`):** seeded RNG, `applyCommand` / `simulate`, `LocalGameClient`, versioned on-device save, Hero tab reading real state. Also pulls in M2's core: woodcutting start/stop, offline progress (capped) and the "while you were away" summary.
-- **M2 — First idle loop: Woodcutting.** Start/stop gathering, logs accumulate over time and offline (capped), skill XP and levels, "while you were away" summary.
-- **M3 — Training & Merchant.** Training in progress: gold unlocks tiers, time raises attributes one at a time (see the 2026-10-26 decisions). Merchant comes next: sell logs/items, buy basics. First complete economy loop.
-- **M4 — Dungeon (in progress).** Automated combat resolved by the engine, combat log replayed in the UI, XP/gold/loot rewards, equip from loot. Done: village modal pattern, combat, persistent HP, auto-repeat runs, stamina skip, 5 tiers with win-based unlocks. Equipping loot comes later.
-- **M5 — Storage & polish.** Storage capacity, item comparison deltas, onboarding.
+Moved to [`STATUS.md`](STATUS.md) (refined and unrefined roadmap, current version, release notes).
 
 ## Decision log
 
@@ -214,6 +208,7 @@ Items per action = MS ÷ the rock's MS × bonus (whole part + the fraction as a 
 | 2026-10-28 | **Training Grounds upgrades** (owner-approved): Lv1–5, capped by the Town Hall, standard cost (half the Town Hall's); **+1 training XP per minute per level** (Lv1 = 1 … Lv5 = 5), read when the XP is credited, so an upgrade finishing mid-training counts from that instant; the stamina speed-up still buys 1 minute per stamina, worth the current XP/min. The Training modal shows the rate and the time to level at it; the Upgrade sheet shows "+1 XP/min per level". Engine 1.11.0, save v11 unchanged (engine-only bump). `NOT_UPGRADABLE` stays for any level without bonus data | Supersedes "the Training Grounds can't be upgraded until they have a bonus"; gives Training a long-term upgrade path |
 | 2026-10-28 | Engineering choice (engineer, flagged): above 1 XP/min a level-up can land a fraction of a wall millisecond past the level; that sub-ms of trained time (less than the XP/min in ms) is carried into the next level instead of dropped. Speed-up "Next Lv" = ceil(XP left ÷ XP/min) stamina | Nothing lost; still split-invariant |
 | 2026-10-26 | Review council sized by risk: 2 reviewers normally, 5 for high-risk PRs; reviewers on Sonnet (medium reasoning); only findings ≥ 80 are fixed in the PR, one verification reviewer after fixes, lower findings batched into cleanup PRs | Token cost: the 5-reviewer council on every PR cost about as much as the coding itself |
+| 2026-10-31 | Review council sized by complexity: 1 reviewer (small: docs, small UI fixes), 2 (normal), 3 (high risk: save, time, formulas, replay, CI); Sonnet, medium. `docs/STATUS.md` added as the "where we are" page (version, release notes, refined/unrefined roadmap), updated by every feature PR | Token cost again; and one page lets a fresh session pick up without the chat history |
 
 ## Stamina projection (2026-10-27, search-only skip)
 
@@ -225,20 +220,6 @@ Items per action = MS ÷ the rock's MS × bonus (whole part + the fraction as a 
 | Runs without stamina | free: one Rat Cellar run per ~1:53 (1:50 search + ~3 s fight at DEX 10) ≈ 32/h, live or offline (8h cap ≈ 255 runs) |
 | New hero, first session | Lv5 needs 49 Rat wins. A fight costs ~5 HP and a skip gives no regen, so **HP, not stamina, sets the pace**: skipping only at ≥ 10 HP reaches Lv5 after 50 straight wins in ~17 min (sim, 2026-10-27). Skipping at 0 HP burns 2 stamina per instant loss (the UI warns) |
 
-## Backlog (not scheduled)
+## Backlog
 
-- Per-PR Expo previews (not now): publish an EAS Update per open PR. Today only `dev` and `main` publish.
-- Pixel sprite set to replace emoji item icons.
-- Arena / PvP once a server exists.
-- Prestige / rebirth layer.
-- Offline cap upgrade (raise `offline.capMs` / `efficiency` per player, e.g. bought in the village).
-- Big-number support for XP beyond ~level 150 (values clamp to `Number.MAX_SAFE_INTEGER` today).
-- Server-owned time: closes the repeated "clock forward 8h, open, repeat" offline-cap farm, which can't be detected on the device (see ENGINE.md exploit table).
-- Ordered SQL schema migrations keyed on `meta.schema_version`, before the first table change.
-- Selling logs in bulk; crafting with ores and logs.
-- Cancel an upgrade; a second builder; passive bonuses for Town Hall Lv3–5.
-- Modals for the other village signs (Merchant, Storage).
-- More dungeon content: multi-enemy runs, bosses, unlock rules beyond wins (e.g. hero level).
-- Hit chance and crit using DEX.
-- HP potions.
-- Action-log retention once sync exists: delete synced rows older than 30 days.
+Merged into the unrefined roadmap in [`STATUS.md`](STATUS.md).
