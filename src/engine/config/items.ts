@@ -1,6 +1,6 @@
 // Item catalog (data), keyed by item definition id. Stackable items are stored in the inventory with
 // id = definition id; every stored item carries `defId`. Gear stats here are the 100% maxima (since 1.14.0): each gear
-// instance carries its own `qualityBp` and `rarity`, and every reader scales the catalog stat by the instance quality
+// instance carries its own `quality` and `rarity`, and every reader scales the catalog stat by the instance quality
 // (src/engine/gear.ts), so changing a number here rebalances every save without a migration. Rolled affixes (later)
 // will be stored on the instance too; see docs/ENGINE.md for where they enter the stat pipeline.
 import type { EquipmentSlot, ItemRarity } from '../types';
@@ -17,9 +17,9 @@ export type ItemDef = {
   rarity: ItemRarity;
   /** One short line for the item info sheet. */
   description: string;
-  /** Gold the merchant pays per unit. Integer ≥ 1; always below buyPrice. Gear: at 25% quality (scaled per instance). */
+  /** Gold the merchant pays per unit. Integer ≥ 1; always below buyPrice. Gear: for a common piece (× the instance's rarity multiplier). */
   sellPrice: number;
-  /** Gold per unit when the merchant sells it. Only items the merchant can stock have one. Gear: at 25% quality. */
+  /** Gold per unit when the merchant sells it. Only items the merchant can stock have one. Gear: for a common piece (× the listing's rarity multiplier). */
   buyPrice?: number;
   stackable: boolean;
   slot?: EquipmentSlot;
@@ -68,7 +68,7 @@ const MATERIALS = {
 
 /**
  * A crafted gear piece (1.14.0): `<set>_<piece>`, common in the catalog (each instance rolls its own rarity), not sold by
- * the Merchant, sell price = max(1, floor(25% × the sell value of its inputs)) at 25% quality.
+ * the Merchant, sell price = max(1, floor(25% × the sell value of its inputs)) for a common piece.
  */
 function craftedGear(setId: GearSetId, pieceId: GearPieceId) {
   const set = GEAR_SETS.find((x) => x.id === setId)!;

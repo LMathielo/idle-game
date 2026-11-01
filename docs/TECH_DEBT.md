@@ -24,7 +24,6 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#19, note] Village map pixel art is bilinear-upscaled when zoomed (up to ~1.4× native), so it looks soft. Visual call: nearest-neighbour or a higher-res PNG.
 - [#21, 65] `crafting/CraftingModal.tsx` `LivePercent` — after a clock pause clears, the xx.yy% jumps ahead by the paused time until the next engine tick (`start` not reset). Add `running` to the key or reset `start` when `running` turns true.
 - [#21, 60] `crafting/CraftingModal.tsx` `PipeRow` — `memo` never hits (craftingView builds new pipe objects every tick). Custom comparator or drop the memo.
-- [#22, 70] `crafting/CraftingModal.tsx` `GearCard` — recomputes the quality floor (`min(10000, invest × qualityBpPerStamina + minQualityBp)`) in the screen. Use the engine's `gearQualityFloorBp(state, invest)` and drop the two pass-through view fields.
 - [#22, 40] "✓ Ready" green text on `woodDark` isn't in `tests/theme.test.ts`. Add the pair to the contrast test.
 
 ## Engine and data
@@ -42,7 +41,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#19, 45] `tests/migrationV12.test.ts` — the v12 totals use the live `SKILL_XP_CURVE`; a future rebalance breaks them though the migration is frozen. Freeze a `V12_CURVE` literal in the test; keep the live-config pins in a separate block.
 - [#19, 45] `ui/useHoldRepeat.ts`, `ui/useCommand.ts` — no tests for the 400/100 ms schedule, stop on refusal/disable/unmount, or the one-at-a-time guard. Extract a pure scheduler and test it with fake timers.
 - [#19, 25] Only woodcutting's "Lv15 ≈ 23.5 h" is tested. Tie `ROCKS` to `TREES` (same XP and base time) or run `hoursTo` over both.
-- [#22, 30] No test for a nonzero `minQualityBp` (hook, 0 today). Add one when the first mechanic sets it.
+- [#22, 30] No test for a nonzero `minQuality` (hook, 0 today). Add one when the first mechanic sets it.
 
 ## Docs and workflow
 

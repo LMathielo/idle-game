@@ -93,7 +93,7 @@ describe('config: rock table and formulas (own config, same numbers as the trees
 describe('mining strength (MS = 10 × level + effective STR + pickaxe)', () => {
   it('a new hero has MS 21 (10 + 10 + 1) with the Wooden Pickaxe equipped', () => {
     const s = builtGame(1, T0);
-    expect(s.character.equipment.pickaxe).toEqual({ id: 'start-wooden_pickaxe', defId: 'wooden_pickaxe', name: 'Wooden Pickaxe', icon: '⛏️', slot: 'pickaxe', rarity: 'common', qualityBp: 2500 });
+    expect(s.character.equipment.pickaxe).toEqual({ id: 'start-wooden_pickaxe', defId: 'wooden_pickaxe', name: 'Wooden Pickaxe', icon: '⛏️', slot: 'pickaxe', rarity: 'common', quality: 25 });
     expect(miningStrength(s)).toEqual({ value: 21, breakdown: { level: 10, strength: 10, pickaxe: 1, pickaxeDefId: 'wooden_pickaxe' } });
   });
 
@@ -293,7 +293,7 @@ describe('the pickaxe: equip, unequip and the stop rule', () => {
 
   it('the merchant sells the Iron Pickaxe right after the Iron Axe, and it equips into the pickaxe slot', () => {
     const rich = apply(builtGame(4, T0), { type: 'DEBUG_ADD_GOLD', amount: 1000 }, T0);
-    expect(rich.merchant.stock[2]).toEqual({ defId: 'iron_pickaxe', quantity: 1, unitPrice: 600, qualityBp: 2500, rarity: 'common' });
+    expect(rich.merchant.stock[2]).toEqual({ defId: 'iron_pickaxe', quantity: 1, unitPrice: 600, quality: 25, rarity: 'common' });
     const bought = apply(rich, { type: 'BUY_ITEM', slot: 2, defId: 'iron_pickaxe', quantity: 1, maxUnitPrice: 600 }, T0);
     const e = apply(bought, { type: 'EQUIP_ITEM', itemId: 'iron_pickaxe#1' }, T0);
     expect(e.character.equipment.pickaxe?.defId).toBe('iron_pickaxe');

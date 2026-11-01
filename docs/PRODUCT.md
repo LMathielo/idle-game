@@ -32,7 +32,7 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - **Merchant (2026-10-27):** the Merchant sign opens a full-screen modal with **Buy | Sell** tabs. Slot 1 is always Health Potion ×10; since 1.10.0 the other slots are rolled from a pool on each refresh (table below); 5 refresh charges (+1 per 2 h). Tapping an item on the Hero tab opens an info sheet with **Equip / Use / Unequip**. Item names are colored by rarity.
 - **UI kit, village map, skill XP (2026-10-31, engine 1.12.0):** see "UI rules" below. Woodcutting / Mining Lv1 → 15 takes about a day of gathering (skill XP base 100, steeper from Lv15); existing saves keep their total skill XP and jump levels.
 - **Crafting (2026-11-01, engine 1.13.0):** the Crafting house (east plot, locked on a new save) turns logs and ore into planks, Stone Bricks and ingots in **timed pipes** that run side by side, beside anything the hero does, live and offline (8h cap). 2 of 8 pipes open (3–4 "Unlocks later", 5–8 "Premium — coming soon"; no unlock yet, debug only). A job = recipe × quantity, all materials paid at start; **x10 mode** crafts 10× for stamina; **Insta** finishes the current craft for stamina; **Cancel** refunds what is not done. INT shortens craft time (its first effect). The unused Smithing skill is gone. Tables below.
-- **Gear crafting, quality and rarity (2026-11-01, engine 1.14.0):** every piece of gear (weapons, armor, axes, pickaxes) has a **rarity colour** (white, green, blue, purple) and a **quality 0–100%** that scales its stats and prices; old gear became "White · Quality 25%" with unchanged numbers. The Merchant's gear is rolled (0–50%, white / green / blue). The Crafting house's **Equipment** tab makes 5 sets × 6 pieces (Stone, Copper, Iron, Silver, Gold) from bricks / ingots and planks, one piece per job; stamina invested at start raises the lowest quality; the piece waits in its pipe until **Done**, which reveals it. Tables below.
+- **Gear crafting, quality and rarity (2026-11-01, engine 1.14.0):** every piece of gear (weapons, armor, axes, pickaxes) has a **rarity colour** (white, green, blue, purple) and a **quality 0–100%** that scales its stats; prices follow the colour (×1 / ×1.5 / ×2 / ×4). Old gear became "White · Quality 25%" with unchanged numbers. The Merchant's gear is rolled (quality 0–50, white / green / blue). The Crafting house's **Equipment** tab makes 5 sets × 6 pieces (Stone, Copper, Iron, Silver, Gold) from bricks / ingots and planks, one piece per job; stamina invested at start raises the lowest quality; the piece waits in its pipe until **Done**, which reveals it. Tables below.
 - Storage shows "coming soon". No storage, tool crafting, gear drops or item affixes yet.
 - Technical details: `docs/ENGINE.md`.
 - Delivery: PRs land on `dev` (test preview in Expo Go, EAS branch `dev`); the owner releases `dev` → `main` (EAS branch `main`) after testing.
@@ -111,20 +111,20 @@ Crafted materials are common (white), stackable, and sell for the sell value of 
 | --- | --- |
 | Gear | every equippable item (all slots, tools included). Each piece has its own rarity and quality |
 | Rarity (colour) | common white, uncommon green, rare blue, epic purple (legendary gold later); names and slot frames use it |
-| Quality | 0–100% (stored as 0–10,000 bp). Popover subtitle "Green · Quality 73%" |
-| Stats | catalog = 100% max; effective = max(1, round(max × (50% + quality / 2))), half up; both ends of a damage range; attack speed not scaled |
-| Prices | buy and sell × (0.8 + 0.8 × quality): 0.8× at 0%, 1.0× at 25%, 1.6× at 100%; Town Hall sell bonus after it; a 0% piece still sells for 1 |
-| Old gear | every existing piece, a new hero's gear and a new save's stock: 25%, common (same stats and prices as before) |
-| Merchant gear | one piece per listing, quality 0–50%, common 70 / uncommon 25 / rare 5 (never epic+); price fixed at the roll |
-| Mob gear drops | not yet; will roll 0–70% (config only) |
+| Quality | an integer 0–100 (a d101: every roll is a uniform integer, both ends included). Popover subtitle "Green · Quality 73%" |
+| Stats | catalog = 100% max; effective = max(1, round(max × (100 + quality) / 200)), half up; both ends of a damage range; attack speed not scaled |
+| Prices | buy and sell = floor(catalog price × rarity multiplier): common ×1, uncommon ×1.5, rare ×2, epic ×4 (legendary unused). Quality does not change prices. Town Hall sell bonus after it |
+| Old gear | every existing piece, a new hero's gear and a new save's stock: quality 25, common (same stats and prices as before) |
+| Merchant gear | one piece per listing, quality 0–50, common 70 / uncommon 25 / rare 5 (never epic+); price = buy × rarity multiplier, fixed at the roll |
+| Mob gear drops | not yet; will roll 0–70 (config only) |
 
 ## Gear crafting (2026-11-01, engine 1.14.0)
 
 | Rule | Value |
 | --- | --- |
 | Job | one piece per job (no quantity, no x10, no yield bonus); same craft-time rule as materials |
-| Stamina | invest 0–50 at start (stepper +1 / +10, hold to repeat): +1% minimum quality each; paid at start, **never refunded**; never changes the colour odds. A `minQualityBp` hook (0) adds to the floor; capped at 100% |
-| Roll | at start: quality = floor + uniform × (100% − floor); colour uncommon 75 / rare 20 / epic 5 (per-recipe override possible). Hidden until Done |
+| Stamina | invest 0–50 at start (stepper +1 / +10, hold to repeat): +1 minimum quality each; paid at start, **never refunded**; never changes the colour odds. A `minQuality` hook (0) adds to the floor; capped at 100 |
+| Roll | at start: quality = a uniform integer in [floor, 100]; colour uncommon 75 / rare 20 / epic 5 (per-recipe override possible). Hidden until Done |
 | Ready | the finished piece waits in its pipe (100.00%, "✓ Ready — Done"; sign "Iron Sword ready"; away summary lists it), live and offline; the pipe starts nothing else |
 | Done | moves the piece into the inventory and opens its popover (the reveal, with Equip); needs a free slot ("Inventory full", greyed; the piece stays safe) |
 | Insta | same cost rule; takes the job to ready |
@@ -138,7 +138,7 @@ Crafted materials are common (white), stackable, and sell for the sell value of 
 | 4 | Silver | Silver Ingot + Yew Plank | 16–22 | 10 | 16 | 13 | 5 |
 | 5 | Gold | Gold Ingot + Ironwood Plank | 24–34 | 15 | 24 | 20 | 8 |
 
-Stats at 100% quality (damage for swords, armor for the rest). Inputs per piece at every tier (bricks or ingots + planks) and T1 time: Sword 4 + 2, 5 min · Helm 3 + 1, 4 min · Chestplate 6 + 2, 8 min · Shield 3 + 3, 5 min · Gloves 2 + 1, 2 min · Boots 2 + 1, 2 min; times double each tier. The Iron set makes the existing iron items (same prices). New pieces are not sold by the Merchant and sell for 25% of their inputs' sell value (at 25% quality, at least 1).
+Stats at 100% quality (damage for swords, armor for the rest). Inputs per piece at every tier (bricks or ingots + planks) and T1 time: Sword 4 + 2, 5 min · Helm 3 + 1, 4 min · Chestplate 6 + 2, 8 min · Shield 3 + 3, 5 min · Gloves 2 + 1, 2 min · Boots 2 + 1, 2 min; times double each tier. The Iron set makes the existing iron items (same prices). New pieces are not sold by the Merchant and sell for 25% of their inputs' sell value (as common, at least 1), × their rarity multiplier. On average a crafted piece sells for less than its inputs; a single epic (×4) can sell for more (accepted).
 
 ## Workers (2026-10-28, engine 1.10.0)
 
@@ -155,9 +155,9 @@ Stats at 100% quality (damage for swords, armor for the rest). Inputs per piece 
 
 ## Merchant stock (2026-10-28, engine 1.10.0)
 
-Slot 1: Health Potion ×10. Other slots: rolled from the pool on each refresh (seeded, no duplicates). A new save starts with Iron Axe, Iron Pickaxe, Iron Sword, Iron Helm (25%, common). Every item sells for 30% of its price (floored), below its buy price even with the +20% bonus. Since 1.14.0 each gear listing rolls a quality (0–50%) and colour, and its price scales with the quality; the table shows 25%.
+Slot 1: Health Potion ×10. Other slots: rolled from the pool on each refresh (seeded, no duplicates). A new save starts with Iron Axe, Iron Pickaxe, Iron Sword, Iron Helm (quality 25, common). Every item sells for 30% of its price (floored), below its buy price even with the +20% bonus. Since 1.14.0 each gear listing rolls a quality (0–50) and a colour, and its price is × the colour's multiplier; the table shows a common piece at quality 25.
 
-| Item | Slot | Stat (at 25%) | Buy | Sell |
+| Item | Slot | Stat (quality 25) | Buy | Sell |
 | --- | --- | --- | ---: | ---: |
 | Iron Axe / Iron Pickaxe | axe / pickaxe | +40 WS / MS | 600 | 180 |
 | Iron Sword | weapon | 6–9 dmg | 500 | 150 |
@@ -289,9 +289,11 @@ Moved to [`STATUS.md`](STATUS.md) (refined and unrefined roadmap, current versio
 | 2026-11-01 | **INT's first effect:** −craft time on a diminishing curve, cap 50%, k 50 (`diminishing(value, cap, k) = cap × value ÷ (value + k)`, shared helper, data in `STAT_EFFECTS`). Several reductions multiply. **Smithing skill removed** (crafting has no skill); the v13 migration drops it | A use for INT; one curve for future attribute effects |
 | 2026-11-01 | **UI rule:** every building modal shows its current level's bonuses under the header ("Lv1 · no bonus yet") | The player always sees what the building gives now |
 | 2026-11-01 | Engineering choices for crafting (engineer, flagged): (1) Insta is **refused** (`INVENTORY_FULL`, no stamina spent) when the output would not fit, and while the pipe waits for room. (2) A cancel's stamina refund is **capped at max** (no stamina banked above the bar through a long x10 job). (3) A cancel whose refund would not fit is refused (`INVENTORY_FULL`), so nothing is lost. (4) Same-instant order: hero → builder → crews → pipes (pipe order); held pipes retry at the start of each step and after every command. (5) The Crafting sign shows "2/2 crafting · 0:42" (busy / open pipes, shortest job left) or "Inventory full", and the upgrade timer when it upgrades. (6) START_CRAFT carries the stamina shown (`maxCost`, `COST_CHANGED`) | Nothing lost, no stamina exploit, deterministic |
-| 2026-11-01 | **Gear quality and rarity (PR B, engine 1.14.0, save v14):** catalog `quality` renamed `rarity` (colour tier); new **quality** 0–100% on every gear instance (tools included), which also carries its own rarity. Catalog gear stats ×1.6 become the 100% max; effective = max(1, round(max × (50% + q/2))); prices × (0.8 + 0.8q), sell bonus after. Existing gear, starting gear and the starter stock: 25% / common (unchanged numbers). Merchant gear: 0–50%, common 70 / uncommon 25 / rare 5, price fixed at the roll. Mob drops later: 0–70% | Gives gathered materials their main use; gear upgrades become a long-term goal beyond the Merchant |
+| 2026-11-01 | **Gear quality and rarity (PR B, engine 1.14.0, save v14):** catalog `quality` renamed `rarity` (colour tier); new **quality**, an integer 0–100 (d101 rolls), on every gear instance (tools included), which also carries its own rarity. Catalog gear stats ×1.6 become the 100% max; effective = max(1, round(max × (100 + q) / 200)). Existing gear, starting gear and the starter stock: 25 / common (unchanged numbers). Merchant gear: quality 0–50, common 70 / uncommon 25 / rare 5. Mob drops later: 0–70 | Gives gathered materials their main use; gear upgrades become a long-term goal beyond the Merchant |
 | 2026-11-01 | **Gear crafting:** 5 sets (Stone, Copper, Iron, Silver, Gold) × 6 pieces from tier-n bricks / ingots + planks; one piece per job; 0–50 stamina invested for +1% min quality each (not refunded, no effect on colour); quality and colour rolled at start, hidden until Done; uncommon 75 / rare 20 / epic 5; the piece waits in its pipe (`ready`) until Done; cancel refunds materials only while crafting, never on a ready piece; new pieces sell for 25% of their inputs | A crafting goal per tier; stamina has a use with a visible payoff; the reveal makes Done a moment |
-| 2026-11-01 | Engineering choices for gear (engineer, flagged): (1) the Merchant's gear rolls draw from their **own seeded stream** (main RNG XOR a salt) so drops, yields and combat don't shift; crafting rolls use the main stream. (2) A gear piece's sell price is **at least 1** (a 0% Worn Sandals would floor to 0). (3) Quality shows as a floored whole percent (99.99% reads 99%). (4) The selected Equipment card expands in place with the stepper, odds and Start. (5) The reveal popover has an Equip button | Determinism and replay unchanged; every piece stays sellable; no misleading 100% |
+| 2026-11-01 | **Gear prices follow rarity, not quality** (owner fix round on PR #22): buy and sell = floor(catalog price × rarity multiplier), common ×1, uncommon ×1.5, rare ×2, epic ×4 (legendary unused); Town Hall sell bonus after it; Merchant listing price = buy × the listing's multiplier, fixed at the roll. Replaces the quality-scaled prices (0.8× → 1.6×) and the "a gear piece sells for at least 1" rule. Invariants: every gear item at every rarity sells (+20%) below its buy price; for every gear recipe the **expected** sell value of its piece (rarity odds × multipliers × 1.2) is below its inputs. A single 5% epic can sell above its inputs: accepted (crafting to sell has a negative expected value) | Quality is about power, rarity about value; simple prices; no buy→sell loop |
+| 2026-11-01 | Quality is an integer percent 0–100, rolled as a d101 (uniform integer, both ends included): crafting [floor, 100] with floor = min(100, stamina + minQuality), Merchant [0, 50], mob drops [0, 70]. Shown as "Quality 73%", no rounding (owner fix round on PR #22) | Readable numbers; no hidden fractions |
+| 2026-11-01 | Engineering choices for gear (engineer, flagged): (1) the Merchant's gear rolls draw from their **own seeded stream** (main RNG XOR a salt) so drops, yields and combat don't shift; crafting rolls use the main stream (owner OK). (2) The selected Equipment card expands in place with the stepper, odds and Start. (3) The reveal popover has an Equip button | Determinism and replay unchanged |
 
 ## Stamina projection (2026-10-27, search-only skip)
 

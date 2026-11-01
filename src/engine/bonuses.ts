@@ -2,7 +2,7 @@
 // ("Building bonuses"). Bonuses from different buildings add together:
 //
 //   yield multiplier  = 1 + Town Hall bonus + the skill's own building bonus        (basis points)
-//   sell price        = floor(base sell price × (1 + sell bonus)); base = catalog sellPrice, quality-scaled for gear
+//   sell price        = floor(base sell price × (1 + sell bonus)); base = catalog sellPrice, × the rarity multiplier for gear
 //   worker cap        = the Town Hall level's workerCap (0 before the Town Hall is built)
 //   stock slots       = the Merchant level's stockSlots
 //   training XP / min = the Training Grounds level's trainingXpPerMin (1 … 5)
@@ -60,14 +60,14 @@ const withSellBonus = (state: Buildings, base: number) =>
 
 /**
  * What the merchant pays per unit of a non-gear `defId` right now: floor(catalog sellPrice × (1 + bonus)). 0 when it
- * buys none. Gear depends on the instance's quality: use sellPriceOfItem.
+ * buys none. Gear depends on the instance's rarity: use sellPriceOfItem.
  */
 export function sellPriceOf(state: Buildings, defId: string): number {
   return withSellBonus(state, getItemDef(defId)?.sellPrice ?? 0);
 }
 
-/** What the merchant pays per unit of this instance right now: its quality-scaled base (gear) × (1 + bonus), floored. */
-export function sellPriceOfItem(state: Buildings, item: Pick<Item, 'defId' | 'qualityBp'>): number {
+/** What the merchant pays per unit of this instance right now: its base (gear: × the rarity multiplier) × (1 + bonus), floored. */
+export function sellPriceOfItem(state: Buildings, item: Pick<Item, 'defId' | 'rarity'>): number {
   return withSellBonus(state, baseSellPrice(item));
 }
 

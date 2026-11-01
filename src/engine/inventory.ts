@@ -15,7 +15,7 @@ export function makeItem(defId: string, quantity = 1, instanceId?: string, roll?
   if (def.slot) {
     item.slot = def.slot;
     item.rarity = roll?.rarity ?? GEAR.defaultRarity;
-    item.qualityBp = roll?.qualityBp ?? GEAR.defaultQualityBp;
+    item.quality = roll?.quality ?? GEAR.defaultQuality;
   }
   if (def.stackable) {
     item.stackable = true;

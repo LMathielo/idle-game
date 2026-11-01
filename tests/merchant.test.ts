@@ -132,10 +132,10 @@ describe('merchant stock and refresh charges', () => {
     expect(s.merchant.stock).toHaveLength(5);
     expect(s.merchant.stock).toEqual([
       { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
-      { defId: 'iron_axe', quantity: 1, unitPrice: 600, qualityBp: 2500, rarity: 'common' }, // 1.14.0: the starter stock is 25% / common
-      { defId: 'iron_pickaxe', quantity: 1, unitPrice: 600, qualityBp: 2500, rarity: 'common' },
-      { defId: 'iron_sword', quantity: 1, unitPrice: 500, qualityBp: 2500, rarity: 'common' },
-      { defId: 'iron_helm', quantity: 1, unitPrice: 400, qualityBp: 2500, rarity: 'common' },
+      { defId: 'iron_axe', quantity: 1, unitPrice: 600, quality: 25, rarity: 'common' }, // 1.14.0: the starter stock is 25% / common
+      { defId: 'iron_pickaxe', quantity: 1, unitPrice: 600, quality: 25, rarity: 'common' },
+      { defId: 'iron_sword', quantity: 1, unitPrice: 500, quality: 25, rarity: 'common' },
+      { defId: 'iron_helm', quantity: 1, unitPrice: 400, quality: 25, rarity: 'common' },
     ]);
     expect(rollStock({ seed: 1 }, 2).stock).toHaveLength(2);
   });

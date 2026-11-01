@@ -20,7 +20,7 @@ export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'weapon' | 'shield' 
 /**
  * Item rarity: the colour tier. `junk` is sell-only; `common` has a game use (gear, logs, potions); uncommon →
  * legendary are rarity tiers. In the catalog by defId; a gear instance carries its own (save v14), which overrides it.
- * Not to be confused with gear **quality** (`qualityBp`, 0–100%), which scales a gear instance's stats and prices.
+ * Not to be confused with gear **quality** (`quality`, 0–100%), which scales a gear instance's stats and prices.
  */
 export const ITEM_RARITIES = ['junk', 'common', 'uncommon', 'rare', 'epic', 'legendary'] as const;
 
@@ -44,12 +44,12 @@ export type Item = {
   quantity?: number;
   /** Gear only (save v14; every equippable instance has it): the colour tier, overriding the catalog's. */
   rarity?: ItemRarity;
-  /** Gear only (save v14; every equippable instance has it): quality, integer basis points 0..10 000 (100%). */
-  qualityBp?: number;
+  /** Gear only (save v14; every equippable instance has it): quality, an integer percent 0..100. */
+  quality?: number;
 };
 
 /** A gear roll: what a crafted piece or a Merchant gear listing got. */
-export type GearRoll = { qualityBp: number; rarity: ItemRarity };
+export type GearRoll = { quality: number; rarity: ItemRarity };
 
 /** Skills on the Hero tab. `smithing` was removed in save v13 (crafting has no skill). */
 export type SkillKey = 'woodcutting' | 'mining' | 'fishing';
@@ -390,9 +390,9 @@ export type CraftingState = {
 
 /**
  * One merchant stock slot: `quantity` left of `defId` at `unitPrice` gold each (fixed when the stock was rolled).
- * Gear listings (save v14) hold one piece with its rolled `qualityBp` and `rarity` (the price already scaled by it).
+ * Gear listings (save v14) hold one piece with its rolled `quality` and `rarity` (the price already scaled by it).
  */
-export type MerchantListing = { defId: string; quantity: number; unitPrice: number; qualityBp?: number; rarity?: ItemRarity };
+export type MerchantListing = { defId: string; quantity: number; unitPrice: number; quality?: number; rarity?: ItemRarity };
 
 export type MerchantState = {
   /** Stored refresh charges, 0..MERCHANT.maxCharges. */

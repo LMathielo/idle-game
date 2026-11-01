@@ -22,9 +22,9 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 
 ### Engine 1.14.0 · save v14
 - **#22 Crafting PR B — gear crafting, item quality and rarity:**
-  - **Rarity and quality:** every piece of gear (tools too) has a colour (white / green / blue / purple) and a quality 0–100% that scales its stats (50% → 100% of the max) and prices (0.8× → 1.6×). Existing gear is "White · Quality 25%" with unchanged numbers.
-  - **Merchant:** gear listings roll 0–50% quality and white 70 / green 25 / blue 5; Buy, Sell and popovers show colour and quality.
-  - **Equipment tab:** Stone, Copper, Iron, Silver and Gold sets (sword, helm, chestplate, shield, gloves, boots) from bricks / ingots and planks; one piece per job; 0–50 stamina for +1% minimum quality each (not refunded); green 75 / blue 20 / purple 5. The piece waits in its pipe ("✓ Ready — Done") until **Done** reveals it.
+  - **Rarity and quality:** every piece of gear (tools too) has a colour (white / green / blue / purple) and a quality 0–100 (a d101) that scales its stats (50% → 100% of the max). Prices follow the colour: ×1 / ×1.5 / ×2 / ×4. Existing gear is "White · Quality 25%" with unchanged numbers.
+  - **Merchant:** gear listings roll quality 0–50 and white 70 / green 25 / blue 5, priced by colour; Buy, Sell and popovers show colour and quality.
+  - **Equipment tab:** Stone, Copper, Iron, Silver and Gold sets (sword, helm, chestplate, shield, gloves, boots) from bricks / ingots and planks; one piece per job; 0–50 stamina for +1 minimum quality each (not refunded); green 75 / blue 20 / purple 5. The piece waits in its pipe ("✓ Ready — Done") until **Done** reveals it.
 
 ### Engine 1.13.0 · save v13
 - **#21 Crafting PR A — Crafting house, pipes, materials:**
@@ -121,9 +121,9 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 
 **Items**
 - Tool recipes (axes and pickaxes) in the Crafting house.
-- Mob gear drops (quality 0–70%; the config constant exists, unused).
+- Mob gear drops (quality 0–70; the config constant exists, unused).
 - Stat jumps between rarity tiers (today rarity is colour only; quality alone scales stats).
-- Minimum-quality mechanics (the `minQualityBp` hook is 0: upgrades, skills or consumables could raise it).
+- Minimum-quality mechanics (the `minQuality` hook is 0: upgrades, skills or consumables could raise it).
 - Random affixes stored on item instances.
 - Pixel sprites replacing emoji icons.
 

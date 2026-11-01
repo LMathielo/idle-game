@@ -34,7 +34,7 @@ const FIXTURES = join(__dirname, 'fixtures');
 const V13_SAVE = JSON.parse(readFileSync(join(FIXTURES, 'save-v13.json'), 'utf8'));
 const V13_LOG: LogRow[] = JSON.parse(readFileSync(join(FIXTURES, 'log-v13.json'), 'utf8'));
 const entries = (rows: LogRow[]): ReplayEntry[] => rows.map(({ seq: _s, synced: _y, ...r }) => r);
-const ROLL = { qualityBp: 2500, rarity: 'common' };
+const ROLL = { quality: 25, rarity: 'common' };
 
 describe('save v14 migration (v13 → v14)', () => {
   it('adds 25% / common to every gear instance and gear listing, nothing else; pure', () => {
@@ -138,11 +138,11 @@ describe('frozen v13 save (tests/fixtures/save-v13.json), engine 1.13.0 → 1.14
     s = client.getState();
     const job = s.crafting.pipes[0]!;
     expect(job.status).toBe('ready');
-    expect(job.gear!.qualityBp).toBeGreaterThanOrEqual(2000);
+    expect(job.gear!.quality).toBeGreaterThanOrEqual(20);
     const done = await client.dispatch({ type: 'COLLECT_CRAFT', pipe: 0, jobId: job.id });
     expect(done.ok).toBe(true);
     const sword = client.getState().inventory.items.find((i) => i.defId === 'stone_sword')!;
-    expect(sword).toMatchObject({ qualityBp: job.gear!.qualityBp, rarity: job.gear!.rarity });
+    expect(sword).toMatchObject({ quality: job.gear!.quality, rarity: job.gear!.rarity });
 
     const report = replayLogReport(entries(await repo.getAllLog()));
     expect(report).toMatchObject({ anchors: 1, skippedOldEngine: V13_LOG.length });

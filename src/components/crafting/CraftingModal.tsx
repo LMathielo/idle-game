@@ -15,6 +15,8 @@ import {
   type CraftMode,
   CRAFTING,
   freeSlots,
+  type GameState,
+  gearQualityFloor,
   type GearStats,
   type PipeView,
   type RecipeView,
@@ -120,7 +122,7 @@ export function CraftingModal() {
     >
       {clockPaused ? <Text style={styles.paused}>⏸ Paused: your device clock moved back. Crafting waits until it catches up.</Text> : null}
       {picker !== null ? (
-        <RecipePicker pipe={picker} view={view} stamina={state.stamina.current} onStart={onStart} onBack={closePicker} />
+        <RecipePicker pipe={picker} view={view} buildings={state.buildings} stamina={state.stamina.current} onStart={onStart} onBack={closePicker} />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.intro}>
@@ -330,6 +332,7 @@ function LivePercent({ progressMs, craftMs, running }: { progressMs: number; cra
 type PickerProps = {
   pipe: number;
   view: CraftingView;
+  buildings: GameState['buildings'];
   stamina: number;
   onStart: (pipe: number, recipeId: string, quantity: number, mode: CraftMode, cost: number, stamina?: number) => void;
   onBack: () => void;
@@ -337,7 +340,7 @@ type PickerProps = {
 
 type PickerTab = 'material' | 'gear';
 
-function RecipePicker({ pipe, view, stamina, onStart, onBack }: PickerProps) {
+function RecipePicker({ pipe, view, buildings, stamina, onStart, onBack }: PickerProps) {
   const [tab, setTab] = useState<PickerTab>('material');
   const [selected, setSelected] = useState<string | null>(null);
   const [mode, setMode] = useState<CraftMode>('x1');
@@ -418,7 +421,17 @@ function RecipePicker({ pipe, view, stamina, onStart, onBack }: PickerProps) {
           </Text>
           {recipes.map((r) =>
             r.kind === 'gear' ? (
-              <GearCard key={r.recipeId} recipe={r} selected={r.recipeId === selected} onPress={choose} stamina={stamina} pipe={pipe} onStart={onStart} onBack={onBack} />
+              <GearCard
+                key={r.recipeId}
+                recipe={r}
+                buildings={buildings}
+                selected={r.recipeId === selected}
+                onPress={choose}
+                stamina={stamina}
+                pipe={pipe}
+                onStart={onStart}
+                onBack={onBack}
+              />
             ) : (
               <RecipeRow key={r.recipeId} recipe={r} selected={r.recipeId === selected} onPress={choose} />
             ),
@@ -441,6 +454,8 @@ function statText(st: GearStats): string {
 
 type GearCardProps = {
   recipe: RecipeView;
+  /** For the engine's quality floor (gearQualityFloor); keeps its identity until a build. */
+  buildings: GameState['buildings'];
   selected: boolean;
   stamina: number;
   pipe: number;
@@ -453,11 +468,11 @@ type GearCardProps = {
  * A gear recipe: inputs have / need, effective time, stats at 100% quality; tapped, it opens the stamina stepper
  * ("Quality 20–100%"), the rarity odds and Start.
  */
-const GearCard = memo(function GearCard({ recipe, selected, stamina, pipe, onPress, onStart, onBack }: GearCardProps) {
+const GearCard = memo(function GearCard({ recipe, buildings, selected, stamina, pipe, onPress, onStart, onBack }: GearCardProps) {
   const g = recipe.gear!;
   const [invest, setInvest] = useState(0);
   const enough = recipe.max.x1 > 0;
-  const floorBp = Math.min(10_000, invest * g.qualityBpPerStamina + g.minQualityBp);
+  const floor = gearQualityFloor({ buildings }, invest);
   const odds = g.rarityOdds.map((o) => `${RARITY_COLOR_NAMES[o.rarity]} ${o.pct}%`).join(' · ');
   const inputs = recipe.inputs.map((i) => `${itemIcon(i.defId)} ${formatNumber(i.have)} / ${i.perCraft} ${itemName(i.defId)}`);
   return (
@@ -485,7 +500,7 @@ const GearCard = memo(function GearCard({ recipe, selected, stamina, pipe, onPre
           <Text style={styles.detailLabel}>Stamina to invest (+1% min quality each, not refunded)</Text>
           <StaminaStepper value={invest} max={g.maxStamina} onChange={setInvest} />
           <Text style={styles.detail}>
-            Quality {Math.floor(floorBp / 100)}–100%
+            Quality {floor}–100%
           </Text>
           <Text style={styles.detail}>Colour: {odds}</Text>
           {!enough ? <Text style={styles.missing}>Not enough materials</Text> : null}

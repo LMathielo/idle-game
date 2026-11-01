@@ -55,8 +55,9 @@
 // holds now (the Iron Pickaxe buy still finds it in slot 2). The script gained a 1.10.0 segment: two hires, crews on
 // Oak and Stone during Rat Cellar runs, the hero on Oak beside the Oak crew, a real Town Hall upgrade with a simulate
 // boundary mid-build, a third worker, then ~10 h away (capped).
-// 1.13.0 → 1.14.0 (2026-11-01): save v14 (gear quality and rarity on every gear instance, gear crafting). Gear stats in
-// the catalog are 100% maxima and every instance from before is 25% / common, which gives the old numbers. A restock
+// 1.13.0 → 1.14.0 (2026-11-01): save v14 (gear quality 0–100 and rarity on every gear instance, gear crafting). Gear
+// stats in the catalog are 100% maxima and every instance from before is quality 25 / common, which gives the old
+// numbers; prices follow rarity only (common ×1). A restock
 // now rolls each gear listing's quality and rarity on its own stream (the main RNG does not move), so the script resets
 // its gear listings to the 1.13.0 terms after each refresh (`as113Stock`): seen in the v13 shape (`asV13`) the whole
 // 1.13.0 script still hashes to the 1.13.0 pin. The script gained a 1.14.0 segment (a real refresh and a rolled buy,
@@ -119,7 +120,7 @@ const I = H + 21 * MIN + 2 * SEC + 9 * HOUR;
 
 /** BUY_ITEM of the first gear listing in the stock at the price shown (1.14.0: gear prices follow the rolled quality). */
 const buyFirstGear = (id: string, s: GameState): Command => {
-  const slot = s.merchant.stock.findIndex((l) => l?.qualityBp !== undefined);
+  const slot = s.merchant.stock.findIndex((l) => l?.quality !== undefined);
   const l = s.merchant.stock[slot]!;
   return { id, type: 'BUY_ITEM', slot, defId: l.defId, quantity: 1, maxUnitPrice: l.unitPrice };
 };
@@ -147,7 +148,7 @@ function asV12(s: GameState): unknown {
 }
 
 /**
- * A 1.14.0 state seen in the v13 shape: no `qualityBp` / `rarity` on any gear instance or listing, at save v13. For a
+ * A 1.14.0 state seen in the v13 shape: no `quality` / `rarity` on any gear instance or listing, at save v13. For a
  * script whose gear is all 25% / common (the v14 default) this is exactly what the 1.13.0 engine produced.
  */
 function asV13(s: GameState): GameState {
@@ -157,11 +158,11 @@ function asV13(s: GameState): GameState {
 /**
  * 1.14.0: a restock rolls each gear listing's quality and rarity (on its own stream: the main RNG does not move). The
  * steps written before 1.14.0 buy rolled gear (Iron Gloves, Iron Pickaxe, Iron Shield); to keep their outcomes exactly
- * as the 1.13.0 engine produced them, the script resets the gear listings to the 1.13.0 terms (25%, common, catalog
+ * as the 1.13.0 engine produced them, the script resets the gear listings to the 1.13.0 terms (quality 25, common, catalog
  * price) right after each of its refreshes. The 1.14.0 segment buys rolled gear for real.
  */
 function as113Stock(s: GameState): GameState {
-  const stock = s.merchant.stock.map((l) => (l && l.qualityBp !== undefined ? { ...l, qualityBp: 2500, rarity: 'common' as const, unitPrice: getItemDef(l.defId)!.buyPrice! } : l));
+  const stock = s.merchant.stock.map((l) => (l && l.quality !== undefined ? { ...l, quality: 25, rarity: 'common' as const, unitPrice: getItemDef(l.defId)!.buyPrice! } : l));
   return { ...s, merchant: { ...s.merchant, stock } };
 }
 
@@ -1073,7 +1074,7 @@ describe('golden', () => {
       xp: undefined,
       xpToNext: undefined,
       // v14: every gear instance gets the default roll (25% quality, common).
-      equipment: Object.fromEntries(Object.entries(raw.character.equipment).map(([k, v]) => [k, { ...noRarity(v as Record<string, unknown>), rarity: 'common', qualityBp: 2500 }])),
+      equipment: Object.fromEntries(Object.entries(raw.character.equipment).map(([k, v]) => [k, { ...noRarity(v as Record<string, unknown>), rarity: 'common', quality: 25 }])),
     });
     expect(axe?.defId).toBe('wooden_axe');
     expect(pickaxe?.defId).toBe('wooden_pickaxe');
@@ -1150,24 +1151,24 @@ const qtyOf = (s: GameState, defId: string) => s.inventory.items.filter((i) => i
 describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
   const at = (id: string) => runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => (x.id ?? (typeof x.cmd === 'object' ? x.cmd.id : undefined)) === id)));
   it('a rolled stock, a bought piece, gear jobs with invested stamina, a cancel, an insta, ready pipes, Done, equip', () => {
-    // The refresh rolls each gear listing (0–50%, common / uncommon / rare) and fixes its price.
+    // The refresh rolls each gear listing (quality 0–50, common / uncommon / rare) and fixes its price (buy × rarity).
     const q3 = at('q3');
     expect(q3.merchant.stock).toEqual([
       { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
-      { defId: 'iron_pickaxe', quantity: 1, unitPrice: 609, qualityBp: 2704, rarity: 'uncommon' },
-      { defId: 'iron_boots', quantity: 1, unitPrice: 293, qualityBp: 4661, rarity: 'common' },
-      { defId: 'steel_pickaxe', quantity: 1, unitPrice: 2600, qualityBp: 3003, rarity: 'uncommon' },
-      { defId: 'steel_axe', quantity: 1, unitPrice: 2342, qualityBp: 1711, rarity: 'uncommon' },
+      { defId: 'iron_pickaxe', quantity: 1, unitPrice: 900, quality: 27, rarity: 'uncommon' },
+      { defId: 'iron_boots', quantity: 1, unitPrice: 250, quality: 47, rarity: 'common' },
+      { defId: 'steel_pickaxe', quantity: 1, unitPrice: 3750, quality: 30, rarity: 'uncommon' },
+      { defId: 'steel_axe', quantity: 1, unitPrice: 3750, quality: 17, rarity: 'uncommon' },
     ]);
     const q4 = at('q4');
-    expect(q4.inventory.items.find((i) => i.id === 'iron_pickaxe#5')).toMatchObject({ qualityBp: 2704, rarity: 'uncommon' });
-    expect(q3.character.gold - q4.character.gold).toBe(609);
-    // Gear jobs: inputs and invested stamina paid at start; the roll is on the job (sword: floor 20%).
+    expect(q4.inventory.items.find((i) => i.id === 'iron_pickaxe#5')).toMatchObject({ quality: 27, rarity: 'uncommon' });
+    expect(q3.character.gold - q4.character.gold).toBe(900);
+    // Gear jobs: inputs and invested stamina paid at start; the roll is on the job (sword: floor 20).
     const q7 = at('q7');
     expect(q7.crafting.pipes.slice(0, 3).map((j) => j && { recipeId: j.recipeId, gear: j.gear, status: j.status })).toEqual([
-      { recipeId: 'stone_sword', gear: { staminaInvested: 20, qualityBp: 9921, rarity: 'rare' }, status: 'running' },
-      { recipeId: 'stone_helm', gear: { staminaInvested: 0, qualityBp: 2126, rarity: 'epic' }, status: 'running' },
-      { recipeId: 'stone_gloves', gear: { staminaInvested: 5, qualityBp: expect.any(Number), rarity: expect.any(String) }, status: 'running' },
+      { recipeId: 'stone_sword', gear: { staminaInvested: 20, quality: 100, rarity: 'rare' }, status: 'running' },
+      { recipeId: 'stone_helm', gear: { staminaInvested: 0, quality: 21, rarity: 'epic' }, status: 'running' },
+      { recipeId: 'stone_gloves', gear: { staminaInvested: 5, quality: 21, rarity: 'uncommon' }, status: 'running' },
     ]);
     // Cancel: the gloves' 2 bricks and 1 plank come back; the 5 stamina do not.
     const q8 = at('q8');
@@ -1179,10 +1180,10 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     expect(q8b.crafting.pipes.slice(0, 2).map((j) => j?.status)).toEqual(['ready', 'ready']);
     const s = runScript();
     expect(s.crafting.pipes.every((p) => p === null)).toBe(true);
-    expect(s.character.equipment.weapon).toMatchObject({ id: 'stone_sword#6', qualityBp: 9921, rarity: 'rare' });
-    expect(s.inventory.items.find((i) => i.defId === 'stone_helm')).toMatchObject({ id: 'stone_helm#7', qualityBp: 2126, rarity: 'epic' });
-    expect(getDerivedStats(s).damage.breakdown[0]).toMatchObject({ source: 'weapon', min: 4, max: 6 }); // 99.21% of 4–6
+    expect(s.character.equipment.weapon).toMatchObject({ id: 'stone_sword#6', quality: 100, rarity: 'rare' });
+    expect(s.inventory.items.find((i) => i.defId === 'stone_helm')).toMatchObject({ id: 'stone_helm#7', quality: 21, rarity: 'epic' });
+    expect(getDerivedStats(s).damage.breakdown[0]).toMatchObject({ source: 'weapon', min: 4, max: 6 }); // 100% of 4–6
     expect(qtyOf(s, 'stone_brick')).toBe(13);
-    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(s) }).toEqual({ engineVersion: '1.14.0', gold: 4053, hash: '8a4ca97f' });
+    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(s) }).toEqual({ engineVersion: '1.14.0', gold: 3762, hash: 'f6345886' });
   });
 });

@@ -484,14 +484,14 @@ const V14_GEAR_IDS: ReadonlySet<string> = new Set([
   'steel_pickaxe',
   'steel_sword',
 ]);
-const V14_DEFAULT_ROLL = { qualityBp: 2500, rarity: 'common' } as const;
+const V14_DEFAULT_ROLL = { quality: 25, rarity: 'common' } as const;
 
 const isV14Gear = (x: unknown): x is Doc => isDoc(x) && typeof x.defId === 'string' && V14_GEAR_IDS.has(x.defId);
 const withV14Roll = (x: unknown): unknown => (isV14Gear(x) ? { ...x, ...V14_DEFAULT_ROLL } : x);
 
 /**
  * Owner-approved (2026-11-01):
- * - every gear instance (equipped and in the inventory) gets `qualityBp: 2500, rarity: 'common'`: at 25% the rescaled
+ * - every gear instance (equipped and in the inventory) gets `quality: 25, rarity: 'common'`: at quality 25 the rescaled
  *   catalog gives exactly the old stats and prices, so nothing changes for the player;
  * - every gear listing in the merchant's current stock gets the same roll (its unit price is kept);
  * - everything else (crafting jobs: materials only before v14) is kept.

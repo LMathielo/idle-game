@@ -8,6 +8,7 @@ import {
   craftingView,
   craftJobView,
   craftMs,
+  gearQualityFloor,
   type GameState,
   getItemDef,
   hashState,
@@ -81,8 +82,6 @@ describe('gear recipes (owner-approved 2026-11-01)', () => {
         { rarity: 'epic', pct: 5 },
       ],
       maxStamina: 50,
-      qualityBpPerStamina: 100,
-      minQualityBp: 0,
     });
     expect(v.max).toEqual({ x1: 1, x10: 0 });
     expect(v.craftMs).toBe(craftMs(s, 'stone_sword')); // house × INT, like materials
@@ -114,8 +113,9 @@ describe('START_CRAFT for gear', () => {
     const job = after.crafting.pipes[0]!;
     expect(job).toMatchObject({ recipeId: 'stone_sword', quantity: 1, mode: 'x1', staminaPerCraft: 0, status: 'running' });
     expect(job.gear!.staminaInvested).toBe(20);
-    expect(job.gear!.qualityBp).toBeGreaterThanOrEqual(2000);
-    expect(job.gear!.qualityBp).toBeLessThanOrEqual(10_000);
+    expect(Number.isInteger(job.gear!.quality)).toBe(true);
+    expect(job.gear!.quality).toBeGreaterThanOrEqual(20);
+    expect(job.gear!.quality).toBeLessThanOrEqual(100);
     expect(['uncommon', 'rare', 'epic']).toContain(job.gear!.rarity);
     expect(after.rng).not.toEqual(s.rng); // two draws of the main stream
     // Deterministic: the same state and command roll the same piece.
@@ -123,29 +123,27 @@ describe('START_CRAFT for gear', () => {
     // The view never shows the roll.
     const view = craftJobView(after, 0)!;
     expect(view).not.toHaveProperty('gear');
-    expect(JSON.stringify(view)).not.toContain('qualityBp');
+    expect(JSON.stringify(view)).not.toContain('quality');
     expect(view).toMatchObject({ kind: 'gear', staminaInvested: 20, ready: false });
   });
 
-  it('quality bounds: floor = 100 bp per stamina (50 → 50%), uniform up to 100%; rarity odds ≈ 75 / 20 / 5', () => {
+  it('quality bounds: a uniform integer in [floor, 100], floor = 1 per stamina (50 → 50), both ends reached; odds ≈ 75 / 20 / 5', () => {
     const counts: Record<string, number> = {};
     const N = 3000;
-    let lo50 = 10_000;
-    let lo0 = 10_000;
-    let hi0 = 0;
+    const seen50 = new Set<number>();
+    const seen0 = new Set<number>();
     for (let i = 0; i < N; i += 1) {
       const s = game(1000 + i, { stone_brick: 4, oak_plank: 2 });
       const a = ok(s, gear(0, 'stone_sword', 50)).crafting.pipes[0]!.gear!;
       const b = ok(s, gear(0, 'stone_sword', 0)).crafting.pipes[0]!.gear!;
-      lo50 = Math.min(lo50, a.qualityBp);
-      lo0 = Math.min(lo0, b.qualityBp);
-      hi0 = Math.max(hi0, b.qualityBp);
+      seen50.add(a.quality);
+      seen0.add(b.quality);
       counts[b.rarity] = (counts[b.rarity] ?? 0) + 1;
     }
-    expect(lo50).toBeGreaterThanOrEqual(5000);
-    expect(lo50).toBeLessThan(5200);
-    expect(lo0).toBeLessThan(300);
-    expect(hi0).toBeGreaterThan(9700);
+    expect([Math.min(...seen50), Math.max(...seen50), seen50.size]).toEqual([50, 100, 51]);
+    expect([Math.min(...seen0), Math.max(...seen0), seen0.size]).toEqual([0, 100, 101]);
+    // The floor comes from the engine selector the screen reads too (capped at 100).
+    expect([gearQualityFloor(game(), 0), gearQualityFloor(game(), 20), gearQualityFloor(game(), 50), gearQualityFloor(game(), 500)]).toEqual([0, 20, 50, 100]);
     expect(Object.keys(counts).sort()).toEqual(['epic', 'rare', 'uncommon']);
     expect(counts.uncommon / N).toBeCloseTo(0.75, 1);
     expect(counts.rare / N).toBeCloseTo(0.2, 1);
@@ -191,7 +189,7 @@ describe('ready → Done (COLLECT_CRAFT)', () => {
     expect(code(s, { type: 'COLLECT_CRAFT', pipe: 0, jobId: 999 })).toBe('CRAFT_CHANGED');
     const done = ok(s, { type: 'COLLECT_CRAFT', pipe: 0, jobId: s.crafting.pipes[0]!.id });
     const item = done.inventory.items.find((i) => i.defId === 'stone_sword')!;
-    expect(item).toEqual(makeItem('stone_sword', 1, `stone_sword#${s.nextItemSerial}`, { qualityBp: roll.qualityBp, rarity: roll.rarity }));
+    expect(item).toEqual(makeItem('stone_sword', 1, `stone_sword#${s.nextItemSerial}`, { quality: roll.quality, rarity: roll.rarity }));
     expect(done.nextItemSerial).toBe(s.nextItemSerial + 1);
     expect(done.crafting.pipes[0]).toBeNull();
     // Equipped, it gives its scaled damage.

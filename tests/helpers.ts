@@ -103,14 +103,14 @@ export const V13_ADDED = {
 } as const;
 
 /**
- * A state (or save document) without the v13 → v14 additions: no `qualityBp` / `rarity` on any equipped item, inventory
+ * A state (or save document) without the v13 → v14 additions: no `quality` / `rarity` on any equipped item, inventory
  * item or merchant listing, at save 13. Tests written before 1.14.0 compare migrated saves in this shape: the v14 step
  * only adds the default gear roll (25% / common, see tests/migrationV14.test.ts).
  */
 export function withoutGearRolls<T>(s: T): T {
   const strip = (x: unknown) => {
     if (!x || typeof x !== 'object') return x;
-    const { qualityBp: _q, rarity: _r, ...rest } = x as Record<string, unknown>;
+    const { quality: _q, rarity: _r, ...rest } = x as Record<string, unknown>;
     return rest;
   };
   const d = JSON.parse(JSON.stringify(s)) as Record<string, any>;

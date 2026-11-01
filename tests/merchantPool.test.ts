@@ -2,7 +2,7 @@
 // seeded RNG, no duplicates; slot count from the Merchant's level; new iron and steel items.
 import { describe, expect, it } from 'vitest';
 import {
-  scaleGearPrice,
+  gearPrice,
   applyCommand,
   type BuildingId,
   type GameState,
@@ -64,8 +64,8 @@ describe('rolled stock', () => {
       const rest = r.stock.slice(1).map((l) => l!.defId);
       expect(new Set(rest).size).toBe(rest.length);
       for (const id of rest) expect(MERCHANT.pool.some((e) => e.defId === id)).toBe(true);
-      // 1.14.0: gear prices scale with the rolled quality (tests/gear.test.ts); the rest are catalog prices.
-      for (const l of r.stock) expect(l!.unitPrice).toBe(l!.qualityBp === undefined ? getItemDef(l!.defId)!.buyPrice : scaleGearPrice(getItemDef(l!.defId)!.buyPrice!, l!.qualityBp));
+      // 1.14.0: gear prices follow the rolled rarity (tests/gear.test.ts); the rest are catalog prices.
+      for (const l of r.stock) expect(l!.unitPrice).toBe(l!.quality === undefined ? getItemDef(l!.defId)!.buyPrice : gearPrice(getItemDef(l!.defId)!.buyPrice!, l!.rarity!));
     }
   });
 

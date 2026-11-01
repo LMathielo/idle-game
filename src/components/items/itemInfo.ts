@@ -1,8 +1,8 @@
 // Display helpers for item sheets (read-only: catalog data and the engine's gear-quality selectors).
-import { type EquipmentSlot, gearStatsAt, getItemDef, type Item, type ItemDef, type ItemRarity, isGearDef, qualityBpOf, rarityOf } from '../../engine';
+import { type EquipmentSlot, gearStatsAt, getItemDef, type Item, type ItemDef, type ItemRarity, isGearDef, qualityOf, rarityOf } from '../../engine';
 
 /** What a popover or slot shows: a stored item, a merchant listing or a crafted piece (gear carries its roll). */
-export type ShownItem = Pick<Item, 'defId'> & { qualityBp?: number; rarity?: ItemRarity };
+export type ShownItem = Pick<Item, 'defId'> & { quality?: number; rarity?: ItemRarity };
 
 export const RARITY_LABELS: Record<ItemRarity, string> = {
   junk: 'Junk',
@@ -23,13 +23,13 @@ export const RARITY_COLOR_NAMES: Record<ItemRarity, string> = {
   legendary: 'Gold',
 };
 
-/** Quality as a whole percent, floored (99.99% never reads 100%). */
-export const qualityPct = (bp: number) => `${Math.floor(Math.max(0, bp) / 100)}%`;
+/** Quality is an integer percent (0–100). */
+export const qualityPct = (q: number) => `${q}%`;
 
 /** The popover subtitle: gear "Green · Quality 73%", anything else its rarity label ("Common", "Junk"). */
 export function itemSubtitle(item: ShownItem, def: ItemDef): string {
   if (!isGearDef(def)) return RARITY_LABELS[def.rarity];
-  return `${RARITY_COLOR_NAMES[rarityOf(item)]} · Quality ${qualityPct(qualityBpOf(item))}`;
+  return `${RARITY_COLOR_NAMES[rarityOf(item)]} · Quality ${qualityPct(qualityOf(item))}`;
 }
 
 export const SLOT_LABELS: Record<EquipmentSlot, string> = {
@@ -73,8 +73,8 @@ export function statLines(item: ShownItem, equipped?: ShownItem | null): StatLin
   const def = defOf(item.defId);
   const lines: StatLine[] = [];
   const cmp = equipped !== undefined;
-  const st = gearStatsAt(def, qualityBpOf(item));
-  const eq = equipped ? gearStatsAt(getItemDef(equipped.defId), qualityBpOf(equipped)) : {};
+  const st = gearStatsAt(def, qualityOf(item));
+  const eq = equipped ? gearStatsAt(getItemDef(equipped.defId), qualityOf(equipped)) : {};
   if (def.slot) lines.push({ label: 'Slot', value: SLOT_LABELS[def.slot] });
   if (st.damage) {
     const d = eq.damage;

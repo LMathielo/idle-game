@@ -8,8 +8,8 @@
 //   CANCEL_CRAFT  refunds the inputs of every craft not yet delivered and the stamina of every x10 craft not yet started
 //   COLLECT_CRAFT a ready gear piece goes into the inventory (Done)
 //
-// Gear jobs (1.14.0): one piece, x1, any invested stamina (0..50) paid at start and never refunded. Its quality
-// (floor + uniform × (10 000 − floor), floor = 100 bp per stamina + minQualityBp, capped at 10 000) and rarity are rolled
+// Gear jobs (1.14.0): one piece, x1, any invested stamina (0..50) paid at start and never refunded. Its quality (a
+// uniform integer in [floor, 100], floor = 1 per stamina + minQuality, capped at 100) and rarity are rolled
 // at START_CRAFT with the seeded RNG and stored on the job. When the craft finishes the job turns `ready`: the pipe holds
 // the piece (live and offline) until COLLECT_CRAFT moves it into the inventory. Insta takes it to `ready`; a ready job
 // cannot be cancelled.
@@ -25,7 +25,7 @@ import { GEAR } from './config/gear';
 import { getItemDef } from './config/items';
 import { BASIS_POINTS, STAT_EFFECTS } from './config/stats';
 import { diminishingBp } from './diminishing';
-import { gearStatsAt, type GearStats, rarityOdds, rollQualityBp, rollRarity } from './gear';
+import { gearStatsAt, type GearStats, rarityOdds, rollQuality, rollRarity } from './gear';
 import { addStackable, freeSlots, makeItem } from './inventory';
 import { itemQuantity } from './selectors';
 import type { CraftingState, CraftJob, CraftMode, GameEvent, GameState, Inventory, ItemRarity, SimulationSummary } from './types';
@@ -129,14 +129,14 @@ export function craftStaminaCost(state: GameState, recipeId: RecipeId, mode: Cra
   return mode === 'x10' ? x10StaminaPerCraft(craftMs(state, recipeId)) * quantity : 0;
 }
 
-/** Bonus to every gear craft's quality floor, bp (a hook for later upgrades; GEAR.craft.minQualityBp, 0 for now). */
-export function minQualityBp(_state: Pick<GameState, 'buildings'>): number {
-  return GEAR.craft.minQualityBp;
+/** Bonus to every gear craft's quality floor, percent points (a hook for later upgrades; GEAR.craft.minQuality, 0 for now). */
+export function minQuality(_state: Pick<GameState, 'buildings'>): number {
+  return GEAR.craft.minQuality;
 }
 
-/** A gear craft's quality floor, bp: 100 per invested stamina + minQualityBp, capped at 10 000. */
-export function gearQualityFloorBp(state: Pick<GameState, 'buildings'>, stamina: number): number {
-  return Math.min(GEAR.maxQualityBp, Math.max(0, stamina) * GEAR.craft.qualityBpPerStamina + minQualityBp(state));
+/** A gear craft's quality floor, percent: 1 per invested stamina + minQuality, capped at 100. The screen reads this too. */
+export function gearQualityFloor(state: Pick<GameState, 'buildings'>, stamina: number): number {
+  return Math.min(GEAR.maxQuality, Math.max(0, stamina) * GEAR.craft.qualityPerStamina + minQuality(state));
 }
 
 /** The rarity odds of a gear recipe: its own, else the default (uncommon 75 / rare 20 / epic 5). */
@@ -313,10 +313,10 @@ export function startCraft(
   const job: CraftJob = { id: c.nextJobSerial, recipeId, mode, quantity, done: 0, craftMs: ms, progressMs: 0, staminaPerCraft, status: 'running', startedAt: now };
   if (gear) {
     // The piece is rolled now, the moment it is paid for: quality, then rarity (two draws of the main stream).
-    const q = rollQualityBp(draft.rng, gearQualityFloorBp(draft, stamina), GEAR.maxQualityBp);
+    const q = rollQuality(draft.rng, gearQualityFloor(draft, stamina), GEAR.maxQuality);
     const r = rollRarity(q.rng, gearRarityWeights(recipe));
     draft.rng = r.rng;
-    job.gear = { staminaInvested: stamina, qualityBp: q.value, rarity: r.value };
+    job.gear = { staminaInvested: stamina, quality: q.value, rarity: r.value };
   }
   c.pipes[index] = job;
   c.nextJobSerial += 1;
@@ -401,7 +401,7 @@ export function collectCraft(draft: GameState, pipe: unknown, jobId: unknown, ev
   if (freeSlots(draft.inventory) < 1) return err('INVENTORY_FULL', 'Free an inventory slot first: the piece waits in the pipe');
   const defId = RECIPES[job.recipeId].output.defId;
   const itemId = collectedItemId(draft, defId);
-  draft.inventory.items.push(makeItem(defId, 1, itemId, { qualityBp: job.gear.qualityBp, rarity: job.gear.rarity }));
+  draft.inventory.items.push(makeItem(defId, 1, itemId, { quality: job.gear.quality, rarity: job.gear.rarity }));
   draft.nextItemSerial += 1;
   draft.crafting.pipes[p.index] = null;
   events.push({ type: 'CRAFT_COLLECTED', pipe: p.index, jobId: job.id, itemId, defId });
@@ -431,11 +431,8 @@ export type GearRecipeView = {
   maxStats: GearStats;
   /** Rarity odds in whole percents, in table order. */
   rarityOdds: { rarity: ItemRarity; pct: number }[];
-  /** Stamina investable at start (0..maxStamina) and the floor each point adds, bp. */
+  /** Stamina investable at start (0..maxStamina); the floor it gives comes from gearQualityFloor(). */
   maxStamina: number;
-  qualityBpPerStamina: number;
-  /** The flat floor every gear craft gets now, bp (0 for now). */
-  minQualityBp: number;
 };
 
 export type RecipeView = {
@@ -474,11 +471,9 @@ export function recipeView(state: GameState, recipeId: RecipeId): RecipeView {
       r.kind === 'gear'
         ? {
             slot: outDef?.slot ?? '',
-            maxStats: gearStatsAt(outDef, GEAR.maxQualityBp),
+            maxStats: gearStatsAt(outDef, GEAR.maxQuality),
             rarityOdds: rarityOdds(gearRarityWeights(r)),
             maxStamina: GEAR.craft.maxStamina,
-            qualityBpPerStamina: GEAR.craft.qualityBpPerStamina,
-            minQualityBp: minQualityBp(state),
           }
         : null,
   };
