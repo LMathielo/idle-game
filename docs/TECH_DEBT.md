@@ -43,7 +43,6 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 
 ## Docs and workflow
 
-- [#19, 55] `AGENTS.md` (Navigation) — says `VILLAGE_MODAL_PATHS` lives in `src/app/_layout.tsx`; it is now `src/components/village/modalPaths.ts`.
 - [#19, 30] Stray double blank lines in `src/app/_layout.tsx` and `src/components/ui/GameDialog.tsx`.
 - [#4, 70] `.claude/agents/game-engineer.md:53`, `pr-review-council/SKILL.md:18` — `$(cat pr.md)` / `$(cat review.md)` use relative paths; use `-F body=@/abs/path` so a missing file fails loudly.
 - [#4, 45] `pr-review-council/SKILL.md:13-18` — `R=`/`$N` shell variables don't survive between agent tool calls; inline the repo and PR number.

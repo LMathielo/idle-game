@@ -8,17 +8,23 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.13.0** (this PR) | 1.1.0 |
-| Save | **v13** (this PR) | v2 |
-| Contents | Everything below, up to PR #20, plus Crafting PR A once merged | M1 only (PRs #1–#2) |
+| Engine | **1.14.0** (PR B, stacked on #21) | 1.1.0 |
+| Save | **v14** (PR B) | v2 |
+| Contents | Everything below, up to PR #20, plus Crafting PR A (#21) and PR B once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is 17 PRs behind `dev` (#3–#19). The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
-- **Open PRs:** #21 Crafting PR A (`feat/crafting`).
+- **Open PRs:** #21 Crafting PR A (`feat/crafting`); Crafting PR B (`feat/crafting-gear`, stacked on #21: merge #21 first).
 - **Workflow:** product owner (orchestrator) → one `game-engineer` per feature → 1–3 reviewers by complexity (`.claude/skills/pr-review-council`) → owner merges.
 
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.14.0 · save v14
+- **Crafting PR B — gear crafting, item quality and rarity:**
+  - **Rarity and quality:** every piece of gear (tools too) has a colour (white / green / blue / purple) and a quality 0–100% that scales its stats (50% → 100% of the max) and prices (0.8× → 1.6×). Existing gear is "White · Quality 25%" with unchanged numbers.
+  - **Merchant:** gear listings roll 0–50% quality and white 70 / green 25 / blue 5; Buy, Sell and popovers show colour and quality.
+  - **Equipment tab:** Stone, Copper, Iron, Silver and Gold sets (sword, helm, chestplate, shield, gloves, boots) from bricks / ingots and planks; one piece per job; 0–50 stamina for +1% minimum quality each (not refunded); green 75 / blue 20 / purple 5. The piece waits in its pipe ("✓ Ready — Done") until **Done** reveals it.
 
 ### Engine 1.13.0 · save v13
 - **#21 Crafting PR A — Crafting house, pipes, materials:**
@@ -81,10 +87,9 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 
 Decided and scoped; ready to brief to an engineer. Top = next.
 
-1. **Crafting PR B: gear crafting, item quality and rarity.** (After PR A; the pipe / job shape already has a `ready` status for a crafted item waiting for a Done tap.)
-2. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
-3. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
-4. **Cleanup PR** working through [`TECH_DEBT.md`](TECH_DEBT.md) (review findings below the fix bar, from PRs #2–#19).
+1. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
+2. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
+3. **Cleanup PR** working through [`TECH_DEBT.md`](TECH_DEBT.md) (review findings below the fix bar, from PRs #2–#19).
 
 ## Roadmap: unrefined
 
@@ -115,7 +120,11 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 - Unlock rules beyond wins (e.g. hero level).
 
 **Items**
-- Rarity tiers above green (blue/purple/gold) and random affixes stored on item instances.
+- Tool recipes (axes and pickaxes) in the Crafting house.
+- Mob gear drops (quality 0–70%; the config constant exists, unused).
+- Stat jumps between rarity tiers (today rarity is colour only; quality alone scales stats).
+- Minimum-quality mechanics (the `minQualityBp` hook is 0: upgrades, skills or consumables could raise it).
+- Random affixes stored on item instances.
 - Pixel sprites replacing emoji icons.
 
 **Gathering**
