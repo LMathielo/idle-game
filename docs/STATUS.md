@@ -13,7 +13,7 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 | Contents | Everything below, up to PR #20, plus Crafting PR A once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is 17 PRs behind `dev` (#3–#19). The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
-- **Open PRs:** Crafting PR A (`feat/crafting`).
+- **Open PRs:** #21 Crafting PR A (`feat/crafting`).
 - **Workflow:** product owner (orchestrator) → one `game-engineer` per feature → 1–3 reviewers by complexity (`.claude/skills/pr-review-council`) → owner merges.
 
 ## Release notes (`dev`)
@@ -21,7 +21,7 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
 
 ### Engine 1.13.0 · save v13
-- **Crafting PR A — Crafting house, pipes, materials:**
+- **#21 Crafting PR A — Crafting house, pipes, materials:**
   - **Crafting house** on the east plot (Woodcutting + Mine Shaft, 30 Oak, 30 Stone, 150 g), Lv1–5: −10% craft time per level from Lv2 (×0.9 each), +10% / +20% crafted yield at Lv4 / Lv5.
   - **Pipes:** 2 of 8 open, running side by side beside the hero, live and offline. Planks, Stone Bricks and Copper / Iron / Silver / Gold Ingots from logs and ore; x10 mode for stamina, Insta, Cancel with refunds; a full inventory holds a pipe until there is room.
   - **INT** shortens crafting (diminishing, cap 50%); **Smithing** removed. Every building modal shows its current bonuses under the header.
