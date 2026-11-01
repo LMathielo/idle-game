@@ -22,12 +22,16 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#2, 25] Hero equipment cells may read the item name twice to screen readers (unverified since the #19 popover rework).
 - [#2, <80] `AwayModal` — an open "While you were away" doesn't add a later short resume to its totals (display only; rewards are saved).
 - [#19, note] Village map pixel art is bilinear-upscaled when zoomed (up to ~1.4× native), so it looks soft. Visual call: nearest-neighbour or a higher-res PNG.
+- [#21, 65] `crafting/CraftingModal.tsx` `LivePercent` — after a clock pause clears, the xx.yy% jumps ahead by the paused time until the next engine tick (`start` not reset). Add `running` to the key or reset `start` when `running` turns true.
+- [#21, 60] `crafting/CraftingModal.tsx` `PipeRow` — `memo` never hits (craftingView builds new pipe objects every tick). Custom comparator or drop the memo.
 
 ## Engine and data
 
 - [#8, <80] `client/LocalGameClient.ts:316` — MIGRATE's `fromEngine` comes from the meta; read it from the last log row to cover a pre-1.4.0 install killed between update and first commit.
 - [#19, 30] `engine/config/dev.ts` — `DEV_TOOLS_ENABLED = true` is hardcoded, so the Debug panel ships in every build, and held Debug buttons (grants) write a `DEBUG_*` row per tick. Gate on `__DEV__` (or an EAS env var) before any public build.
 - [#9, note] Training's rate multiplier is integer-only. Revisit in the PR that gives INT an effect.
+- [#21, 50] `engine/crafting.ts` — 8 pipes at the 1 s floor over 8 h offline emit ~230k `CRAFT_COMPLETED` events in one simulate (under the step guard). Aggregate events per pipe per simulate.
+- [#21, 40] `engine/crafting.ts` `advancePipes` — `progressMs += ms × efficiency` is float; could be off by 1 ms at a split boundary with fractional efficiency. Use integer math like the workers.
 
 ## Tests
 
