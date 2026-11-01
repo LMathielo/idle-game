@@ -71,9 +71,9 @@ export function ActivityStrip() {
     const left = formatTrainingLeft(view.remainingMs);
     return (
       <StripView
-        title={`🏋️ Training ${names.short} · Lv ${view.trained} · ${left} to next`}
-        right={`${names.short} ${formatNumber(view.effective)}`}
-        a11y={`Training ${names.label}, level ${view.trained} of ${view.cap}, ${left} to the next level, ${names.label} ${view.effective}${clockPaused ? PAUSED_A11Y : ''}`}
+        title={`🏋️ Training core ${names.short} · Lv ${view.core} · ${left} to next`}
+        right={`${names.short} ${formatNumber(view.total)}`}
+        a11y={`Training core ${names.label}, level ${view.core} of ${view.cap}, ${left} to the next level, ${names.label} ${view.total}${clockPaused ? PAUSED_A11Y : ''}`}
         fraction={view.fraction}
         remainingMs={view.remainingMs}
         paused={clockPaused}

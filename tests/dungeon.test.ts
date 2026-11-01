@@ -13,13 +13,15 @@ import {
   newGame,
   resolveFight,
   searchMsFor,
+  activityTimeMs,
+  levelPoints,
   simulate,
   skipCost,
 } from '../src/engine';
-import { apply, HOUR, MIN, SEC, T0, progressMs, builtGame } from './helpers';
+import { apply, HOUR, MIN, SEC, T0, progressMs, builtGame, withCore } from './helpers';
 
 const RAT_CELLAR = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } as const;
-const SEARCH_MS = 110 * SEC; // Rat Cellar at DEX 10
+const SEARCH_MS = 120 * SEC; // Rat Cellar at core DEX 0 (1.16.0)
 const FIGHT_MS = COMBAT.maxFightMs;
 const ONE_SECOND = { attackIntervalMs: 1000 };
 
@@ -27,8 +29,13 @@ function withCharacter(s: GameState, patch: Partial<GameState['character']>): Ga
   return { ...s, character: { ...s.character, ...patch } };
 }
 
-function withAttributes(s: GameState, patch: Partial<GameState['character']['attributes']>): GameState {
-  return withCharacter(s, { attributes: { ...s.character.attributes, ...patch } });
+/**
+ * The hero with total END = `end` − 10 (stored extra points, negative here): regen 5 + `end` per minute and defense
+ * armor + `end`, exactly what "END `end`" gave before 1.16.0 (the old starting 10 moved into the base). Test-only.
+ */
+function withOldEnd(s: GameState, end: number): GameState {
+  const extra = end - 10 - levelPoints(s.character.level) - s.training.attributes.endurance.level;
+  return withCharacter(s, { attributes: { ...s.character.attributes, endurance: extra } });
 }
 
 /** The skip the UI would send for the search it shows in `s` (run number + cost on the button). */
@@ -57,14 +64,21 @@ function firstRun(s: GameState) {
 }
 
 describe('search time', () => {
-  it('searchMs = max(60 s, 120 s − 1 s × DEX), from the dungeon timing in config', () => {
-    expect(DUNGEONS.rat_cellar.search).toEqual({ baseMs: 120_000, perDexterityMs: 1_000, minMs: 60_000 });
-    const rc = (dexterity: number) => searchMsFor('rat_cellar', { dexterity });
-    expect(rc(10)).toBe(110_000); // 1:50
+  it('searchMs = max(60 s, ceil(120 s × (1 − core DEX reduction))), from the dungeon timing and STAT_EFFECTS (1.16.0)', () => {
+    expect(DUNGEONS.rat_cellar.search).toEqual({ baseMs: 120_000, minMs: 60_000 });
+    const g = builtGame(1, T0);
+    const rc = (dexterity: number) => searchMsFor('rat_cellar', withCore(g, { dexterity }));
     expect(rc(0)).toBe(120_000);
-    expect(rc(59)).toBe(61_000);
-    expect(rc(60)).toBe(60_000);
-    expect(rc(1_000_000)).toBe(60_000); // floor
+    expect(rc(10)).toBe(110_004); // 833 bp
+    expect(rc(50)).toBe(90_000); // 2500 bp
+    expect(rc(100)).toBe(80_004); // 3333 bp
+    expect(rc(210)).toBe(71_544); // 4038 bp
+    expect(rc(1_000_000)).toBe(60_012); // 4999 bp: the curve never reaches 50%
+    // Normal DEX (level points, extra) never shortens it.
+    expect(searchMsFor('rat_cellar', withCharacter(g, { level: 30, attributes: { ...g.character.attributes, dexterity: 999 } }))).toBe(120_000);
+    // The floor holds whenever the curve would go below it.
+    expect(activityTimeMs(100_000, 60_000, 4038)).toBe(60_000);
+    expect(activityTimeMs(120_000, 60_000, 5000)).toBe(60_000);
   });
 
   it('the search ends exactly at searchMs and the fight starts then; the run counts when the fight ends', () => {
@@ -119,7 +133,7 @@ describe('skip (search only)', () => {
   });
 
   it('a full 2:00 search costs 2; 0:30 left costs 1', () => {
-    const slow = dungeonGame(7, (g) => withAttributes(g, { dexterity: 0 }));
+    const slow = dungeonGame(7);
     const full = applyCommand(slow, skipFor(slow, 'a'), T0);
     expect(full.ok && full.state.stamina.current).toBe(98);
     const late = applyCommand(dungeonGame(), skipAny(dungeonGame(), 'b'), T0 + SEARCH_MS - 30 * SEC);
@@ -292,17 +306,17 @@ describe('rewards', () => {
   });
 
   it('loss: no XP, no gold, no loot; the hero ends at 0 HP', () => {
-    // From 0 HP with END 0 (5/min, defense 3) and DEX 60 (60 s searches): the fight starts at 5 HP.
-    // The rat needs 3 hero hits; its strikes at 1 s and 2 s (3–5 each after defense) kill 5 HP first.
-    const s = dungeonGame(3, (g) => withAttributes(withCharacter(g, { hp: 0 }), { endurance: 0, dexterity: 60 }));
-    const r = simulate(s, T0 + MIN + 10 * SEC);
+    // From 0 HP with old END −2 (3/min, defense 1) and a 2:00 search: the fight starts at 6 HP.
+    // The rat needs 3 hero hits; its strikes at 1 s and 2 s (3–5 each after defense) kill 6 HP first.
+    const s = dungeonGame(3, (g) => withOldEnd(withCharacter(g, { hp: 0 }), -2));
+    const r = simulate(s, T0 + SEARCH_MS + 10 * SEC);
     const f = r.state.dungeon.lastFight!;
-    expect(f.heroHpStart).toBe(5);
+    expect(f.heroHpStart).toBe(6);
     expect(f.won).toBe(false);
     expect(f.endReason).toBe('hero_defeated');
     expect(f.rewards).toEqual({ heroXp: 0, gold: 0, items: {}, itemsLost: {} });
     expect(r.state.character).toMatchObject({ xp: 0, gold: s.character.gold });
-    expect(simulate(s, T0 + MIN + f.durationMs).state.character.hp).toBe(0);
+    expect(simulate(s, T0 + SEARCH_MS + f.durationMs).state.character.hp).toBe(0);
     expect(r.summary).toMatchObject({ heroXpGained: 0, goldGained: 0, dungeon: { runs: 1, wins: 0, losses: 1 } });
   });
 
@@ -318,13 +332,13 @@ describe('rewards', () => {
 describe('HP regen', () => {
   const hurt = (hp: number, tweak: (s: GameState) => GameState = (s) => s) => tweak(withCharacter(builtGame(5, T0), { hp }));
 
-  it('flat 5 + END per minute: 15/min at END 10, remainder kept', () => {
+  it('flat 15 + total END per minute: 15/min for a new hero (END 0), remainder kept', () => {
     expect(hpView(builtGame(1, T0))).toMatchObject({ hp: 50, maxHp: 50, regenPerMin: 15, full: true });
     const s = hurt(10);
     expect(simulate(s, T0 + MIN).state.character).toMatchObject({ hp: 25, hpRegenProgress: 0 });
     expect(simulate(s, T0 + 4 * SEC).state.character.hp).toBe(11); // 1 HP every 4 s
     expect(simulate(s, T0 + 4 * SEC - 1).state.character).toMatchObject({ hp: 10, hpRegenProgress: 59_985 });
-    expect(simulate(hurt(10, (g) => withAttributes(g, { endurance: 0 })), T0 + MIN).state.character.hp).toBe(15);
+    expect(simulate(hurt(10, (g) => withOldEnd(g, 0)), T0 + MIN).state.character.hp).toBe(15); // total END −10: 5/min
     expect(hpView(s)).toMatchObject({ hp: 10, regenPerMin: 15, full: false, fullInMs: 160 * SEC });
   });
 
@@ -362,8 +376,8 @@ describe('HP regen', () => {
   });
 
   it('not limited by the 8h cap (max HP bounds it)', () => {
-    // Level 500 → max 5040. END 0 → 5/min. 12h = 3600 HP; the 8h cap would give 2400.
-    const s = hurt(0, (g) => withAttributes(withCharacter(g, { level: 500 }), { endurance: 0 }));
+    // Level 500 → max 5040. Old END 0 → 5/min (level points taken back out). 12h = 3600 HP; the 8h cap would give 2400.
+    const s = hurt(0, (g) => withOldEnd(withCharacter(g, { level: 500 }), 0));
     const r = simulate(s, T0 + 12 * HOUR);
     expect(r.summary.grantedMs).toBe(8 * HOUR);
     expect(r.state.character.hp).toBe(3600);
@@ -406,24 +420,24 @@ describe('offline catch-up', () => {
   });
 
   it('regen and runs interleave in time order: each fight sees the HP regenerated during its search', () => {
-    // END 0 (5/min), DEX 60 (60 s searches): every search regens exactly 5 HP; every fight at 5 HP is lost in ≤ 2 s.
-    const s = dungeonGame(3, (g) => withAttributes(withCharacter(g, { hp: 0 }), { endurance: 0, dexterity: 60 }));
-    const r = simulate(s, T0 + 10 * MIN + 25 * SEC);
+    // Old END −2 (3/min, defense 1), 2:00 searches: every search regens exactly 6 HP; every fight at 6 HP is lost in 2 s.
+    const s = dungeonGame(3, (g) => withOldEnd(withCharacter(g, { hp: 0 }), -2));
+    const r = simulate(s, T0 + 10 * (SEARCH_MS + 2 * SEC) + 25 * SEC);
     expect(r.state.dungeon.totals).toEqual({ runs: 10, wins: 0, losses: 10 });
-    expect(r.state.dungeon.lastFight?.heroHpStart).toBe(5);
+    expect(r.state.dungeon.lastFight?.heroHpStart).toBe(6);
     // A loss keeps the regen remainder (also what the fight's seconds banked, always under 1 HP here), so after the
     // 10th loss the hero holds the current search's regen at 5/min plus less than 1 HP of carried remainder.
     const c = r.state.character;
     const units = c.hp * MIN + c.hpRegenProgress;
-    expect(units).toBeGreaterThanOrEqual(progressMs(r.state)! * 5);
-    expect(units).toBeLessThan(progressMs(r.state)! * 5 + MIN);
+    expect(units).toBeGreaterThanOrEqual(progressMs(r.state)! * 3);
+    expect(units).toBeLessThan(progressMs(r.state)! * 3 + MIN);
   });
 
   it('a chain at low HP: the next run starts at once whatever the HP, and regen carries the hero back', () => {
-    // From 1 HP a 1:50 search regens 27 HP (15/min), so the first fight starts at 28 HP.
+    // From 1 HP a 2:00 search regens 30 HP (15/min), so the first fight starts at 31 HP.
     const s = dungeonGame(11, (g) => withCharacter(g, { hp: 1 }));
     const atFight = simulate(s, T0 + SEARCH_MS).state;
-    expect(atFight.activity?.kind === 'dungeon' && atFight.activity.fight?.heroHpStart).toBe(28);
+    expect(atFight.activity?.kind === 'dungeon' && atFight.activity.fight?.heroHpStart).toBe(31);
     const r = simulate(s, T0 + 3 * (SEARCH_MS + 10 * SEC)).state;
     expect(r.dungeon.totals.runs).toBe(3);
   });
@@ -476,9 +490,9 @@ describe('one activity at a time', () => {
 
   it('starting a dungeon stops woodcutting (logs gathered so far are kept)', () => {
     const wood = apply(builtGame(1, T0), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
-    const r = applyCommand(wood, { id: 'd', ...RAT_CELLAR }, T0 + 340 * SEC);
+    const r = applyCommand(wood, { id: 'd', ...RAT_CELLAR }, T0 + 370 * SEC);
     if (!r.ok) throw new Error(r.error.message);
-    expect(r.state.activity).toEqual({ kind: 'dungeon', dungeonId: 'rat_cellar', startedAt: T0 + 340 * SEC, phase: 'search', progressMs: 0, fight: null });
+    expect(r.state.activity).toEqual({ kind: 'dungeon', dungeonId: 'rat_cellar', startedAt: T0 + 370 * SEC, phase: 'search', progressMs: 0, fight: null });
     expect(r.state.stats.totalActions).toBe(3);
   });
 
@@ -491,7 +505,7 @@ describe('one activity at a time', () => {
   });
 
   it('a dungeon can start at 0 HP: the fight is an immediate loss, then regen carries on', () => {
-    const s = dungeonGame(1, (g) => withAttributes(withCharacter(g, { hp: 0 }), { endurance: -5 })); // rate 0
+    const s = dungeonGame(1, (g) => withOldEnd(withCharacter(g, { hp: 0 }), -5)); // rate 0
     const r = simulate(s, T0 + SEARCH_MS).state;
     expect(r.dungeon.lastFight).toMatchObject({ won: false, endReason: 'no_hp', durationMs: 0, heroHpStart: 0, log: [] });
     expect(r.activity).toMatchObject({ phase: 'search', progressMs: 0, fight: null });
@@ -527,7 +541,7 @@ describe('debug commands', () => {
   it('HP → 1, then the search regenerates; a debug finish right away fights at 1 HP and loses', () => {
     const s = apply(dungeonGame(4), { type: 'DEBUG_SET_HERO_HP', hp: 1 }, T0);
     const fightStart = simulate(s, T0 + SEARCH_MS).state;
-    expect(fightStart.activity?.kind === 'dungeon' && fightStart.activity.fight?.heroHpStart).toBe(1 + Math.floor((SEARCH_MS * 15) / MIN)); // 28
+    expect(fightStart.activity?.kind === 'dungeon' && fightStart.activity.fight?.heroHpStart).toBe(1 + Math.floor((SEARCH_MS * 15) / MIN)); // 31
     const now = apply(dungeonGame(4), { type: 'DEBUG_SET_HERO_HP', hp: 1 }, T0);
     const finish = apply(now, { type: 'DEBUG_FINISH_DUNGEON_RUN' }, T0);
     const f = simulate(finish, T0 + FIGHT_MS).state.dungeon.lastFight;

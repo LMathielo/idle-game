@@ -71,7 +71,7 @@ describe('bonuses in play', () => {
     expect(woodcuttingView(at({ town_hall: 5, woodcutting: 5 })).trees[0].yieldBp).toBe(21_000);
     // In play: 19 cuts (still WC Lv1) give 2 or 3 logs each.
     const s = apply(at({ town_hall: 5, woodcutting: 5 }), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
-    const r = simulate(s, T0 + 19 * (2 * MIN - 10 * SEC));
+    const r = simulate(s, T0 + 19 * (2 * MIN)); // 2:00 per cut (core DEX 0)
     expect(r.summary.actions).toBe(19);
     expect(r.summary.itemsGained.oak_logs).toBeGreaterThanOrEqual(38);
     expect(r.summary.itemsGained.oak_logs).toBeLessThanOrEqual(57);

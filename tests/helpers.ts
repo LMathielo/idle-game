@@ -2,7 +2,7 @@ import { FakeClock } from '../src/client/clock';
 import { LocalGameClient } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import type { CommandInput } from '../src/client/types';
-import { applyCommand, BUILDING_IDS, BUILDINGS, type BuildingId, type Command, ENGINE_VERSION, type GameState, newGame, type ReplayEntry, v12SkillProgress } from '../src/engine';
+import { applyCommand, type AttributeKey, BUILDING_IDS, BUILDINGS, type BuildingId, type Command, ENGINE_VERSION, type GameState, newGame, type ReplayEntry, v12SkillProgress } from '../src/engine';
 
 export const T0 = Date.UTC(2026, 9, 25, 12, 0, 0); // fixed epoch for deterministic tests
 export const SEC = 1000;
@@ -119,4 +119,19 @@ export function withoutGearRolls<T>(s: T): T {
   if (Array.isArray(d.merchant?.stock)) d.merchant.stock = d.merchant.stock.map(strip);
   if (d.saveVersion === 14) d.saveVersion = 13;
   return d as T;
+}
+
+/**
+ * The state with these CORE points (training levels; xp and progress 0). Since 1.16.0 core points drive WS / MS (STR) and
+ * the DEX / INT time curves; stored extra points (character.attributes) only add to the totals.
+ */
+export function withCore(state: GameState, core: Partial<Record<AttributeKey, number>>): GameState {
+  const attributes = { ...state.training.attributes };
+  for (const [k, level] of Object.entries(core) as [AttributeKey, number][]) attributes[k] = { level, xp: 0, progressMs: 0 };
+  return { ...state, training: { ...state.training, attributes } };
+}
+
+/** What the v15 → v16 migration does to stored attributes: they become extra normal points, max(0, old − 10). */
+export function v16Attributes<T extends Record<string, number>>(attributes: T): T {
+  return Object.fromEntries(Object.entries(attributes).map(([k, v]) => [k, Math.max(0, v - 10)])) as T;
 }

@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 15 as const;
+export const CURRENT_SAVE_VERSION = 16 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -25,6 +25,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   12: migrateV12toV13,
   13: migrateV13toV14,
   14: migrateV14toV15,
+  15: migrateV15toV16,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -591,6 +592,28 @@ function migrateV14toV15(doc: SaveDoc): SaveDoc {
     out.stamina = { ...stamina, current, progressMs: current >= stamina.max ? 0 : stamina.progressMs };
   }
   return out;
+}
+
+// ---- v15 → v16 (2026-11-01): normal and core attribute points ----
+// The stored attributes become the stored EXTRA normal points: the old new-hero baseline of 10 moved into the hero's
+// base numbers, so a hero keeps only what was added on top (debug points). Training levels are the core points with
+// no shape change, and level points are derived from the hero level, so existing heroes get them at once.
+// Frozen literals: the old baseline and the four attribute keys.
+
+const V16_OLD_BASELINE = 10;
+const V16_ATTRIBUTE_KEYS = ['strength', 'dexterity', 'endurance', 'intelligence'] as const;
+
+/** character.attributes[k] = max(0, old − 10) (a missing or broken value counts as 0). Everything else is kept. */
+function migrateV15toV16(doc: SaveDoc): SaveDoc {
+  const character = isDoc(doc.character) ? doc.character : null;
+  if (!character || !isDoc(character.attributes)) return { ...doc, saveVersion: 16 };
+  const old = character.attributes;
+  const attributes: Doc = { ...old };
+  for (const k of V16_ATTRIBUTE_KEYS) {
+    const v = old[k];
+    attributes[k] = typeof v === 'number' && Number.isSafeInteger(v) ? Math.max(0, v - V16_OLD_BASELINE) : 0;
+  }
+  return { ...doc, saveVersion: 16, character: { ...character, attributes } };
 }
 
 export class SaveVersionError extends Error {}

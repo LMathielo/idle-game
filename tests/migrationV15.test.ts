@@ -23,7 +23,7 @@ import {
   type ReplayEntry,
   simulate,
 } from '../src/engine';
-import { cmd, HOUR, makeClient, MIN, qty, SEC } from './helpers';
+import { cmd, HOUR, makeClient, MIN, qty, SEC, v16Attributes } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /**
@@ -147,7 +147,7 @@ describe('frozen v14 save (tests/fixtures/save-v14.json), engine 1.14.0 → 1.15
     expect([qty(s, 'oak_logs'), qty(s, 'oak_plank'), s.stamina]).toEqual([41 + 36 + 20, 11, { current: 98, max: 100, progressMs: 7000 }]);
     const { crafting: _c, inventory: _i, stamina: _s, saveVersion: _v, ...rest } = s;
     const { crafting: _c2, inventory: _i2, stamina: _s2, saveVersion: _v2, ...rest14 } = V14_SAVE;
-    expect(rest).toEqual(rest14); // nothing else moves
+    expect(rest).toEqual({ ...rest14, character: { ...rest14.character, attributes: v16Attributes(rest14.character.attributes) } }); // nothing else moves (v16: extra points)
     expect(hashState(loadSave(V14_SAVE))).toBe(hashState(s));
   });
 
@@ -157,8 +157,7 @@ describe('frozen v14 save (tests/fixtures/save-v14.json), engine 1.14.0 → 1.15
     const m = (await repo.getAllLog()).filter((r) => r.type === 'MIGRATE');
     expect(m).toHaveLength(1);
     const p = m[0].payload as MigratePayload;
-    expect({ ...p, snapshot: undefined }).toEqual({ fromSave: 14, toSave: 15, fromEngine: '1.14.0', toEngine: ENGINE_VERSION, fromHash: V14_LOG.at(-1)!.stateHash, snapshot: undefined });
-    expect(ENGINE_VERSION).toBe('1.15.0');
+    expect({ ...p, snapshot: undefined }).toEqual({ fromSave: 14, toSave: CURRENT_SAVE_VERSION, fromEngine: '1.14.0', toEngine: ENGINE_VERSION, fromHash: V14_LOG.at(-1)!.stateHash, snapshot: undefined });
     expect(p.snapshot).toEqual(loadSave(V14_SAVE));
 
     // 3 min later both pipes kept crafting from the logs (and the hero's Oak); pipe 2's ×10 craft made 10.

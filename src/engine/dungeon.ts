@@ -9,11 +9,10 @@ import { type FightEvent, newFight, nextFightEvent, strike } from './combat';
 import { hpRegenPerMinute, maxHpOf, regenHp } from './hp';
 import { addStackable } from './inventory';
 import { chance, nextInt } from './rng';
-import { effectiveAttributes } from './attributes';
+import { activityTimeMs, type CoreInput, dexActivityReductionBp } from './attributes';
 import { type DerivedStats, getDerivedStats } from './stats';
 import type {
   ActiveFight,
-  Attributes,
   CombatSide,
   DungeonActivity,
   DungeonId,
@@ -28,10 +27,10 @@ import type {
   SimulationSummary,
 } from './types';
 
-/** searchMs = max(minMs, baseMs − perDexterityMs × DEX), with the dungeon's own timing. Pass EFFECTIVE attributes. */
-export function searchMsFor(dungeonId: DungeonId, attributes: Pick<Attributes, 'dexterity'>): number {
+/** searchMs = max(minMs, ceil(baseMs × (1 − core DEX reduction))), with the dungeon's own timing (1.16.0). */
+export function searchMsFor(dungeonId: DungeonId, state: CoreInput): number {
   const t = DUNGEONS[dungeonId].search;
-  return Math.max(t.minMs, t.baseMs - t.perDexterityMs * attributes.dexterity);
+  return activityTimeMs(t.baseMs, t.minMs, dexActivityReductionBp(state));
 }
 
 /** Stamina to skip the rest of a search: 1 per started minute left, at least 1. */
@@ -290,13 +289,13 @@ export function advanceDungeon(
   summary: SimulationSummary,
   events: GameEvent[],
 ): void {
-  const rate = hpRegenPerMinute(draft);
-  const searchMs = searchMsFor(activity.dungeonId, effectiveAttributes(draft));
+  const searchMs = searchMsFor(activity.dungeonId, draft);
   const efficiency = draft.offline.efficiency;
   let regenLeft = requestedMs;
+  // The rate is read at each regen, not once: a win can level the hero up, and level points raise END (1.16.0).
   const regen = (ms: number) => {
     if (!(ms > 0)) return;
-    draft.character = regenHp(draft.character, maxHpOf(draft), rate, ms);
+    draft.character = regenHp(draft.character, maxHpOf(draft), hpRegenPerMinute(draft), ms);
     regenLeft -= ms;
   };
   let owned = false;
@@ -361,7 +360,7 @@ export function dungeonNextEventMs(state: GameState): number {
   const fight = a.phase === 'fight' ? a.fight : null;
   const need = fight
     ? Math.max(0, nextFightEvent(fight, COMBAT.maxFightMs).atMs - fight.elapsedMs)
-    : Math.max(0, searchMsFor(a.dungeonId, effectiveAttributes(state)) - a.progressMs);
+    : Math.max(0, searchMsFor(a.dungeonId, state) - a.progressMs);
   return Math.ceil(need / efficiency);
 }
 
@@ -400,7 +399,7 @@ export type DungeonRunView = {
 export function dungeonRunView(state: GameState): DungeonRunView | null {
   const a = state.activity;
   if (!a || a.kind !== 'dungeon') return null;
-  const searchMs = searchMsFor(a.dungeonId, effectiveAttributes(state));
+  const searchMs = searchMsFor(a.dungeonId, state);
   const base = { kind: 'dungeon' as const, dungeonId: a.dungeonId, run: state.dungeon.totals.runs + 1, searchMs };
   const f = a.phase === 'fight' ? a.fight : null;
   if (f) {

@@ -9,7 +9,7 @@
 //
 // Training progress lives per attribute in state.training, never on the activity, so pausing, switching
 // attribute or starting another activity keeps it. Integer math only; no RNG.
-import { effectiveAttributes } from './attributes';
+import { effectiveAttributes, normalAttributes } from './attributes';
 import { trainingXpPerMinute as buildingXpPerMinute } from './bonuses';
 import { cloneState } from './clone';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
@@ -265,11 +265,12 @@ export function trainingBlock(state: Pick<GameState, 'training'>, attribute: Att
 
 export type AttributeTrainingView = {
   attribute: AttributeKey;
-  /** Stored attribute (10 for a new hero, plus debug points). */
-  base: number;
-  /** Training level = points added by training. */
-  trained: number;
-  effective: number;
+  /** Normal points (level points + stored extra; 0 for a new hero, 1.16.0). */
+  normal: number;
+  /** Core points = the training level (Training is the only source). */
+  core: number;
+  /** normal + core. */
+  total: number;
   /** Highest level the current tier allows. */
   cap: number;
   /** Whole XP toward the next level, and the XP that level needs. */
@@ -308,16 +309,15 @@ export type TrainingView = {
 export function attributeTrainingView(state: GameState, attribute: AttributeKey): AttributeTrainingView {
   const t = state.training.attributes[attribute];
   const cap = trainingCap(state.training.tier);
-  const base = state.character.attributes[attribute];
   const maxed = state.training.tier > 0 && t.level >= cap;
   const xpToNext = trainingXpToNext(t.level);
   const needMs = maxed ? 0 : msToNextLevel(t);
   const speed = trainingSpeed(state, attribute);
   return {
     attribute,
-    base,
-    trained: t.level,
-    effective: effectiveAttributes(state)[attribute],
+    normal: normalAttributes(state)[attribute],
+    core: t.level,
+    total: effectiveAttributes(state)[attribute],
     cap,
     xp: maxed ? 0 : t.xp,
     xpToNext,

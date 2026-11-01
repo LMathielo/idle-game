@@ -22,19 +22,14 @@ import {
   TREES,
   WOODCUTTING,
 } from '../src/engine';
-import { apply, builtGame, cmd, debugBuild, HOUR, makeClient, MIN, progressMs, qty, SEC, T0 } from './helpers';
+import { apply, builtGame, cmd, debugBuild, HOUR, makeClient, MIN, progressMs, qty, SEC, T0, withCore } from './helpers';
 
-const STONE_MS = 110 * SEC;
+const STONE_MS = 120 * SEC; // core DEX 0 (1.16.0): the base time
 
-function withMining(s: GameState, level: number, extra: Partial<GameState['character']['attributes']> = {}): GameState {
-  return {
-    ...s,
-    character: {
-      ...s.character,
-      attributes: { ...s.character.attributes, ...extra },
-      skills: { ...s.character.skills, mining: { ...s.character.skills.mining, level } },
-    },
-  };
+/** Mining level `level` and these CORE points (training levels: core STR raises MS since 1.16.0). */
+function withMining(s: GameState, level: number, core: Partial<GameState['character']['attributes']> = {}): GameState {
+  const out = withCore(s, core);
+  return { ...out, character: { ...out.character, skills: { ...out.character.skills, mining: { ...out.character.skills.mining, level } } } };
 }
 
 function run(s: GameState, c: CommandInput, at: number) {
@@ -90,18 +85,19 @@ describe('config: rock table and formulas (own config, same numbers as the trees
   });
 });
 
-describe('mining strength (MS = 10 × level + effective STR + pickaxe)', () => {
-  it('a new hero has MS 21 (10 + 10 + 1) with the Wooden Pickaxe equipped', () => {
+describe('mining strength (MS = 10 × level + 10 base + core STR + pickaxe, 1.16.0)', () => {
+  it('a new hero has MS 21 (10 + 10 base + 0 core STR + 1) with the Wooden Pickaxe equipped', () => {
     const s = builtGame(1, T0);
     expect(s.character.equipment.pickaxe).toEqual({ id: 'start-wooden_pickaxe', defId: 'wooden_pickaxe', name: 'Wooden Pickaxe', icon: '⛏️', slot: 'pickaxe', rarity: 'common', quality: 25 });
-    expect(miningStrength(s)).toEqual({ value: 21, breakdown: { level: 10, strength: 10, pickaxe: 1, pickaxeDefId: 'wooden_pickaxe' } });
+    expect(miningStrength(s)).toEqual({ value: 21, breakdown: { level: 10, base: 10, strength: 0, pickaxe: 1, pickaxeDefId: 'wooden_pickaxe' } });
   });
 
-  it('level 5 base hero = 61; trained STR counts; no pickaxe or an unknown one gives 0; the axe never counts', () => {
+  it('level 5 base hero = 61; core STR counts, normal STR (level points, extra) does not; no pickaxe or an unknown one gives 0; the axe never counts', () => {
     const s = withMining(builtGame(1, T0), 5);
     expect(miningStrength(s).value).toBe(61);
-    const trained = { ...s, training: { ...s.training, attributes: { ...s.training.attributes, strength: { level: 39, xp: 0, progressMs: 0 } } } };
-    expect(miningStrength(trained).breakdown).toMatchObject({ level: 50, strength: 49, pickaxe: 1 });
+    expect(miningStrength(withCore(s, { strength: 39 })).breakdown).toMatchObject({ level: 50, base: 10, strength: 39, pickaxe: 1 });
+    const normal = { ...s, character: { ...s.character, level: 20, attributes: { ...s.character.attributes, strength: 500 } } };
+    expect(miningStrength(normal).value).toBe(61);
     const { pickaxe: _p, ...noPick } = s.character.equipment;
     expect(miningStrength({ ...s, character: { ...s.character, equipment: noPick } }).breakdown).toMatchObject({ pickaxe: 0, pickaxeDefId: null });
     const odd = { ...s.character.equipment, pickaxe: { ...s.character.equipment.pickaxe!, defId: 'nope' } };
@@ -112,14 +108,15 @@ describe('mining strength (MS = 10 × level + effective STR + pickaxe)', () => {
   });
 });
 
-describe('time per ore = max(10 s, base − 1 s × effective DEX)', () => {
-  it('Stone at DEX 10 is 1:50; the 10 s floor; trained DEX counts', () => {
-    expect(oreMsFor('stone', { dexterity: 10 })).toBe(STONE_MS);
-    expect(oreMsFor('gold', { dexterity: 10 })).toBe(30 * MIN - 10 * SEC);
-    expect(oreMsFor('stone', { dexterity: 110 })).toBe(10 * SEC);
+describe('time per ore = max(10 s, ceil(base × (1 − core DEX reduction))) (1.16.0)', () => {
+  it('Stone at core DEX 0 is 2:00, 10 → 1:50.004, 50 → 1:30, 210 → 1:11.544; normal DEX never counts; the view reads it', () => {
     const s = miningGame();
-    const trained = { ...s, training: { ...s.training, attributes: { ...s.training.attributes, dexterity: { level: 20, xp: 0, progressMs: 0 } } } };
-    expect(mineActivityView(trained)?.oreMs).toBe(90 * SEC);
+    expect(oreMsFor('stone', s)).toBe(STONE_MS);
+    expect(oreMsFor('stone', withCore(s, { dexterity: 10 }))).toBe(110_004); // 833 bp
+    expect(oreMsFor('stone', withCore(s, { dexterity: 50 }))).toBe(90 * SEC); // 2500 bp
+    expect(oreMsFor('gold', withCore(s, { dexterity: 210 }))).toBe(1_073_160); // 4038 bp
+    expect(oreMsFor('stone', { ...s, character: { ...s.character, level: 50, attributes: { ...s.character.attributes, dexterity: 1000 } } } as GameState)).toBe(STONE_MS);
+    expect(mineActivityView(withCore(s, { dexterity: 50 }))?.oreMs).toBe(90 * SEC);
   });
 });
 
@@ -131,7 +128,7 @@ describe('starting a rock', () => {
     const ms = run(l5, { type: 'START_ACTIVITY', kind: 'mining', rockId: 'copper' }, T0);
     expect(ms).toMatchObject({ ok: false, error: { code: 'ROCK_LOCKED', message: expect.stringContaining('61') } });
     expect(miningView(l5).rocks[1]).toMatchObject({ levelOk: true, msOk: false, unlocked: false });
-    const ok = run(withMining(s, 5, { strength: 49 }), { type: 'START_ACTIVITY', kind: 'mining', rockId: 'copper' }, T0);
+    const ok = run(withMining(s, 5, { strength: 39 }), { type: 'START_ACTIVITY', kind: 'mining', rockId: 'copper' }, T0);
     expect(ok.ok && ok.state.activity).toEqual({ kind: 'mining', rockId: 'copper', startedAt: T0, progressMs: 0 });
   });
 
@@ -144,19 +141,19 @@ describe('starting a rock', () => {
   it('same rock again keeps the ore in progress; another rock restarts it', () => {
     const s = simulate(miningGame(), T0 + 50 * SEC).state;
     expect(progressMs(apply(s, { type: 'START_ACTIVITY', kind: 'mining', rockId: 'stone' }, T0 + 50 * SEC))).toBe(50 * SEC);
-    const copper = apply(withMining(s, 5, { strength: 49 }), { type: 'START_ACTIVITY', kind: 'mining', rockId: 'copper' }, T0 + 50 * SEC);
+    const copper = apply(withMining(s, 5, { strength: 39 }), { type: 'START_ACTIVITY', kind: 'mining', rockId: 'copper' }, T0 + 50 * SEC);
     expect(copper.activity).toEqual({ kind: 'mining', rockId: 'copper', startedAt: T0 + 50 * SEC, progressMs: 0 });
   });
 
-  it('a Stone ore gives 1 Stone and 25 mining XP, no hero or woodcutting XP; Copper gives 119 every 4:50', () => {
+  it('a Stone ore gives 1 Stone and 25 mining XP, no hero or woodcutting XP; Copper gives 119 every 5:00', () => {
     const r = simulate(miningGame(), T0 + 3 * STONE_MS);
     expect(r.summary).toMatchObject({ oresMined: 3, actions: 0, itemsGained: { stone: 3 }, skillXpGained: { mining: 75 }, heroXpGained: 0 });
     expect(qty(r.state, 'stone')).toBe(3);
     expect(r.state.character.skills.mining.xp).toBe(75);
     expect(r.state.character.skills.woodcutting.xp).toBe(0);
     expect(r.state.stats.itemsGathered.stone).toBe(3);
-    const c = apply(withMining(builtGame(3, T0), 5, { strength: 49 }), { type: 'START_ACTIVITY', kind: 'mining', rockId: 'copper' }, T0);
-    const rc = simulate(c, T0 + 2 * 290 * SEC);
+    const c = apply(withMining(builtGame(3, T0), 5, { strength: 39 }), { type: 'START_ACTIVITY', kind: 'mining', rockId: 'copper' }, T0);
+    const rc = simulate(c, T0 + 2 * 300 * SEC);
     expect(rc.summary).toMatchObject({ oresMined: 2, itemsGained: { copper_ore: 2 }, skillXpGained: { mining: 238 } });
   });
 
@@ -172,8 +169,8 @@ describe('back-to-back ores, live and offline', () => {
   it('ores follow each other through the 8 h cap; the excess is forfeited', () => {
     const r = simulate(miningGame(), T0 + 24 * HOUR);
     expect(r.summary.grantedMs).toBe(8 * HOUR);
-    expect(r.summary.oresMined).toBe(261);
-    expect(progressMs(r.state)).toBe(8 * HOUR - 261 * STONE_MS);
+    expect(r.summary.oresMined).toBe(240);
+    expect(progressMs(r.state)).toBe(8 * HOUR - 240 * STONE_MS);
     expect(isNoteworthy(r.summary)).toBe(true);
   });
 
@@ -185,7 +182,7 @@ describe('back-to-back ores, live and offline', () => {
   });
 
   it('Geode drops at ~1/200 per ore over a long run and rolls the seeded RNG', () => {
-    let s = { ...miningGame(5), character: { ...miningGame(5).character, attributes: { strength: 10, dexterity: 1000, endurance: 10, intelligence: 10 } } };
+    let s = withCore(miningGame(5), { dexterity: 1000 }); // 4761 bp: 62 868 ms per Stone
     let geodes = 0;
     let ores = 0;
     for (let h = 1; h <= 40; h++) {
@@ -194,7 +191,7 @@ describe('back-to-back ores, live and offline', () => {
       ores += r.summary.oresMined;
       s = r.state;
     }
-    expect(ores).toBe(40 * 2880); // 10 s floor
+    expect(ores).toBe(Math.floor((40 * 8 * HOUR) / oreMsFor('stone', s)));
     expect(geodes).toBeGreaterThan(ores / 200 / 2);
     expect(geodes).toBeLessThan((ores / 200) * 2);
     expect(qty(s, 'geode')).toBe(geodes);
@@ -252,13 +249,13 @@ describe('SKIP_MINE', () => {
 });
 
 describe('the pickaxe: equip, unequip and the stop rule', () => {
-  /** Mining Lv5 with STR 48 (MS 99, Copper needs 100), the Iron Pickaxe equipped from the bag (MS 138), mining Copper. */
+  /** Mining Lv5 with core STR 38 (MS 99, Copper needs 100), the Iron Pickaxe equipped from the bag (MS 138), mining Copper. */
   function copperWithIronPick(): GameState {
-    const s = withMining(builtGame(2, T0), 5, { strength: 48 }); // 50 + 48 + 1 = 99: Copper locked
+    const s = withMining(builtGame(2, T0), 5, { strength: 38 }); // 50 + 10 + 38 + 1 = 99: Copper locked
     const bag = { ...s, inventory: { ...s.inventory, items: [...s.inventory.items, { id: 'iron_pickaxe#1', defId: 'iron_pickaxe', name: 'Iron Pickaxe', icon: '⛏️', slot: 'pickaxe' as const }] } };
     expect(run(bag, { type: 'START_ACTIVITY', kind: 'mining', rockId: 'copper' }, T0)).toMatchObject({ ok: false, error: { code: 'ROCK_LOCKED' } });
     const equipped = apply(bag, { type: 'EQUIP_ITEM', itemId: 'iron_pickaxe#1' }, T0);
-    expect(miningStrength(equipped).value).toBe(138); // 50 + 48 + 40
+    expect(miningStrength(equipped).value).toBe(138); // 50 + 10 + 38 + 40
     expect(equipped.inventory.items.some((i) => i.id === 'start-wooden_pickaxe')).toBe(true); // swapped back
     return apply(equipped, { type: 'START_ACTIVITY', kind: 'mining', rockId: 'copper' }, T0);
   }
@@ -268,9 +265,9 @@ describe('the pickaxe: equip, unequip and the stop rule', () => {
   });
 
   it('re-equipping the Wooden Pickaxe drops MS below Copper: mining stops; finished ores are kept', () => {
-    const s = simulate(copperWithIronPick(), T0 + 290 * SEC + MIN).state; // 1 ore + 1 min into the next
+    const s = simulate(copperWithIronPick(), T0 + 300 * SEC + MIN).state; // 1 ore + 1 min into the next
     expect(qty(s, 'copper_ore')).toBe(1);
-    const r = run(s, { type: 'EQUIP_ITEM', itemId: 'start-wooden_pickaxe' }, T0 + 290 * SEC + MIN);
+    const r = run(s, { type: 'EQUIP_ITEM', itemId: 'start-wooden_pickaxe' }, T0 + 300 * SEC + MIN);
     if (!r.ok) throw new Error(r.error.message);
     expect(r.state.activity).toBeNull();
     expect(r.events).toContainEqual({ type: 'ACTIVITY_STOPPED', kind: 'mining' });
@@ -319,11 +316,11 @@ describe('one activity at a time, views and debug', () => {
 
   it('the carousel opens on the active rock, else the highest unlocked one; the strip view matches', () => {
     expect(miningView(builtGame(1, T0)).focusRockId).toBe('stone');
-    const big = withMining(builtGame(1, T0), 20, { strength: 400 }); // MS 601: Iron
+    const big = withMining(builtGame(1, T0), 20, { strength: 390 }); // MS 601: Iron
     expect(miningView(big).focusRockId).toBe('iron');
     const m = apply(big, { type: 'START_ACTIVITY', kind: 'mining', rockId: 'copper' }, T0);
     expect(miningView(m)).toMatchObject({ focusRockId: 'copper', activeRockId: 'copper' });
-    expect(activityView(m)).toMatchObject({ kind: 'mining', rockId: 'copper', ore: 1, skipCost: 5, oreMs: 290 * SEC });
+    expect(activityView(m)).toMatchObject({ kind: 'mining', rockId: 'copper', ore: 1, skipCost: 5, oreMs: 300 * SEC });
   });
 
   it('DEBUG_ADD_MINING_LEVEL keeps XP, sets debugUsed, bounded', () => {
@@ -354,6 +351,6 @@ describe('one activity at a time, views and debug', () => {
     expect(rows.map((r) => r.type)).toEqual(expect.arrayContaining(['DEBUG_BUILD', 'SKIP_MINE', 'DEBUG_ADD_MINING_LEVEL', 'UNEQUIP_ITEM']));
     const report = replayLogReport(rows.map((r) => ({ type: r.type, payload: r.payload, clientTime: r.clientTime, engineVersion: r.engineVersion, stateHash: r.stateHash })));
     expect(hashState(report.state)).toBe(hashState(client.getState()));
-    expect(client.getSnapshot().awaySummary?.oresMined).toBeGreaterThan(60);
+    expect(client.getSnapshot().awaySummary?.oresMined).toBe(60); // 2 h / 2:00
   });
 });

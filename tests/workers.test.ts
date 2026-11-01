@@ -18,19 +18,20 @@ import {
   workersView,
 } from '../src/engine';
 import type { CommandInput } from '../src/client/types';
-import { apply, builtGame, cmd, HOUR, makeClient, MIN, qty, SEC, T0 } from './helpers';
+import { apply, builtGame, cmd, HOUR, makeClient, MIN, qty, SEC, T0, withCore } from './helpers';
 
 const OAK_MS = TREES.oak.baseMs; // crews ignore DEX: 2:00
 
 /** Every building built (Town Hall at `th`), `gold` gold, no activity. */
 function village(opts: { gold?: number; th?: number; str?: number; seed?: number; levels?: Partial<Record<BuildingId, number>> } = {}): GameState {
-  const s = builtGame(opts.seed ?? 11, T0);
+  // `str` = core STR (training levels; core STR raises WS / MS since 1.16.0, on top of the 10 base).
+  const s = withCore(builtGame(opts.seed ?? 11, T0), { strength: opts.str ?? 0 });
   const buildings = { ...s.buildings, town_hall: { state: 'built' as const, level: opts.th ?? 1 } };
   for (const [id, level] of Object.entries(opts.levels ?? {})) buildings[id as BuildingId] = { state: 'built', level: level! };
   return {
     ...s,
     buildings,
-    character: { ...s.character, gold: opts.gold ?? 100_000, attributes: { ...s.character.attributes, strength: 10 + (opts.str ?? 0) } },
+    character: { ...s.character, gold: opts.gold ?? 100_000 },
   };
 }
 
@@ -158,7 +159,7 @@ describe('crews', () => {
     s = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
     const both = simulate(s, T0 + HOUR);
     expect(both.summary.workerActions).toBe(alone.summary.workerActions); // 30
-    expect(both.summary.actions).toBe(32); // the hero's own 1:50 cuts
+    expect(both.summary.actions).toBe(30); // the hero's own 2:00 cuts (core DEX 0)
     expect(qty(both.state, 'oak_logs')).toBe((both.summary.itemsGained.oak_logs ?? 0) + (both.summary.workerItemsGained.oak_logs ?? 0));
     expect(both.summary.workerItemsGained.oak_logs).toBeGreaterThanOrEqual(30);
   });
@@ -169,7 +170,7 @@ describe('crews', () => {
   });
 
   it('when the hero can no longer work a node, its crew goes idle (event), stays assigned, costs nothing; it resumes when the hero qualifies again', () => {
-    // WC Lv5, STR 20, Iron Axe: WS 110 ≥ Birch 100; without the axe 70.
+    // WC Lv5, core STR 10, Iron Axe: WS 110 ≥ Birch 100; without the axe 70.
     let s = village({ str: 10, gold: 1000 });
     s = { ...s, character: { ...s.character, skills: { ...s.character.skills, woodcutting: { level: 5, xp: 0, xpToNext: 5590 } } } };
     const axe = { id: 'iron_axe#1', defId: 'iron_axe', name: 'Iron Axe', icon: '🪓', slot: 'axe' as const };
@@ -194,7 +195,7 @@ describe('crews', () => {
   });
 
   it('an idle crew resumes when the hero levels up during simulate (no split dependence)', () => {
-    // Copper needs mining Lv5 and MS 100. Hero mines Stone with STR 90 (MS 10×lvl + 100 + 1): at Lv4 MS 141 but level too low.
+    // Copper needs mining Lv5 and MS 100. Hero mines Stone with core STR 80 (MS 10×lvl + 10 + 80 + 1): at Lv4 MS 141 but level too low.
     let s = village({ str: 80, seed: 21 });
     s = { ...s, character: { ...s.character, skills: { ...s.character.skills, mining: { level: 5, xp: 0, xpToNext: 5590 } } } };
     s = hire(s, 3);

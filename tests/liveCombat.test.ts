@@ -19,7 +19,6 @@ import {
   type DungeonId,
   DUNGEONS,
   dungeonRunView,
-  effectiveAttributes,
   ENEMIES,
   ENGINE_VERSION,
   type GameState,
@@ -42,14 +41,14 @@ import {
   SKILL_XP_CURVE,
   xpToNext,
 } from '../src/engine';
-import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, progressMs } from './helpers';
+import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, progressMs, withCore } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v8 save + its action log, written by the 1.7.0 engine before live combat (tests/fixtures). */
 const V8_SAVE = JSON.parse(readFileSync(join(FIXTURES, 'save-v8.json'), 'utf8'));
 const V8_LOG: LogRow[] = JSON.parse(readFileSync(join(FIXTURES, 'log-v8.json'), 'utf8'));
 
-const SEARCH_MS = 110 * SEC; // Rat Cellar at DEX 10
+const SEARCH_MS = 120 * SEC; // Rat Cellar at core DEX 0 (1.16.0)
 const RAT_CELLAR = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } as const;
 
 const entries = (rows: LogRow[]): ReplayEntry[] =>
@@ -81,7 +80,7 @@ function walkEventByEvent(start: GameState, until: number): { state: GameState; 
     const a = s.activity;
     if (a?.kind !== 'dungeon') throw new Error('not in a dungeon');
     const f = a.phase === 'fight' ? a.fight : null;
-    const next = f ? t + (nextFightEvent(f).atMs - f.elapsedMs) : t + (searchMsFor(a.dungeonId, effectiveAttributes(s)) - a.progressMs);
+    const next = f ? t + (nextFightEvent(f).atMs - f.elapsedMs) : t + (searchMsFor(a.dungeonId, s) - a.progressMs);
     if (next > until) break;
     if (next > t) {
       t = next;
@@ -96,13 +95,14 @@ function walkEventByEvent(start: GameState, until: number): { state: GameState; 
 }
 
 describe('rebalance (config)', () => {
-  it('search times 2 / 3 / 5 / 8 / 12 min, −1 s per DEX, floor 1:00; every enemy strikes every 1 s', () => {
+  it('search times 2 / 3 / 5 / 8 / 12 min, core DEX on the curve (1.16.0), floor 1:00; every enemy strikes every 1 s', () => {
     const base = Object.values(DUNGEONS).map((d) => d.search.baseMs / MIN);
     expect(base).toEqual([2, 3, 5, 8, 12]);
-    for (const d of Object.values(DUNGEONS)) expect(d.search).toMatchObject({ perDexterityMs: 1000, minMs: 60_000 });
+    for (const d of Object.values(DUNGEONS)) expect(d.search).toEqual({ baseMs: d.search.baseMs, minMs: 60_000 });
     expect(Object.values(ENEMIES).map((e) => e.attackIntervalMs)).toEqual([1000, 1000, 1000, 1000, 1000]);
-    expect(searchMsFor('troll_bridge', { dexterity: 10 })).toBe(11 * MIN + 50 * SEC);
-    expect(searchMsFor('rat_cellar', { dexterity: 500 })).toBe(MIN);
+    const g = builtGame(1, T0);
+    expect(searchMsFor('troll_bridge', withCore(g, { dexterity: 10 }))).toBe(660_024);
+    expect(searchMsFor('rat_cellar', withCore(g, { dexterity: 50 }))).toBe(90 * SEC);
     expect(COMBAT.maxFightMs).toBe(60_000);
   });
 
@@ -200,14 +200,14 @@ describe('strike timing', () => {
 
 describe('fight time limit', () => {
   it('reaching 60 s is a loss with the usual loss rules: 0 HP, no rewards, a loss on the counters', () => {
-    // Troll Bridge with an unarmed STR-0 hero (1 dmg per strike vs 300 HP) and huge END (the Troll deals 1):
-    // nobody dies in 60 s.
+    // Troll Bridge with an unarmed hero at total STR −10 (the old STR 0: 1 dmg per strike vs 300 HP) and huge END (the
+    // Troll deals 1): nobody dies in 60 s.
     const s = runningIn('troll_bridge', 9, (g) => {
       g.character.equipment = { ...g.character.equipment, weapon: undefined };
-      g.character.attributes = { ...g.character.attributes, strength: 0, endurance: 100_000 };
+      g.character.attributes = { ...g.character.attributes, strength: -10, endurance: 100_000 };
       return g;
     });
-    const search = searchMsFor('troll_bridge', s.character.attributes);
+    const search = searchMsFor('troll_bridge', s);
     const mid = simulate(s, T0 + search + 59_999).state;
     expect(fightOf(mid)?.log).toHaveLength(118);
     const r = simulate(s, T0 + search + 60_000);
@@ -271,10 +271,12 @@ describe('determinism across simulate boundaries', () => {
   /**
    * Shifts the timeline (initial search progress) until T0 + 8 h falls inside a fight with strikes already landed
    * and at least one more second of fight to go. `s` is the state at exactly 8 h (no cap: requested = 8 h).
+   * Wolf Den (1.16.0): a new hero loses there in a few seconds, so it never levels up and every fight lasts several
+   * strikes. On the Rat Cellar, 8 h of wins give level points that make every fight a one-strike kill.
    */
   function capInsideFight(): { g: GameState; s: GameState } {
-    const base = rat();
-    for (let p = 0; p < SEARCH_MS; p += 250) {
+    const base = runningIn('wolf_den', 31);
+    for (let p = 0; p < searchMsFor('wolf_den', base); p += 250) {
       const g = structuredClone(base);
       if (g.activity?.kind === 'dungeon') g.activity.progressMs = p;
       const s = simulate(g, T0 + 8 * HOUR).state;
@@ -287,7 +289,7 @@ describe('determinism across simulate boundaries', () => {
   it('the 8 h cap lands mid-fight: that fight is finished past the cap, exactly as live play; nothing else progresses', () => {
     const pick = capInsideFight();
     const atCap = fightOf(pick.s)!;
-    // A player who never hit the cap: the same fight ends within maxFightMs of the cap, before the next 1:50 search ends.
+    // A player who never hit the cap: the same fight ends within maxFightMs of the cap, before the next 5:00 search ends.
     const live = simulate(pick.s, T0 + 8 * HOUR + COMBAT.maxFightMs).state;
     expect(fightOf(live)).toBeNull();
     expect(live.dungeon.totals.runs).toBe(pick.s.dungeon.totals.runs + 1);
@@ -303,7 +305,7 @@ describe('determinism across simulate boundaries', () => {
     expect(capped.state.rng).toEqual(live.rng);
     expect(capped.state.character.gold).toBe(live.character.gold);
     expect(capped.state.character.xp).toBe(live.character.xp);
-    expect(capped.events).toContainEqual({ type: 'FIGHT_RESOLVED', dungeonId: 'rat_cellar', won: capped.state.dungeon.lastFight!.won });
+    expect(capped.events).toContainEqual({ type: 'FIGHT_RESOLVED', dungeonId: 'wolf_den', won: capped.state.dungeon.lastFight!.won });
     expect(capped.summary.dungeon.runs).toBe(live.dungeon.totals.runs - pick.g.dungeon.totals.runs);
     // HP regen is not capped (it ran over the whole 20 h), so the hero comes back full, by the regen rule.
     expect(capped.state.character.hp).toBe(getDerivedStats(capped.state).maxHp.value);
@@ -377,8 +379,8 @@ describe('skip: search only', () => {
     if (!skipped.ok) throw new Error(skipped.error.message);
     expect(skipped.state.character.hp).toBe(10);
     expect(fightOf(skipped.state)).toMatchObject({ heroHpStart: 10, elapsedMs: 0 });
-    // Waiting instead regenerates 1:50 × 15/min = 27 HP before the fight.
-    expect(fightOf(simulate(hurt, T0 + SEARCH_MS).state)?.heroHpStart).toBe(37);
+    // Waiting instead regenerates 2:00 × 15/min = 30 HP before the fight.
+    expect(fightOf(simulate(hurt, T0 + SEARCH_MS).state)?.heroHpStart).toBe(40);
     // During the fight regen keeps going: after 4 s the hero has 10 − hits + 1 HP (15/min = 1 HP per 4 s).
     const at4 = simulate(skipped.state, T0 + 4 * SEC).state;
     const hits = fightOf(at4) ? fightOf(at4)!.log : at4.dungeon.lastFight!.log;
@@ -462,7 +464,7 @@ describe('skip: search only', () => {
 
   it('the run view: search shows the countdown and the skip cost; the fight shows HP and the strikes so far, no skip', () => {
     const s = runningIn('rat_cellar', 6);
-    expect(dungeonRunView(simulate(s, T0 + 50 * SEC).state)).toMatchObject({ phase: 'search', remainingMs: 60 * SEC, skipCost: 1, fight: null, run: 91 });
+    expect(dungeonRunView(simulate(s, T0 + 50 * SEC).state)).toMatchObject({ phase: 'search', remainingMs: 70 * SEC, skipCost: 2, fight: null, run: 91 });
     const fight = dungeonRunView(simulate(s, T0 + SEARCH_MS + 1000).state)!;
     expect(fight).toMatchObject({ phase: 'fight', skipCost: null, remainingMs: 0, fraction: 1 });
     expect(fight.fight).toMatchObject({ elapsedMs: 1000, maxFightMs: 60_000, heroMaxHp: 50, enemyMaxHp: 30 });
@@ -585,7 +587,7 @@ describe('frozen v8 save (tests/fixtures/save-v8.json) → v9', () => {
   });
 
   it('loading writes a MIGRATE anchor (save 8 → 9, engine 1.7.0 → 1.8.0); a skip and a live fight follow; the whole log replays', async () => {
-    const { repo, clock, client } = await v8Phone(2 * SEC);
+    const { repo, clock, client } = await v8Phone(1500); // Lv3 = +10 STR since 1.16.0: the Rat falls at the 2nd strike
     await client.load();
     const m = (await repo.getAllLog()).filter((r) => r.type === 'MIGRATE');
     expect(m).toHaveLength(1);
@@ -599,7 +601,7 @@ describe('frozen v8 save (tests/fixtures/save-v8.json) → v9', () => {
       snapshot: undefined,
     });
     expect(p.snapshot).toEqual(loadSave(V8_SAVE));
-    // The resume after the anchor already started the fight (2 s in).
+    // The resume after the anchor already started the fight (1.5 s in).
     expect(client.getState().activity).toMatchObject({ phase: 'fight' });
     for (let i = 0; i < 70; i++) {
       clock.advance(SEC);

@@ -1,11 +1,11 @@
 // Woodcutting (pure): woodcutting strength, tree requirements, cut time, cutting logs back-to-back inside
 // simulate(), and read-only views. See docs/ENGINE.md ("Woodcutting").
 //
-//   WS            = wsPerLevel × woodcutting level + effective STR + axe bonus (item catalog)
-//   cut time/log  = max(minLogMs, tree base − perDexterityMs × effective DEX)
+//   WS            = wsPerLevel × woodcutting level + wsBase + CORE STR + axe bonus (item catalog)   (1.16.0)
+//   cut time/log  = max(minLogMs, ceil(tree base × (1 − core DEX reduction)))                     (1.16.0)
 //   unlocked      ⇔ woodcutting level ≥ tree reqLevel AND WS ≥ tree reqWs
 //   skip cost     = ceil(remaining min) stamina, at least 1
-import { effectiveAttributes, type TrainingLevels } from './attributes';
+import { activityTimeMs, dexActivityReductionBp, type CoreInput, type TrainingLevels } from './attributes';
 import { cloneState } from './clone';
 import { gearStats } from './gear';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
@@ -16,20 +16,22 @@ import { rollYield, yieldBp } from './gathering';
 import { addStackable } from './inventory';
 import { addXp } from './progression';
 import { chance } from './rng';
-import type { Attributes, Character, GameEvent, GameState, SimulationSummary, TreeId, WoodcuttingActivity } from './types';
+import type { Character, GameEvent, GameState, SimulationSummary, TreeId, WoodcuttingActivity } from './types';
 
 // ---------- woodcutting strength ----------
 
 /** What woodcutting strength reads. A GameState fits. */
-export type WsInput = { character: Pick<Character, 'attributes' | 'equipment' | 'skills'>; training: TrainingLevels };
+export type WsInput = { character: Pick<Character, 'equipment' | 'skills'>; training: TrainingLevels };
 
 export type WoodcuttingStrength = {
   value: number;
-  /** The three parts add up to `value`. */
+  /** The four parts add up to `value`. */
   breakdown: {
     /** wsPerLevel × woodcutting level. */
     level: number;
-    /** Effective STR (base + trained). */
+    /** The hero base (WOODCUTTING.wsBase: the old starting 10 STR). */
+    base: number;
+    /** CORE STR (the training level). Normal STR does not count (1.16.0). */
     strength: number;
     /** The equipped axe's bonus from the catalog (0 with no axe or an unknown one). */
     axe: number;
@@ -48,16 +50,17 @@ export function axeBonus(equipment: Character['equipment']): number {
 
 export function woodcuttingStrength(state: WsInput): WoodcuttingStrength {
   const level = WOODCUTTING.wsPerLevel * state.character.skills.woodcutting.level;
-  const strength = effectiveAttributes(state).strength;
+  const base = WOODCUTTING.wsBase;
+  const strength = state.training.attributes.strength.level;
   const axe = axeBonus(state.character.equipment);
-  return { value: level + strength + axe, breakdown: { level, strength, axe, axeDefId: state.character.equipment.axe?.defId ?? null } };
+  return { value: level + base + strength + axe, breakdown: { level, base, strength, axe, axeDefId: state.character.equipment.axe?.defId ?? null } };
 }
 
 // ---------- trees ----------
 
-/** Cut time of one log: max(minLogMs, base − perDexterityMs × DEX). Pass EFFECTIVE attributes. */
-export function logMsFor(treeId: TreeId, attributes: Pick<Attributes, 'dexterity'>): number {
-  return Math.max(WOODCUTTING.minLogMs, TREES[treeId].baseMs - WOODCUTTING.perDexterityMs * attributes.dexterity);
+/** Cut time of one log: max(minLogMs, ceil(base × (1 − core DEX reduction))). Workers do not use it. */
+export function logMsFor(treeId: TreeId, state: CoreInput): number {
+  return activityTimeMs(TREES[treeId].baseMs, WOODCUTTING.minLogMs, dexActivityReductionBp(state));
 }
 
 /** Stamina to skip the rest of a log: staminaPerStep per started step left, at least one step. */
@@ -131,7 +134,7 @@ export function cutLog(draft: GameState, treeId: TreeId, summary: SimulationSumm
 export function advanceWoodcutting(draft: GameState, activity: WoodcuttingActivity, grantedMs: number, summary: SimulationSummary, events: GameEvent[]): void {
   if (!(grantedMs > 0)) return;
   activity.progressMs += grantedMs * draft.offline.efficiency;
-  const logMs = logMsFor(activity.treeId, effectiveAttributes(draft));
+  const logMs = logMsFor(activity.treeId, draft);
   let owned = false;
   let guard = 0;
   while (activity.progressMs >= logMs && guard < MAX_ACTIONS_PER_SIMULATION) {
@@ -154,7 +157,7 @@ export function woodcuttingNextEventMs(state: GameState): number {
   const a = state.activity;
   const efficiency = state.offline.efficiency;
   if (a?.kind !== 'woodcutting' || !(efficiency > 0)) return Number.POSITIVE_INFINITY;
-  return Math.ceil(Math.max(0, logMsFor(a.treeId, effectiveAttributes(state)) - a.progressMs) / efficiency);
+  return Math.ceil(Math.max(0, logMsFor(a.treeId, state) - a.progressMs) / efficiency);
 }
 
 // ---------- read-only views for the UI ----------
@@ -215,7 +218,7 @@ export function treeView(state: GameState, treeId: TreeId): TreeView {
     icon: tree.icon,
     reqLevel: tree.reqLevel,
     reqWs: tree.reqWs,
-    logMs: logMsFor(treeId, effectiveAttributes(state)),
+    logMs: logMsFor(treeId, state),
     xpPerLog: tree.xpPerLog,
     logItemId: tree.logItemId,
     rareDrops: WOODCUTTING.rareDrops,
@@ -227,7 +230,7 @@ export function treeView(state: GameState, treeId: TreeId): TreeView {
 export function woodcutActivityView(state: GameState): WoodcutActivityView | null {
   const a = state.activity;
   if (a?.kind !== 'woodcutting') return null;
-  const logMs = logMsFor(a.treeId, effectiveAttributes(state));
+  const logMs = logMsFor(a.treeId, state);
   const progress = Math.min(a.progressMs, logMs);
   const remainingMs = Math.max(0, logMs - progress);
   return {

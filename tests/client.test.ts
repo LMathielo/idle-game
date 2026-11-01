@@ -55,7 +55,7 @@ describe('LocalGameClient', () => {
     // Exactly what the engine grants for the whole span (level-ups included), no more, no less.
     const expected = simulate(started, T0 + 2 * HOUR + 10 * SEC).state;
     const expectedActions = expected.stats.totalActions;
-    expect(expectedActions).toBe(65); // 2h + 10 s of 1:50 Oak logs
+    expect(expectedActions).toBe(60); // 2h + 10 s of 2:00 Oak logs
     expect(hashState(snap.state)).toBe(hashState(expected));
     expect(snap.state.stats.totalActions).toBe(expectedActions);
     expect(snap.awaySummary?.actions).toBe(expectedActions);
@@ -274,7 +274,7 @@ describe('LocalGameClient', () => {
     await client.load();
     await debugBuild(client);
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
-    clock.advance(4 * 110 * SEC); // four 1:50 Oak logs
+    clock.advance(4 * 120 * SEC); // four 2:00 Oak logs
     await Promise.all([client.tick(), client.resume(), client.debug.grantHeroXp(60), client.persist(), client.tick()]);
     expect(client.getState().stats.totalActions).toBe(4);
     expect(client.getState().character.xp).toBe(60);
@@ -286,7 +286,7 @@ describe('LocalGameClient', () => {
       await client.load();
       await debugBuild(client);
       await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
-      clock.advance(105 * SEC); // 105 s into the first 1:50 log, no log yet: no modal
+      clock.advance(115 * SEC); // 115 s into the first 2:00 log, no log yet: no modal
       await client.resume();
       expect(client.getSnapshot().awaySummary).toBeNull();
       await client.persist();

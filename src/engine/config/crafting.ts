@@ -2,7 +2,7 @@
 // docs/ENGINE.md ("Crafting") and docs/PRODUCT.md. Owner-approved 2026-11-01 (engine 1.13.0, save v13).
 //
 //   craft time  = max(minCraftMs, ceil(baseMs × house time bp / 10 000 × (1 − INT reduction)))    (integer ms)
-//   INT reduction = diminishing(effective INT, STAT_EFFECTS.intelligence.craftTime)               (config/stats.ts)
+//   INT reduction = diminishing(core INT, STAT_EFFECTS.intelligence.craftTime)               (config/stats.ts)
 //   output / craft = output × (1, or x10.multiplier for a ×10 craft) × (10 000 + house yield bp) / 10 000; the fraction
 //                    goes to a ledger
 //   x10 tap        = (x10.multiplier − 1) × the inputs now + max(1, ceil(x10.staminaPerMinute × craft time / 1 min))

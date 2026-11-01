@@ -14,6 +14,7 @@ import {
   CURRENT_SAVE_VERSION,
   dungeonRunView,
   effectiveAttributes,
+  levelPoints,
   ENGINE_VERSION,
   type GameEvent,
   type GameState,
@@ -217,10 +218,10 @@ describe('training time', () => {
     expect(s.training.attributes.strength).toEqual({ level: 0, xp: 1, progressMs: 30 * SEC });
     s = simulate(s, T0 + 120 * SEC).state;
     expect(s.training.attributes.strength).toEqual({ level: 0, xp: 2, progressMs: 0 });
-    // 5 minutes → level 1 (STR 10 → 11), then 15 more for level 2.
+    // 5 minutes → level 1 (core STR 0 → 1, total 0 → 1), then 15 more for level 2.
     s = simulate(s, T0 + 5 * MIN).state;
     expect(s.training.attributes.strength).toEqual({ level: 1, xp: 0, progressMs: 0 });
-    expect(effectiveAttributes(s).strength).toBe(11);
+    expect(effectiveAttributes(s).strength).toBe(1);
   });
 
   it('many 1 s ticks = one big resume, byte for byte (END level-ups change HP regen mid-way)', () => {
@@ -349,28 +350,28 @@ describe('one activity at a time', () => {
   });
 });
 
-describe('effective attributes feed every rule', () => {
-  it('5 min of STR training: STR 10 → 11 and damage +1 (acceptance)', () => {
+describe('trained (core) points feed every rule', () => {
+  it('5 min of STR training: core STR 0 → 1, total 0 → 1 and damage +1 (acceptance)', () => {
     const s0 = train(heroAtTier(1), 'strength');
     const s = simulate(s0, T0 + 5 * MIN).state;
-    expect(s.character.attributes.strength).toBe(10); // base stays
-    expect(effectiveAttributes(s).strength).toBe(11);
+    expect(s.character.attributes.strength).toBe(0); // the stored extra points stay
+    expect(effectiveAttributes(s).strength).toBe(1);
     const [d0, d1] = [getDerivedStats(s0).damage, getDerivedStats(s).damage];
     expect([d1.min - d0.min, d1.max - d0.max]).toEqual([1, 1]);
-    expect(d1.breakdown.find((p) => p.source === 'strength')).toMatchObject({ min: 11, max: 11 });
+    expect(d1.breakdown.find((p) => p.source === 'strength')).toMatchObject({ min: 1, max: 1 });
   });
 
-  it('END: defense and HP regen; DEX: dungeon search time', () => {
+  it('END: defense and HP regen (total); DEX: dungeon search time (core, on the curve)', () => {
     const base = heroAtTier(2);
     const trained = { ...base, training: { ...base.training, attributes: { ...base.training.attributes, endurance: { level: 7, xp: 0, progressMs: 0 }, dexterity: { level: 25, xp: 0, progressMs: 0 } } } };
     expect(getDerivedStats(trained).defense.value - getDerivedStats(base).defense.value).toBe(7);
-    expect(hpRegenPerMinute(trained)).toBe(5 + 17);
+    expect(hpRegenPerMinute(trained)).toBe(15 + 7);
     const search = (s: GameState) => dungeonRunView(apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0))!.searchMs;
-    expect(search(base)).toBe(110 * SEC);
-    expect(search(trained)).toBe(85 * SEC); // DEX 35
+    expect(search(base)).toBe(120 * SEC);
+    expect(search(trained)).toBe(100_008); // core DEX 25: 1666 bp
     // The skip cost reads the same search time.
     const started = apply(trained, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0);
-    expect(dungeonRunView(started)!.skipCost).toBe(2); // 1:25 left → 2 started minutes
+    expect(dungeonRunView(started)!.skipCost).toBe(2); // 1:40 left → 2 started minutes
   });
 });
 
@@ -378,7 +379,7 @@ describe('views', () => {
   it('new hero: tier 0, nothing trainable; Training Grounds built: Tier 1, next Tier 2 for 800 g (775 missing)', () => {
     const v = trainingView(newGame(1, T0));
     expect(v).toMatchObject({ tier: 0, cap: 0, active: null, nextTier: { tier: 1, price: 100, cap: 20, affordable: false, missing: 75 } });
-    expect(v.attributes.map((a) => [a.attribute, a.effective, a.trained, a.maxed])).toEqual(ATTRIBUTE_KEYS.map((k) => [k, 10, 0, false]));
+    expect(v.attributes.map((a) => [a.attribute, a.total, a.normal, a.core, a.maxed])).toEqual(ATTRIBUTE_KEYS.map((k) => [k, 0, 0, 0, false]));
     const built = trainingView(builtGame(1, T0));
     expect(built).toMatchObject({ tier: 1, cap: 20, active: null, nextTier: { tier: 2, price: 800, cap: 40, affordable: false, missing: 775 } });
   });
@@ -386,14 +387,14 @@ describe('views', () => {
   it('active attribute: fraction and minutes left; the strip view matches', () => {
     const s = simulate(train(heroAtTier(1), 'strength'), T0 + 3 * MIN + 30 * SEC).state;
     const str = trainingView(s).attributes[0];
-    expect(str).toMatchObject({ attribute: 'strength', active: true, xp: 3, xpToNext: 5, fraction: 0.7, remainingMs: 90 * SEC, effective: 10 });
+    expect(str).toMatchObject({ attribute: 'strength', active: true, xp: 3, xpToNext: 5, fraction: 0.7, remainingMs: 90 * SEC, total: 0, core: 0 });
     expect(activityView(s)).toEqual({ kind: 'training', ...str });
   });
 
   it('maxed attribute: full bar, 0 left', () => {
     const s = heroAtTier(1);
     const m = { ...s, training: { ...s.training, attributes: { ...s.training.attributes, dexterity: { level: 20, xp: 0, progressMs: 0 } } } };
-    expect(trainingView(m).attributes[1]).toMatchObject({ maxed: true, fraction: 1, remainingMs: 0, effective: 30 });
+    expect(trainingView(m).attributes[1]).toMatchObject({ maxed: true, fraction: 1, remainingMs: 0, total: 20, normal: 0, core: 20 });
   });
 });
 
@@ -494,8 +495,8 @@ describe('frozen v5 save (tests/fixtures/save-v5.json) → v6', () => {
     const { saveVersion: _rv, ...rawRest } = V5_SAVE;
     expect(rest).toEqual(rawRest);
     expect(hashState(migrateDoc(V5_SAVE, MIGRATIONS, 6) as unknown as GameState)).toBe(hashState(s));
-    // Derived stats are unchanged by the migration (no training yet): base attributes only.
-    expect(effectiveAttributes(s)).toEqual(V5_SAVE.character.attributes);
+    // The stored attributes are untouched by this step (v15 → v16 later turns them into extra normal points).
+    expect(s.character.attributes).toEqual(V5_SAVE.character.attributes);
   });
 
   it('loading writes a MIGRATE anchor (save 5 → 6, engine 1.4.0 → 1.5.0) and the whole log replays', async () => {
@@ -522,7 +523,10 @@ describe('frozen v5 save (tests/fixtures/save-v5.json) → v6', () => {
     expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'training', attribute: 'endurance' })).ok).toBe(true);
     clock.advance(30 * MIN);
     await client.resume();
-    expect(effectiveAttributes(client.getState()).endurance).toBe(13 + 2);
+    // Save v16: the stored END 13 keeps 3 extra points; level points and the 2 trained (core) levels add up.
+    const now = client.getState();
+    expect(now.training.attributes.endurance.level).toBe(2);
+    expect(effectiveAttributes(now).endurance).toBe(levelPoints(now.character.level) + 3 + 2);
 
     const report = replayLogReport(entries(await repo.getAllLog()));
     expect(report).toMatchObject({ anchors: 1, skippedOldEngine: V5_LOG.length });
