@@ -13,7 +13,7 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 | Contents | Everything below, up to PR #20, plus Crafting PR A (#21) and PR B once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is 17 PRs behind `dev` (#3–#19). The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
-- **Open PRs:** #21 Crafting PR A (`feat/crafting`); Crafting PR B (`feat/crafting-gear`, stacked on #21: merge #21 first).
+- **Open PRs:** #21 Crafting PR A (`feat/crafting`); #22 Crafting PR B (`feat/crafting-gear`, stacked on #21: merge #21 first).
 - **Workflow:** product owner (orchestrator) → one `game-engineer` per feature → 1–3 reviewers by complexity (`.claude/skills/pr-review-council`) → owner merges.
 
 ## Release notes (`dev`)
@@ -21,7 +21,7 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
 
 ### Engine 1.14.0 · save v14
-- **Crafting PR B — gear crafting, item quality and rarity:**
+- **#22 Crafting PR B — gear crafting, item quality and rarity:**
   - **Rarity and quality:** every piece of gear (tools too) has a colour (white / green / blue / purple) and a quality 0–100% that scales its stats (50% → 100% of the max) and prices (0.8× → 1.6×). Existing gear is "White · Quality 25%" with unchanged numbers.
   - **Merchant:** gear listings roll 0–50% quality and white 70 / green 25 / blue 5; Buy, Sell and popovers show colour and quality.
   - **Equipment tab:** Stone, Copper, Iron, Silver and Gold sets (sword, helm, chestplate, shield, gloves, boots) from bricks / ingots and planks; one piece per job; 0–50 stamina for +1% minimum quality each (not refunded); green 75 / blue 20 / purple 5. The piece waits in its pipe ("✓ Ready — Done") until **Done** reveals it.
