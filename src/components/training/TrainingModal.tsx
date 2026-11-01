@@ -61,6 +61,7 @@ export function TrainingModal() {
   return (
     <ModalScreen
       title="Training"
+      buildingId="training_grounds"
       closeLabel="Close training"
       headerRight={
         <Text style={styles.gold} accessibilityLabel={`${formatNumber(character.gold)} gold, stamina ${state.stamina.current} of ${state.stamina.max}`}>

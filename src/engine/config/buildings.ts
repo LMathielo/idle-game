@@ -24,6 +24,10 @@ export type LevelBonuses = {
   stockSlots?: number;
   /** Training XP per trained minute (Training Grounds; 1 without it). */
   trainingXpPerMin?: number;
+  /** Crafting house: craft time multiplier in basis points (10 000 = 100%; 9 000 = −10%). */
+  craftTimeBp?: number;
+  /** Crafting house: extra output of normal (material) items, in basis points (1 000 = +10%). */
+  craftYieldBp?: number;
 };
 
 /** Town Hall: Lv2+ gives +20% wood/stone/ore yield and +20% sell prices; Lv3–5 only raise the worker cap (for now). */
@@ -48,6 +52,18 @@ const TRAINING_GROUNDS_LEVELS: readonly LevelBonuses[] = [
   { trainingXpPerMin: 3 },
   { trainingXpPerMin: 4 },
   { trainingXpPerMin: 5 },
+];
+
+/**
+ * Crafting house: craft time × 0.9 per level from Lv2 (100% / 90% / 81% / 72.9% / 65.61%) and +10% / +20% normal-item
+ * yield at Lv4 / Lv5 (owner-approved 2026-11-01, 1.13.0).
+ */
+const CRAFTING_LEVELS: readonly LevelBonuses[] = [
+  { craftTimeBp: 10_000 },
+  { craftTimeBp: 9_000 },
+  { craftTimeBp: 8_100 },
+  { craftTimeBp: 7_290, craftYieldBp: 1_000 },
+  { craftTimeBp: 6_561, craftYieldBp: 2_000 },
 ];
 
 /** What one upgrade costs, paid up front when it starts, and how long the builder takes. */
@@ -116,7 +132,7 @@ export type BuildingDef = {
  * Every stored building, in the order the Build sheets and docs list them. Dungeon and Storage are not buildings
  * in the engine (always there, nothing to build or upgrade).
  */
-export const BUILDING_IDS = ['woodcutting', 'mine_shaft', 'town_hall', 'training_grounds', 'merchant'] as const satisfies readonly BuildingId[];
+export const BUILDING_IDS = ['woodcutting', 'mine_shaft', 'town_hall', 'training_grounds', 'merchant', 'crafting'] as const satisfies readonly BuildingId[];
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   woodcutting: {
@@ -185,6 +201,26 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     upgrades: BUILDING_UPGRADES,
     cappedByTownHall: true,
     levels: MERCHANT_LEVELS,
+  },
+  crafting: {
+    id: 'crafting',
+    name: 'Crafting',
+    icon: '🔨',
+    description: 'A workshop with crafting pipes. Turns logs and ore into planks, bricks and ingots.',
+    requirements: {
+      buildings: [
+        { buildingId: 'woodcutting', level: 1 },
+        { buildingId: 'mine_shaft', level: 1 },
+      ],
+      items: [
+        { defId: 'oak_logs', quantity: 30 },
+        { defId: 'stone', quantity: 30 },
+      ],
+      gold: 150,
+    },
+    upgrades: BUILDING_UPGRADES,
+    cappedByTownHall: true,
+    levels: CRAFTING_LEVELS,
   },
 };
 

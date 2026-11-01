@@ -102,6 +102,7 @@ export function WoodcuttingModal() {
   return (
     <ModalScreen
       title="Woodcutting"
+      buildingId="woodcutting"
       closeLabel="Close woodcutting"
       headerRight={
         <Text style={styles.stamina} accessibilityLabel={`Stamina ${stamina} of ${state.stamina.max}`}>

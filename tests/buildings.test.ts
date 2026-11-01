@@ -58,7 +58,7 @@ const GROUNDS_READY = { gold: 250, level: 10, items: { oak_logs: 50, stone: 50 }
 
 describe('config and a new save', () => {
   it('the four buildings and their requirements are data, as the owner approved (+ the Merchant, always built, since 1.10.0)', () => {
-    expect(BUILDING_IDS).toEqual(['woodcutting', 'mine_shaft', 'town_hall', 'training_grounds', 'merchant']);
+    expect(BUILDING_IDS).toEqual(['woodcutting', 'mine_shaft', 'town_hall', 'training_grounds', 'merchant', 'crafting']);
     expect(BUILDINGS.merchant.startsBuilt).toBe(true);
     expect(BUILDINGS.woodcutting.requirements).toEqual({ gold: 50 });
     expect(BUILDINGS.mine_shaft.requirements).toEqual({ gold: 50 });
@@ -70,6 +70,15 @@ describe('config and a new save', () => {
       gold: 250,
     });
     expect(BUILDINGS.training_grounds.grantsTrainingTier).toBe(1);
+    // 1.13.0: the Crafting house (owner-approved 2026-11-01).
+    expect(BUILDINGS.crafting.requirements).toEqual({
+      buildings: [
+        { buildingId: 'woodcutting', level: 1 },
+        { buildingId: 'mine_shaft', level: 1 },
+      ],
+      items: [{ defId: 'oak_logs', quantity: 30 }, { defId: 'stone', quantity: 30 }],
+      gold: 150,
+    });
   });
 
   it('a new save has every building locked (level 0) but the Merchant (built, Lv1); the dungeon and storage are not stored', () => {
@@ -80,6 +89,7 @@ describe('config and a new save', () => {
       town_hall: { state: 'locked', level: 0 },
       training_grounds: { state: 'locked', level: 0 },
       merchant: { state: 'built', level: 1 },
+      crafting: { state: 'locked', level: 0 },
     });
     expect(s.training.tier).toBe(0);
   });
@@ -200,13 +210,13 @@ describe('BUILD', () => {
   });
 
   it('gold is never negative over any build order (invariant)', () => {
-    let s = withBuilt(hero({ gold: 450, level: 10, items: { oak_logs: 70, stone: 70 } }), []);
-    for (const id of ['woodcutting', 'mine_shaft', 'town_hall', 'training_grounds', 'woodcutting'] as const) {
+    let s = withBuilt(hero({ gold: 600, level: 10, items: { oak_logs: 100, stone: 100 } }), []);
+    for (const id of ['woodcutting', 'crafting', 'mine_shaft', 'town_hall', 'training_grounds', 'crafting', 'woodcutting'] as const) {
       const r = run(s, { type: 'BUILD', buildingId: id });
       if (r.ok) s = r.state;
       expect(s.character.gold).toBeGreaterThanOrEqual(0);
     }
-    expect(BUILDING_IDS.map((id) => s.buildings[id].state)).toEqual(['built', 'built', 'built', 'built', 'built']);
+    expect(BUILDING_IDS.map((id) => s.buildings[id].state)).toEqual(['built', 'built', 'built', 'built', 'built', 'built']);
     expect([s.character.gold, qty(s, 'oak_logs'), qty(s, 'stone')]).toEqual([0, 0, 0]);
   });
 });
@@ -348,10 +358,10 @@ describe('frozen v9 save (tests/fixtures/save-v9.json) → v10', () => {
     const s = loadSave(V9_SAVE);
     expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
     expect(s.activity).toBeNull();
-    expect(BUILDING_IDS.map((id) => s.buildings[id].state)).toEqual(['locked', 'locked', 'locked', 'locked', 'built']); // v11: the Merchant
+    expect(BUILDING_IDS.map((id) => s.buildings[id].state)).toEqual(['locked', 'locked', 'locked', 'locked', 'built', 'locked']); // v11: the Merchant; v13: Crafting
     expect(s.character.equipment.pickaxe?.defId).toBe('wooden_pickaxe');
     expect(s.merchant.stock[4]).toEqual({ defId: 'iron_pickaxe', quantity: 1, unitPrice: 600 });
-    const { activity: _a, buildings: _b, construction: _k, workers: _w, merchant, character, saveVersion: _v, ...rest } = s;
+    const { activity: _a, buildings: _b, construction: _k, workers: _w, crafting: _cr, merchant, character, saveVersion: _v, ...rest } = s;
     const { activity: _ra, merchant: rm, character: rc, saveVersion: _rv, ...rawRest } = V9_SAVE;
     expect(rest).toEqual(rawRest);
     const { pickaxe: _p, ...equipment } = character.equipment;

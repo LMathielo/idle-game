@@ -25,3 +25,14 @@ export const STATS = {
 
 /** Percent bonuses are integers in basis points: 100 = +1%, 1000 = +10%, −500 = −5%. */
 export const BASIS_POINTS = 10_000;
+
+/**
+ * Attribute effects on a diminishing curve (src/engine/diminishing.ts): reduction (bp) = floor(capBp × value ÷ (value + k)),
+ * never reaching the cap. Effective attribute values. Several reductions on one number multiply (docs/ENGINE.md).
+ */
+export const STAT_EFFECTS = {
+  intelligence: {
+    /** Crafting time: INT 10 → −8.33%, 50 → −25%, 100 → −33.33%, 210 → −40.38% (owner-approved 2026-11-01). */
+    craftTime: { capBp: 5000, k: 50 },
+  },
+} as const;

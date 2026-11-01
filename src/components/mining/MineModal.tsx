@@ -102,6 +102,7 @@ export function MineModal() {
   return (
     <ModalScreen
       title="Mine Shaft"
+      buildingId="mine_shaft"
       closeLabel="Close mine shaft"
       headerRight={
         <Text style={styles.stamina} accessibilityLabel={`Stamina ${stamina} of ${state.stamina.max}`}>

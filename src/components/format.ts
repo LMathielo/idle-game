@@ -92,6 +92,11 @@ export function formatBp(bp: number): string {
   return (Math.floor(bp / 100) / 100).toFixed(2);
 }
 
+/** Basis points as a percent, up to 2 decimals, no trailing zeros: 1900 → "19%", 2710 → "27.1%", 833 → "8.33%". */
+export function formatPercentBp(bp: number): string {
+  return `${Number((bp / 100).toFixed(2))}%`;
+}
+
 /** Basis points as a percent bonus: 2000 → "+20%". */
 export function formatBonusBp(bp: number): string {
   return `${bp >= 0 ? '+' : ''}${Math.round(bp / 100)}%`;

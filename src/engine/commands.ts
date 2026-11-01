@@ -4,6 +4,7 @@ import { effectiveAttributes } from './attributes';
 import { build, buildingForActivity, completeBuilding, completeConstruction, isBuilt, startUpgrade, type UpgradeErrorCode } from './buildings';
 import { onUpgraded } from './upgradeEffects';
 import { cloneState } from './clone';
+import { cancelCraft, type CraftErrorCode, instaCraft, settleCrafting, startCraft, unlockPipe } from './crafting';
 import { BUILDINGS, isBuildingId } from './config/buildings';
 import { isRockId, ROCKS } from './config/mining';
 import { isGatheringKind, isTreeId, TREES } from './config/woodcutting';
@@ -133,7 +134,22 @@ export type Command =
   /** Sells `quantity` of an inventory item (by item id) at its catalog sellPrice. Equipped items are refused. */
   | { id: string; type: 'SELL_ITEM'; itemId: string; quantity: number }
   /** +1 merchant refresh charge (never above max). */
-  | { id: string; type: 'DEBUG_ADD_MERCHANT_CHARGE' };
+  | { id: string; type: 'DEBUG_ADD_MERCHANT_CHARGE' }
+  /**
+   * Starts a job in an open, idle pipe of the Crafting house: `quantity` crafts of `recipeId` in `mode` (x1 or x10). Every
+   * input of the whole job, and in x10 mode every craft's stamina, is paid now. `maxCost` is the stamina shown (0 in x1):
+   * a higher real cost fails with COST_CHANGED. Not an activity: it runs beside everything.
+   */
+  | { id: string; type: 'START_CRAFT'; pipe: number; recipeId: string; quantity: number; mode: 'x1' | 'x10'; maxCost: number }
+  /**
+   * Spends ceil(remaining minutes) stamina to finish the current craft of pipe `pipe` now. Bound to the job (`jobId`) and
+   * craft number (`craft`, CraftJobView.craftNumber) shown: CRAFT_CHANGED once it finished; COST_CHANGED above `maxCost`.
+   */
+  | { id: string; type: 'INSTA_CRAFT'; pipe: number; jobId: number; craft: number; maxCost: number }
+  /** Cancels the job shown in pipe `pipe` (`jobId`): refunds the inputs of every craft not delivered and the stamina of every x10 craft not started. */
+  | { id: string; type: 'CANCEL_CRAFT'; pipe: number; jobId: number }
+  /** Opens the next crafting pipe (up to 8). */
+  | { id: string; type: 'DEBUG_UNLOCK_PIPE' };
 
 export type CommandType = Command['type'];
 
@@ -173,6 +189,7 @@ export type CommandErrorCode =
   | 'MAX_TIER'
   | 'NOT_ENOUGH_GOLD'
   | ItemErrorCode
+  | CraftErrorCode
   | 'DEBUG_DISABLED';
 
 export type CommandError = { code: CommandErrorCode; message: string };
@@ -613,6 +630,28 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       draft = markDebugUsed(draft);
       break;
     }
+    case 'START_CRAFT': {
+      const e = startCraft(draft, cmd, now, events);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'INSTA_CRAFT': {
+      const e = instaCraft(draft, cmd, events);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'CANCEL_CRAFT': {
+      const e = cancelCraft(draft, cmd.pipe, cmd.jobId, events);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'DEBUG_UNLOCK_PIPE': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const e = unlockPipe(draft, events);
+      if (e) return fail(e.code, e.message);
+      draft = markDebugUsed(draft);
+      break;
+    }
     default: {
       const unknown = cmd as { type?: unknown };
       return fail('INVALID_COMMAND', `Unknown command type ${String(unknown.type)}`);
@@ -622,6 +661,8 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
   // The workforce follows the command at once: crews go idle / active with the hero's power (an equip change), a
   // crew that starts working pays its first minute, and paused crews resume when gold now covers the upkeep.
   settleWorkers(draft, events, null);
+  // Held pipes deliver as soon as their output fits (a sale, a build or a cancel can free a slot).
+  settleCrafting(draft, events, null);
   return { ok: true, state: draft, events, summary: sim.summary };
 }
 

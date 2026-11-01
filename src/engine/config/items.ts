@@ -42,6 +42,9 @@ const log = (id: string, name: string, sellPrice: number, tree: string) =>
 const ore = (id: string, name: string, icon: string, sellPrice: number, description: string) =>
   ({ id, name, icon, quality: 'common', description, sellPrice, stackable: true }) as const;
 
+const crafted = (id: string, name: string, icon: string, sellPrice: number, description: string) =>
+  ({ id, name, icon, quality: 'common', description, sellPrice, stackable: true }) as const;
+
 const junk = (id: string, name: string, icon: string, sellPrice: number, description: string) =>
   ({ id, name, icon, quality: 'junk', description, sellPrice, stackable: true }) as const;
 
@@ -74,6 +77,17 @@ export const ITEMS = {
     sellPrice: 30,
     stackable: true,
   },
+  // Crafted materials (Crafting house, 1.13.0): sell price = the sell value of the inputs (config/crafting.ts).
+  oak_plank: crafted('oak_plank', 'Oak Plank', '🪚', 2, 'Planks sawn from oak logs. Used for crafting.'),
+  stone_brick: crafted('stone_brick', 'Stone Brick', '🧱', 2, 'Squared stone blocks. Used for crafting.'),
+  birch_plank: crafted('birch_plank', 'Birch Plank', '🪚', 12, 'Planks sawn from birch logs. Used for crafting.'),
+  copper_ingot: crafted('copper_ingot', 'Copper Ingot', '🟧', 12, 'Smelted copper. Used for crafting.'),
+  maple_plank: crafted('maple_plank', 'Maple Plank', '🪚', 64, 'Planks sawn from maple logs. Used for crafting.'),
+  iron_ingot: crafted('iron_ingot', 'Iron Ingot', '⬛', 64, 'Smelted iron. Used for crafting.'),
+  yew_plank: crafted('yew_plank', 'Yew Plank', '🪚', 320, 'Planks sawn from yew logs. Used for crafting.'),
+  silver_ingot: crafted('silver_ingot', 'Silver Ingot', '⬜', 320, 'Smelted silver. Used for crafting.'),
+  ironwood_plank: crafted('ironwood_plank', 'Ironwood Plank', '🪚', 1600, 'Planks sawn from ironwood logs. Used for crafting.'),
+  gold_ingot: crafted('gold_ingot', 'Gold Ingot', '🟨', 1600, 'Smelted gold. Used for crafting.'),
   bread: junk('bread', 'Bread', '🍞', 1, 'Stale bread. Not much use to a gladiator.'),
   rat_skin: junk('rat_skin', 'Rat Skin', '🐾', 2, 'A mangy hide from the Rat Cellar.'),
   bat_wing: junk('bat_wing', 'Bat Wing', '🪽', 5, 'Leathery wing from the Bat Cave.'),

@@ -26,7 +26,7 @@ import {
   woodcuttingView,
 } from '../src/engine';
 import { cumulativeXp, xpToNext } from '../src/engine/progression';
-import { HOUR, makeClient, MIN, T0, woodcuttingGame } from './helpers';
+import { HOUR, makeClient, MIN, T0, V13_ADDED, woodcuttingGame } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v11 save + log written by the 1.11.0 engine: WC Lv4 (63 XP), Mining Lv3 (536 XP), Oak running mid-log. */
@@ -189,16 +189,20 @@ describe('frozen v11 save (tests/fixtures/save-v11-skills.json), engine 1.11.0 �
     expect(totalOn(SKILL_XP_CURVE, s.character.skills.woodcutting)).toBe(4_575); // 500 + 1,414 + 2,598 + 63
     expect(s.character.skills.mining).toEqual({ level: 5, xp: 747, xpToNext: 1_118 });
     expect(totalOn(SKILL_XP_CURVE, s.character.skills.mining)).toBe(2_450);
-    const { character, saveVersion: _v, ...rest } = s;
-    const { character: rc, saveVersion: _rv, ...rawRest } = V11_SAVE;
+    // 1.13.0 (save v13) also adds the locked Crafting house and its idle pipes.
+    const { character, saveVersion: _v, buildings, crafting, ...rest } = s;
+    const { character: rc, saveVersion: _rv, buildings: rb, ...rawRest } = V11_SAVE;
     expect(rest).toEqual(rawRest);
+    expect(buildings).toEqual({ ...rb, crafting: V13_ADDED.craftingBuilding });
+    expect(crafting).toEqual(V13_ADDED.crafting);
+    expect(character.skills).not.toHaveProperty('smithing'); // dropped in v13
     const { skills: _s, ...otherCharacter } = character;
     const { skills: _rs, ...rawOther } = rc;
     expect(otherCharacter).toEqual(rawOther);
     expect(hashState(loadSave(V11_SAVE))).toBe(hashState(s));
   });
 
-  it('loading writes a MIGRATE anchor (save 11 → 12, engine 1.11.0 → 1.12.0); Oak keeps running; the whole log replays', async () => {
+  it('loading writes a MIGRATE anchor (save 11 → current, engine 1.11.0 → current); Oak keeps running; the whole log replays', async () => {
     const { repo, clock, client } = await phone();
     await client.load();
     const m = (await repo.getAllLog()).filter((r) => r.type === 'MIGRATE');
@@ -206,13 +210,12 @@ describe('frozen v11 save (tests/fixtures/save-v11-skills.json), engine 1.11.0 �
     const p = m[0].payload as MigratePayload;
     expect({ ...p, snapshot: undefined }).toEqual({
       fromSave: 11,
-      toSave: 12,
+      toSave: CURRENT_SAVE_VERSION,
       fromEngine: '1.11.0',
       toEngine: ENGINE_VERSION,
       fromHash: V11_LOG.at(-1)!.stateHash,
       snapshot: undefined,
     });
-    expect(ENGINE_VERSION).toBe('1.12.0');
     expect(p.snapshot).toEqual(loadSave(V11_SAVE));
 
     const logsBefore = client.getState().stats.totalActions;

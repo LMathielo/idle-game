@@ -21,7 +21,6 @@ const SKILL_LABELS: Record<SkillKey, { label: string; icon: string }> = {
   woodcutting: { label: 'Woodcutting', icon: '🪓' },
   mining: { label: 'Mining', icon: '⛏️' },
   fishing: { label: 'Fishing', icon: '🎣' },
-  smithing: { label: 'Smithing', icon: '🔨' },
 };
 
 // Paper-doll layout: 3 columns, null = empty cell

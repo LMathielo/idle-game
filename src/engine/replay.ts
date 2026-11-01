@@ -52,6 +52,10 @@ export const LOG_TYPES = [
   'DISMISS_WORKER',
   'ASSIGN_WORKER',
   'UNASSIGN_WORKER',
+  'START_CRAFT',
+  'INSTA_CRAFT',
+  'CANCEL_CRAFT',
+  'DEBUG_UNLOCK_PIPE',
   'MIGRATE',
   'RESUME',
   'SIMULATE',
@@ -182,7 +186,11 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'HIRE_WORKER':
     case 'DISMISS_WORKER':
     case 'ASSIGN_WORKER':
-    case 'UNASSIGN_WORKER': {
+    case 'UNASSIGN_WORKER':
+    case 'START_CRAFT':
+    case 'INSTA_CRAFT':
+    case 'CANCEL_CRAFT':
+    case 'DEBUG_UNLOCK_PIPE': {
       const res = applyCommand(state, payload as Command, clientTime, { allowDebug: true });
       if (!res.ok) throw new ReplayError(`${type} rejected on replay: ${res.error.code}`);
       return res.state;

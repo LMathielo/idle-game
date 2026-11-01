@@ -3,6 +3,10 @@
 import { describe, expect, it } from 'vitest';
 import { CORE, clampCamera, mapLimits, PLOTS, SIGNS, WORLD } from '../src/components/village/villageMap';
 
+/** Signs on the core village (visible at start) and signs on a building plot outside it (reached by panning). */
+const CORE_SIGNS = SIGNS.filter((s) => !s.plot);
+const PLOT_SIGNS = SIGNS.filter((s) => s.plot);
+
 const SCREENS = [
   { w: 375, h: 667 },
   { w: 390, h: 844 },
@@ -10,8 +14,8 @@ const SCREENS = [
 ];
 
 describe('village map', () => {
-  it('every sign sits on the core village, every plot inside the world and outside the core', () => {
-    for (const s of SIGNS) {
+  it('every core sign sits on the core village, every plot inside the world and outside the core', () => {
+    for (const s of CORE_SIGNS) {
       expect(s.x).toBeGreaterThan(CORE.x);
       expect(s.x).toBeLessThan(CORE.x + CORE.w);
       expect(s.y).toBeGreaterThan(CORE.y);
@@ -33,13 +37,35 @@ describe('village map', () => {
     expect(WORLD.w * minZoom).toBeGreaterThanOrEqual(view.w);
     expect(WORLD.h * minZoom).toBeGreaterThanOrEqual(view.h);
     expect(camera).toEqual(clampCamera(camera, view));
-    for (const s of SIGNS) {
+    for (const s of CORE_SIGNS) {
       const x = camera.tx + s.x * camera.zoom;
       const y = camera.ty + s.y * camera.zoom;
       expect(x).toBeGreaterThan(40);
       expect(x).toBeLessThan(view.w - 40);
       expect(y - 22).toBeGreaterThanOrEqual(top);
       expect(y + 22 + 22).toBeLessThanOrEqual(view.h - bottom); // sign + an upgrade badge under it
+    }
+  });
+
+  it('a plot sign (Crafting, 1.13.0) sits at its plot centre and pans fully into view between the HUD and the strip', () => {
+    expect(PLOT_SIGNS.map((s) => [s.key, s.plot])).toEqual([['crafting', 'east']]);
+    for (const s of PLOT_SIGNS) {
+      const [x0, y0, x1, y1] = PLOTS[s.plot!];
+      expect([s.x, s.y]).toEqual([(x0 + x1) / 2, (y0 + y1) / 2]);
+      for (const view of SCREENS) {
+        const top = 100;
+        const bottom = 44;
+        const { start } = mapLimits(view, top, bottom);
+        // Pan so the sign is centred in the visible band (clamped like a real drag), at the start zoom.
+        const bandMid = top + (view.h - top - bottom) / 2;
+        const c = clampCamera({ zoom: start, tx: view.w / 2 - s.x * start, ty: bandMid - s.y * start }, view);
+        const x = c.tx + s.x * c.zoom;
+        const y = c.ty + s.y * c.zoom;
+        expect(x).toBeGreaterThan(40);
+        expect(x).toBeLessThan(view.w - 40);
+        expect(y - 22).toBeGreaterThanOrEqual(top);
+        expect(y + 22 + 22).toBeLessThanOrEqual(view.h - bottom);
+      }
     }
   });
 

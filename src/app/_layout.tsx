@@ -29,7 +29,7 @@ function RootAwayModal() {
 
 /**
  * Root stack: the tabs group, plus one full-screen modal per village sign (Dungeon, Training, Woodcutting, Mine Shaft,
- * Merchant and Town Hall today).
+ * Merchant, Town Hall and Crafting today).
  * fullScreenModal: iOS covers the whole screen with no swipe-to-dismiss (the modal's ✕ closes it);
  * Android has no such style and falls back to 'modal', so the slide-up is set explicitly to match
  * (a fade when the system asks to reduce motion).
@@ -53,6 +53,7 @@ export default function RootLayout() {
             <Stack.Screen name="mine" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
             <Stack.Screen name="merchant" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
             <Stack.Screen name="town-hall" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
+            <Stack.Screen name="crafting" options={{ presentation: 'fullScreenModal', animation: reducedMotion ? 'fade' : 'slide_from_bottom' }} />
           </Stack>
           <RootAwayModal />
           <RootDialogHost />

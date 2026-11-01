@@ -11,7 +11,6 @@ const SKILL_NAMES: Record<SkillKey, string> = {
   woodcutting: 'Woodcutting',
   mining: 'Mining',
   fishing: 'Fishing',
-  smithing: 'Smithing',
 };
 
 export function AwayModal() {
@@ -49,6 +48,7 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
   const lost = Object.entries(summary.itemsLost);
   const workerGained = Object.entries(summary.workerItemsGained);
   const workerLost = Object.entries(summary.workerItemsLost);
+  const crafted = Object.entries(summary.itemsCrafted);
   const skills = Object.entries(summary.skillXpGained) as [SkillKey, number][];
   const trained = Object.entries(summary.trainingXpGained) as [AttributeKey, number][];
   const maxed = summary.trainingMaxed;
@@ -92,6 +92,10 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       {workerGained.map(([id, n]) => (
         <Line key={`w-${id}`} label={`${itemIcon(id)} ${itemName(id)}`} value={`+${formatNumber(n)}`} />
       ))}
+      {summary.craftsCompleted > 0 ? <Text style={styles.section}>🔨 Crafted</Text> : null}
+      {crafted.map(([id, n]) => (
+        <Line key={`c-${id}`} label={`${itemIcon(id)} ${itemName(id)}`} value={`+${formatNumber(n)}`} />
+      ))}
       {summary.upkeepPaid > 0 ? <Line label="🪙 Upkeep paid" value={`−${formatNumber(summary.upkeepPaid)}`} cost /> : null}
       {summary.buildingsUpgraded.map((u) => (
         <Line key={`${u.buildingId}-${u.level}`} label={`🔨 ${BUILDINGS[u.buildingId].name} upgraded`} value={`Lv ${u.level}`} />
@@ -126,6 +130,7 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       summary.dungeon.runs === 0 &&
       trainingXpTotal(summary) === 0 &&
       summary.workerActions === 0 &&
+      summary.craftsCompleted === 0 &&
       summary.buildingsUpgraded.length === 0 &&
       !backward ? (
         <Text style={styles.muted}>Nothing was gathered.</Text>

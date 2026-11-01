@@ -44,7 +44,8 @@ export type Item = {
   quantity?: number;
 };
 
-export type SkillKey = 'woodcutting' | 'mining' | 'fishing' | 'smithing';
+/** Skills on the Hero tab. `smithing` was removed in save v13 (crafting has no skill). */
+export type SkillKey = 'woodcutting' | 'mining' | 'fishing';
 
 /** Anything that levels: the hero and every skill. */
 export type LevelProgress = { level: number; xp: number; xpToNext: number };
@@ -276,7 +277,7 @@ export type Stamina = {
  * before use; the Merchant is always built (save v11, so it can be upgraded). Dungeon and Storage are always there
  * and are not stored. Requirements and upgrade costs are data (config/buildings.ts).
  */
-export type BuildingId = 'woodcutting' | 'mine_shaft' | 'town_hall' | 'training_grounds' | 'merchant';
+export type BuildingId = 'woodcutting' | 'mine_shaft' | 'town_hall' | 'training_grounds' | 'merchant' | 'crafting';
 
 export type BuildingStatus = 'locked' | 'built';
 
@@ -321,6 +322,57 @@ export type WorkersState = {
   paidPerMin: number;
 };
 
+// ---------- Crafting (save v13) ----------
+
+/** x1 crafts the recipe as written; x10 crafts ten times the inputs and output in the same time (stamina per craft). */
+export type CraftMode = 'x1' | 'x10';
+
+/**
+ * A pipe's job state. `running`: the current craft's timer runs. `held`: the current craft finished but its output did
+ * not fit (no stack, no free slot); the timer is held and the output is delivered as soon as room appears. `ready`:
+ * reserved for gear crafting (PR B: a single rolled item waiting for a Done tap); nothing produces it yet.
+ */
+export type CraftJobStatus = 'running' | 'held' | 'ready';
+
+/**
+ * One crafting job in a pipe: `quantity` crafts of `recipeId`, back to back. Every input (and, in x10 mode, every
+ * craft's stamina) was paid when the job started. Each craft's duration is fixed when that craft starts (`craftMs`), so
+ * a house upgrade or trained INT counts from the next craft. Output goes to the inventory as each craft finishes.
+ */
+export type CraftJob = {
+  /** Job serial (`crafting.nextJobSerial` when it started): commands name the job they were shown. */
+  id: number;
+  recipeId: string;
+  mode: CraftMode;
+  /** Crafts in the job, ≥ 1. */
+  quantity: number;
+  /** Crafts finished and delivered, 0..quantity − 1 while the job exists. The current craft is number done + 1. */
+  done: number;
+  /** Duration of the current craft, ms (fixed when it started). */
+  craftMs: number;
+  /** Time into the current craft, ms (= craftMs while held). */
+  progressMs: number;
+  /** Stamina paid per craft at job start (x10 mode; 0 in x1): a cancel refunds it for the crafts not yet started. */
+  staminaPerCraft: number;
+  status: CraftJobStatus;
+  /** Engine time the job started. Informational only. */
+  startedAt: number;
+};
+
+export type CraftingState = {
+  /** Open pipes (2 on a new save, up to 8). Pipe i (0-based) is open when i < pipesUnlocked. */
+  pipesUnlocked: number;
+  /** One entry per pipe slot (8): its job, or null when idle. */
+  pipes: (CraftJob | null)[];
+  /**
+   * Hidden yield fractions per output item, in thousandths (the house's yield bonus): when one reaches 1000 it adds one
+   * more item and keeps the rest. Missing = 0. No RNG.
+   */
+  remainders: Record<string, number>;
+  /** Serial for job ids. Only goes up. */
+  nextJobSerial: number;
+};
+
 // ---------- Merchant ----------
 
 /** One merchant stock slot: `quantity` left of `defId` at `unitPrice` gold each (fixed when the stock was rolled). */
@@ -336,7 +388,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 12;
+  saveVersion: 13;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -359,6 +411,8 @@ export type GameState = {
   construction: Construction | null;
   /** Save v11. Hired workers and their crews (Town Hall). */
   workers: WorkersState;
+  /** Save v13. The Crafting house's pipes and the yield fraction ledger. Not an activity: runs beside everything. */
+  crafting: CraftingState;
   /** Save v8. Serial for unique item instance ids (bought gear: `<defId>#<n>`). Only goes up. */
   nextItemSerial: number;
   stats: GameStats;
@@ -403,7 +457,18 @@ export type GameEvent =
   /** Gold can't cover the next minute of upkeep: every crew waits. */
   | { type: 'WORKERS_PAUSED'; upkeepDue: number }
   /** Upkeep is covered again: the crews resume. */
-  | { type: 'WORKERS_RESUMED' };
+  | { type: 'WORKERS_RESUMED' }
+  /** START_CRAFT paid and the pipe started its job. */
+  | { type: 'CRAFT_STARTED'; pipe: number; jobId: number; recipeId: string; quantity: number; mode: CraftMode }
+  /** One craft finished and its output went into the inventory. */
+  | { type: 'CRAFT_COMPLETED'; pipe: number; jobId: number; itemId: string; quantity: number }
+  /** A craft finished but its output does not fit: the pipe waits for room (nothing is lost). */
+  | { type: 'CRAFT_HELD'; pipe: number; jobId: number }
+  /** The job's last craft was delivered: the pipe is idle. */
+  | { type: 'CRAFT_JOB_DONE'; pipe: number; jobId: number }
+  /** CANCEL_CRAFT: the job ended early, unfinished crafts refunded. */
+  | { type: 'CRAFT_JOB_CANCELLED'; pipe: number; jobId: number }
+  | { type: 'PIPE_UNLOCKED'; pipes: number };
 
 /** What happened during one simulate() call. Shown in the "While you were away" modal. */
 export type SimulationSummary = {
@@ -442,5 +507,8 @@ export type SimulationSummary = {
   workerItemsLost: Record<string, number>;
   /** Gold paid in worker upkeep during this period. */
   upkeepPaid: number;
+  /** Crafts finished by the Crafting house's pipes (save v13); their items per output type in itemsCrafted. */
+  craftsCompleted: number;
+  itemsCrafted: Record<string, number>;
   anomalies: ClockAnomalyEvent[];
 };

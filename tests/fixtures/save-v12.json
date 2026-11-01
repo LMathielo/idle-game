@@ -1,0 +1,236 @@
+{
+  "saveVersion": 12,
+  "rng": {
+    "seed": 2388322108
+  },
+  "time": {
+    "lastSimulatedAt": 1793451707000,
+    "highestSeenAt": 1793451707000
+  },
+  "offline": {
+    "capMs": 28800000,
+    "efficiency": 1
+  },
+  "activity": {
+    "kind": "mining",
+    "rockId": "stone",
+    "startedAt": 1793444400000,
+    "progressMs": 47000
+  },
+  "stamina": {
+    "current": 100,
+    "max": 100,
+    "progressMs": 0
+  },
+  "dungeon": {
+    "lastFight": null,
+    "totals": {
+      "runs": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "byDungeon": {}
+  },
+  "training": {
+    "tier": 0,
+    "attributes": {
+      "strength": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "dexterity": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "endurance": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "intelligence": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      }
+    }
+  },
+  "merchant": {
+    "charges": 5,
+    "chargeProgressMs": 0,
+    "stock": [
+      {
+        "defId": "health_potion_t1",
+        "quantity": 10,
+        "unitPrice": 12
+      },
+      {
+        "defId": "iron_axe",
+        "quantity": 1,
+        "unitPrice": 600
+      },
+      {
+        "defId": "iron_pickaxe",
+        "quantity": 1,
+        "unitPrice": 600
+      },
+      {
+        "defId": "iron_sword",
+        "quantity": 1,
+        "unitPrice": 500
+      },
+      {
+        "defId": "iron_helm",
+        "quantity": 1,
+        "unitPrice": 400
+      }
+    ]
+  },
+  "buildings": {
+    "woodcutting": {
+      "state": "built",
+      "level": 1
+    },
+    "mine_shaft": {
+      "state": "built",
+      "level": 1
+    },
+    "town_hall": {
+      "state": "locked",
+      "level": 0
+    },
+    "training_grounds": {
+      "state": "locked",
+      "level": 0
+    },
+    "merchant": {
+      "state": "built",
+      "level": 1
+    }
+  },
+  "construction": null,
+  "workers": {
+    "list": [],
+    "nextSerial": 1,
+    "crews": {},
+    "paused": false,
+    "minuteLeftMs": 0,
+    "paidPerMin": 0
+  },
+  "nextItemSerial": 1,
+  "stats": {
+    "totalActions": 131,
+    "itemsGathered": {
+      "oak_logs": 141,
+      "stone": 133
+    }
+  },
+  "flags": {
+    "debugUsed": true
+  },
+  "character": {
+    "name": "Lucius",
+    "title": "Novice Gladiator",
+    "level": 1,
+    "xp": 0,
+    "xpToNext": 100,
+    "hp": 50,
+    "hpRegenProgress": 0,
+    "gold": 925,
+    "attributes": {
+      "strength": 10,
+      "dexterity": 10,
+      "endurance": 10,
+      "intelligence": 10
+    },
+    "equipment": {
+      "weapon": {
+        "id": "start-rusty_gladius",
+        "defId": "rusty_gladius",
+        "name": "Rusty Gladius",
+        "icon": "🗡️",
+        "slot": "weapon"
+      },
+      "armor": {
+        "id": "start-linen_tunic",
+        "defId": "linen_tunic",
+        "name": "Linen Tunic",
+        "icon": "🥋",
+        "slot": "armor"
+      },
+      "boots": {
+        "id": "start-worn_sandals",
+        "defId": "worn_sandals",
+        "name": "Worn Sandals",
+        "icon": "👢",
+        "slot": "boots"
+      },
+      "axe": {
+        "id": "start-wooden_axe",
+        "defId": "wooden_axe",
+        "name": "Wooden Axe",
+        "icon": "🪓",
+        "slot": "axe"
+      },
+      "pickaxe": {
+        "id": "start-wooden_pickaxe",
+        "defId": "wooden_pickaxe",
+        "name": "Wooden Pickaxe",
+        "icon": "⛏️",
+        "slot": "pickaxe"
+      }
+    },
+    "skills": {
+      "woodcutting": {
+        "level": 4,
+        "xp": 722,
+        "xpToNext": 800
+      },
+      "mining": {
+        "level": 4,
+        "xp": 747,
+        "xpToNext": 800
+      },
+      "fishing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      },
+      "smithing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      }
+    }
+  },
+  "inventory": {
+    "capacity": 20,
+    "items": [
+      {
+        "id": "bread",
+        "defId": "bread",
+        "name": "Bread",
+        "icon": "🍞",
+        "stackable": true,
+        "quantity": 3
+      },
+      {
+        "id": "oak_logs",
+        "defId": "oak_logs",
+        "name": "Oak Logs",
+        "icon": "🪵",
+        "stackable": true,
+        "quantity": 141
+      },
+      {
+        "id": "stone",
+        "defId": "stone",
+        "name": "Stone",
+        "icon": "🪨",
+        "stackable": true,
+        "quantity": 133
+      }
+    ]
+  }
+}

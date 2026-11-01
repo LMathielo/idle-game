@@ -61,6 +61,8 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCommand,
   type Command,
+  craftJobView,
+  craftingView,
   CURRENT_SAVE_VERSION,
   dungeonRunView,
   ENGINE_VERSION,
@@ -92,7 +94,8 @@ const skipShown = (id: string) => (s: GameState): Command => {
   return { id, type: 'SKIP_DUNGEON_RUN', run: v.run, maxCost: v.skipCost! };
 };
 
-type Step = { at: number; cmd?: Command | ((s: GameState) => Command) };
+/** `id` names a step whose command is built from the state (so tests can stop the script just before it). */
+type Step = { at: number; cmd?: Command | ((s: GameState) => Command); id?: string };
 
 /** End of the 1.8.0 script; the 1.9.0 segment starts here. */
 const E = D + 31 * SEC + HOUR;
@@ -100,6 +103,30 @@ const E = D + 31 * SEC + HOUR;
 const F = E + 10 * SEC + 22 * HOUR;
 /** End of the 1.10.0 script; the 1.11.0 segment starts here. */
 const G = F + 10 * SEC + 12 * HOUR;
+/** End of the 1.11.0 script (unchanged in 1.12.0); the 1.13.0 segment starts here. */
+const H = G + 4 * SEC + 2 * HOUR;
+
+/** The insta the UI would send for the craft on screen in `pipe`. */
+const instaShown = (id: string, pipe: number) => (s: GameState): Command => {
+  const j = craftJobView(s, pipe)!;
+  return { id, type: 'INSTA_CRAFT', pipe, jobId: j.id, craft: j.craftNumber, maxCost: j.instaCost };
+};
+
+/** A START_CRAFT with the stamina cost the screen shows (x10 mode). */
+const craftShown = (id: string, pipe: number, recipeId: 'stone_brick', quantity: number) => (s: GameState): Command => {
+  const r = craftingView(s).recipes.find((x) => x.recipeId === recipeId)!;
+  return { id, type: 'START_CRAFT', pipe, recipeId, quantity, mode: 'x10', maxCost: r.x10StaminaPerCraft * quantity };
+};
+
+/**
+ * A 1.13.0 state seen in the v12 shape: without the Crafting house and its pipes, with the (never used) smithing skill
+ * back, at save v12. For a script that never touches crafting this is exactly what the 1.12.0 engine produced, so its
+ * hash must equal the 1.12.0 pin.
+ */
+function asV12(s: GameState): unknown {
+  const { crafting: _c, buildings: { crafting: _b, ...buildings }, character, ...rest } = s;
+  return { ...rest, saveVersion: 12, buildings, character: { ...character, skills: { ...character.skills, smithing: { level: 1, xp: 0, xpToNext: 100 } } } };
+}
 
 const SCRIPT: Step[] = [
   { at: T0, cmd: { id: 'b0', type: 'DEBUG_BUILD', buildingId: 'woodcutting' } }, // 1.9.0: Woodcutting starts locked
@@ -218,7 +245,34 @@ const SCRIPT: Step[] = [
   { at: G + 3 * SEC + 5 * MIN + 250 }, // mid-build: still 1 XP/min
   { at: G + 3 * SEC + 40 * MIN }, // Lv2 since G + 2 s + 15 min: 2 XP/min after it
   { at: G + 4 * SEC + 40 * MIN, cmd: { id: 'p4', type: 'SPEEDUP_TRAINING', minutes: 10, maxCost: 10 } }, // 10 stamina = 20 XP
-  { at: G + 4 * SEC + 2 * HOUR }, // more training at 2 XP/min
+  { at: H }, // more training at 2 XP/min
+  // 1.13.0: the Crafting house. A real BUILD; Oak Planks ×300 (x1) in pipe 1 and Stone Bricks ×5 in x10 mode in pipe 2
+  // (stamina paid up front); a simulate boundary mid-craft; a real house upgrade to Lv2 mid-job (−10% from the next craft);
+  // an insta; the x10 job cancelled (unfinished crafts' stone and unstarted crafts' stamina back); then a full inventory
+  // (gear unequipped, a shield bought) holds the Copper Ingot pipe opened by debug, a sale frees a slot and it delivers;
+  // ~8 h away. STR training runs beside all of it.
+  { at: H + 1 * SEC, cmd: { id: 'c1', type: 'BUILD', buildingId: 'crafting' } }, // 30 Oak Logs, 30 Stone, 150 gold
+  { at: H + 2 * SEC, cmd: { id: 'c2', type: 'START_CRAFT', pipe: 0, recipeId: 'oak_plank', quantity: 300, mode: 'x1', maxCost: 0 } },
+  { at: H + 3 * SEC, cmd: craftShown('c3', 1, 'stone_brick', 5), id: 'c3' },
+  { at: H + 10 * SEC + 500 }, // mid-craft in both pipes
+  { at: H + 12 * SEC, cmd: { id: 'c4', type: 'UPGRADE_BUILDING', buildingId: 'crafting', level: 2 } }, // 250 g, 25 Oak, 25 Stone, 15 min
+  { at: H + 15 * SEC, cmd: (s) => ({ id: 'c5', type: 'CANCEL_CRAFT', pipe: 1, jobId: craftJobView(s, 1)!.id }), id: 'c5' },
+  { at: H + 20 * SEC }, // the screen at that moment
+  { at: H + 20 * SEC, cmd: instaShown('c6', 0), id: 'c6' },
+  { at: H + 20 * MIN }, // the upgrade completed at H + 12 s + 15 min, mid-job
+  { at: H + 20 * MIN + 1 * SEC, cmd: { id: 'c7', type: 'UNEQUIP_ITEM', slot: 'weapon' } },
+  { at: H + 20 * MIN + 2 * SEC, cmd: { id: 'c8', type: 'UNEQUIP_ITEM', slot: 'armor' } },
+  { at: H + 20 * MIN + 3 * SEC, cmd: { id: 'c9', type: 'UNEQUIP_ITEM', slot: 'boots' } },
+  { at: H + 20 * MIN + 4 * SEC, cmd: { id: 'c10', type: 'UNEQUIP_ITEM', slot: 'gloves' } },
+  { at: H + 20 * MIN + 5 * SEC, cmd: { id: 'c11', type: 'UNEQUIP_ITEM', slot: 'axe' } },
+  { at: H + 20 * MIN + 6 * SEC, cmd: { id: 'c12', type: 'UNEQUIP_ITEM', slot: 'pickaxe' } },
+  { at: H + 20 * MIN + 7 * SEC, cmd: { id: 'c13', type: 'BUY_ITEM', slot: 1, defId: 'iron_shield', quantity: 1, maxUnitPrice: 550 } }, // 19 of 20 slots
+  { at: H + 20 * MIN + 8 * SEC, cmd: { id: 'c14', type: 'DEBUG_UNLOCK_PIPE' } },
+  { at: H + 20 * MIN + 9 * SEC, cmd: { id: 'c15', type: 'START_CRAFT', pipe: 1, recipeId: 'birch_plank', quantity: 3, mode: 'x1', maxCost: 0 } },
+  { at: H + 20 * MIN + 9 * SEC, cmd: { id: 'c16', type: 'START_CRAFT', pipe: 2, recipeId: 'copper_ingot', quantity: 3, mode: 'x1', maxCost: 0 } }, // 12 of 16 ore: the stack stays
+  { at: H + 21 * MIN }, // the Birch Plank took the last slot; the Copper Ingot pipe is held
+  { at: H + 21 * MIN + 1 * SEC, cmd: { id: 'c17', type: 'SELL_ITEM', itemId: 'bread', quantity: 3 } }, // a free slot: it delivers at once
+  { at: H + 21 * MIN + 2 * SEC + 9 * HOUR }, // ~9 h away (capped at 8 h)
 ];
 
 function runScript(steps: Step[] = SCRIPT) {
@@ -269,6 +323,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.10.0', 11],
       ['1.11.0', 11],
       ['1.12.0', 12],
+      ['1.13.0', 13],
     ]);
   });
 });
@@ -611,7 +666,8 @@ describe('golden', () => {
     const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'p1')));
     expect(s.time.lastSimulatedAt).toBe(G);
     // 1.12.0: the skill curve (base 100) levels woodcutting and mining faster, so WS / MS and the yield rise. Was 1aed0f53.
-    expect(hashState(s)).toBe('d6b0bd86');
+    // 1.13.0: unchanged outcomes; seen in the v12 shape (no Crafting house, smithing back) the hash is the 1.12.0 one.
+    expect(hashState(asV12(s))).toBe('d6b0bd86');
   });
 
   it('the 1.11.0 segment: Training Grounds Lv2 completes mid-training (1 → 2 XP/min at that instant), speed-up at 2 XP/min', () => {
@@ -619,7 +675,7 @@ describe('golden', () => {
     const before = at('p3');
     expect(before.construction).toMatchObject({ buildingId: 'training_grounds', level: 2, durationMs: 15 * MIN });
     const str0 = before.training.attributes.strength;
-    const s = runScript();
+    const s = at('c1');
     expect(s.buildings.training_grounds).toEqual({ state: 'built', level: 2 });
     expect(s.construction).toBeNull();
     expect(trainingView(s).xpPerMinute).toBe(2);
@@ -635,11 +691,14 @@ describe('golden', () => {
     expect(s.activity).toEqual(expect.objectContaining({ kind: 'training', attribute: 'strength' }));
   });
 
-  it('fixed seed + fixed script → fixed final state hash', () => {
-    const s = runScript();
+  it('the whole 1.12.0 script is unchanged in 1.13.0 (hash in the v12 shape = the 1.12.0 pin)', () => {
+    const s = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'c1')));
+    expect(s.time.lastSimulatedAt).toBe(H);
+    expect(s.buildings.crafting).toEqual({ state: 'locked', level: 0 });
+    expect(s.crafting).toEqual(newGame(1, T0).crafting);
     expect({
-      engineVersion: ENGINE_VERSION,
-      hash: hashState(s),
+      engineVersion: '1.12.0',
+      hash: hashState(asV12(s)),
       heroLevel: s.character.level,
       woodcutting: s.character.skills.woodcutting.level,
       actions: s.stats.totalActions,
@@ -662,7 +721,7 @@ describe('golden', () => {
       nextItemSerial: s.nextItemSerial,
       potions: s.inventory.items.find((i) => i.defId === 'health_potion_t1')?.quantity,
       woodenAxe: s.inventory.items.some((i) => i.defId === 'wooden_axe'),
-      buildings: s.buildings,
+      buildings: (asV12(s) as GameState).buildings,
       mining: s.character.skills.mining,
       pickaxe: s.character.equipment.pickaxe?.id,
       ores: Object.fromEntries(s.inventory.items.filter((i) => ['stone', 'copper_ore', 'geode'].includes(i.defId)).map((i) => [i.defId, i.quantity])),
@@ -952,7 +1011,7 @@ describe('golden', () => {
     });
     expect(axe?.defId).toBe('wooden_axe');
     expect(pickaxe?.defId).toBe('wooden_pickaxe');
-    const { dungeon, training, activity, merchant, nextItemSerial, inventory, buildings: _b, construction: _k, workers: _w, character: _c, saveVersion: _v, ...rest } = s;
+    const { dungeon, training, activity, merchant, nextItemSerial, inventory, buildings: _b, construction: _k, workers: _w, crafting: _cr, character: _c, saveVersion: _v, ...rest } = s;
     expect(merchant.charges).toBe(5);
     expect(nextItemSerial).toBe(1);
     expect(inventory).toEqual({ ...raw.inventory, items: raw.inventory.items.map(noRarity) });
@@ -982,3 +1041,41 @@ describe('golden', () => {
     expect(run.dungeon.lastFight?.heroMaxHp).toBe(90);
   });
 });
+
+describe('golden 1.13.0: the Crafting house', () => {
+  const at = (id: string) => runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => (x.id ?? (typeof x.cmd === 'object' ? x.cmd.id : undefined)) === id)));
+  it('build, two pipes (x1 and x10 paid up front), a cancel with refunds, an insta, an upgrade mid-job, a held pipe, ~8 h away', () => {
+    // BUILD paid 150 gold, 30 Oak Logs and 30 Stone; x1 jobs cost no stamina, the x10 job 1 stamina per craft up front.
+    const c3 = at('c3');
+    expect(c3.buildings.crafting).toEqual({ state: 'built', level: 1 });
+    expect(c3.crafting.pipes[0]).toMatchObject({ id: 1, recipeId: 'oak_plank', quantity: 300, done: 0, craftMs: 4584, status: 'running' }); // 5 s × (1 − 8.33%)
+    expect(c3.stamina.current).toBe(100);
+    const c4 = at('c4');
+    expect(c4.crafting.pipes[1]).toMatchObject({ mode: 'x10', quantity: 5, staminaPerCraft: 1, craftMs: 4584 });
+    expect(c4.stamina.current).toBe(95);
+    // Cancel at H + 15 s: crafts 1–2 delivered (20 bricks), craft 3 in progress → 3 crafts × 20 Stone back; crafts 4–5 not started → 2 stamina back.
+    const c5 = at('c5');
+    const c6 = at('c6');
+    expect(c6.crafting.pipes[1]).toBeNull();
+    expect(c6.stamina.current).toBe(97);
+    expect(qtyOf(c6, 'stone') - qtyOf(c5, 'stone')).toBe(60);
+    expect(qtyOf(c6, 'stone_brick')).toBe(20);
+    // The upgrade to Lv2 completed mid-job: the crafts after it take 4,126 ms (×0.9), the earlier ones 4,584 ms.
+    const c7 = at('c7');
+    expect(c7.buildings.crafting.level).toBe(2);
+    expect(c7.crafting.pipes[0]).toMatchObject({ craftMs: 4126 });
+    // A full inventory holds the Copper Ingot pipe (the Birch Plank took the last slot); a sale frees a slot and it delivers.
+    const c17 = at('c17');
+    expect(c17.inventory.items).toHaveLength(20);
+    expect(c17.crafting.pipes[2]).toMatchObject({ recipeId: 'copper_ingot', done: 0, status: 'held', progressMs: 8251, craftMs: 8251 });
+    expect(c17.crafting.pipesUnlocked).toBe(3);
+    const s = runScript();
+    expect(s.crafting.pipes.every((p) => p === null)).toBe(true);
+    expect([qtyOf(s, 'oak_plank'), qtyOf(s, 'stone_brick'), qtyOf(s, 'birch_plank'), qtyOf(s, 'copper_ingot')]).toEqual([300, 20, 3, 3]);
+    expect(s.flags.debugUsed).toBe(true);
+    expect(s.activity).toEqual(expect.objectContaining({ kind: 'training', attribute: 'strength' })); // pipes never touch the hero
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.13.0', hash: '073a47bf' });
+  });
+});
+
+const qtyOf = (s: GameState, defId: string) => s.inventory.items.filter((i) => i.defId === defId).reduce((n, i) => n + (i.quantity ?? 1), 0);

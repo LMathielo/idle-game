@@ -40,14 +40,14 @@ type Props = {
   active?: VillageAction | null;
   /** Signs of buildings not built yet: greyed with 🔒, still tappable (they open the Build box). */
   locked?: ReadonlySet<VillageAction>;
-  /** One sign with a timer pill under it (the building being upgraded: "Upgrading 12:34"). */
-  badge?: { key: VillageAction; text: string } | null;
+  /** Timer pills under signs, with their own icon ("🔨 Upgrading 12:34", "⚒️ 2/2 crafting · 0:42"). */
+  badges?: Partial<Record<VillageAction, string>>;
   /** Screen space covered by overlays (HUD, activity strip): the start view centres the core between them. */
   topReserve?: number;
   bottomReserve?: number;
 };
 
-export const VillageScene = memo(function VillageScene({ onAction, active, locked, badge, topReserve = 0, bottomReserve = 0 }: Props) {
+export const VillageScene = memo(function VillageScene({ onAction, active, locked, badges, topReserve = 0, bottomReserve = 0 }: Props) {
   const zoom = useSharedValue(1);
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
@@ -171,7 +171,7 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
                 ty={ty}
                 locked={!!locked?.has(s.key)}
                 active={active === s.key}
-                badge={badge?.key === s.key ? badge.text : undefined}
+                badge={badges?.[s.key]}
                 onAction={onAction}
                 anchorOf={anchorOf}
                 onPressStart={measureRoot}
@@ -236,7 +236,7 @@ const Sign = memo(function Sign({ sign, zoom, tx, ty, locked, active, badge, onA
       {badge ? (
         <View style={styles.badge} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no">
           <Text style={styles.badgeText} numberOfLines={1}>
-            🔨 {badge}
+            {badge}
           </Text>
         </View>
       ) : null}
