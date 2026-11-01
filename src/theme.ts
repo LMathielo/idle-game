@@ -27,7 +27,7 @@ export const colors = {
 } as const;
 
 /** Item name colors by quality (catalog `quality`). Readable (≥ 4.5:1) on colors.sheet and colors.slot. */
-export const qualityColors = {
+export const rarityColors = {
   junk: '#b0a89c', // gray
   common: '#f5efe2', // white
   uncommon: '#6fcf62', // green

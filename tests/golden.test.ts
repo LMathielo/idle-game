@@ -59,6 +59,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  getItemDef,
   applyCommand,
   type Command,
   craftJobView,
@@ -79,7 +80,7 @@ import {
   woodcutActivityView,
   woodcuttingView,
 } from '../src/engine';
-import { HOUR, MIN, SEC, T0, v12Skills, withBuilt } from './helpers';
+import { HOUR, MIN, SEC, T0, v12Skills, withBuilt, withoutGearRolls } from './helpers';
 
 /** End of the 1.5.0 script; the 1.6.0 segment starts here. */
 const B = T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC;
@@ -95,7 +96,8 @@ const skipShown = (id: string) => (s: GameState): Command => {
 };
 
 /** `id` names a step whose command is built from the state (so tests can stop the script just before it). */
-type Step = { at: number; cmd?: Command | ((s: GameState) => Command); id?: string };
+/** A command, a simulate to `at` (no cmd), or (1.14.0) a `patch` of the state made by the test at `at` (no simulate). */
+type Step = { at: number; cmd?: Command | ((s: GameState) => Command); id?: string; patch?: (s: GameState) => GameState };
 
 /** End of the 1.8.0 script; the 1.9.0 segment starts here. */
 const E = D + 31 * SEC + HOUR;
@@ -124,8 +126,27 @@ const craftShown = (id: string, pipe: number, recipeId: 'stone_brick', quantity:
  * hash must equal the 1.12.0 pin.
  */
 function asV12(s: GameState): unknown {
-  const { crafting: _c, buildings: { crafting: _b, ...buildings }, character, ...rest } = s;
+  const { crafting: _c, buildings: { crafting: _b, ...buildings }, character, ...rest } = asV13(s);
   return { ...rest, saveVersion: 12, buildings, character: { ...character, skills: { ...character.skills, smithing: { level: 1, xp: 0, xpToNext: 100 } } } };
+}
+
+/**
+ * A 1.14.0 state seen in the v13 shape: no `qualityBp` / `rarity` on any gear instance or listing, at save v13. For a
+ * script whose gear is all 25% / common (the v14 default) this is exactly what the 1.13.0 engine produced.
+ */
+function asV13(s: GameState): GameState {
+  return withoutGearRolls(s);
+}
+
+/**
+ * 1.14.0: a restock rolls each gear listing's quality and rarity (on its own stream: the main RNG does not move). The
+ * steps written before 1.14.0 buy rolled gear (Iron Gloves, Iron Pickaxe, Iron Shield); to keep their outcomes exactly
+ * as the 1.13.0 engine produced them, the script resets the gear listings to the 1.13.0 terms (25%, common, catalog
+ * price) right after each of its refreshes. The 1.14.0 segment buys rolled gear for real.
+ */
+function as113Stock(s: GameState): GameState {
+  const stock = s.merchant.stock.map((l) => (l && l.qualityBp !== undefined ? { ...l, qualityBp: 2500, rarity: 'common' as const, unitPrice: getItemDef(l.defId)!.buyPrice! } : l));
+  return { ...s, merchant: { ...s.merchant, stock } };
 }
 
 const SCRIPT: Step[] = [
@@ -193,9 +214,12 @@ const SCRIPT: Step[] = [
   { at: C + 7 * SEC, cmd: { id: 'm7', type: 'SELL_ITEM', itemId: 'oak_logs', quantity: 100 } },
   { at: C + 8 * SEC, cmd: { id: 'm8', type: 'SELL_ITEM', itemId: 'start-wooden_axe', quantity: 1 } },
   { at: C + 9 * SEC, cmd: { id: 'm9', type: 'REFRESH_MERCHANT' } },
+  { at: C + 9 * SEC, patch: as113Stock }, // 1.14.0: gear listings on the 1.13.0 terms
   { at: C + 9 * SEC + 5 * HOUR }, // charges: 4 → 5 after 2 h, then full (no banked time)
   { at: C + 10 * SEC + 5 * HOUR, cmd: { id: 'm10', type: 'REFRESH_MERCHANT' } },
+  { at: C + 10 * SEC + 5 * HOUR, patch: as113Stock }, // 1.14.0: gear listings on the 1.13.0 terms
   { at: C + 11 * SEC + 5 * HOUR, cmd: { id: 'm11', type: 'REFRESH_MERCHANT' } },
+  { at: C + 11 * SEC + 5 * HOUR, patch: as113Stock }, // 1.14.0: gear listings on the 1.13.0 terms
   { at: C + 12 * SEC + 5 * HOUR, cmd: { id: 'm12', type: 'DEBUG_ADD_MERCHANT_CHARGE' } },
   { at: C + 13 * SEC + 5 * HOUR, cmd: { id: 'm13', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' } },
   // 1.10.0: refreshes roll the stock (seeded); this one holds Iron Gloves in slot 4 (it held the Iron Helm before).
@@ -278,7 +302,9 @@ const SCRIPT: Step[] = [
 function runScript(steps: Step[] = SCRIPT) {
   let s = newGame(0xc0ffee, T0);
   for (const step of steps) {
-    if (step.cmd) {
+    if (step.patch) {
+      s = step.patch(s);
+    } else if (step.cmd) {
       const c = typeof step.cmd === 'function' ? step.cmd(s) : step.cmd;
       const r = applyCommand(s, c, step.at);
       if (!r.ok) throw new Error(r.error.message);
@@ -324,6 +350,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.11.0', 11],
       ['1.12.0', 12],
       ['1.13.0', 13],
+      ['1.14.0', 14],
     ]);
   });
 });
@@ -717,7 +744,7 @@ describe('golden', () => {
       logs: Object.fromEntries(s.inventory.items.filter((i) => i.defId.endsWith('_logs')).map((i) => [i.defId, i.quantity])),
       axe: s.character.equipment.axe?.defId,
       gloves: s.character.equipment.gloves?.id, // 1.10.0: the post-refresh buy is the Iron Gloves (was the Iron Helm)
-      merchant: { charges: s.merchant.charges, chargeProgressMs: s.merchant.chargeProgressMs, stock: s.merchant.stock.slice(0, 5) },
+      merchant: { charges: s.merchant.charges, chargeProgressMs: s.merchant.chargeProgressMs, stock: asV13(s).merchant.stock.slice(0, 5) },
       nextItemSerial: s.nextItemSerial,
       potions: s.inventory.items.find((i) => i.defId === 'health_potion_t1')?.quantity,
       woodenAxe: s.inventory.items.some((i) => i.defId === 'wooden_axe'),
@@ -1007,7 +1034,8 @@ describe('golden', () => {
       skills: v12Skills(raw.character.skills), // v12: levels recomputed from total XP (WC Lv8 → Lv16)
       xp: undefined,
       xpToNext: undefined,
-      equipment: Object.fromEntries(Object.entries(raw.character.equipment).map(([k, v]) => [k, noRarity(v as Record<string, unknown>)])),
+      // v14: every gear instance gets the default roll (25% quality, common).
+      equipment: Object.fromEntries(Object.entries(raw.character.equipment).map(([k, v]) => [k, { ...noRarity(v as Record<string, unknown>), rarity: 'common', qualityBp: 2500 }])),
     });
     expect(axe?.defId).toBe('wooden_axe');
     expect(pickaxe?.defId).toBe('wooden_pickaxe');
@@ -1074,7 +1102,8 @@ describe('golden 1.13.0: the Crafting house', () => {
     expect([qtyOf(s, 'oak_plank'), qtyOf(s, 'stone_brick'), qtyOf(s, 'birch_plank'), qtyOf(s, 'copper_ingot')]).toEqual([300, 20, 3, 3]);
     expect(s.flags.debugUsed).toBe(true);
     expect(s.activity).toEqual(expect.objectContaining({ kind: 'training', attribute: 'strength' })); // pipes never touch the hero
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.13.0', hash: '073a47bf' });
+    // 1.14.0: in the v13 shape (no gear rolls) the whole 1.13.0 script still hashes to the 1.13.0 pin.
+    expect({ engineVersion: '1.13.0', hash: hashState(asV13(s)) }).toEqual({ engineVersion: '1.13.0', hash: '073a47bf' });
   });
 });
 

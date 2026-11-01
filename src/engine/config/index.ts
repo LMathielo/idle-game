@@ -13,3 +13,4 @@ export * from './mining';
 export * from './buildings';
 export * from './workers';
 export * from './crafting';
+export * from './gear';

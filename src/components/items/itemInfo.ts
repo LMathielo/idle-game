@@ -1,7 +1,10 @@
-// Display helpers for item sheets (read-only, catalog data only).
-import { type EquipmentSlot, getItemDef, type Item, type ItemDef, type ItemQuality } from '../../engine';
+// Display helpers for item sheets (read-only: catalog data and the engine's gear-quality selectors).
+import { type EquipmentSlot, gearStatsAt, getItemDef, type Item, type ItemDef, type ItemRarity, isGearDef, qualityBpOf, rarityOf } from '../../engine';
 
-export const QUALITY_LABELS: Record<ItemQuality, string> = {
+/** What a popover or slot shows: a stored item, a merchant listing or a crafted piece (gear carries its roll). */
+export type ShownItem = Pick<Item, 'defId'> & { qualityBp?: number; rarity?: ItemRarity };
+
+export const RARITY_LABELS: Record<ItemRarity, string> = {
   junk: 'Junk',
   common: 'Common',
   uncommon: 'Uncommon',
@@ -9,6 +12,25 @@ export const QUALITY_LABELS: Record<ItemQuality, string> = {
   epic: 'Epic',
   legendary: 'Legendary',
 };
+
+/** Gear subtitles name the colour (owner wording: "Green · Quality 73%"). */
+export const RARITY_COLOR_NAMES: Record<ItemRarity, string> = {
+  junk: 'Gray',
+  common: 'White',
+  uncommon: 'Green',
+  rare: 'Blue',
+  epic: 'Purple',
+  legendary: 'Gold',
+};
+
+/** Quality as a whole percent, floored (99.99% never reads 100%). */
+export const qualityPct = (bp: number) => `${Math.floor(Math.max(0, bp) / 100)}%`;
+
+/** The popover subtitle: gear "Green · Quality 73%", anything else its rarity label ("Common", "Junk"). */
+export function itemSubtitle(item: ShownItem, def: ItemDef): string {
+  if (!isGearDef(def)) return RARITY_LABELS[def.rarity];
+  return `${RARITY_COLOR_NAMES[rarityOf(item)]} · Quality ${qualityPct(qualityBpOf(item))}`;
+}
 
 export const SLOT_LABELS: Record<EquipmentSlot, string> = {
   helmet: 'Helmet',
@@ -31,7 +53,7 @@ export function defOf(defId: string, item?: Item): ItemDef {
       id: defId,
       name: item?.name ?? defId,
       icon: item?.icon ?? '?',
-      quality: 'junk',
+      rarity: 'junk',
       description: 'Unknown item.',
       sellPrice: 0,
       stackable: !!item?.stackable,
@@ -44,24 +66,27 @@ export type StatLine = { label: string; value: string; delta?: number };
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 
 /**
- * Stat lines for the sheet. With `equipped` (the item now in the same slot), gear lines carry the
- * difference to it, so the player sees what equipping changes.
+ * Stat lines for the sheet, scaled by the item's quality (gear). With `equipped` (the item now in the same slot, null
+ * when empty), gear lines carry the difference to its scaled stats, so the player sees what equipping changes.
  */
-export function statLines(def: ItemDef, equipped?: ItemDef | null): StatLine[] {
+export function statLines(item: ShownItem, equipped?: ShownItem | null): StatLine[] {
+  const def = defOf(item.defId);
   const lines: StatLine[] = [];
   const cmp = equipped !== undefined;
+  const st = gearStatsAt(def, qualityBpOf(item));
+  const eq = equipped ? gearStatsAt(getItemDef(equipped.defId), qualityBpOf(equipped)) : {};
   if (def.slot) lines.push({ label: 'Slot', value: SLOT_LABELS[def.slot] });
-  if (def.damage) {
-    const d = equipped?.damage;
-    const delta = cmp && d ? Math.round((def.damage.min + def.damage.max - (d ? d.min + d.max : 0)) / 2) : undefined;
-    lines.push({ label: 'Damage', value: `${def.damage.min}–${def.damage.max}`, delta });
+  if (st.damage) {
+    const d = eq.damage;
+    const delta = cmp ? Math.round((st.damage.min + st.damage.max - (d ? d.min + d.max : 0)) / 2) : undefined;
+    lines.push({ label: 'Damage', value: `${st.damage.min}–${st.damage.max}`, delta });
   }
-  if (def.armor !== undefined) lines.push({ label: 'Armor', value: signed(def.armor), delta: cmp ? def.armor - (equipped?.armor ?? 0) : undefined });
-  if (def.woodcuttingStrength !== undefined) {
-    lines.push({ label: 'Woodcutting', value: `${signed(def.woodcuttingStrength)} WS`, delta: cmp ? def.woodcuttingStrength - (equipped?.woodcuttingStrength ?? 0) : undefined });
+  if (st.armor !== undefined) lines.push({ label: 'Armor', value: signed(st.armor), delta: cmp ? st.armor - (eq.armor ?? 0) : undefined });
+  if (st.woodcuttingStrength !== undefined) {
+    lines.push({ label: 'Woodcutting', value: `${signed(st.woodcuttingStrength)} WS`, delta: cmp ? st.woodcuttingStrength - (eq.woodcuttingStrength ?? 0) : undefined });
   }
-  if (def.miningStrength !== undefined) {
-    lines.push({ label: 'Mining', value: `${signed(def.miningStrength)} MS`, delta: cmp ? def.miningStrength - (equipped?.miningStrength ?? 0) : undefined });
+  if (st.miningStrength !== undefined) {
+    lines.push({ label: 'Mining', value: `${signed(st.miningStrength)} MS`, delta: cmp ? st.miningStrength - (eq.miningStrength ?? 0) : undefined });
   }
   if (def.heal) lines.push({ label: 'Heals', value: `${def.heal} HP` });
   return lines;

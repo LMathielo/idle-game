@@ -6,6 +6,13 @@
 //                 pipe while the output does not fit) and the next craft starts with a duration computed right then
 //   INSTA_CRAFT   ceil(remaining minutes) stamina finishes the current craft now
 //   CANCEL_CRAFT  refunds the inputs of every craft not yet delivered and the stamina of every x10 craft not yet started
+//   COLLECT_CRAFT a ready gear piece goes into the inventory (Done)
+//
+// Gear jobs (1.14.0): one piece, x1, any invested stamina (0..50) paid at start and never refunded. Its quality
+// (floor + uniform × (10 000 − floor), floor = 100 bp per stamina + minQualityBp, capped at 10 000) and rarity are rolled
+// at START_CRAFT with the seeded RNG and stored on the job. When the craft finishes the job turns `ready`: the pipe holds
+// the piece (live and offline) until COLLECT_CRAFT moves it into the inventory. Insta takes it to `ready`; a ready job
+// cannot be cancelled.
 //
 // Pipes are NOT an activity: they never use the hero and never stop (or get stopped by) gathering, dungeons or
 // training. They never compete for materials: a job owns its inputs from the moment it starts.
@@ -14,12 +21,14 @@ import { levelBonuses } from './bonuses';
 import { consumeItem, isBuilt } from './buildings';
 import { BUILDINGS } from './config/buildings';
 import { CRAFTING, isCraftMode, isRecipeId, RECIPE_IDS, RECIPES, type RecipeDef, type RecipeId } from './config/crafting';
+import { GEAR } from './config/gear';
 import { getItemDef } from './config/items';
 import { BASIS_POINTS, STAT_EFFECTS } from './config/stats';
 import { diminishingBp } from './diminishing';
-import { addStackable, freeSlots } from './inventory';
+import { gearStatsAt, type GearStats, rarityOdds, rollQualityBp, rollRarity } from './gear';
+import { addStackable, freeSlots, makeItem } from './inventory';
 import { itemQuantity } from './selectors';
-import type { CraftingState, CraftJob, CraftMode, GameEvent, GameState, Inventory, SimulationSummary } from './types';
+import type { CraftingState, CraftJob, CraftMode, GameEvent, GameState, Inventory, ItemRarity, SimulationSummary } from './types';
 
 export type CraftErrorCode =
   | 'BUILDING_LOCKED'
@@ -34,7 +43,9 @@ export type CraftErrorCode =
   | 'NO_CRAFT_JOB'
   | 'CRAFT_CHANGED'
   | 'INVENTORY_FULL'
-  | 'PIPES_MAXED';
+  | 'PIPES_MAXED'
+  | 'CRAFT_READY'
+  | 'CRAFT_NOT_READY';
 
 export type CraftError = { code: CraftErrorCode; message: string } | null;
 
@@ -106,15 +117,31 @@ function canAdd(inventory: Inventory, defId: string): boolean {
 /** Most crafts of `recipeId` in `mode` the hero can pay for now (inputs, and stamina in x10), up to maxJobQuantity. */
 export function maxCrafts(state: GameState, recipeId: RecipeId, mode: CraftMode): number {
   const recipe = RECIPES[recipeId];
-  let n: number = CRAFTING.maxJobQuantity;
+  if (recipe.kind === 'gear' && mode !== 'x1') return 0;
+  let n: number = recipe.kind === 'gear' ? 1 : CRAFTING.maxJobQuantity;
   for (const i of inputsFor(recipe, mode, 1)) n = Math.min(n, Math.floor(itemQuantity(state, i.defId) / i.quantity));
   if (mode === 'x10') n = Math.min(n, Math.floor(state.stamina.current / x10StaminaPerCraft(craftMs(state, recipeId))));
   return Math.max(0, n);
 }
 
-/** Stamina a job costs up front: 0 in x1, x10StaminaPerCraft(effective craft time) × crafts in x10. */
+/** Stamina a material job costs up front: 0 in x1, x10StaminaPerCraft(effective craft time) × crafts in x10. (Gear: the stamina invested.) */
 export function craftStaminaCost(state: GameState, recipeId: RecipeId, mode: CraftMode, quantity: number): number {
   return mode === 'x10' ? x10StaminaPerCraft(craftMs(state, recipeId)) * quantity : 0;
+}
+
+/** Bonus to every gear craft's quality floor, bp (a hook for later upgrades; GEAR.craft.minQualityBp, 0 for now). */
+export function minQualityBp(_state: Pick<GameState, 'buildings'>): number {
+  return GEAR.craft.minQualityBp;
+}
+
+/** A gear craft's quality floor, bp: 100 per invested stamina + minQualityBp, capped at 10 000. */
+export function gearQualityFloorBp(state: Pick<GameState, 'buildings'>, stamina: number): number {
+  return Math.min(GEAR.maxQualityBp, Math.max(0, stamina) * GEAR.craft.qualityBpPerStamina + minQualityBp(state));
+}
+
+/** The rarity odds of a gear recipe: its own, else the default (uncommon 75 / rare 20 / epic 5). */
+export function gearRarityWeights(recipe: RecipeDef) {
+  return recipe.rarityWeights ?? GEAR.craft.rarityWeights;
 }
 
 // ---------- delivery (shared by the walk, insta and settling) ----------
@@ -131,6 +158,10 @@ function deliver(draft: GameState, index: number, events: GameEvent[], summary: 
   if (!job || !isRecipeId(job.recipeId)) return false;
   const recipe = RECIPES[job.recipeId];
   const outId = recipe.output.defId;
+  if (recipe.kind === 'gear') {
+    markReady(job, index, outId, events, summary);
+    return false;
+  }
   if (!canAdd(draft.inventory, outId)) {
     job.progressMs = job.craftMs;
     if (job.status !== 'held') {
@@ -166,6 +197,15 @@ function deliver(draft: GameState, index: number, events: GameEvent[], summary: 
     job.status = 'running';
   }
   return true;
+}
+
+/** A gear craft finished: the pipe holds the piece (`ready`) until COLLECT_CRAFT. Mutates the job. */
+function markReady(job: CraftJob, index: number, defId: string, events: GameEvent[], summary: SimulationSummary | null): void {
+  job.progressMs = job.craftMs;
+  if (job.status === 'ready') return;
+  job.status = 'ready';
+  events.push({ type: 'CRAFT_READY', pipe: index, jobId: job.id, defId });
+  if (summary) summary.craftsReady[defId] = (summary.craftsReady[defId] ?? 0) + 1;
 }
 
 // ---------- the world walk ----------
@@ -229,7 +269,7 @@ const isCount = (n: unknown, min: number): n is number => typeof n === 'number' 
  */
 export function startCraft(
   draft: GameState,
-  cmd: { pipe: unknown; recipeId: unknown; quantity: unknown; mode: unknown; maxCost: unknown },
+  cmd: { pipe: unknown; recipeId: unknown; quantity: unknown; mode: unknown; maxCost: unknown; stamina?: unknown },
   now: number,
   events: GameEvent[],
 ): CraftError {
@@ -248,6 +288,15 @@ export function startCraft(
   const recipeId = cmd.recipeId;
   const mode = cmd.mode;
   const recipe = RECIPES[recipeId];
+  const gear = recipe.kind === 'gear';
+  const invest = cmd.stamina ?? 0;
+  if (gear) {
+    if (mode !== 'x1') return err('INVALID_COMMAND', 'Gear is crafted one piece at a time (x1)');
+    if (quantity !== 1) return err('INVALID_AMOUNT', 'Gear is crafted one piece per job');
+    if (!isCount(invest, 0) || invest > GEAR.craft.maxStamina) return err('INVALID_AMOUNT', `Invest 0 to ${GEAR.craft.maxStamina} stamina`);
+  } else if (invest !== 0) {
+    return err('INVALID_AMOUNT', 'Only gear takes invested stamina');
+  }
   const inputs = inputsFor(recipe, mode, quantity);
   const missing = inputs.filter((i) => itemQuantity(draft, i.defId) < i.quantity);
   if (missing.length > 0) {
@@ -256,12 +305,19 @@ export function startCraft(
   }
   const ms = craftMs(draft, recipeId);
   const staminaPerCraft = mode === 'x10' ? x10StaminaPerCraft(ms) : 0;
-  const stamina = staminaPerCraft * quantity;
+  const stamina = gear ? (invest as number) : staminaPerCraft * quantity;
   if (stamina > maxCost) return err('COST_CHANGED', `This job now costs ${stamina} stamina, more than the ${maxCost} shown`);
   if (stamina > draft.stamina.current) return err('NOT_ENOUGH_STAMINA', `Needs ${stamina} stamina, has ${draft.stamina.current}`);
   for (const i of inputs) consumeItem(draft, i.defId, i.quantity);
   if (stamina > 0) draft.stamina = { ...draft.stamina, current: draft.stamina.current - stamina };
   const job: CraftJob = { id: c.nextJobSerial, recipeId, mode, quantity, done: 0, craftMs: ms, progressMs: 0, staminaPerCraft, status: 'running', startedAt: now };
+  if (gear) {
+    // The piece is rolled now, the moment it is paid for: quality, then rarity (two draws of the main stream).
+    const q = rollQualityBp(draft.rng, gearQualityFloorBp(draft, stamina), GEAR.maxQualityBp);
+    const r = rollRarity(q.rng, gearRarityWeights(recipe));
+    draft.rng = r.rng;
+    job.gear = { staminaInvested: stamina, qualityBp: q.value, rarity: r.value };
+  }
   c.pipes[index] = job;
   c.nextJobSerial += 1;
   events.push({ type: 'CRAFT_STARTED', pipe: index, jobId: job.id, recipeId, quantity, mode });
@@ -286,6 +342,8 @@ export function cancelCraft(draft: GameState, pipe: unknown, jobId: unknown, eve
   const job = draft.crafting.pipes[p.index];
   if (!job) return err('NO_CRAFT_JOB', `Pipe ${p.index + 1} is idle`);
   if (jobId !== job.id) return err('CRAFT_CHANGED', 'That job already finished');
+  // A finished gear piece is never cancelled: that would refund its inputs and drop the rolled piece.
+  if (job.status === 'ready') return err('CRAFT_READY', 'The piece is finished: collect it with Done');
   const refund = cancelRefund(job);
   const newStacks = new Set(refund.items.filter((i) => i.quantity > 0 && !draft.inventory.items.some((it) => it.stackable && it.defId === i.defId)).map((i) => i.defId));
   if (newStacks.size > freeSlots(draft.inventory)) {
@@ -314,15 +372,45 @@ export function instaCraft(draft: GameState, cmd: { pipe: unknown; jobId: unknow
   const job = draft.crafting.pipes[p.index];
   if (!job) return err('NO_CRAFT_JOB', `Pipe ${p.index + 1} is idle`);
   if (cmd.jobId !== job.id || cmd.craft !== job.done + 1) return err('CRAFT_CHANGED', 'That craft already finished');
+  if (job.status === 'ready') return err('CRAFT_READY', 'The piece is finished: collect it with Done');
   if (job.status !== 'running' || !isRecipeId(job.recipeId)) return err('INVENTORY_FULL', 'This craft is done and waits for room in the inventory');
   const cost = instaCost(job.craftMs - job.progressMs);
   if (cost > cmd.maxCost) return err('COST_CHANGED', `Finishing now costs ${cost}, more than the ${cmd.maxCost} shown`);
   if (draft.stamina.current < cost) return err('NOT_ENOUGH_STAMINA', `Needs ${cost} stamina, has ${draft.stamina.current}`);
-  if (!canAdd(draft.inventory, RECIPES[job.recipeId].output.defId)) return err('INVENTORY_FULL', 'No room in the inventory for the crafted items');
+  const recipe = RECIPES[job.recipeId];
+  // Gear waits in the pipe (ready), so it needs no room now; materials go straight into the inventory.
+  if (recipe.kind !== 'gear' && !canAdd(draft.inventory, recipe.output.defId)) return err('INVENTORY_FULL', 'No room in the inventory for the crafted items');
   draft.stamina = { ...draft.stamina, current: draft.stamina.current - cost };
   job.progressMs = job.craftMs;
   deliver(draft, p.index, events, null);
   return null;
+}
+
+/**
+ * COLLECT_CRAFT (Done), bound to the job shown (`jobId`): the ready gear piece goes into the inventory with its rolled
+ * quality and rarity as a new instance (`<defId>#<serial>`, see collectedItemId) and the pipe turns idle. Refused with
+ * INVENTORY_FULL when no slot is free (the piece stays safe in the pipe) and CRAFT_NOT_READY while it is still crafting.
+ */
+export function collectCraft(draft: GameState, pipe: unknown, jobId: unknown, events: GameEvent[]): CraftError {
+  const p = pipeIndex(draft, pipe);
+  if ('error' in p) return p.error;
+  const job = draft.crafting.pipes[p.index];
+  if (!job) return err('NO_CRAFT_JOB', `Pipe ${p.index + 1} is idle`);
+  if (jobId !== job.id) return err('CRAFT_CHANGED', 'That job already finished');
+  if (job.status !== 'ready' || !job.gear || !isRecipeId(job.recipeId)) return err('CRAFT_NOT_READY', 'Still crafting');
+  if (freeSlots(draft.inventory) < 1) return err('INVENTORY_FULL', 'Free an inventory slot first: the piece waits in the pipe');
+  const defId = RECIPES[job.recipeId].output.defId;
+  const itemId = collectedItemId(draft, defId);
+  draft.inventory.items.push(makeItem(defId, 1, itemId, { qualityBp: job.gear.qualityBp, rarity: job.gear.rarity }));
+  draft.nextItemSerial += 1;
+  draft.crafting.pipes[p.index] = null;
+  events.push({ type: 'CRAFT_COLLECTED', pipe: p.index, jobId: job.id, itemId, defId });
+  return null;
+}
+
+/** The instance id COLLECT_CRAFT gives the next piece (the UI opens its popover after Done). */
+export function collectedItemId(state: Pick<GameState, 'nextItemSerial'>, defId: string): string {
+  return `${defId}#${state.nextItemSerial}`;
 }
 
 /** DEBUG_UNLOCK_PIPE: opens the next pipe (up to all 8). */
@@ -336,9 +424,24 @@ export function unlockPipe(draft: GameState, events: GameEvent[]): CraftError {
 
 // ---------- views ----------
 
+/** A gear recipe's extra view: what the piece can be and what stamina buys. */
+export type GearRecipeView = {
+  slot: string;
+  /** Stats at 100% quality (the catalog maxima). */
+  maxStats: GearStats;
+  /** Rarity odds in whole percents, in table order. */
+  rarityOdds: { rarity: ItemRarity; pct: number }[];
+  /** Stamina investable at start (0..maxStamina) and the floor each point adds, bp. */
+  maxStamina: number;
+  qualityBpPerStamina: number;
+  /** The flat floor every gear craft gets now, bp (0 for now). */
+  minQualityBp: number;
+};
+
 export type RecipeView = {
   recipeId: RecipeId;
   name: string;
+  kind: RecipeDef['kind'];
   tier: number;
   /** Per x1 craft, with what the hero has. */
   inputs: { defId: string; perCraft: number; have: number }[];
@@ -349,27 +452,48 @@ export type RecipeView = {
   x10StaminaPerCraft: number;
   /** Most crafts the hero can start now, per mode. */
   max: Record<CraftMode, number>;
+  /** Gear recipes only. */
+  gear: GearRecipeView | null;
 };
 
 export function recipeView(state: GameState, recipeId: RecipeId): RecipeView {
   const r = RECIPES[recipeId];
   const ms = craftMs(state, recipeId);
+  const outDef = getItemDef(r.output.defId);
   return {
     recipeId,
     name: r.name,
+    kind: r.kind,
     tier: r.tier,
     inputs: r.inputs.map((i) => ({ defId: i.defId, perCraft: i.quantity, have: itemQuantity(state, i.defId) })),
     output: { defId: r.output.defId, perCraft: r.output.quantity },
     craftMs: ms,
     x10StaminaPerCraft: x10StaminaPerCraft(ms),
     max: { x1: maxCrafts(state, recipeId, 'x1'), x10: maxCrafts(state, recipeId, 'x10') },
+    gear:
+      r.kind === 'gear'
+        ? {
+            slot: outDef?.slot ?? '',
+            maxStats: gearStatsAt(outDef, GEAR.maxQualityBp),
+            rarityOdds: rarityOdds(gearRarityWeights(r)),
+            maxStamina: GEAR.craft.maxStamina,
+            qualityBpPerStamina: GEAR.craft.qualityBpPerStamina,
+            minQualityBp: minQualityBp(state),
+          }
+        : null,
   };
 }
 
-export type CraftJobView = CraftJob & {
+/** A job as the screen may show it: never the rolled quality or rarity of a gear piece (revealed only by Done). */
+export type CraftJobView = Omit<CraftJob, 'gear'> & {
   pipe: number;
   recipeName: string;
+  kind: RecipeDef['kind'];
   outputDefId: string;
+  /** Gear: the finished piece waits for Done (COLLECT_CRAFT). */
+  ready: boolean;
+  /** Gear: the stamina invested at start (lost on cancel); 0 for materials. */
+  staminaInvested: number;
   /** The current craft's number (done + 1), which INSTA_CRAFT names. */
   craftNumber: number;
   /** Time left on the current craft, ms (0 while held). */
@@ -394,11 +518,15 @@ export function craftJobView(state: GameState, index: number): CraftJobView | nu
   const r = RECIPES[job.recipeId];
   const remainingMs = job.status === 'running' ? Math.max(0, job.craftMs - job.progressMs) : 0;
   const rest = Math.max(0, job.quantity - job.done - 1);
+  const { gear, ...shown } = job;
   return {
-    ...job,
+    ...shown,
     pipe: index,
     recipeName: r.name,
+    kind: r.kind,
     outputDefId: r.output.defId,
+    ready: job.status === 'ready',
+    staminaInvested: gear?.staminaInvested ?? 0,
     craftNumber: job.done + 1,
     remainingMs,
     fraction: job.craftMs > 0 ? Math.min(1, job.progressMs / job.craftMs) : 1,
@@ -419,10 +547,12 @@ export type CraftingView = {
   intReductionBp: number;
   pipesUnlocked: number;
   pipes: PipeView[];
-  /** Pipes with a job (running or held). */
+  /** Pipes with a job (running, held or ready). */
   busy: number;
   /** Some pipe waits for inventory room. */
   held: boolean;
+  /** Pipes holding a finished gear piece (waiting for Done). */
+  ready: number;
   /** Shortest estimated time to a job's end among running pipes, or null. */
   nextJobDoneMs: number | null;
   recipes: RecipeView[];
@@ -437,11 +567,13 @@ export function craftingView(state: GameState): CraftingView {
   }));
   let busy = 0;
   let held = false;
+  let ready = 0;
   let nextJobDoneMs: number | null = null;
   for (const p of pipes) {
     if (!p.job) continue;
     busy += 1;
     if (p.job.status === 'held') held = true;
+    else if (p.job.status === 'ready') ready += 1;
     else nextJobDoneMs = nextJobDoneMs === null ? p.job.jobRemainingMs : Math.min(nextJobDoneMs, p.job.jobRemainingMs);
   }
   const built = isBuilt(state, 'crafting');
@@ -455,26 +587,32 @@ export function craftingView(state: GameState): CraftingView {
     pipes,
     busy,
     held,
+    ready,
     nextJobDoneMs,
     recipes: RECIPE_IDS.map((id) => recipeView(state, id)),
   };
 }
 
-/** The Village sign's line: busy pipes of the open ones, any held pipe, the shortest time to a job's end. Null when idle. */
-export type CraftingSign = { busy: number; open: number; held: boolean; nextJobDoneMs: number };
+/**
+ * The Village sign's line: busy pipes of the open ones, any held pipe, the shortest time to a job's end, and the name
+ * of a finished gear piece waiting for Done ("Iron Sword ready"; the first in pipe order). Null when idle.
+ */
+export type CraftingSign = { busy: number; open: number; held: boolean; nextJobDoneMs: number; readyName: string | null };
 
 /** Cheap (no recipe views): read on every live tick by the Village. */
 export function craftingSign(state: GameState): CraftingSign | null {
   const c = state.crafting;
   let busy = 0;
   let held = false;
+  let readyName: string | null = null;
   let next = Number.POSITIVE_INFINITY;
   c.pipes.forEach((job, i) => {
     if (!job) return;
     busy += 1;
-    if (job.status !== 'running') held = true;
+    if (job.status === 'ready') readyName ??= isRecipeId(job.recipeId) ? RECIPES[job.recipeId].name : null;
+    else if (job.status !== 'running') held = true;
     else next = Math.min(next, craftJobView(state, i)?.jobRemainingMs ?? next);
   });
   if (busy === 0) return null;
-  return { busy, open: c.pipesUnlocked, held, nextJobDoneMs: Number.isFinite(next) ? next : 0 };
+  return { busy, open: c.pipesUnlocked, held, nextJobDoneMs: Number.isFinite(next) ? next : 0, readyName };
 }

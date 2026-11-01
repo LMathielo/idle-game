@@ -193,11 +193,11 @@ function HeroItemSheet({ selection, onClose }: { selection: Selection | null; on
   };
 
   const actions: SheetAction[] = [];
-  let equipped: ReturnType<typeof defOf> | null | undefined;
+  let equipped: Item | null | undefined;
   if (item && def && selection?.kind === 'inventory') {
     if (def.slot && !def.stackable) {
       const current = state.character.equipment[def.slot];
-      equipped = current ? defOf(current.defId, current) : null;
+      equipped = current ?? null;
       actions.push({
         label: 'Equip',
         disabled: busy,
@@ -223,7 +223,7 @@ function HeroItemSheet({ selection, onClose }: { selection: Selection | null; on
     });
   }
 
-  return <ItemSheet def={def} anchor={selection?.anchor ?? null} quantity={item?.quantity} equipped={equipped} actions={actions} error={error} onClose={close} />;
+  return <ItemSheet item={item ?? null} anchor={selection?.anchor ?? null} quantity={item?.quantity} equipped={equipped} actions={actions} error={error} onClose={close} />;
 }
 
 const styles = StyleSheet.create({

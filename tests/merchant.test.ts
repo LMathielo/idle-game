@@ -13,6 +13,7 @@ import {
   type GameState,
   getDerivedStats,
   getItemDef,
+  type ItemDef,
   hashState,
   ITEMS,
   loadSave,
@@ -84,18 +85,18 @@ describe('catalog: quality and prices (config/items.ts)', () => {
 
   it('every item has a quality, a description and a whole sellPrice ≥ 1', () => {
     for (const def of Object.values(ITEMS)) {
-      expect(['junk', 'common', 'uncommon', 'rare', 'epic', 'legendary']).toContain(def.quality);
+      expect(['junk', 'common', 'uncommon', 'rare', 'epic', 'legendary']).toContain(def.rarity);
       expect(def.description.length).toBeGreaterThan(0);
       expect(Number.isSafeInteger(def.sellPrice) && def.sellPrice >= 1).toBe(true);
     }
   });
 
   it('qualities match the brief', () => {
-    for (const id of junk) expect(getItemDef(id)?.quality).toBe('junk');
+    for (const id of junk) expect(getItemDef(id)?.rarity).toBe('junk');
     for (const id of [...logs, 'rusty_gladius', 'linen_tunic', 'worn_sandals', 'wooden_axe', 'iron_axe', 'iron_sword', 'iron_helm', 'health_potion_t1']) {
-      expect(getItemDef(id)?.quality).toBe('common');
+      expect(getItemDef(id)?.rarity).toBe('common');
     }
-    expect(getItemDef('bird_nest')?.quality).toBe('uncommon');
+    expect(getItemDef('bird_nest')?.rarity).toBe('uncommon');
   });
 
   it('sell prices match the brief; starting gear 1–5', () => {
@@ -112,10 +113,10 @@ describe('catalog: quality and prices (config/items.ts)', () => {
   it('new items: stats and buy prices; every buyable sells for less than it costs (no buy→sell profit)', () => {
     expect(getItemDef('health_potion_t1')).toMatchObject({ stackable: true, heal: 50, buyPrice: 12 });
     expect(getItemDef('health_potion_t1')).not.toHaveProperty('slot');
-    expect(getItemDef('iron_axe')).toMatchObject({ slot: 'axe', woodcuttingStrength: 40, buyPrice: 600, stackable: false });
-    expect(getItemDef('iron_sword')).toMatchObject({ slot: 'weapon', damage: { min: 6, max: 9 }, buyPrice: 500, stackable: false });
-    expect(getItemDef('iron_helm')).toMatchObject({ slot: 'helmet', armor: 4, buyPrice: 400, stackable: false });
-    for (const def of Object.values(ITEMS)) if ('buyPrice' in def) expect(def.sellPrice).toBeLessThan(def.buyPrice);
+    expect(getItemDef('iron_axe')).toMatchObject({ slot: 'axe', woodcuttingStrength: 64, buyPrice: 600, stackable: false });
+    expect(getItemDef('iron_sword')).toMatchObject({ slot: 'weapon', damage: { min: 10, max: 14 }, buyPrice: 500, stackable: false });
+    expect(getItemDef('iron_helm')).toMatchObject({ slot: 'helmet', armor: 6, buyPrice: 400, stackable: false });
+    for (const def of Object.values(ITEMS) as ItemDef[]) if (def.buyPrice !== undefined) expect(def.sellPrice).toBeLessThan(def.buyPrice);
   });
 
   it('the stock pool only holds buyable catalog items', () => {
@@ -131,10 +132,10 @@ describe('merchant stock and refresh charges', () => {
     expect(s.merchant.stock).toHaveLength(5);
     expect(s.merchant.stock).toEqual([
       { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
-      { defId: 'iron_axe', quantity: 1, unitPrice: 600 },
-      { defId: 'iron_pickaxe', quantity: 1, unitPrice: 600 },
-      { defId: 'iron_sword', quantity: 1, unitPrice: 500 },
-      { defId: 'iron_helm', quantity: 1, unitPrice: 400 },
+      { defId: 'iron_axe', quantity: 1, unitPrice: 600, qualityBp: 2500, rarity: 'common' }, // 1.14.0: the starter stock is 25% / common
+      { defId: 'iron_pickaxe', quantity: 1, unitPrice: 600, qualityBp: 2500, rarity: 'common' },
+      { defId: 'iron_sword', quantity: 1, unitPrice: 500, qualityBp: 2500, rarity: 'common' },
+      { defId: 'iron_helm', quantity: 1, unitPrice: 400, qualityBp: 2500, rarity: 'common' },
     ]);
     expect(rollStock({ seed: 1 }, 2).stock).toHaveLength(2);
   });

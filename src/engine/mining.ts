@@ -8,7 +8,7 @@
 //   skip cost     = ceil(remaining min) stamina, at least 1
 import { effectiveAttributes, type TrainingLevels } from './attributes';
 import { cloneState } from './clone';
-import { getItemDef } from './config/items';
+import { gearStats } from './gear';
 import { MINING, ROCK_IDS, ROCKS } from './config/mining';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { SKILL_XP_CURVE } from './config/xpCurve';
@@ -39,11 +39,11 @@ export type MiningStrength = {
   };
 };
 
-/** MS bonus of the equipped pickaxe, read from the item catalog by defId. */
+/** MS bonus of the equipped pickaxe: the catalog max scaled by the instance quality. */
 export function pickaxeBonus(equipment: Character['equipment']): number {
   const pickaxe = equipment.pickaxe;
   if (!pickaxe) return 0;
-  const bonus = getItemDef(pickaxe.defId)?.miningStrength ?? 0;
+  const bonus = gearStats(pickaxe).miningStrength ?? 0;
   return Number.isSafeInteger(bonus) && bonus > 0 ? bonus : 0;
 }
 

@@ -101,3 +101,22 @@ export const V13_ADDED = {
   crafting: { pipesUnlocked: 2, pipes: [null, null, null, null, null, null, null, null], remainders: {}, nextJobSerial: 1 },
   craftingBuilding: { state: 'locked', level: 0 },
 } as const;
+
+/**
+ * A state (or save document) without the v13 → v14 additions: no `qualityBp` / `rarity` on any equipped item, inventory
+ * item or merchant listing, at save 13. Tests written before 1.14.0 compare migrated saves in this shape: the v14 step
+ * only adds the default gear roll (25% / common, see tests/migrationV14.test.ts).
+ */
+export function withoutGearRolls<T>(s: T): T {
+  const strip = (x: unknown) => {
+    if (!x || typeof x !== 'object') return x;
+    const { qualityBp: _q, rarity: _r, ...rest } = x as Record<string, unknown>;
+    return rest;
+  };
+  const d = JSON.parse(JSON.stringify(s)) as Record<string, any>;
+  if (d.character?.equipment) for (const k of Object.keys(d.character.equipment)) d.character.equipment[k] = strip(d.character.equipment[k]);
+  if (Array.isArray(d.inventory?.items)) d.inventory.items = d.inventory.items.map(strip);
+  if (Array.isArray(d.merchant?.stock)) d.merchant.stock = d.merchant.stock.map(strip);
+  if (d.saveVersion === 14) d.saveVersion = 13;
+  return d as T;
+}

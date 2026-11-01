@@ -2,14 +2,15 @@
 // ("Building bonuses"). Bonuses from different buildings add together:
 //
 //   yield multiplier  = 1 + Town Hall bonus + the skill's own building bonus        (basis points)
-//   sell price        = floor(catalog sellPrice × (1 + sell bonus))
+//   sell price        = floor(base sell price × (1 + sell bonus)); base = catalog sellPrice, quality-scaled for gear
 //   worker cap        = the Town Hall level's workerCap (0 before the Town Hall is built)
 //   stock slots       = the Merchant level's stockSlots
 //   training XP / min = the Training Grounds level's trainingXpPerMin (1 … 5)
 import { BUILDING_IDS, BUILDINGS, type LevelBonuses } from './config/buildings';
 import { getItemDef } from './config/items';
 import { BASIS_POINTS } from './config/stats';
-import type { BuildingId, GameState, GatheringKind } from './types';
+import { baseSellPrice } from './gear';
+import type { BuildingId, GameState, GatheringKind, Item } from './types';
 
 type Buildings = Pick<GameState, 'buildings'>;
 
@@ -54,11 +55,20 @@ export function sellPriceBonusBp(state: Buildings): number {
   return bp;
 }
 
-/** What the merchant pays per unit of `defId` right now: floor(catalog sellPrice × (1 + bonus)). 0 when it buys none. */
+const withSellBonus = (state: Buildings, base: number) =>
+  base > 0 ? Math.floor((base * Math.max(0, BASIS_POINTS + sellPriceBonusBp(state))) / BASIS_POINTS) : 0;
+
+/**
+ * What the merchant pays per unit of a non-gear `defId` right now: floor(catalog sellPrice × (1 + bonus)). 0 when it
+ * buys none. Gear depends on the instance's quality: use sellPriceOfItem.
+ */
 export function sellPriceOf(state: Buildings, defId: string): number {
-  const base = getItemDef(defId)?.sellPrice ?? 0;
-  if (!(base > 0)) return 0;
-  return Math.floor((base * Math.max(0, BASIS_POINTS + sellPriceBonusBp(state))) / BASIS_POINTS);
+  return withSellBonus(state, getItemDef(defId)?.sellPrice ?? 0);
+}
+
+/** What the merchant pays per unit of this instance right now: its quality-scaled base (gear) × (1 + bonus), floored. */
+export function sellPriceOfItem(state: Buildings, item: Pick<Item, 'defId' | 'qualityBp'>): number {
+  return withSellBonus(state, baseSellPrice(item));
 }
 
 /** Most workers the player may have (Town Hall level; 0 while it is locked). */

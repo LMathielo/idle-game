@@ -26,7 +26,7 @@ import {
   woodcuttingView,
 } from '../src/engine';
 import { cumulativeXp, xpToNext } from '../src/engine/progression';
-import { HOUR, makeClient, MIN, T0, V13_ADDED, woodcuttingGame } from './helpers';
+import { HOUR, makeClient, MIN, T0, V13_ADDED, woodcuttingGame, withoutGearRolls } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v11 save + log written by the 1.11.0 engine: WC Lv4 (63 XP), Mining Lv3 (536 XP), Oak running mid-log. */
@@ -183,8 +183,8 @@ describe('frozen v11 save (tests/fixtures/save-v11-skills.json), engine 1.11.0 �
   });
 
   it('migrates: WC 4,575 total XP → Lv7, Mining 2,450 → Lv5; everything else kept (deterministic)', () => {
-    const s = loadSave(V11_SAVE);
-    expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
+    expect(loadSave(V11_SAVE).saveVersion).toBe(CURRENT_SAVE_VERSION);
+    const s = withoutGearRolls(loadSave(V11_SAVE)); // the v13 → v14 gear rolls: tests/migrationV14.test.ts
     expect(s.character.skills.woodcutting).toEqual({ level: 7, xp: 284, xpToNext: 1_852 });
     expect(totalOn(SKILL_XP_CURVE, s.character.skills.woodcutting)).toBe(4_575); // 500 + 1,414 + 2,598 + 63
     expect(s.character.skills.mining).toEqual({ level: 5, xp: 747, xpToNext: 1_118 });
@@ -199,7 +199,7 @@ describe('frozen v11 save (tests/fixtures/save-v11-skills.json), engine 1.11.0 �
     const { skills: _s, ...otherCharacter } = character;
     const { skills: _rs, ...rawOther } = rc;
     expect(otherCharacter).toEqual(rawOther);
-    expect(hashState(loadSave(V11_SAVE))).toBe(hashState(s));
+    expect(hashState(withoutGearRolls(loadSave(V11_SAVE)))).toBe(hashState(s));
   });
 
   it('loading writes a MIGRATE anchor (save 11 → current, engine 1.11.0 → current); Oak keeps running; the whole log replays', async () => {

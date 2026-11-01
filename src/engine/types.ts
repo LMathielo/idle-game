@@ -18,12 +18,13 @@ export type Attributes = Record<AttributeKey, number>;
 export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots' | 'axe' | 'pickaxe';
 
 /**
- * Item quality (catalog only, by defId). `junk` is sell-only; `common` has a game use (gear, logs, potions);
- * uncommon → legendary are rarity tiers (only the Bird Nest uses one for now).
+ * Item rarity: the colour tier. `junk` is sell-only; `common` has a game use (gear, logs, potions); uncommon →
+ * legendary are rarity tiers. In the catalog by defId; a gear instance carries its own (save v14), which overrides it.
+ * Not to be confused with gear **quality** (`qualityBp`, 0–100%), which scales a gear instance's stats and prices.
  */
-export const ITEM_QUALITIES = ['junk', 'common', 'uncommon', 'rare', 'epic', 'legendary'] as const;
+export const ITEM_RARITIES = ['junk', 'common', 'uncommon', 'rare', 'epic', 'legendary'] as const;
 
-export type ItemQuality = (typeof ITEM_QUALITIES)[number];
+export type ItemRarity = (typeof ITEM_RARITIES)[number];
 
 export const EQUIPMENT_SLOTS = ['helmet', 'amulet', 'armor', 'weapon', 'shield', 'gloves', 'ring1', 'ring2', 'boots', 'axe', 'pickaxe'] as const satisfies readonly EquipmentSlot[];
 
@@ -31,10 +32,9 @@ export type Item = {
   /** Stackable items use their definition id (e.g. `oak_logs`); unique items use an instance id. */
   id: string;
   /**
-   * Item definition id (key of ITEMS in config/items.ts). BASE combat stats (damage, armor) are read
-   * from the catalog by this id and never copied onto the instance, so balance changes need no save
-   * migration. Quality, description and prices are catalog-only too (save v8 dropped the old instance
-   * `rarity`). Rolled affixes (M4 loot) will be stored on the instance, since they differ per drop.
+   * Item definition id (key of ITEMS in config/items.ts). Max combat stats (damage, armor, WS, MS at 100% quality)
+   * are read from the catalog by this id and never copied onto the instance, so balance changes need no save
+   * migration. Description and base prices are catalog-only too. Rolled affixes (later) will be stored on the instance.
    */
   defId: string;
   name: string;
@@ -42,7 +42,14 @@ export type Item = {
   slot?: EquipmentSlot; // equippable items only
   stackable?: boolean;
   quantity?: number;
+  /** Gear only (save v14; every equippable instance has it): the colour tier, overriding the catalog's. */
+  rarity?: ItemRarity;
+  /** Gear only (save v14; every equippable instance has it): quality, integer basis points 0..10 000 (100%). */
+  qualityBp?: number;
 };
+
+/** A gear roll: what a crafted piece or a Merchant gear listing got. */
+export type GearRoll = { qualityBp: number; rarity: ItemRarity };
 
 /** Skills on the Hero tab. `smithing` was removed in save v13 (crafting has no skill). */
 export type SkillKey = 'woodcutting' | 'mining' | 'fishing';
@@ -329,8 +336,9 @@ export type CraftMode = 'x1' | 'x10';
 
 /**
  * A pipe's job state. `running`: the current craft's timer runs. `held`: the current craft finished but its output did
- * not fit (no stack, no free slot); the timer is held and the output is delivered as soon as room appears. `ready`:
- * reserved for gear crafting (PR B: a single rolled item waiting for a Done tap); nothing produces it yet.
+ * not fit (no stack, no free slot); the timer is held and the output is delivered as soon as room appears (materials
+ * only). `ready`: a gear craft finished; the pipe holds the rolled piece until COLLECT_CRAFT (Done) and starts nothing
+ * else (save v14).
  */
 export type CraftJobStatus = 'running' | 'held' | 'ready';
 
@@ -357,6 +365,11 @@ export type CraftJob = {
   status: CraftJobStatus;
   /** Engine time the job started. Informational only. */
   startedAt: number;
+  /**
+   * Gear jobs only (save v14; always one craft, x1): the stamina invested at start (never refunded) and the piece's
+   * quality and rarity, rolled at start with the seeded RNG. Never shown before COLLECT_CRAFT.
+   */
+  gear?: GearRoll & { staminaInvested: number };
 };
 
 export type CraftingState = {
@@ -375,8 +388,11 @@ export type CraftingState = {
 
 // ---------- Merchant ----------
 
-/** One merchant stock slot: `quantity` left of `defId` at `unitPrice` gold each (fixed when the stock was rolled). */
-export type MerchantListing = { defId: string; quantity: number; unitPrice: number };
+/**
+ * One merchant stock slot: `quantity` left of `defId` at `unitPrice` gold each (fixed when the stock was rolled).
+ * Gear listings (save v14) hold one piece with its rolled `qualityBp` and `rarity` (the price already scaled by it).
+ */
+export type MerchantListing = { defId: string; quantity: number; unitPrice: number; qualityBp?: number; rarity?: ItemRarity };
 
 export type MerchantState = {
   /** Stored refresh charges, 0..MERCHANT.maxCharges. */
@@ -388,7 +404,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 13;
+  saveVersion: 14;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -464,6 +480,10 @@ export type GameEvent =
   | { type: 'CRAFT_COMPLETED'; pipe: number; jobId: number; itemId: string; quantity: number }
   /** A craft finished but its output does not fit: the pipe waits for room (nothing is lost). */
   | { type: 'CRAFT_HELD'; pipe: number; jobId: number }
+  /** A gear craft finished: the pipe holds the piece until COLLECT_CRAFT. */
+  | { type: 'CRAFT_READY'; pipe: number; jobId: number; defId: string }
+  /** COLLECT_CRAFT: the gear piece went into the inventory as `itemId`; the pipe is idle. */
+  | { type: 'CRAFT_COLLECTED'; pipe: number; jobId: number; itemId: string; defId: string }
   /** The job's last craft was delivered: the pipe is idle. */
   | { type: 'CRAFT_JOB_DONE'; pipe: number; jobId: number }
   /** CANCEL_CRAFT: the job ended early, unfinished crafts refunded. */
@@ -510,5 +530,7 @@ export type SimulationSummary = {
   /** Crafts finished by the Crafting house's pipes (save v13); their items per output type in itemsCrafted. */
   craftsCompleted: number;
   itemsCrafted: Record<string, number>;
+  /** Gear crafts that finished during this period and wait in their pipe for Done, per item (save v14). */
+  craftsReady: Record<string, number>;
   anomalies: ClockAnomalyEvent[];
 };

@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 13 as const;
+export const CURRENT_SAVE_VERSION = 14 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -23,6 +23,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   10: migrateV10toV11,
   11: migrateV11toV12,
   12: migrateV12toV13,
+  13: migrateV13toV14,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -461,6 +462,55 @@ function migrateV12toV13(doc: SaveDoc): SaveDoc {
     crafting: { pipesUnlocked: V13_PIPES_UNLOCKED, pipes: Array.from({ length: V13_PIPE_SLOTS }, () => null), remainders: {}, nextJobSerial: 1 },
     character: { ...character, skills },
   };
+}
+
+// ---- v13 → v14 (2026-11-01): gear quality and rarity on every gear instance ----
+// Frozen literals: the gear (equippable) items of the 1.13.0 catalog and the default roll, whatever config says later.
+const V14_GEAR_IDS: ReadonlySet<string> = new Set([
+  'rusty_gladius',
+  'linen_tunic',
+  'worn_sandals',
+  'wooden_axe',
+  'iron_axe',
+  'wooden_pickaxe',
+  'iron_pickaxe',
+  'iron_sword',
+  'iron_helm',
+  'iron_chestplate',
+  'iron_shield',
+  'iron_gloves',
+  'iron_boots',
+  'steel_axe',
+  'steel_pickaxe',
+  'steel_sword',
+]);
+const V14_DEFAULT_ROLL = { qualityBp: 2500, rarity: 'common' } as const;
+
+const isV14Gear = (x: unknown): x is Doc => isDoc(x) && typeof x.defId === 'string' && V14_GEAR_IDS.has(x.defId);
+const withV14Roll = (x: unknown): unknown => (isV14Gear(x) ? { ...x, ...V14_DEFAULT_ROLL } : x);
+
+/**
+ * Owner-approved (2026-11-01):
+ * - every gear instance (equipped and in the inventory) gets `qualityBp: 2500, rarity: 'common'`: at 25% the rescaled
+ *   catalog gives exactly the old stats and prices, so nothing changes for the player;
+ * - every gear listing in the merchant's current stock gets the same roll (its unit price is kept);
+ * - everything else (crafting jobs: materials only before v14) is kept.
+ */
+function migrateV13toV14(doc: SaveDoc): SaveDoc {
+  const character = isDoc(doc.character) ? doc.character : {};
+  const equipment: Doc = {};
+  for (const [slot, item] of Object.entries(isDoc(character.equipment) ? character.equipment : {})) equipment[slot] = withV14Roll(item);
+  const inventory = isDoc(doc.inventory) ? doc.inventory : {};
+  const items = Array.isArray(inventory.items) ? inventory.items.map(withV14Roll) : inventory.items;
+  const merchant = isDoc(doc.merchant) ? doc.merchant : null;
+  const out: SaveDoc = {
+    ...doc,
+    saveVersion: 14,
+    character: { ...character, equipment },
+    inventory: { ...inventory, items },
+  };
+  if (merchant && Array.isArray(merchant.stock)) out.merchant = { ...merchant, stock: merchant.stock.map(withV14Roll) };
+  return out;
 }
 
 export class SaveVersionError extends Error {}

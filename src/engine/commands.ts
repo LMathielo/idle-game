@@ -4,7 +4,7 @@ import { effectiveAttributes } from './attributes';
 import { build, buildingForActivity, completeBuilding, completeConstruction, isBuilt, startUpgrade, type UpgradeErrorCode } from './buildings';
 import { onUpgraded } from './upgradeEffects';
 import { cloneState } from './clone';
-import { cancelCraft, type CraftErrorCode, instaCraft, settleCrafting, startCraft, unlockPipe } from './crafting';
+import { cancelCraft, collectCraft, type CraftErrorCode, instaCraft, settleCrafting, startCraft, unlockPipe } from './crafting';
 import { BUILDINGS, isBuildingId } from './config/buildings';
 import { isRockId, ROCKS } from './config/mining';
 import { isGatheringKind, isTreeId, TREES } from './config/woodcutting';
@@ -139,8 +139,10 @@ export type Command =
    * Starts a job in an open, idle pipe of the Crafting house: `quantity` crafts of `recipeId` in `mode` (x1 or x10). Every
    * input of the whole job, and in x10 mode every craft's stamina, is paid now. `maxCost` is the stamina shown (0 in x1):
    * a higher real cost fails with COST_CHANGED. Not an activity: it runs beside everything.
+   * Gear recipes: quantity 1, mode x1, and `stamina` (0..50) invested now (never refunded; +1% quality floor each);
+   * `maxCost` = that stamina. The piece's quality and rarity are rolled now and revealed by COLLECT_CRAFT.
    */
-  | { id: string; type: 'START_CRAFT'; pipe: number; recipeId: string; quantity: number; mode: 'x1' | 'x10'; maxCost: number }
+  | { id: string; type: 'START_CRAFT'; pipe: number; recipeId: string; quantity: number; mode: 'x1' | 'x10'; maxCost: number; stamina?: number }
   /**
    * Spends ceil(remaining minutes) stamina to finish the current craft of pipe `pipe` now. Bound to the job (`jobId`) and
    * craft number (`craft`, CraftJobView.craftNumber) shown: CRAFT_CHANGED once it finished; COST_CHANGED above `maxCost`.
@@ -148,6 +150,8 @@ export type Command =
   | { id: string; type: 'INSTA_CRAFT'; pipe: number; jobId: number; craft: number; maxCost: number }
   /** Cancels the job shown in pipe `pipe` (`jobId`): refunds the inputs of every craft not delivered and the stamina of every x10 craft not started. */
   | { id: string; type: 'CANCEL_CRAFT'; pipe: number; jobId: number }
+  /** Done: the finished gear piece of pipe `pipe` (`jobId`) goes into the inventory; INVENTORY_FULL keeps it in the pipe. */
+  | { id: string; type: 'COLLECT_CRAFT'; pipe: number; jobId: number }
   /** Opens the next crafting pipe (up to 8). */
   | { id: string; type: 'DEBUG_UNLOCK_PIPE' };
 
@@ -642,6 +646,11 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
     }
     case 'CANCEL_CRAFT': {
       const e = cancelCraft(draft, cmd.pipe, cmd.jobId, events);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'COLLECT_CRAFT': {
+      const e = collectCraft(draft, cmd.pipe, cmd.jobId, events);
       if (e) return fail(e.code, e.message);
       break;
     }

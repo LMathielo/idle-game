@@ -27,7 +27,7 @@ import {
   simulate,
 } from '../src/engine';
 import { makeItem } from '../src/engine/inventory';
-import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, v12Skills, withBuilt } from './helpers';
+import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, v12Skills, withBuilt, withoutGearRolls } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v9 save + its action log, written by the 1.8.0 engine before buildings (tests/fixtures). */
@@ -295,7 +295,7 @@ describe('save v10 migration (v9 → v10)', () => {
 
   it('adds the Wooden Pickaxe exactly as a new hero has it, and mining at Lv1 when missing (kept when present)', () => {
     const v10 = MIGRATIONS[9](v9Doc()) as unknown as GameState;
-    expect(v10.character.equipment.pickaxe).toEqual(newGame(1, T0).character.equipment.pickaxe);
+    expect(v10.character.equipment.pickaxe).toEqual(withoutGearRolls(newGame(1, T0)).character.equipment.pickaxe);
     expect(v10.character.equipment.axe?.defId).toBe('wooden_axe');
     // The v10 literal (mining Lv1 on the v10 skill curve, base 500); v11 → v12 recomputes it later.
     expect(v10.character.skills).toEqual({ woodcutting: { level: 9, xp: 1, xpToNext: 2 }, mining: { level: 1, xp: 0, xpToNext: 500 } });
@@ -355,8 +355,8 @@ describe('frozen v9 save (tests/fixtures/save-v9.json) → v10', () => {
   });
 
   it('migrates: buildings locked, woodcutting stopped, pickaxe added, everything else kept (deterministic)', () => {
-    const s = loadSave(V9_SAVE);
-    expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
+    expect(loadSave(V9_SAVE).saveVersion).toBe(CURRENT_SAVE_VERSION);
+    const s = withoutGearRolls(loadSave(V9_SAVE)); // the v13 → v14 gear rolls: tests/migrationV14.test.ts
     expect(s.activity).toBeNull();
     expect(BUILDING_IDS.map((id) => s.buildings[id].state)).toEqual(['locked', 'locked', 'locked', 'locked', 'built', 'locked']); // v11: the Merchant; v13: Crafting
     expect(s.character.equipment.pickaxe?.defId).toBe('wooden_pickaxe');
@@ -368,7 +368,7 @@ describe('frozen v9 save (tests/fixtures/save-v9.json) → v10', () => {
     // v11 → v12 (1.12.0) then recomputes each skill's level from its total XP on the new skill curve.
     expect({ ...character, equipment }).toEqual({ ...rc, skills: v12Skills({ ...rc.skills, mining: { level: 1, xp: 0, xpToNext: 500 } }) });
     expect({ ...merchant, stock: merchant.stock.map((x, i) => (i === 4 ? null : x)) }).toEqual(rm);
-    expect(hashState(loadSave(V9_SAVE))).toBe(hashState(s));
+    expect(hashState(withoutGearRolls(loadSave(V9_SAVE)))).toBe(hashState(s));
   });
 
   it('loading writes a MIGRATE anchor (save 9 → 10, engine 1.8.0 → 1.9.0); real builds and mining follow; the whole log replays', async () => {
