@@ -89,7 +89,7 @@ describe('dungeon through the client', () => {
     const { repo, clock, client } = makeClient({ prefix: 'race' });
     await client.load();
     await client.dispatch(START);
-    clock.advance(110 * SEC - 20 * SEC);
+    clock.advance(120 * SEC - 20 * SEC); // Rat Cellar: 2:00 at core DEX 0
     await client.tick();
     const view = dungeonRunView(client.getState())!; // what the button shows: run 1, cost 1
     expect([view.run, view.skipCost]).toEqual([1, 1]);

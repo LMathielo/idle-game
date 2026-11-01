@@ -100,7 +100,8 @@ describe('frozen v13 save (tests/fixtures/save-v13.json), engine 1.13.0 → 1.14
     for (const item of s.inventory.items) if (item.slot) expect(item).toMatchObject(ROLL);
     expect(s.merchant.stock[1]).toEqual({ defId: 'iron_axe', quantity: 1, unitPrice: 600, ...ROLL });
     // The numbers the player sees: 1.13.0 had Iron Helm 4 armor, Rusty Gladius 2–4, Wooden Axe +1 WS, Wooden Pickaxe +1 MS.
-    const raw = V13_SAVE as GameState;
+    // (Same attributes on both sides: the v16 step turns the stored ones into extra normal points.)
+    const raw = { ...(V13_SAVE as GameState), character: { ...(V13_SAVE as GameState).character, attributes: s.character.attributes } };
     expect(getDerivedStats(s)).toEqual(getDerivedStats(raw)); // a v13 instance (no quality) reads as 25%
     expect(getDerivedStats(s).defense.breakdown.find((p) => p.source === 'armor' && p.defId === 'iron_helm')).toMatchObject({ value: 4 });
     expect(getDerivedStats(s).damage.breakdown[0]).toMatchObject({ min: 2, max: 4 });

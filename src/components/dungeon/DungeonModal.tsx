@@ -17,7 +17,6 @@ import {
   type DungeonRunView,
   dungeonTotals,
   dungeonUnlockView,
-  effectiveAttributes,
   ENEMIES,
   type FightRecord,
   type GameState,
@@ -107,7 +106,6 @@ function requirementText(req: { dungeonId: DungeonId; wins: number }, progress: 
 }
 
 function DungeonList({ state, running, onPick }: { state: GameState; running: DungeonId | null; onPick: (id: DungeonId) => void }) {
-  const attributes = effectiveAttributes(state); // search time uses the trained DEX
   /** The locked dungeon whose info box is open, anchored on its card. */
   const [info, setInfo] = useState<{ id: DungeonId; anchor: AnchorRect } | null>(null);
   const explain = useCallback((id: DungeonId, node: HostInstance | null) => {
@@ -126,7 +124,7 @@ function DungeonList({ state, running, onPick }: { state: GameState; running: Du
           <DungeonCard
             key={id}
             id={id}
-            searchMs={searchMsFor(id, attributes)}
+            searchMs={searchMsFor(id, state)}
             wins={dungeonTotals(state, id).wins}
             running={running === id}
             onPick={onPick}
@@ -253,7 +251,7 @@ function DungeonDetail({
   const { training } = state;
   const stats = useMemo(() => getDerivedStats({ character: { level, attributes, equipment }, training }), [level, attributes, equipment, training]);
   const danger = useMemo(() => dangerHint({ character: { level, attributes, equipment }, training }, id), [level, attributes, equipment, training, id]);
-  const searchMs = searchMsFor(id, effectiveAttributes(state));
+  const searchMs = searchMsFor(id, state);
   const unlock = dungeonUnlockView(state, id);
   const totals = dungeonTotals(state, id);
   const hp = hpView(state);

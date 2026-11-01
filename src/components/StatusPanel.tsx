@@ -1,15 +1,17 @@
-// Hero "Status": the 4 attributes (effective = base + trained; tap one for an info box with the split), derived combat
-// stats (tap a row for an info box with its breakdown) and stamina. Info boxes are InfoPopovers anchored on the row.
-// Derived stats come from the engine's read-only getDerivedStats(); nothing here computes rules.
+// Hero "Status": the 4 attributes (the total; tap one for an info box with "N STR + M core STR" and the effects of each
+// part), derived combat stats (tap a row for an info box with its breakdown) and stamina. Info boxes are InfoPopovers
+// anchored on the row. Numbers come from the engine's read-only selectors (attributeViews, getDerivedStats, hpView);
+// nothing here computes rules, it only words them.
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { type HostInstance, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
-  ATTRIBUTE_KEYS,
+  ATTRIBUTE_POINTS,
+  type AttributeEffect,
   type AttributeKey,
+  type AttributeView,
+  attributeViews,
   type Character,
-  effectiveAttributes,
   getDerivedStats,
-  intCraftReductionBp,
   hpView,
   type RangePart,
   type Stamina,
@@ -17,32 +19,43 @@ import {
   staminaView,
   type TrainingState,
   type ValuePart,
-  DUNGEONS,
 } from '../engine';
 import { colors, fonts } from '../theme';
 import { ATTRIBUTE_NAMES, formatClock, formatHoursMinutes, formatNumber, itemName } from './format';
 import { Bar, Panel } from './Panel';
 import { type AnchorRect, InfoPopover, measureAnchor, PopoverRow, PopoverText } from './ui/InfoPopover';
 
-/** What one point does, built from the engine coefficients so the text can't drift from the rules. */
-const ATTRIBUTE_EFFECTS: Record<AttributeKey, string | null> = {
-  strength: `+${STATS.damagePerStrength} damage`,
-  // Rat Cellar's timing; every tier uses the same −1 s per DEX today (config/dungeons.ts).
-  dexterity: `−${DUNGEONS.rat_cellar.search.perDexterityMs / 1000}s dungeon search`,
-  endurance: `+${STATS.defensePerEndurance} defense, +${STATS.hpRegen.perEndurance} HP/min`,
-  // INT's effect depends on its value (a diminishing curve), so it is filled in from the engine in the component.
-  intelligence: null,
-};
+/** 833 bp → "8.3%". */
+const pct = (bp: number) => `${Number((bp / 100).toFixed(1))}%`;
 
-/** INT 10 → "−8.3% crafting time" (intCraftReductionBp: diminishing, cap 50%). */
-const intEffect = (bp: number) => `−${Number((bp / 100).toFixed(1))}% crafting time`;
+/** One effect line, worded from the engine's numbers. */
+function effectText(e: AttributeEffect): string {
+  switch (e.kind) {
+    case 'damage':
+      return `+${formatNumber(e.amount)} damage`;
+    case 'defense':
+      return `+${formatNumber(e.amount)} defense`;
+    case 'hpRegen':
+      return `+${formatNumber(e.amount)} HP/min`;
+    case 'gatheringPower':
+      return `+${formatNumber(e.amount)} woodcutting & mining strength`;
+    case 'activityTime':
+      return `−${pct(e.bp)} search, cut & mining time`;
+    case 'craftTime':
+      return `−${pct(e.bp)} crafting time`;
+  }
+}
 
-const ATTRIBUTES = ATTRIBUTE_KEYS.map((key) => ({
-  key,
-  ...ATTRIBUTE_NAMES[key],
-  effect: ATTRIBUTE_EFFECTS[key] ?? 'no effect yet',
-  active: ATTRIBUTE_EFFECTS[key] !== null,
-}));
+const effectsText = (effects: AttributeEffect[]) => effects.map(effectText).join(', ');
+
+/** The cell's one-line summary: the linear effects, else the core ones (a hint while there is no core point yet). */
+function summaryOf(v: AttributeView): { text: string; active: boolean } {
+  if (v.linear.length > 0) return { text: effectsText(v.linear), active: true };
+  if (v.coreEffects.length === 0) return { text: 'no effect yet', active: false };
+  if (v.core === 0) return { text: 'train core for its effect', active: false };
+  return { text: effectsText(v.coreEffects), active: true };
+}
+
 
 type StatKey = 'damage' | 'defense' | 'attackIntervalMs' | 'maxHp' | 'maxMana';
 
@@ -78,7 +91,9 @@ function partLabel(p: RangePart | ValuePart): string {
 }
 
 function describeRange(parts: RangePart[]): string {
-  return parts.map((p) => `${range(p.min, p.max)} ${partLabel(p)}`).join(' + ');
+  // Zero lines add nothing (e.g. "+ 0 STR" for a new hero), but keep at least one.
+  const shown = parts.filter((p) => p.min !== 0 || p.max !== 0);
+  return (shown.length > 0 ? shown : parts.slice(0, 1)).map((p) => `${range(p.min, p.max)} ${partLabel(p)}`).join(' + ');
 }
 
 function describeValue(parts: ValuePart[]): string {
@@ -99,7 +114,7 @@ type Props = {
 
 export const StatusPanel = memo(function StatusPanel({ level, attributes, equipment, hp, hpRegenProgress, stamina, training }: Props) {
   const stats = useMemo(() => getDerivedStats({ character: { level, attributes, equipment }, training }), [level, attributes, equipment, training]);
-  const effective = useMemo(() => effectiveAttributes({ character: { attributes }, training }), [attributes, training]);
+  const attrs = useMemo(() => attributeViews({ character: { level, attributes }, training }), [level, attributes, training]);
   const hpNow = hpView({ character: { level, attributes, equipment, hp, hpRegenProgress }, training });
   /** The info box: a stat or an attribute, anchored on its row. */
   const [info, setInfo] = useState<{ key: StatKey | AttributeKey; anchor: AnchorRect } | null>(null);
@@ -107,9 +122,8 @@ export const StatusPanel = memo(function StatusPanel({ level, attributes, equipm
     void measureAnchor(node).then((anchor) => anchor && setInfo({ key, anchor }));
   }, []);
   const closeInfo = useCallback(() => setInfo(null), []);
-  const intBp = intCraftReductionBp({ character: { attributes }, training });
-  const attrs = useMemo(() => ATTRIBUTES.map((a) => (a.key === 'intelligence' ? { ...a, effect: intEffect(intBp), active: true } : a)), [intBp]);
-  const attrInfo = info ? attrs.find((a) => a.key === info.key) : undefined;
+  const attrInfo = info ? attrs.find((a) => a.attribute === info.key) : undefined;
+  const attrNames = attrInfo ? ATTRIBUTE_NAMES[attrInfo.attribute] : undefined;
 
   const rows: { key: StatKey; label: string; value: string; note?: string; detail: string }[] = [
     { key: 'damage', label: 'Damage', value: range(stats.damage.min, stats.damage.max), detail: `Damage ${range(stats.damage.min, stats.damage.max)} = ${describeRange(stats.damage.breakdown)}` },
@@ -125,7 +139,7 @@ export const StatusPanel = memo(function StatusPanel({ level, attributes, equipm
       label: 'HP',
       value: `${formatNumber(hpNow.hp)} / ${formatNumber(stats.maxHp.value)}`,
       note: `+${hpNow.regenPerMin}/min${hpNow.full ? '' : ` · full in ${formatHoursMinutes(hpNow.fullInMs)}`}`,
-      detail: `Max HP ${formatNumber(stats.maxHp.value)} = ${describeValue(stats.maxHp.breakdown)}. Regen ${hpNow.regenPerMin}/min = ${STATS.hpRegen.basePerMin} base + ${STATS.hpRegen.perEndurance} × END.`,
+      detail: `Max HP ${formatNumber(stats.maxHp.value)} = ${describeValue(stats.maxHp.breakdown)}. Regen ${hpNow.regenPerMin}/min = ${STATS.hpRegen.basePerMin} base + ${STATS.hpRegen.perEndurance} × total END.`,
     },
     { key: 'maxMana', label: 'Mana', value: formatNumber(stats.maxMana.value), detail: `Mana ${formatNumber(stats.maxMana.value)} = ${describeValue(stats.maxMana.breakdown)}` },
   ];
@@ -134,9 +148,10 @@ export const StatusPanel = memo(function StatusPanel({ level, attributes, equipm
   return (
     <Panel title="Status">
       <View style={styles.attrGrid}>
-        {attrs.map((a) => (
-          <AttributeCell key={a.key} attr={a} effective={effective[a.key]} onInfo={openInfo} />
-        ))}
+        {attrs.map((a) => {
+          const sum = summaryOf(a);
+          return <AttributeCell key={a.attribute} attribute={a.attribute} total={a.total} summary={sum.text} active={sum.active} onInfo={openInfo} />;
+        })}
       </View>
 
       <View style={styles.statList}>
@@ -146,12 +161,23 @@ export const StatusPanel = memo(function StatusPanel({ level, attributes, equipm
       </View>
 
       <StaminaBar stamina={stamina} />
-      {info && attrInfo ? (
-        <InfoPopover anchor={info.anchor} onClose={closeInfo} title={attrInfo.label} subtitle={attrInfo.effect}>
-          <PopoverRow label="Total" value={formatNumber(effective[attrInfo.key])} strong />
-          <PopoverRow label="Base" value={formatNumber(attributes[attrInfo.key])} />
-          <PopoverRow label="Trained" value={formatNumber(training.attributes[attrInfo.key].level)} />
-          <PopoverText tone="note">Raise it at the Training Grounds. Everything that uses it reads the total.</PopoverText>
+      {info && attrInfo && attrNames ? (
+        <InfoPopover
+          anchor={info.anchor}
+          onClose={closeInfo}
+          title={`${attrNames.short} ${formatNumber(attrInfo.total)}`}
+          subtitle={`${formatNumber(attrInfo.normal)} ${attrNames.short} + ${formatNumber(attrInfo.core)} core ${attrNames.short}`}
+        >
+          <PopoverRow label="From hero level" value={formatNumber(attrInfo.levelPoints)} />
+          {attrInfo.extra !== 0 ? <PopoverRow label="Extra" value={formatNumber(attrInfo.extra)} /> : null}
+          <PopoverRow label="Core (training)" value={formatNumber(attrInfo.core)} />
+          <PopoverText>
+            {`Total ${attrNames.short} (linear): ${attrInfo.linear.length > 0 ? effectsText(attrInfo.linear) : 'no effect yet'}`}
+          </PopoverText>
+          <PopoverText>
+            {`Core ${attrNames.short} (special): ${attrInfo.coreEffects.length > 0 ? effectsText(attrInfo.coreEffects) : 'no special effect yet'}`}
+          </PopoverText>
+          <PopoverText tone="note">Every hero level gives +{ATTRIBUTE_POINTS.perLevel} to each attribute. Core points come only from the Training Grounds.</PopoverText>
         </InfoPopover>
       ) : null}
       {statInfo && info ? (
@@ -164,30 +190,35 @@ export const StatusPanel = memo(function StatusPanel({ level, attributes, equipm
 });
 
 const AttributeCell = memo(function AttributeCell({
-  attr,
-  effective,
+  attribute,
+  total,
+  summary,
+  active,
   onInfo,
 }: {
-  attr: (typeof ATTRIBUTES)[number];
-  effective: number;
+  attribute: AttributeKey;
+  total: number;
+  summary: string;
+  active: boolean;
   onInfo: (k: AttributeKey, node: HostInstance | null) => void;
 }) {
   const ref = useRef<HostInstance>(null);
-  const onPress = useCallback(() => onInfo(attr.key, ref.current), [onInfo, attr.key]);
+  const onPress = useCallback(() => onInfo(attribute, ref.current), [onInfo, attribute]);
+  const names = ATTRIBUTE_NAMES[attribute];
   return (
     <Pressable
       ref={ref}
       onPress={onPress}
       style={styles.attrCell}
       accessibilityRole="button"
-      accessibilityLabel={`${attr.label} ${effective}, ${attr.effect}`}
-      accessibilityHint="Shows base and trained points"
+      accessibilityLabel={`${names.label} ${total}, ${summary}`}
+      accessibilityHint="Shows normal and core points and what each does"
     >
       <View style={styles.attrTop}>
-        <Text style={styles.attrShort}>ⓘ {attr.short}</Text>
-        <Text style={styles.attrValue}>{formatNumber(effective)}</Text>
+        <Text style={styles.attrShort}>ⓘ {names.short}</Text>
+        <Text style={styles.attrValue}>{formatNumber(total)}</Text>
       </View>
-      <Text style={attr.active ? styles.attrEffect : styles.attrEffectNone}>{attr.effect}</Text>
+      <Text style={active ? styles.attrEffect : styles.attrEffectNone}>{summary}</Text>
     </Pressable>
   );
 });

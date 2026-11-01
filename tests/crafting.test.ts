@@ -27,13 +27,16 @@ import {
 import { cloneState } from '../src/engine/clone';
 import { getItemDef } from '../src/engine/config/items';
 import { addStackable } from '../src/engine/inventory';
-import { apply, builtGame, cmd, debugBuild, HOUR, makeClient, MIN, qty, SEC, T0 } from './helpers';
+import { apply, builtGame, cmd, debugBuild, HOUR, makeClient, MIN, qty, SEC, T0, withCore } from './helpers';
 
 type Input = Parameters<typeof cmd>[0];
 
-/** A built game (every building) with these stacks added. */
+/**
+ * A built game (every building) with these stacks added, and core INT 10 (−8.33% craft time: the numbers below were pinned
+ * when a new hero had INT 10; since 1.16.0 only core INT counts and a new hero has 0).
+ */
 function game(items: Record<string, number> = { oak_logs: 1000, stone: 1000 }, seed = 7): GameState {
-  const s = cloneState(builtGame(seed, T0));
+  const s = cloneState(withCore(builtGame(seed, T0), { intelligence: 10 }));
   for (const [id, n] of Object.entries(items)) addStackable(s.inventory, id, n);
   return s;
 }
@@ -119,22 +122,27 @@ describe('craft time', () => {
     expect(craftMsFor(5000, 10_000, 0)).toBe(5000);
   });
 
-  it('reads the EFFECTIVE INT (base + trained) and the house level', () => {
+  it('reads the CORE INT only (training level, 1.16.0) and the house level', () => {
+    expect(craftingView(builtGame(7, T0)).recipes[0].craftMs).toBe(5000); // a new hero: core INT 0
     let s = game();
     expect(intCraftReductionBp(s)).toBe(833);
     expect(craftingView(s).recipes[0].craftMs).toBe(4584);
-    s = { ...s, training: { ...s.training, attributes: { ...s.training.attributes, intelligence: { level: 40, xp: 0, progressMs: 0 } } } };
-    expect(intCraftReductionBp(s)).toBe(2500); // 10 base + 40 trained
+    // Normal INT (level points, extra) never shortens crafting.
+    const normal = { ...s, character: { ...s.character, level: 30, attributes: { ...s.character.attributes, intelligence: 500 } } };
+    expect(intCraftReductionBp(normal)).toBe(833);
+    s = withCore(s, { intelligence: 50 });
+    expect(intCraftReductionBp(s)).toBe(2500); // core 50
     expect(craftingView(withLevel(s, 3)).recipes[0].craftMs).toBe(3038); // 5000 × 0.81 × 0.75 = 3037.5
   });
 
   it("each craft's duration is fixed when it starts: INT gained mid-job counts from the next craft", () => {
     let s = apply(game(), start(0, 'oak_plank'), T0);
     expect(s.crafting.pipes[0]!.craftMs).toBe(4584);
-    s = apply(s, { type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'intelligence', amount: 40 }, T0 + 1000);
+    s = simulate(s, T0 + 1000).state;
+    s = withCore(s, { intelligence: 50 }); // core INT 10 → 50 mid-craft (as training levels would)
     expect(s.crafting.pipes[0]!.craftMs).toBe(4584); // the craft in progress keeps its time
     s = simulate(s, T0 + 4584).state;
-    expect(s.crafting.pipes[0]).toMatchObject({ done: 1, craftMs: 3750, progressMs: 0 }); // INT 50 → −25%
+    expect(s.crafting.pipes[0]).toMatchObject({ done: 1, craftMs: 3750, progressMs: 0 }); // core INT 50 → −25%
   });
 });
 

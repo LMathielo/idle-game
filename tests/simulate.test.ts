@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { applyCommand, hashState, itemQuantity, newGame, simulate, type GameState } from '../src/engine';
+import { applyCommand, hashState, itemQuantity, logMsFor, newGame, simulate, type GameState } from '../src/engine';
 import { CLOCK_BACKWARD_TOLERANCE_MS, DEFAULT_OFFLINE_CAP_MS } from '../src/engine/config/time';
-import { HOUR, MIN, SEC, T0, apply, cmd, qty, woodcuttingGame, progressMs, builtGame } from './helpers';
+import { HOUR, MIN, SEC, T0, apply, cmd, qty, woodcuttingGame, progressMs, builtGame, withCore } from './helpers';
 
-/** Oak at DEX 10: 2:00 − 10 s = 1:50 per log, 25 XP. */
-const OAK_MS = 110 * SEC;
+/** Oak at core DEX 0 (1.16.0): 2:00 per log, 25 XP. */
+const OAK_MS = 120 * SEC;
 
 describe('woodcutting rules (Oak)', () => {
   it('each log gives 1 Oak Logs and 25 woodcutting XP, no hero XP', () => {
@@ -24,15 +24,14 @@ describe('woodcutting rules (Oak)', () => {
     const a = simulate(s, T0 + 100 * SEC).state;
     expect(progressMs(a)).toBe(100 * SEC);
     expect(qty(a, 'oak_logs')).toBe(0);
-    const b = simulate(a, T0 + 115 * SEC).state;
+    const b = simulate(a, T0 + 125 * SEC).state;
     expect(qty(b, 'oak_logs')).toBe(1);
     expect(progressMs(b)).toBe(5 * SEC);
   });
 
   it('bird nest drops at ~1/200 over a long run and rolls the seeded RNG', () => {
-    // Fastest logs (10 s floor) so the sample is large.
-    let s = woodcuttingGame(7);
-    s = { ...s, character: { ...s.character, attributes: { ...s.character.attributes, dexterity: 500 } } };
+    // Fast logs (core DEX 500: −45.45%) so the sample is large.
+    let s = withCore(woodcuttingGame(7), { dexterity: 500 });
     let actions = 0;
     for (let i = 0; i < 40; i++) {
       const r = simulate(s, s.time.lastSimulatedAt + DEFAULT_OFFLINE_CAP_MS);
@@ -40,7 +39,7 @@ describe('woodcutting rules (Oak)', () => {
       s = r.state;
     }
     const nests = qty(s, 'bird_nest');
-    expect(actions).toBe(40 * 2880);
+    expect(actions).toBe(Math.floor((40 * DEFAULT_OFFLINE_CAP_MS) / logMsFor('oak', s)));
     const expected = actions / 200;
     expect(Math.abs(nests - expected)).toBeLessThan(5 * Math.sqrt(expected));
     expect(s.rng.seed).not.toBe(woodcuttingGame(7).rng.seed);
@@ -250,12 +249,11 @@ describe('time rules', () => {
     expect(qty(fwdAgain.state, 'oak_logs')).toBe(qty(fwd.state, 'oak_logs'));
   });
 
-  it('8h cap: worst-case loop (10 s floor) stays bounded', () => {
-    const s = woodcuttingGame();
-    const fast: GameState = { ...s, character: { ...s.character, attributes: { ...s.character.attributes, dexterity: 1_000_000 } } };
+  it('8h cap: worst-case loop (core DEX near the 50% cap) stays bounded', () => {
+    const fast: GameState = withCore(woodcuttingGame(), { dexterity: 1_000_000 });
     const started = performance.now();
     const r = simulate(fast, T0 + 8 * HOUR);
-    expect(r.summary.actions).toBe(2880);
+    expect(r.summary.actions).toBe(Math.floor((8 * HOUR) / logMsFor('oak', fast))); // 479 at 60 012 ms
     expect(performance.now() - started).toBeLessThan(2000);
   });
 });

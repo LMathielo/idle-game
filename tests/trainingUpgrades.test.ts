@@ -25,7 +25,7 @@ import {
   upgradeView,
 } from '../src/engine';
 import type { CommandInput } from '../src/client/types';
-import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, V13_ADDED, v12Skills, withoutGearRolls } from './helpers';
+import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, V13_ADDED, v12Skills, withoutGearRolls, v16Attributes } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v11 save + its action log, written by the 1.10.0 engine before Training Grounds upgrades (tests/fixtures). */
@@ -266,7 +266,7 @@ describe('frozen v11 save (tests/fixtures/save-v11.json), 1.10.0 → 1.11.0 (eng
     expect(rest).toEqual(rawRest);
     expect(buildings).toEqual({ ...rb, crafting: V13_ADDED.craftingBuilding });
     expect(crafting).toEqual(V13_ADDED.crafting);
-    expect(character).toEqual({ ...rc, skills: v12Skills(rc.skills) });
+    expect(character).toEqual({ ...rc, attributes: v16Attributes(rc.attributes), skills: v12Skills(rc.skills) });
   });
 
   it('loading writes a MIGRATE anchor (engine 1.10.0 → current; save 11 → 12 since 1.12.0); the upgrade then doubles the rate; the whole log replays', async () => {

@@ -33,7 +33,7 @@ import {
   woodcuttingStrength,
   woodcuttingView,
 } from '../src/engine';
-import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, woodcuttingGame, progressMs, builtGame, debugBuild } from './helpers';
+import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, woodcuttingGame, progressMs, builtGame, debugBuild, withCore } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v6 save + its action log, written by the 1.5.0 engine before the woodcutting rework (tests/fixtures). */
@@ -43,17 +43,12 @@ const V6_LOG: LogRow[] = JSON.parse(readFileSync(join(FIXTURES, 'log-v6.json'), 
 const entries = (rows: LogRow[]): ReplayEntry[] =>
   rows.map((r) => ({ type: r.type, payload: r.payload, clientTime: r.clientTime, engineVersion: r.engineVersion, stateHash: r.stateHash }));
 
-const OAK_MS = 110 * SEC;
+const OAK_MS = 120 * SEC; // core DEX 0 (1.16.0): the base time
 
-function withWc(s: GameState, level: number, extra: Partial<GameState['character']['attributes']> = {}): GameState {
-  return {
-    ...s,
-    character: {
-      ...s.character,
-      attributes: { ...s.character.attributes, ...extra },
-      skills: { ...s.character.skills, woodcutting: { ...s.character.skills.woodcutting, level } },
-    },
-  };
+/** Woodcutting level `level` and these CORE points (training levels: core STR raises WS since 1.16.0). */
+function withWc(s: GameState, level: number, core: Partial<GameState['character']['attributes']> = {}): GameState {
+  const out = withCore(s, core);
+  return { ...out, character: { ...out.character, skills: { ...out.character.skills, woodcutting: { ...out.character.skills.woodcutting, level } } } };
 }
 
 function run(s: GameState, c: CommandInput, at: number) {
@@ -92,19 +87,21 @@ describe('config: tree table and formulas', () => {
   });
 });
 
-describe('woodcutting strength (WS = 10 × level + effective STR + axe)', () => {
-  it('a new hero has WS 21 (10 + 10 + 1) with the Wooden Axe equipped', () => {
+describe('woodcutting strength (WS = 10 × level + 10 base + core STR + axe, 1.16.0)', () => {
+  it('a new hero has WS 21 (10 + 10 base + 0 core STR + 1) with the Wooden Axe equipped', () => {
     const s = builtGame(1, T0);
     expect(s.character.equipment.axe).toMatchObject({ id: 'start-wooden_axe', defId: 'wooden_axe', slot: 'axe' });
-    expect(woodcuttingStrength(s)).toEqual({ value: 21, breakdown: { level: 10, strength: 10, axe: 1, axeDefId: 'wooden_axe' } });
+    expect(woodcuttingStrength(s)).toEqual({ value: 21, breakdown: { level: 10, base: 10, strength: 0, axe: 1, axeDefId: 'wooden_axe' } });
   });
 
-  it('level 5 base hero = 61; trained STR counts (effective); no axe or an unknown axe gives 0', () => {
+  it('level 5 base hero = 61; core STR counts, normal STR (level points, extra) does not; no axe or an unknown axe gives 0', () => {
     const s = withWc(builtGame(1, T0), 5);
     expect(woodcuttingStrength(s).value).toBe(61);
-    const trained = { ...s, training: { ...s.training, attributes: { ...s.training.attributes, strength: { level: 39, xp: 0, progressMs: 0 } } } };
-    expect(woodcuttingStrength(trained).breakdown).toMatchObject({ level: 50, strength: 49, axe: 1 });
+    const trained = withCore(s, { strength: 39 });
+    expect(woodcuttingStrength(trained).breakdown).toMatchObject({ level: 50, base: 10, strength: 39, axe: 1 });
     expect(woodcuttingStrength(trained).value).toBe(100);
+    const normal = { ...s, character: { ...s.character, level: 20, attributes: { ...s.character.attributes, strength: 500 } } };
+    expect(woodcuttingStrength(normal).value).toBe(61);
     const { axe: _a, ...noAxe } = s.character.equipment;
     expect(woodcuttingStrength({ ...s, character: { ...s.character, equipment: noAxe } }).breakdown).toMatchObject({ axe: 0, axeDefId: null });
     const odd = { ...s.character.equipment, axe: { ...s.character.equipment.axe!, defId: 'nope' } };
@@ -112,15 +109,16 @@ describe('woodcutting strength (WS = 10 × level + effective STR + axe)', () => 
   });
 });
 
-describe('cut time = max(10 s, base − 1 s × effective DEX)', () => {
-  it('Oak at DEX 10 is 1:50; the 10 s floor; trained DEX counts', () => {
-    expect(logMsFor('oak', { dexterity: 10 })).toBe(OAK_MS);
-    expect(logMsFor('ironwood', { dexterity: 10 })).toBe(30 * MIN - 10 * SEC);
-    expect(logMsFor('oak', { dexterity: 110 })).toBe(10 * SEC);
-    expect(logMsFor('oak', { dexterity: 5000 })).toBe(10 * SEC);
+describe('cut time = max(10 s, ceil(base × (1 − core DEX reduction))) (1.16.0)', () => {
+  it('Oak at core DEX 0 is 2:00, 10 → 1:50.004, 50 → 1:30, 210 → 1:11.544; normal DEX never counts; the view reads it', () => {
     const s = woodcuttingGame();
-    const trained = { ...s, training: { ...s.training, attributes: { ...s.training.attributes, dexterity: { level: 20, xp: 0, progressMs: 0 } } } };
-    expect(woodcutActivityView(trained)?.logMs).toBe(90 * SEC); // DEX 10 + 20 trained
+    expect(logMsFor('oak', s)).toBe(OAK_MS);
+    expect(logMsFor('oak', withCore(s, { dexterity: 10 }))).toBe(110_004); // 833 bp
+    expect(logMsFor('oak', withCore(s, { dexterity: 50 }))).toBe(90 * SEC); // 2500 bp
+    expect(logMsFor('oak', withCore(s, { dexterity: 210 }))).toBe(71_544); // 4038 bp
+    expect(logMsFor('ironwood', withCore(s, { dexterity: 100 }))).toBe(1_200_060); // 3333 bp
+    expect(logMsFor('oak', { ...s, character: { ...s.character, level: 50, attributes: { ...s.character.attributes, dexterity: 5000 } } } as GameState)).toBe(OAK_MS);
+    expect(woodcutActivityView(withCore(s, { dexterity: 50 }))?.logMs).toBe(90 * SEC);
   });
 });
 
@@ -136,7 +134,7 @@ describe('starting a tree', () => {
     expect(woodcuttingView(l5).trees[1]).toMatchObject({ levelOk: true, wsOk: false, unlocked: false });
     expect(l5.activity).toBeNull();
     // Enough STR opens it.
-    const ok = run(withWc(s, 5, { strength: 49 }), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
+    const ok = run(withWc(s, 5, { strength: 39 }), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
     expect(ok.ok && ok.state.activity).toEqual({ kind: 'woodcutting', treeId: 'birch', startedAt: T0, progressMs: 0 });
   });
 
@@ -149,14 +147,14 @@ describe('starting a tree', () => {
   it('same tree again keeps the log in progress; another tree restarts it', () => {
     const s = simulate(woodcuttingGame(), T0 + 50 * SEC).state;
     expect(progressMs(apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0 + 50 * SEC))).toBe(50 * SEC);
-    const big = withWc(s, 5, { strength: 49 });
+    const big = withWc(s, 5, { strength: 39 });
     const birch = apply(big, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0 + 50 * SEC);
     expect(birch.activity).toEqual({ kind: 'woodcutting', treeId: 'birch', startedAt: T0 + 50 * SEC, progressMs: 0 });
   });
 
-  it('a Birch log gives Birch Logs and 119 XP every 4:50 at DEX 10', () => {
-    const s = apply(withWc(builtGame(3, T0), 5, { strength: 49 }), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
-    const r = simulate(s, T0 + 2 * 290 * SEC);
+  it('a Birch log gives Birch Logs and 119 XP every 5:00 at core DEX 0', () => {
+    const s = apply(withWc(builtGame(3, T0), 5, { strength: 39 }), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
+    const r = simulate(s, T0 + 2 * 300 * SEC);
     expect(r.summary.actions).toBe(2);
     expect(r.summary.itemsGained.birch_logs).toBe(2);
     expect(r.summary.skillXpGained.woodcutting).toBe(238);
@@ -169,9 +167,9 @@ describe('back-to-back logs, live and offline', () => {
     const s = woodcuttingGame();
     const r = simulate(s, T0 + 24 * HOUR);
     expect(r.summary.grantedMs).toBe(8 * HOUR);
-    expect(r.summary.actions).toBe(Math.floor((8 * HOUR) / OAK_MS)); // 261
-    expect(r.summary.actions).toBe(261);
-    expect(progressMs(r.state)).toBe(8 * HOUR - 261 * OAK_MS);
+    expect(r.summary.actions).toBe(Math.floor((8 * HOUR) / OAK_MS)); // 240
+    expect(r.summary.actions).toBe(240);
+    expect(progressMs(r.state)).toBe(8 * HOUR - 240 * OAK_MS);
     expect(hashState(r.state.inventory)).toBe(hashState(simulate(s, T0 + 8 * HOUR).state.inventory));
   });
 
@@ -306,11 +304,11 @@ describe('one activity at a time (woodcutting, dungeon, training)', () => {
 describe('views', () => {
   it('the carousel opens on the active tree, else the highest unlocked tree', () => {
     expect(woodcuttingView(builtGame(1, T0)).focusTreeId).toBe('oak');
-    const big = withWc(builtGame(1, T0), 20, { strength: 400 }); // WS 601: Maple
+    const big = withWc(builtGame(1, T0), 20, { strength: 390 }); // WS 601: Maple
     expect(woodcuttingView(big).focusTreeId).toBe('maple');
     const cutting = apply(big, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' }, T0);
     expect(woodcuttingView(cutting)).toMatchObject({ focusTreeId: 'birch', activeTreeId: 'birch' });
-    expect(activityView(cutting)).toMatchObject({ kind: 'woodcutting', treeId: 'birch', log: 1, skipCost: 5, logMs: 290 * SEC });
+    expect(activityView(cutting)).toMatchObject({ kind: 'woodcutting', treeId: 'birch', log: 1, skipCost: 5, logMs: 300 * SEC });
   });
 });
 
@@ -414,7 +412,7 @@ describe('frozen v6 save (tests/fixtures/save-v6.json) → v7', () => {
     expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' })).ok).toBe(true);
     clock.advance(HOUR);
     await client.resume();
-    expect(client.getState().stats.totalActions).toBe(V6_SAVE.stats.totalActions + Math.floor(HOUR / OAK_MS));
+    expect(client.getState().stats.totalActions).toBe(V6_SAVE.stats.totalActions + Math.floor(HOUR / logMsFor('oak', client.getState())));
     const report = replayLogReport(entries(await repo.getAllLog()));
     expect(report).toMatchObject({ anchors: 1, skippedOldEngine: V6_LOG.length });
     expect(hashState(report.state)).toBe(hashState(client.getState()));
