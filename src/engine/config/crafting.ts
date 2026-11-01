@@ -6,8 +6,13 @@
 //   output / craft = output × mode multiplier × (10 000 + house yield bp) / 10 000; the fraction goes to a ledger
 //   x10 stamina / craft = max(1, ceil(x10.staminaPerMinute × craft time / 1 min)), paid for the whole job up front
 //   insta = ceil(remaining minutes) stamina, at least 1 (the rule of every skip)
+//
+// Gear recipes (1.14.0, owner-approved 2026-11-01): one piece per job (x1 only, no yield bonus), made from its tier's
+// bricks / ingots and planks (config/gear.ts); stamina invested at start raises the quality floor; the piece's quality
+// and rarity are rolled at start and it waits in the pipe (`ready`) until Done.
 
 import type { CraftMode } from '../types';
+import { GEAR_PIECE_IDS, GEAR_PIECES, GEAR_SETS, type RarityWeight } from './gear';
 
 const SEC = 1000;
 const MIN_MS = 60 * SEC;
@@ -24,7 +29,7 @@ export const CRAFTING = {
   freePipes: 4,
   /** No craft is ever faster than this. */
   minCraftMs: 1 * SEC,
-  /** Most crafts in one job (keeps every product far below 2^53). */
+  /** Most crafts in one job (keeps every product far below 2^53). Gear jobs: always 1. */
   maxJobQuantity: 100_000,
   /** Output and input multiplier per mode. */
   modeMultiplier: { x1: 1, x10: 10 } satisfies Record<CraftMode, number>,
@@ -36,8 +41,8 @@ export const CRAFTING = {
   remainderUnit: 1000,
 } as const;
 
-/** `material`: a normal stackable item (planks, bricks, ingots). PR B adds gear recipes (single rolled item). */
-export type RecipeKind = 'material';
+/** `material`: a normal stackable item (planks, bricks, ingots). `gear`: one equippable piece with a rolled quality and rarity. */
+export type RecipeKind = 'material' | 'gear';
 
 export type RecipeDef = {
   id: string;
@@ -51,6 +56,8 @@ export type RecipeDef = {
   output: { defId: string; quantity: number };
   /** Craft time before the house level and INT. */
   baseMs: number;
+  /** Gear only: this recipe's rarity odds, instead of GEAR.craft.rarityWeights. None sets one yet. */
+  rarityWeights?: readonly RarityWeight[];
 };
 
 const material = (id: string, name: string, tier: number, input: string, output: string): RecipeDef => {
@@ -58,7 +65,26 @@ const material = (id: string, name: string, tier: number, input: string, output:
   return { id, name, kind: 'material', tier, inputs: [{ defId: input, quantity: 2 * scale }], output: { defId: output, quantity: 1 }, baseMs: 5 * SEC * scale };
 };
 
-/** Every recipe, in picker order (by tier, planks before bricks / ingots). */
+/** A gear recipe: `<set>_<piece>` from the set's bar and plank; inputs fixed per piece, time doubling per tier. */
+const gear = (setId: string, pieceId: (typeof GEAR_PIECE_IDS)[number]): RecipeDef => {
+  const set = GEAR_SETS.find((x) => x.id === setId)!;
+  const piece = GEAR_PIECES[pieceId];
+  const id = `${set.id}_${pieceId}`;
+  return {
+    id,
+    name: `${set.name} ${piece.name}`,
+    kind: 'gear',
+    tier: set.tier,
+    inputs: [
+      { defId: set.bar, quantity: piece.bars },
+      { defId: set.plank, quantity: piece.planks },
+    ],
+    output: { defId: id, quantity: 1 },
+    baseMs: piece.t1Ms * (1 << (set.tier - 1)),
+  };
+};
+
+/** Every recipe, in picker order: materials (by tier, planks before bricks / ingots), then gear (by tier, then piece). */
 export const RECIPE_IDS = [
   'oak_plank',
   'stone_brick',
@@ -70,6 +96,36 @@ export const RECIPE_IDS = [
   'silver_ingot',
   'ironwood_plank',
   'gold_ingot',
+  'stone_sword',
+  'stone_helm',
+  'stone_chestplate',
+  'stone_shield',
+  'stone_gloves',
+  'stone_boots',
+  'copper_sword',
+  'copper_helm',
+  'copper_chestplate',
+  'copper_shield',
+  'copper_gloves',
+  'copper_boots',
+  'iron_sword',
+  'iron_helm',
+  'iron_chestplate',
+  'iron_shield',
+  'iron_gloves',
+  'iron_boots',
+  'silver_sword',
+  'silver_helm',
+  'silver_chestplate',
+  'silver_shield',
+  'silver_gloves',
+  'silver_boots',
+  'gold_sword',
+  'gold_helm',
+  'gold_chestplate',
+  'gold_shield',
+  'gold_gloves',
+  'gold_boots',
 ] as const;
 
 export type RecipeId = (typeof RECIPE_IDS)[number];
@@ -86,6 +142,36 @@ export const RECIPES: Record<RecipeId, RecipeDef> = {
   silver_ingot: material('silver_ingot', 'Silver Ingot', 4, 'silver_ore', 'silver_ingot'),
   ironwood_plank: material('ironwood_plank', 'Ironwood Plank', 5, 'ironwood_logs', 'ironwood_plank'),
   gold_ingot: material('gold_ingot', 'Gold Ingot', 5, 'gold_ore', 'gold_ingot'),
+  stone_sword: gear('stone', 'sword'),
+  stone_helm: gear('stone', 'helm'),
+  stone_chestplate: gear('stone', 'chestplate'),
+  stone_shield: gear('stone', 'shield'),
+  stone_gloves: gear('stone', 'gloves'),
+  stone_boots: gear('stone', 'boots'),
+  copper_sword: gear('copper', 'sword'),
+  copper_helm: gear('copper', 'helm'),
+  copper_chestplate: gear('copper', 'chestplate'),
+  copper_shield: gear('copper', 'shield'),
+  copper_gloves: gear('copper', 'gloves'),
+  copper_boots: gear('copper', 'boots'),
+  iron_sword: gear('iron', 'sword'),
+  iron_helm: gear('iron', 'helm'),
+  iron_chestplate: gear('iron', 'chestplate'),
+  iron_shield: gear('iron', 'shield'),
+  iron_gloves: gear('iron', 'gloves'),
+  iron_boots: gear('iron', 'boots'),
+  silver_sword: gear('silver', 'sword'),
+  silver_helm: gear('silver', 'helm'),
+  silver_chestplate: gear('silver', 'chestplate'),
+  silver_shield: gear('silver', 'shield'),
+  silver_gloves: gear('silver', 'gloves'),
+  silver_boots: gear('silver', 'boots'),
+  gold_sword: gear('gold', 'sword'),
+  gold_helm: gear('gold', 'helm'),
+  gold_chestplate: gear('gold', 'chestplate'),
+  gold_shield: gear('gold', 'shield'),
+  gold_gloves: gear('gold', 'gloves'),
+  gold_boots: gear('gold', 'boots'),
 };
 
 export function isRecipeId(id: unknown): id is RecipeId {

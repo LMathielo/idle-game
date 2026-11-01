@@ -5,12 +5,14 @@
 //   REFRESH_MERCHANT spends 1 charge and rolls a new stock (rollStock: Health Potion ×10, then the pool, seeded,
 //                    no duplicates; as many slots as the Merchant's level gives).
 //   BUY_ITEM / SELL_ITEM move gold and items; gold never goes negative, inventory never overflows.
-import { merchantStockSlots, sellPriceOf } from './bonuses';
+import { merchantStockSlots, sellPriceOfItem } from './bonuses';
 import { getItemDef } from './config/items';
+import { GEAR } from './config/gear';
 import { MERCHANT, type MerchantPoolEntry } from './config/merchant';
+import { defaultGearRoll, gearPrice, isGearDef, rollQuality, rollRarity } from './gear';
 import { addStackable, freeSlots, makeItem } from './inventory';
 import { nextInt } from './rng';
-import type { GameState, MerchantListing, MerchantState, RngState } from './types';
+import type { GameState, GearRoll, MerchantListing, MerchantState, RngState } from './types';
 
 export type ItemErrorCode =
   | 'INVALID_AMOUNT'
@@ -36,15 +38,37 @@ export type ItemError = { code: ItemErrorCode; message: string } | null;
 const err = (code: ItemErrorCode, message: string): ItemError => ({ code, message });
 const isWhole = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n);
 
-function listingOf(entry: MerchantPoolEntry): MerchantListing {
+/**
+ * A stock listing. Gear: one piece with its roll (default 25% / common: the starter stock) and the buy price scaled by
+ * its quality, fixed now.
+ */
+function listingOf(entry: MerchantPoolEntry, roll: GearRoll = defaultGearRoll()): MerchantListing {
   const def = getItemDef(entry.defId);
   if (!def || def.buyPrice === undefined) throw new Error(`Merchant pool item ${entry.defId} has no buyPrice`);
-  return { defId: entry.defId, quantity: entry.quantity, unitPrice: def.buyPrice };
+  if (!isGearDef(def)) return { defId: entry.defId, quantity: entry.quantity, unitPrice: def.buyPrice };
+  return { defId: entry.defId, quantity: 1, unitPrice: gearPrice(def.buyPrice, roll.rarity), quality: roll.quality, rarity: roll.rarity };
+}
+
+/**
+ * Rolls the gear listings of a restock: per gear listing in stock order, quality a uniform integer in 0..50 and then rarity
+ * (common 70 / uncommon 25 / rare 5). They draw from their own stream, seeded from the main RNG (after the stock was
+ * picked) XOR GEAR.merchant.rollSalt, so the main stream is not advanced: drops, yields and combat stay where they were.
+ */
+function rollGearListings(rng: RngState, entries: readonly MerchantPoolEntry[]): MerchantListing[] {
+  let sub: RngState = { seed: (rng.seed ^ GEAR.merchant.rollSalt) >>> 0 };
+  return entries.map((entry) => {
+    if (!isGearDef(getItemDef(entry.defId))) return listingOf(entry);
+    const q = rollQuality(sub, 0, GEAR.merchant.maxQuality);
+    const r = rollRarity(q.rng, GEAR.merchant.rarityWeights);
+    sub = r.rng;
+    return listingOf(entry, { quality: q.value, rarity: r.value });
+  });
 }
 
 /**
  * Picks up to `count` pool entries without duplicates (and none whose defId is in `exclude`), in the order drawn:
- * one seeded draw per pick, from the entries still left. Pure: returns the advanced RNG.
+ * one seeded draw per pick, from the entries still left; then the gear listings roll their quality and rarity on their
+ * own stream (rollGearListings). Pure: returns the advanced main RNG.
  */
 export function rollPoolListings(
   rng: RngState,
@@ -53,15 +77,15 @@ export function rollPoolListings(
   pool: readonly MerchantPoolEntry[] = MERCHANT.pool,
 ): { listings: MerchantListing[]; rng: RngState } {
   const left = pool.filter((e) => !exclude.has(e.defId));
-  const listings: MerchantListing[] = [];
+  const picked: MerchantPoolEntry[] = [];
   let r = rng;
-  while (listings.length < count && left.length > 0) {
+  while (picked.length < count && left.length > 0) {
     const pick = nextInt(r, 0, left.length - 1);
     r = pick.rng;
-    listings.push(listingOf(left[pick.value]));
+    picked.push(left[pick.value]);
     left.splice(pick.value, 1);
   }
-  return { listings, rng: r };
+  return { listings: rollGearListings(r, picked), rng: r };
 }
 
 /**
@@ -201,7 +225,8 @@ export function buyItem(draft: GameState, slot: unknown, defId: unknown, quantit
     addStackable(draft.inventory, def.id, quantity);
   } else {
     for (let n = 0; n < quantity; n += 1) {
-      draft.inventory.items.push(makeItem(def.id, 1, `${def.id}#${draft.nextItemSerial}`));
+      const roll = listing.quality !== undefined && listing.rarity !== undefined ? { quality: listing.quality, rarity: listing.rarity } : undefined;
+      draft.inventory.items.push(makeItem(def.id, 1, `${def.id}#${draft.nextItemSerial}`, roll));
       draft.nextItemSerial += 1;
     }
   }
@@ -210,7 +235,10 @@ export function buyItem(draft: GameState, slot: unknown, defId: unknown, quantit
   return null;
 }
 
-/** Sells `quantity` of inventory item `itemId` at sellPriceOf() (catalog price + building bonus). Equipped items are refused. Mutates the draft. */
+/**
+ * Sells `quantity` of inventory item `itemId` at sellPriceOfItem() (catalog price, × the rarity multiplier for gear, + building
+ * bonus). Equipped items are refused. Mutates the draft.
+ */
 export function sellItem(draft: GameState, itemId: unknown, quantity: unknown): ItemError {
   if (typeof itemId !== 'string') return err('INVALID_COMMAND', 'Missing itemId');
   const items = draft.inventory.items;
@@ -225,7 +253,7 @@ export function sellItem(draft: GameState, itemId: unknown, quantity: unknown): 
   const owned = item.stackable ? (item.quantity ?? 0) : 1;
   if (!isWhole(quantity) || quantity < 1 || quantity > owned) return err('INVALID_AMOUNT', `Quantity must be 1 to ${owned}`);
   // Town Hall Lv2+ adds to every sell price (floored); still below every buy price (tested).
-  const gold = draft.character.gold + sellPriceOf(draft, def.id) * quantity;
+  const gold = draft.character.gold + sellPriceOfItem(draft, item) * quantity;
   if (!isWhole(gold)) return err('INVALID_AMOUNT', 'Gold would overflow');
   draft.character.gold = gold;
   if (quantity === owned) items.splice(index, 1);

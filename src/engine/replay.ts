@@ -55,6 +55,7 @@ export const LOG_TYPES = [
   'START_CRAFT',
   'INSTA_CRAFT',
   'CANCEL_CRAFT',
+  'COLLECT_CRAFT',
   'DEBUG_UNLOCK_PIPE',
   'MIGRATE',
   'RESUME',
@@ -190,6 +191,7 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'START_CRAFT':
     case 'INSTA_CRAFT':
     case 'CANCEL_CRAFT':
+    case 'COLLECT_CRAFT':
     case 'DEBUG_UNLOCK_PIPE': {
       const res = applyCommand(state, payload as Command, clientTime, { allowDebug: true });
       if (!res.ok) throw new ReplayError(`${type} rejected on replay: ${res.error.code}`);

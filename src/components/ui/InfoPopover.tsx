@@ -61,7 +61,7 @@ type Props = {
   title: string;
   /** Emoji or short text in a framed square left of the title. */
   icon?: string;
-  /** Title color (e.g. item quality). Default gold. */
+  /** Title color (e.g. item rarity). Default gold. */
   titleColor?: string;
   /** Frame color of the icon square. */
   iconBorder?: string;

@@ -8,8 +8,8 @@ import { FakeClock } from '../src/client/clock';
 import { META_ENGINE_VERSION } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import type { LogRow } from '../src/client/types';
-import { CURRENT_SAVE_VERSION, ENGINE_VERSION, type GameState, hashState, loadSave, type MigratePayload, MIGRATIONS, newGame, replayLogReport, type ReplayEntry } from '../src/engine';
-import { HOUR, makeClient, MIN, qty, SEC, T0, V13_ADDED } from './helpers';
+import { CURRENT_SAVE_VERSION, ENGINE_VERSION, RELEASED_ENGINES, type GameState, hashState, loadSave, type MigratePayload, MIGRATIONS, newGame, replayLogReport, type ReplayEntry } from '../src/engine';
+import { HOUR, makeClient, MIN, qty, SEC, T0, V13_ADDED, withoutGearRolls } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v12 save + log written by the 1.12.0 engine: Woodcutting and Mine Shaft built, 925 gold, 141 Oak, 133 Stone, Stone mid-ore. */
@@ -69,8 +69,8 @@ describe('frozen v12 save (tests/fixtures/save-v12.json), engine 1.12.0 → 1.13
   });
 
   it('migrates: Crafting locked, idle pipes, no smithing; everything else kept (deterministic)', () => {
-    const s = loadSave(V12_SAVE);
-    expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
+    expect(loadSave(V12_SAVE).saveVersion).toBe(CURRENT_SAVE_VERSION);
+    const s = withoutGearRolls(loadSave(V12_SAVE)); // the v13 → v14 gear rolls: tests/migrationV14.test.ts
     const { character, saveVersion: _v, buildings, crafting, ...rest } = s;
     const { character: rc, saveVersion: _rv, buildings: rb, ...rawRest } = V12_SAVE;
     expect(rest).toEqual(rawRest);
@@ -78,17 +78,17 @@ describe('frozen v12 save (tests/fixtures/save-v12.json), engine 1.12.0 → 1.13
     expect(crafting).toEqual(V13_ADDED.crafting);
     const { smithing: _sm, ...skills } = rc.skills;
     expect(character).toEqual({ ...rc, skills });
-    expect(hashState(loadSave(V12_SAVE))).toBe(hashState(s));
+    expect(hashState(withoutGearRolls(loadSave(V12_SAVE)))).toBe(hashState(s));
   });
 
-  it('loading writes a MIGRATE anchor (save 12 → 13, engine 1.12.0 → 1.13.0); Crafting is built and crafts; the whole log replays', async () => {
+  it('loading writes a MIGRATE anchor (save 12 → current, engine 1.12.0 → current); Crafting is built and crafts; the whole log replays', async () => {
     const { repo, clock, client } = await phone();
     await client.load();
     const m = (await repo.getAllLog()).filter((r) => r.type === 'MIGRATE');
     expect(m).toHaveLength(1);
     const p = m[0].payload as MigratePayload;
-    expect({ ...p, snapshot: undefined }).toEqual({ fromSave: 12, toSave: 13, fromEngine: '1.12.0', toEngine: ENGINE_VERSION, fromHash: V12_LOG.at(-1)!.stateHash, snapshot: undefined });
-    expect(ENGINE_VERSION).toBe('1.13.0');
+    expect({ ...p, snapshot: undefined }).toEqual({ fromSave: 12, toSave: CURRENT_SAVE_VERSION, fromEngine: '1.12.0', toEngine: ENGINE_VERSION, fromHash: V12_LOG.at(-1)!.stateHash, snapshot: undefined });
+    expect(RELEASED_ENGINES.some((r) => r.engine === '1.13.0')).toBe(true);
     expect(p.snapshot).toEqual(loadSave(V12_SAVE));
 
     // Mining keeps running; the house is built for real and crafts beside it, live and offline.

@@ -2,6 +2,7 @@
 // seeded RNG, no duplicates; slot count from the Merchant's level; new iron and steel items.
 import { describe, expect, it } from 'vitest';
 import {
+  gearPrice,
   applyCommand,
   type BuildingId,
   type GameState,
@@ -23,14 +24,14 @@ function withLevels(s: GameState, levels: Partial<Record<BuildingId, number>>): 
 describe('new items (owner-approved table)', () => {
   it('stats, slots and buy prices; sell = 30% of buy, floored', () => {
     const table: [string, Record<string, unknown>, number][] = [
-      ['iron_chestplate', { slot: 'armor', armor: 6 }, 700],
-      ['iron_shield', { slot: 'shield', armor: 5 }, 550],
-      ['iron_gloves', { slot: 'gloves', armor: 2 }, 250],
-      ['iron_boots', { slot: 'boots', armor: 2 }, 250],
+      ['iron_chestplate', { slot: 'armor', armor: 10 }, 700],
+      ['iron_shield', { slot: 'shield', armor: 8 }, 550],
+      ['iron_gloves', { slot: 'gloves', armor: 3 }, 250],
+      ['iron_boots', { slot: 'boots', armor: 3 }, 250],
       ['greater_health_potion', { heal: 60, stackable: true }, 30],
-      ['steel_axe', { slot: 'axe', woodcuttingStrength: 120 }, 2500],
-      ['steel_pickaxe', { slot: 'pickaxe', miningStrength: 120 }, 2500],
-      ['steel_sword', { slot: 'weapon', damage: { min: 10, max: 14 } }, 2000],
+      ['steel_axe', { slot: 'axe', woodcuttingStrength: 192 }, 2500],
+      ['steel_pickaxe', { slot: 'pickaxe', miningStrength: 192 }, 2500],
+      ['steel_sword', { slot: 'weapon', damage: { min: 16, max: 22 } }, 2000],
     ];
     for (const [id, stats, buy] of table) {
       const def = getItemDef(id)!;
@@ -63,7 +64,8 @@ describe('rolled stock', () => {
       const rest = r.stock.slice(1).map((l) => l!.defId);
       expect(new Set(rest).size).toBe(rest.length);
       for (const id of rest) expect(MERCHANT.pool.some((e) => e.defId === id)).toBe(true);
-      for (const l of r.stock) expect(l!.unitPrice).toBe(getItemDef(l!.defId)!.buyPrice);
+      // 1.14.0: gear prices follow the rolled rarity (tests/gear.test.ts); the rest are catalog prices.
+      for (const l of r.stock) expect(l!.unitPrice).toBe(l!.quality === undefined ? getItemDef(l!.defId)!.buyPrice : gearPrice(getItemDef(l!.defId)!.buyPrice!, l!.rarity!));
     }
   });
 

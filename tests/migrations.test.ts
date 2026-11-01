@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type GameState, getDerivedStats, hashState, newGame, newTrainingState } from '../src/engine';
 import { CURRENT_SAVE_VERSION, loadSave, migrateDoc, type Migration, MIGRATIONS, SaveVersionError } from '../src/engine/migrations';
-import { T0 } from './helpers';
+import { T0, withoutGearRolls } from './helpers';
 
 describe('save migrations', () => {
   it('real v1 → v2 step adds flags.debugUsed = false and keeps everything else', () => {
@@ -144,7 +144,7 @@ describe('save migrations', () => {
       axe: { id: 'start-wooden_axe', defId: 'wooden_axe', name: 'Wooden Axe', icon: '🪓', rarity: 'common', slot: 'axe' },
     });
     // The frozen axe is exactly what a new hero gets, once v8 drops the per-instance rarity.
-    expect((MIGRATIONS[7](v7 as never) as unknown as GameState).character.equipment.axe).toEqual(newGame(1, T0).character.equipment.axe);
+    expect((MIGRATIONS[7](v7 as never) as unknown as GameState).character.equipment.axe).toEqual(withoutGearRolls(newGame(1, T0)).character.equipment.axe);
     expect(v7.character.skills).toEqual(v6.character.skills);
     expect(v7.inventory).toEqual(v6.inventory);
   });
@@ -203,10 +203,10 @@ describe('save migrations', () => {
     expect(bare.inventory.items).toEqual([]);
   });
 
-  it('newest save loads unchanged; a new game is already v13', () => {
+  it('newest save loads unchanged; a new game is already v14', () => {
     const s = newGame(77, T0);
-    expect(s.saveVersion).toBe(13);
-    expect(CURRENT_SAVE_VERSION).toBe(13);
+    expect(s.saveVersion).toBe(14);
+    expect(CURRENT_SAVE_VERSION).toBe(14);
     expect(loadSave(s)).toEqual(s);
   });
 

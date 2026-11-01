@@ -5,7 +5,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameState } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
-import { DEV_TOOLS_ENABLED, freeSlots, type GameState, type Item, maxBuyable, merchantView, sellPriceOf, slotsNeeded } from '../../engine';
+import { baseSellPrice, DEV_TOOLS_ENABLED, freeSlots, type GameState, type Item, maxBuyable, merchantView, sellPriceOfItem, slotsNeeded } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { formatHms, formatNumber } from '../format';
 import { defOf } from '../items/itemInfo';
@@ -88,7 +88,7 @@ function BuyTab({ state }: { state: GameState }) {
       view.stock.map((l): SlotItem | null => {
         if (!l) return null;
         const def = defOf(l.defId);
-        return { defId: l.defId, icon: def.icon, name: def.name, quantity: def.stackable ? l.quantity : undefined, stackable: def.stackable };
+        return { defId: l.defId, icon: def.icon, name: def.name, quantity: def.stackable ? l.quantity : undefined, stackable: def.stackable, rarity: l.rarity };
       }),
     [view.stock],
   );
@@ -157,10 +157,10 @@ function BuySheet({ state, slot, anchor, onClose }: { state: GameState; slot: nu
 
   return (
     <ItemSheet
-      def={def}
+      item={listing}
       anchor={anchor}
       quantity={listing.quantity}
-      equipped={def.slot ? (equipped ? defOf(equipped.defId, equipped) : null) : undefined}
+      equipped={def.slot ? (equipped ?? null) : undefined}
       error={error}
       onClose={onClose}
       actions={[
@@ -191,7 +191,7 @@ function SellTab({ state }: { state: GameState }) {
       slots.map((item) => {
         if (!item) return '';
         // Catalog price plus the Town Hall bonus, as the engine pays it.
-        const price = sellPriceOf({ buildings }, item.defId);
+        const price = sellPriceOfItem({ buildings }, item);
         return price > 0 ? `${formatNumber(price)}g` : '—';
       }),
     [slots, buildings],
@@ -206,7 +206,7 @@ function SellTab({ state }: { state: GameState }) {
         Your inventory {inventory.items.length}/{inventory.capacity} · equipped gear must be unequipped first
       </Text>
       <StockGrid slots={slots} prices={prices} onPress={open} keyOf={inventoryKey} />
-      {item && selected ? <SellSheet key={item.id} item={item} anchor={selected.anchor} unitPrice={sellPriceOf({ buildings }, item.defId)} onClose={close} /> : null}
+      {item && selected ? <SellSheet key={item.id} item={item} anchor={selected.anchor} unitPrice={sellPriceOfItem({ buildings }, item)} onClose={close} /> : null}
     </ScrollView>
   );
 }
@@ -224,7 +224,7 @@ function SellSheet({ item, anchor, unitPrice, onClose }: { item: Item; anchor: A
 
   return (
     <ItemSheet
-      def={def}
+      item={item}
       anchor={anchor}
       quantity={item.quantity}
       error={error}
@@ -239,7 +239,7 @@ function SellSheet({ item, anchor, unitPrice, onClose }: { item: Item; anchor: A
       ]}
     >
       {owned > 1 ? <QuantityStepper value={quantity} max={owned} onChange={setQty} /> : null}
-      {unitPrice !== def.sellPrice ? <SheetRow label="Price" value={`🪙 ${formatNumber(unitPrice)} (Town Hall bonus)`} /> : null}
+      {unitPrice !== baseSellPrice(item) ? <SheetRow label="Price" value={`🪙 ${formatNumber(unitPrice)} (Town Hall bonus)`} /> : null}
       <SheetRow label="Total" value={`🪙 ${formatNumber(unitPrice * quantity)}`} strong />
     </ItemSheet>
   );

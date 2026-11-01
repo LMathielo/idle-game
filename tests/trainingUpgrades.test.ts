@@ -25,7 +25,7 @@ import {
   upgradeView,
 } from '../src/engine';
 import type { CommandInput } from '../src/client/types';
-import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, V13_ADDED, v12Skills } from './helpers';
+import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, V13_ADDED, v12Skills, withoutGearRolls } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v11 save + its action log, written by the 1.10.0 engine before Training Grounds upgrades (tests/fixtures). */
@@ -261,7 +261,7 @@ describe('frozen v11 save (tests/fixtures/save-v11.json), 1.10.0 → 1.11.0 (eng
     expect(hashState(V11_SAVE)).toBe(V11_LOG.at(-1)!.stateHash);
     // Since 1.12.0 (save v12) it also runs the v11 → v12 skill migration: only the skills change. Since 1.13.0 (save v13)
     // the Crafting house (locked) and the idle pipes are added, and smithing is dropped.
-    const { character, saveVersion: _v, buildings, crafting, ...rest } = loadSave(V11_SAVE);
+    const { character, saveVersion: _v, buildings, crafting, ...rest } = withoutGearRolls(loadSave(V11_SAVE)); // v14 gear rolls: tests/migrationV14.test.ts
     const { character: rc, saveVersion: _rv, buildings: rb, ...rawRest } = V11_SAVE;
     expect(rest).toEqual(rawRest);
     expect(buildings).toEqual({ ...rb, crafting: V13_ADDED.craftingBuilding });

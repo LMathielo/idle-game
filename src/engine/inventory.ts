@@ -1,13 +1,22 @@
 // Inventory rules. Stackable items merge into one stack per definition id;
 // a new stack needs a free slot, otherwise the item is lost.
+import { GEAR } from './config/gear';
 import { getItemDef } from './config/items';
-import type { Inventory, Item } from './types';
+import type { GearRoll, Inventory, Item } from './types';
 
-export function makeItem(defId: string, quantity = 1, instanceId?: string): Item {
+/**
+ * A new item instance. Gear (an item with a slot) carries `roll` (its quality and rarity), by default 25% / common: a
+ * new hero's starting gear and the starter stock.
+ */
+export function makeItem(defId: string, quantity = 1, instanceId?: string, roll?: GearRoll): Item {
   const def = getItemDef(defId);
   if (!def) throw new Error(`Unknown item ${defId}`);
   const item: Item = { id: instanceId ?? def.id, defId: def.id, name: def.name, icon: def.icon };
-  if (def.slot) item.slot = def.slot;
+  if (def.slot) {
+    item.slot = def.slot;
+    item.rarity = roll?.rarity ?? GEAR.defaultRarity;
+    item.quality = roll?.quality ?? GEAR.defaultQuality;
+  }
   if (def.stackable) {
     item.stackable = true;
     item.quantity = quantity;

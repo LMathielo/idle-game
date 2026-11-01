@@ -8,7 +8,7 @@
 // Integer math only: percent bonuses are basis points and rounding is half-up on integers,
 // so the phone (Hermes) and a future server (V8) always agree.
 import { effectiveAttributes, type TrainingLevels } from './attributes';
-import { getItemDef } from './config/items';
+import { gearStats } from './gear';
 import { BASIS_POINTS, STATS } from './config/stats';
 import type { Character, EquipmentSlot } from './types';
 
@@ -78,7 +78,7 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
 
   // ---- damage ----
   const weapon = equipment.weapon;
-  const weaponDamage = weapon ? getItemDef(weapon.defId)?.damage : undefined;
+  const weaponDamage = weapon ? gearStats(weapon).damage : undefined;
   const baseDamage = weaponDamage ?? STATS.unarmedDamage;
   const damageParts: RangePart[] = [
     weaponDamage && weapon
@@ -104,7 +104,7 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
   for (const slot of SLOT_ORDER) {
     const item = equipment[slot];
     if (!item) continue;
-    const armor = getItemDef(item.defId)?.armor;
+    const armor = gearStats(item).armor;
     if (!armor) continue;
     baseDefense += armor;
     defenseParts.push({ source: 'armor', value: armor, defId: item.defId, slot });
@@ -122,7 +122,7 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
   for (const slot of ALL_SLOTS_ORDER) {
     const item = equipment[slot];
     if (!item) continue;
-    const mod = getItemDef(item.defId)?.attackIntervalModMs;
+    const mod = gearStats(item).attackIntervalModMs;
     if (!mod || !Number.isSafeInteger(mod)) continue;
     interval += mod;
     intervalParts.push({ source: 'gear', value: mod, defId: item.defId, slot });

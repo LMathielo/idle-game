@@ -1,13 +1,14 @@
-// One inventory / equipment / merchant slot: icon, stack count, quality-colored frame, optional price
+// One inventory / equipment / merchant slot: icon, stack count, rarity-colored frame (the instance's), optional price
 // caption, tap to open the item's info box (anchored on the slot). Memoized: grids re-render only the slots that changed.
 import { memo, useCallback, useRef } from 'react';
 import { type HostInstance, Pressable, StyleSheet, Text, View } from 'react-native';
 import { type AnchorRect, measureAnchor } from '../ui/InfoPopover';
-import { colors, fonts, qualityColors } from '../../theme';
+import { type ItemRarity, rarityOf } from '../../engine';
+import { colors, fonts, rarityColors } from '../../theme';
 import { formatQty } from '../format';
-import { defOf } from './itemInfo';
 
-export type SlotItem = { defId: string; icon: string; name: string; quantity?: number; stackable?: boolean };
+/** Gear carries its own rarity (the frame colour); anything else takes the catalog's. */
+export type SlotItem = { defId: string; icon: string; name: string; quantity?: number; stackable?: boolean; rarity?: ItemRarity };
 
 type Props = {
   item?: SlotItem | null;
@@ -28,10 +29,10 @@ export const ItemSlot = memo(function ItemSlot({ item, size, caption, pressKey, 
     if (!onPress || pressKey === undefined) return;
     void measureAnchor(ref.current).then((anchor) => anchor && onPress(pressKey, anchor));
   }, [onPress, pressKey]);
-  const quality = item ? defOf(item.defId).quality : null;
+  const rarity = item ? rarityOf(item) : null;
   const label = item ? `${item.name}${item.quantity ? ` x${item.quantity}` : ''}${hint ?? ''}` : 'Empty slot';
   const box = (
-    <View style={[styles.slot, size === 58 ? styles.slot58 : styles.slot52, quality ? { borderColor: qualityColors[quality] } : null]}>
+    <View style={[styles.slot, size === 58 ? styles.slot58 : styles.slot52, rarity ? { borderColor: rarityColors[rarity] } : null]}>
       {item ? <Text style={size === 58 ? styles.icon58 : styles.icon52}>{item.icon}</Text> : null}
       {item?.quantity ? <Text style={styles.qty}>{formatQty(item.quantity)}</Text> : null}
     </View>

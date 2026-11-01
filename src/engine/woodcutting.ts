@@ -7,7 +7,7 @@
 //   skip cost     = ceil(remaining min) stamina, at least 1
 import { effectiveAttributes, type TrainingLevels } from './attributes';
 import { cloneState } from './clone';
-import { getItemDef } from './config/items';
+import { gearStats } from './gear';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { TREE_IDS, TREES, WOODCUTTING } from './config/woodcutting';
 import { SKILL_XP_CURVE } from './config/xpCurve';
@@ -38,11 +38,11 @@ export type WoodcuttingStrength = {
   };
 };
 
-/** WS bonus of the equipped axe, read from the item catalog by defId. */
+/** WS bonus of the equipped axe: the catalog max scaled by the instance quality. */
 export function axeBonus(equipment: Character['equipment']): number {
   const axe = equipment.axe;
   if (!axe) return 0;
-  const bonus = getItemDef(axe.defId)?.woodcuttingStrength ?? 0;
+  const bonus = gearStats(axe).woodcuttingStrength ?? 0;
   return Number.isSafeInteger(bonus) && bonus > 0 ? bonus : 0;
 }
 

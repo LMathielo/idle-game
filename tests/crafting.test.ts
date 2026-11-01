@@ -53,18 +53,20 @@ function withLevel(s: GameState, level: number): GameState {
 
 describe('data (owner-approved 2026-11-01)', () => {
   it('ten material recipes: inputs and time double every tier, one common output whose sell price = the inputs', () => {
-    expect(RECIPE_IDS).toHaveLength(10);
-    for (const id of RECIPE_IDS) {
+    const materials = RECIPE_IDS.filter((id) => RECIPES[id].kind === 'material');
+    expect(materials).toHaveLength(10);
+    expect(RECIPE_IDS).toHaveLength(40); // + 30 gear recipes (1.14.0, tests/gearCrafting.test.ts)
+    for (const id of materials) {
       const r = RECIPES[id];
       const scale = [1, 2, 4, 8, 16][r.tier - 1];
       expect(r.inputs).toEqual([{ defId: r.inputs[0].defId, quantity: 2 * scale }]);
       expect(r.baseMs).toBe(5000 * scale);
       expect(r.output.quantity).toBe(1);
       const out = getItemDef(r.output.defId)!;
-      expect(out).toMatchObject({ quality: 'common', stackable: true, name: r.name });
+      expect(out).toMatchObject({ rarity: 'common', stackable: true, name: r.name });
       expect(out.sellPrice).toBe(r.inputs[0].quantity * getItemDef(r.inputs[0].defId)!.sellPrice);
     }
-    expect(RECIPE_IDS.map((id) => [RECIPES[id].name, getItemDef(RECIPES[id].output.defId)!.sellPrice])).toEqual([
+    expect(materials.map((id) => [RECIPES[id].name, getItemDef(RECIPES[id].output.defId)!.sellPrice])).toEqual([
       ['Oak Plank', 2],
       ['Stone Brick', 2],
       ['Birch Plank', 12],

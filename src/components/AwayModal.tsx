@@ -49,6 +49,8 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
   const workerGained = Object.entries(summary.workerItemsGained);
   const workerLost = Object.entries(summary.workerItemsLost);
   const crafted = Object.entries(summary.itemsCrafted);
+  // Older summaries (before 1.14.0) have no craftsReady.
+  const ready = Object.entries(summary.craftsReady ?? {});
   const skills = Object.entries(summary.skillXpGained) as [SkillKey, number][];
   const trained = Object.entries(summary.trainingXpGained) as [AttributeKey, number][];
   const maxed = summary.trainingMaxed;
@@ -96,6 +98,10 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       {crafted.map(([id, n]) => (
         <Line key={`c-${id}`} label={`${itemIcon(id)} ${itemName(id)}`} value={`+${formatNumber(n)}`} />
       ))}
+      {ready.length > 0 ? <Text style={styles.section}>✅ Ready to collect (Crafting)</Text> : null}
+      {ready.map(([id, n]) => (
+        <Line key={`r-${id}`} label={`${itemIcon(id)} ${itemName(id)}`} value={`×${formatNumber(n)}`} />
+      ))}
       {summary.upkeepPaid > 0 ? <Line label="🪙 Upkeep paid" value={`−${formatNumber(summary.upkeepPaid)}`} cost /> : null}
       {summary.buildingsUpgraded.map((u) => (
         <Line key={`${u.buildingId}-${u.level}`} label={`🔨 ${BUILDINGS[u.buildingId].name} upgraded`} value={`Lv ${u.level}`} />
@@ -131,6 +137,7 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       trainingXpTotal(summary) === 0 &&
       summary.workerActions === 0 &&
       summary.craftsCompleted === 0 &&
+      ready.length === 0 &&
       summary.buildingsUpgraded.length === 0 &&
       !backward ? (
         <Text style={styles.muted}>Nothing was gathered.</Text>

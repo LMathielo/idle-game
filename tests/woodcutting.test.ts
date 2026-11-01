@@ -86,9 +86,9 @@ describe('config: tree table and formulas', () => {
       [28, 18, 'yew_logs'],
       [42, 30, 'ironwood_logs'],
     ]);
-    for (const id of TREE_IDS) expect(getItemDef(TREES[id].logItemId)).toMatchObject({ stackable: true, quality: 'common' });
+    for (const id of TREE_IDS) expect(getItemDef(TREES[id].logItemId)).toMatchObject({ stackable: true, rarity: 'common' });
     expect(WOODCUTTING.rareDrops).toEqual([{ itemId: 'bird_nest', chance: 1 / 200 }]);
-    expect(getItemDef('wooden_axe')).toMatchObject({ slot: 'axe', quality: 'common', woodcuttingStrength: 1 });
+    expect(getItemDef('wooden_axe')).toMatchObject({ slot: 'axe', rarity: 'common', woodcuttingStrength: 2 }); // the 100% max (1.14.0): +1 at 25%
   });
 });
 

@@ -104,7 +104,7 @@ describe('tier table (config)', () => {
 
   it('new loot is in the catalog: stackable, junk, with an icon', () => {
     for (const id of ['bat_wing', 'wolf_pelt', 'old_bone', 'troll_hide']) {
-      expect(getItemDef(id)).toMatchObject({ id, stackable: true, quality: 'junk', icon: expect.any(String) });
+      expect(getItemDef(id)).toMatchObject({ id, stackable: true, rarity: 'junk', icon: expect.any(String) });
       expect(getItemDef(id)!.icon.length).toBeGreaterThan(0);
     }
   });
