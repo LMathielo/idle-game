@@ -43,7 +43,7 @@ function code(s: GameState, c: Input, at = T0): string {
 
 type StartCraft = Extract<Input, { type: 'START_CRAFT' }>;
 
-const gear = (pipe: number, recipeId: string, stamina = 0): StartCraft => ({ type: 'START_CRAFT', pipe, recipeId, quantity: 1, mode: 'x1', maxCost: stamina, stamina });
+const gear = (pipe: number, recipeId: string, stamina = 0): StartCraft => ({ type: 'START_CRAFT', pipe, recipeId, maxCost: stamina, stamina });
 
 describe('gear recipes (owner-approved 2026-11-01)', () => {
   it('30 recipes: tier n uses tier n bricks / ingots + planks, fixed counts, T1 times doubling per tier, one piece', () => {
@@ -70,7 +70,7 @@ describe('gear recipes (owner-approved 2026-11-01)', () => {
     });
   });
 
-  it('views: Equipment recipes carry max stats, odds and the stamina rule; x10 is never offered', () => {
+  it('views: Equipment recipes carry max stats, odds and the stamina rule; x10 is never offered (X10_CRAFT refuses gear)', () => {
     const s = game();
     const v = craftingView(s).recipes.find((r) => r.recipeId === 'stone_sword')!;
     expect(v.gear).toEqual({
@@ -83,21 +83,19 @@ describe('gear recipes (owner-approved 2026-11-01)', () => {
       ],
       maxStamina: 50,
     });
-    expect(v.max).toEqual({ x1: 1, x10: 0 });
+    expect(v.enough).toBe(true);
     expect(v.craftMs).toBe(craftMs(s, 'stone_sword')); // house × INT, like materials
     expect(craftingView(s).recipes.find((r) => r.recipeId === 'oak_plank')!.gear).toBeNull();
   });
 });
 
 describe('START_CRAFT for gear', () => {
-  it('refuses x10, more than one piece, stamina outside 0..50, stamina on materials, a cost above maxCost', () => {
+  it('refuses stamina outside 0..50, stamina on materials, a cost above maxCost', () => {
     const s = game();
-    expect(code(s, { ...gear(0, 'stone_sword'), mode: 'x10' })).toBe('INVALID_COMMAND');
-    expect(code(s, { ...gear(0, 'stone_sword'), quantity: 2 })).toBe('INVALID_AMOUNT');
     expect(code(s, gear(0, 'stone_sword', 51))).toBe('INVALID_AMOUNT');
     expect(code(s, gear(0, 'stone_sword', -1))).toBe('INVALID_AMOUNT');
     expect(code(s, { ...gear(0, 'stone_sword', 20), maxCost: 19 })).toBe('COST_CHANGED');
-    expect(code(s, { type: 'START_CRAFT', pipe: 0, recipeId: 'oak_plank', quantity: 1, mode: 'x1', maxCost: 5, stamina: 5 })).toBe('INVALID_AMOUNT');
+    expect(code(s, { type: 'START_CRAFT', pipe: 0, recipeId: 'oak_plank', maxCost: 5, stamina: 5 })).toBe('INVALID_AMOUNT');
     const tired = cloneState(s);
     tired.stamina.current = 10;
     expect(code(tired, gear(0, 'stone_sword', 20))).toBe('NOT_ENOUGH_STAMINA');
@@ -111,7 +109,7 @@ describe('START_CRAFT for gear', () => {
     expect(qty(after, 'oak_plank')).toBe(198);
     expect(after.stamina.current).toBe(s.stamina.current - 20);
     const job = after.crafting.pipes[0]!;
-    expect(job).toMatchObject({ recipeId: 'stone_sword', quantity: 1, mode: 'x1', staminaPerCraft: 0, status: 'running' });
+    expect(job).toMatchObject({ recipeId: 'stone_sword', done: 0, x10: false, status: 'running' });
     expect(job.gear!.staminaInvested).toBe(20);
     expect(Number.isInteger(job.gear!.quality)).toBe(true);
     expect(job.gear!.quality).toBeGreaterThanOrEqual(20);
@@ -218,7 +216,8 @@ describe('ready → Done (COLLECT_CRAFT)', () => {
     const s0 = game();
     const started = ok(s0, gear(0, 'stone_sword', 30));
     const id = started.crafting.pipes[0]!.id;
-    expect(craftJobView(started, 0)!.refund).toEqual({ items: [{ defId: 'stone_brick', quantity: 4 }, { defId: 'oak_plank', quantity: 2 }], stamina: 0 });
+    expect(craftJobView(started, 0)!.refund).toEqual([{ defId: 'stone_brick', quantity: 4 }, { defId: 'oak_plank', quantity: 2 }]);
+    expect(code(started, { type: 'STOP_CRAFT', pipe: 0, jobId: id }, T0 + MIN)).toBe('INVALID_COMMAND'); // Stop is for materials
     const cancelled = ok(started, { type: 'CANCEL_CRAFT', pipe: 0, jobId: id }, T0 + MIN);
     expect([qty(cancelled, 'stone_brick'), qty(cancelled, 'oak_plank')]).toEqual([200, 200]);
     expect(cancelled.stamina.current).toBe(started.stamina.current); // the 30 invested are not refunded
@@ -243,7 +242,7 @@ describe('ready → Done (COLLECT_CRAFT)', () => {
 
 describe('time rules', () => {
   it('split invariance: one simulate = many small ones = a command mid-way (the roll was fixed at start)', () => {
-    const s0 = ok(ok(game(7, { ...MATS, oak_logs: 40 }), gear(0, 'stone_sword', 10)), { type: 'START_CRAFT', pipe: 1, recipeId: 'oak_plank', quantity: 20, mode: 'x1', maxCost: 0 });
+    const s0 = ok(ok(game(7, { ...MATS, oak_logs: 40 }), gear(0, 'stone_sword', 10)), { type: 'START_CRAFT', pipe: 1, recipeId: 'oak_plank' });
     const end = T0 + 2 * HOUR;
     const once = simulate(s0, end).state;
     let steps = s0;

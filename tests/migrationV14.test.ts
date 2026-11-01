@@ -16,6 +16,7 @@ import {
   hashState,
   loadSave,
   type MigratePayload,
+  migrateDoc,
   MIGRATIONS,
   miningStrength,
   newGame,
@@ -94,7 +95,7 @@ describe('frozen v13 save (tests/fixtures/save-v13.json), engine 1.13.0 → 1.14
   it('migrates: every gear instance and listing 25% / common; every stat and price exactly as before; the rest kept', () => {
     const s = loadSave(V13_SAVE);
     expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
-    expect(withoutGearRolls(s)).toEqual(V13_SAVE);
+    expect(withoutGearRolls(migrateDoc(V13_SAVE, MIGRATIONS, 14))).toEqual(V13_SAVE); // the v14 step alone (v15: tests/migrationV15.test.ts)
     for (const item of Object.values(s.character.equipment)) expect(item).toMatchObject(ROLL);
     for (const item of s.inventory.items) if (item.slot) expect(item).toMatchObject(ROLL);
     expect(s.merchant.stock[1]).toEqual({ defId: 'iron_axe', quantity: 1, unitPrice: 600, ...ROLL });
@@ -109,27 +110,28 @@ describe('frozen v13 save (tests/fixtures/save-v13.json), engine 1.13.0 → 1.14
     expect(hashState(loadSave(V13_SAVE))).toBe(hashState(s)); // deterministic
   });
 
-  it('loading writes a MIGRATE anchor (save 13 → 14, engine 1.13.0 → 1.14.0); gear crafts and the whole log replays', async () => {
+  it('loading writes a MIGRATE anchor (save 13 → current, engine 1.13.0 → current); gear crafts and the whole log replays', async () => {
     const { repo, clock, client } = await phone();
     await client.load();
     const m = (await repo.getAllLog()).filter((r) => r.type === 'MIGRATE');
     expect(m).toHaveLength(1);
     const p = m[0].payload as MigratePayload;
-    expect({ ...p, snapshot: undefined }).toEqual({ fromSave: 13, toSave: 14, fromEngine: '1.13.0', toEngine: ENGINE_VERSION, fromHash: V13_LOG.at(-1)!.stateHash, snapshot: undefined });
-    expect(ENGINE_VERSION).toBe('1.14.0');
+    expect({ ...p, snapshot: undefined }).toEqual({ fromSave: 13, toSave: CURRENT_SAVE_VERSION, fromEngine: '1.13.0', toEngine: ENGINE_VERSION, fromHash: V13_LOG.at(-1)!.stateHash, snapshot: undefined });
     expect(p.snapshot).toEqual(loadSave(V13_SAVE));
 
-    // The Oak Plank job finished in those 3 minutes; Oak keeps running. Make Stone Bricks, then a Stone Sword with
-    // 20 stamina, through a simulate boundary and an offline stretch; Done reveals it.
+    // 1.15.0: the Oak Plank job became continuous (its 11 unstarted crafts' logs went back) and the hero's Oak feeds it:
+    // past the old 20 in those 3 minutes; Stop it. Make Stone Bricks, then a Stone Sword with 20 stamina, through a
+    // simulate boundary and an offline stretch; Done reveals it.
     let s = client.getState();
-    expect(qty(s, 'oak_plank')).toBe(20);
+    expect(qty(s, 'oak_plank')).toBeGreaterThan(20);
+    expect((await client.dispatch({ type: 'STOP_CRAFT', pipe: 0, jobId: s.crafting.pipes[0]!.id })).ok).toBe(true);
     expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'mining', rockId: 'stone' })).ok).toBe(true);
     clock.advance(HOUR);
     await client.resume();
-    expect((await client.dispatch({ type: 'START_CRAFT', pipe: 1, recipeId: 'stone_brick', quantity: 4, mode: 'x1', maxCost: 0 })).ok).toBe(true);
+    expect((await client.dispatch({ type: 'START_CRAFT', pipe: 1, recipeId: 'stone_brick' })).ok).toBe(true);
     clock.advance(MIN);
     await client.tick();
-    expect((await client.dispatch({ type: 'START_CRAFT', pipe: 0, recipeId: 'stone_sword', quantity: 1, mode: 'x1', maxCost: 20, stamina: 20 })).ok).toBe(true);
+    expect((await client.dispatch({ type: 'START_CRAFT', pipe: 0, recipeId: 'stone_sword', maxCost: 20, stamina: 20 })).ok).toBe(true);
     clock.advance(2 * MIN + 7 * SEC);
     await client.tick();
     clock.advance(HOUR);

@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 14 as const;
+export const CURRENT_SAVE_VERSION = 15 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -24,6 +24,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   11: migrateV11toV12,
   12: migrateV12toV13,
   13: migrateV13toV14,
+  14: migrateV14toV15,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -510,6 +511,85 @@ function migrateV13toV14(doc: SaveDoc): SaveDoc {
     inventory: { ...inventory, items },
   };
   if (merchant && Array.isArray(merchant.stock)) out.merchant = { ...merchant, stock: merchant.stock.map(withV14Roll) };
+  return out;
+}
+
+// ---- v14 → v15 (2026-11-01): continuous material pipes ----
+// Frozen literals: the 1.14.0 material recipes' input per craft, the ×10 multiplier, and the stack an input refund
+// creates when the hero has none, whatever config/crafting.ts and config/items.ts say later.
+const V15_MATERIAL_INPUT: Readonly<Record<string, { defId: string; quantity: number }>> = {
+  oak_plank: { defId: 'oak_logs', quantity: 2 },
+  stone_brick: { defId: 'stone', quantity: 2 },
+  birch_plank: { defId: 'birch_logs', quantity: 4 },
+  copper_ingot: { defId: 'copper_ore', quantity: 4 },
+  maple_plank: { defId: 'maple_logs', quantity: 8 },
+  iron_ingot: { defId: 'iron_ore', quantity: 8 },
+  yew_plank: { defId: 'yew_logs', quantity: 16 },
+  silver_ingot: { defId: 'silver_ore', quantity: 16 },
+  ironwood_plank: { defId: 'ironwood_logs', quantity: 32 },
+  gold_ingot: { defId: 'gold_ore', quantity: 32 },
+};
+const V15_INPUT_ITEM: Readonly<Record<string, { name: string; icon: string }>> = {
+  oak_logs: { name: 'Oak Logs', icon: '🪵' },
+  birch_logs: { name: 'Birch Logs', icon: '🪵' },
+  maple_logs: { name: 'Maple Logs', icon: '🪵' },
+  yew_logs: { name: 'Yew Logs', icon: '🪵' },
+  ironwood_logs: { name: 'Ironwood Logs', icon: '🪵' },
+  stone: { name: 'Stone', icon: '🪨' },
+  copper_ore: { name: 'Copper Ore', icon: '🟠' },
+  iron_ore: { name: 'Iron Ore', icon: '⚫' },
+  silver_ore: { name: 'Silver Ore', icon: '⚪' },
+  gold_ore: { name: 'Gold Ore', icon: '🟡' },
+};
+const V15_X10 = 10;
+const v15Count = (v: unknown) => (typeof v === 'number' && Number.isSafeInteger(v) && v > 0 ? v : 0);
+
+/**
+ * Owner-approved (2026-11-01). Material jobs become continuous (no quantity, no mode); nothing may be lost:
+ * - the craft in progress (running or held) keeps its taken inputs and its progress; it is ×10 if the job was in x10 mode
+ *   (its stamina was spent);
+ * - the inputs of every craft not yet started go back to the inventory (an existing stack, else a free slot), in pipe
+ *   order; when they do not fit, those crafts stay on the job as `prepaid` x1 crafts (×10 crafts count 10), used before
+ *   any new inputs and refunded by Stop;
+ * - the up-front ×10 stamina of every craft not yet started goes back, capped at max stamina;
+ * - gear jobs (one piece, x1), held and ready states are kept; every job drops `quantity`, `mode`, `staminaPerCraft`
+ *   and gets `x10`.
+ */
+function migrateV14toV15(doc: SaveDoc): SaveDoc {
+  const crafting = isDoc(doc.crafting) ? doc.crafting : null;
+  if (!crafting || !Array.isArray(crafting.pipes)) return { ...doc, saveVersion: 15 };
+  const inventory = isDoc(doc.inventory) ? doc.inventory : {};
+  const items: Doc[] = Array.isArray(inventory.items) ? inventory.items.map((i) => (isDoc(i) ? { ...i } : i)) : [];
+  const capacity = typeof inventory.capacity === 'number' ? inventory.capacity : 0;
+  let staminaBack = 0;
+  const pipes = crafting.pipes.map((job) => {
+    if (!isDoc(job)) return job;
+    const { quantity, mode, staminaPerCraft, ...rest } = job;
+    const x10 = mode === 'x10';
+    const input = typeof job.recipeId === 'string' ? V15_MATERIAL_INPUT[job.recipeId] : undefined;
+    if (!input) return { ...rest, x10: false }; // gear: one piece, x1
+    const notStarted = Math.max(0, v15Count(quantity) - v15Count(job.done) - 1);
+    if (notStarted === 0) return { ...rest, x10 };
+    staminaBack += v15Count(staminaPerCraft) * notStarted;
+    const crafts = notStarted * (x10 ? V15_X10 : 1);
+    const amount = input.quantity * crafts;
+    const stack = items.find((i) => isDoc(i) && i.stackable === true && i.defId === input.defId);
+    if (stack) {
+      stack.quantity = v15Count(stack.quantity) + amount;
+      return { ...rest, x10 };
+    }
+    if (items.length < capacity) {
+      items.push({ id: input.defId, defId: input.defId, ...V15_INPUT_ITEM[input.defId], stackable: true, quantity: amount });
+      return { ...rest, x10 };
+    }
+    return { ...rest, x10, prepaid: crafts };
+  });
+  const out: SaveDoc = { ...doc, saveVersion: 15, crafting: { ...crafting, pipes }, inventory: { ...inventory, items } };
+  const stamina = isDoc(doc.stamina) ? doc.stamina : null;
+  if (stamina && staminaBack > 0 && typeof stamina.current === 'number' && typeof stamina.max === 'number') {
+    const current = Math.max(stamina.current, Math.min(stamina.max, stamina.current + staminaBack));
+    out.stamina = { ...stamina, current, progressMs: current >= stamina.max ? 0 : stamina.progressMs };
+  }
   return out;
 }
 

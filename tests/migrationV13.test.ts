@@ -94,16 +94,19 @@ describe('frozen v12 save (tests/fixtures/save-v12.json), engine 1.12.0 → 1.13
     // Mining keeps running; the house is built for real and crafts beside it, live and offline.
     expect(client.getState().activity).toMatchObject({ kind: 'mining', rockId: 'stone' });
     expect((await client.dispatch({ type: 'BUILD', buildingId: 'crafting' })).ok).toBe(true);
-    expect((await client.dispatch({ type: 'START_CRAFT', pipe: 0, recipeId: 'oak_plank', quantity: 10, mode: 'x1', maxCost: 0 })).ok).toBe(true);
+    // 1.15.0: continuous pipes. Oak Planks until the logs run out (then it waits); Stone Bricks fed by the mining, a ×10 tap.
+    const logs = qty(client.getState(), 'oak_logs');
+    expect((await client.dispatch({ type: 'START_CRAFT', pipe: 0, recipeId: 'oak_plank' })).ok).toBe(true);
     clock.advance(30 * SEC);
     await client.tick();
-    expect((await client.dispatch({ type: 'START_CRAFT', pipe: 1, recipeId: 'stone_brick', quantity: 3, mode: 'x10', maxCost: 3 })).ok).toBe(true);
+    expect((await client.dispatch({ type: 'START_CRAFT', pipe: 1, recipeId: 'stone_brick' })).ok).toBe(true);
+    expect((await client.dispatch({ type: 'X10_CRAFT', pipe: 1, jobId: 2, craft: 1, maxCost: 1 })).ok).toBe(true);
     clock.advance(HOUR);
     await client.resume();
     const s = client.getState();
-    expect(qty(s, 'oak_plank')).toBe(10);
-    expect(qty(s, 'stone_brick')).toBe(30);
-    expect(s.crafting.pipes.every((x) => x === null)).toBe(true);
+    expect(qty(s, 'oak_plank')).toBe(Math.floor(logs / 2));
+    expect(s.crafting.pipes[0]).toMatchObject({ status: 'waiting', done: Math.floor(logs / 2) });
+    expect(qty(s, 'stone_brick')).toBeGreaterThan(10);
     expect(s.activity).toMatchObject({ kind: 'mining', rockId: 'stone' });
 
     const report = replayLogReport(entries(await repo.getAllLog()));

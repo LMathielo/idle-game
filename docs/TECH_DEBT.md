@@ -22,9 +22,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#2, 25] Hero equipment cells may read the item name twice to screen readers (unverified since the #19 popover rework).
 - [#2, <80] `AwayModal` — an open "While you were away" doesn't add a later short resume to its totals (display only; rewards are saved).
 - [#19, note] Village map pixel art is bilinear-upscaled when zoomed (up to ~1.4× native), so it looks soft. Visual call: nearest-neighbour or a higher-res PNG.
-- [#21, 65] `crafting/CraftingModal.tsx` `LivePercent` — after a clock pause clears, the xx.yy% jumps ahead by the paused time until the next engine tick (`start` not reset). Add `running` to the key or reset `start` when `running` turns true.
-- [#21, 60] `crafting/CraftingModal.tsx` `PipeRow` — `memo` never hits (craftingView builds new pipe objects every tick). Custom comparator or drop the memo.
 - [#22, 40] "✓ Ready" green text on `woodDark` isn't in `tests/theme.test.ts`. Add the pair to the contrast test.
+- [#23, 62] `crafting/CraftingModal.tsx` ~316 — the ×10 disabled reason ("Needs 12 Iron Ore") is a one-line sublabel on a ~105 pt button at 375 pt and may truncate. Put ×10 on its own row or show the reason as a line under the buttons.
 
 ## Engine and data
 

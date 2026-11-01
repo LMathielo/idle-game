@@ -27,6 +27,7 @@ export function emptySummary(): SimulationSummary {
     craftsCompleted: 0,
     itemsCrafted: {},
     craftsReady: {},
+    craftWaits: [],
     anomalies: [],
   };
 }
@@ -35,6 +36,13 @@ function addMaps<M extends Partial<Record<string, number>>>(a: M, b: M): M {
   const out: Record<string, number> = { ...(a as Record<string, number>) };
   for (const [k, v] of Object.entries(b)) out[k] = (out[k] ?? 0) + (v ?? 0);
   return out as M;
+}
+
+/** One entry per pipe and missing input, first seen first. Summaries stored before 1.15.0 have none. */
+export function mergeWaits(a: SimulationSummary['craftWaits'] | undefined, b: SimulationSummary['craftWaits'] | undefined): SimulationSummary['craftWaits'] {
+  const out = [...(a ?? [])];
+  for (const w of b ?? []) if (!out.some((x) => x.pipe === w.pipe && x.defId === w.defId)) out.push(w);
+  return out;
 }
 
 /** Combines two consecutive summaries (used to aggregate live ticks). */
@@ -68,6 +76,7 @@ export function mergeSummaries(a: SimulationSummary, b: SimulationSummary): Simu
     craftsCompleted: a.craftsCompleted + b.craftsCompleted,
     itemsCrafted: addMaps(a.itemsCrafted, b.itemsCrafted),
     craftsReady: addMaps(a.craftsReady, b.craftsReady),
+    craftWaits: mergeWaits(a.craftWaits, b.craftWaits),
     anomalies: [...a.anomalies, ...b.anomalies],
   };
 }
