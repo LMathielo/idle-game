@@ -102,7 +102,7 @@ Owner's target (2026-10-27): a new player reaches hero **Lv5 in the first minute
 
 **Skill curve (woodcutting, mining; engine 1.12.0).** Owner target (2026-10-31): Lv1 → 15 within one day of continuous gathering (offline included), early levels quick; the late game may be harder. Hours = continuous gathering on Oak to Lv5, then Birch (the plain path, no gear: Maple from Lv15 needs WS 450, so those columns are an upper bound), from `tests/migrationV12.test.ts`. The old curve (base 500) needed 159,989 XP ≈ 117 h for Lv15.
 
-| Skill level | xpToNext | XP to reach this level | Hours, DEX 0 | Hours, DEX 10 (new hero) | Old curve: XP to reach |
+| Skill level | xpToNext | XP to reach this level | Hours, DEX 0 (a 1.16.0 new hero: core DEX 0) | Hours, DEX 10 (the pre-1.16.0 new hero, −1 s per DEX) | Old curve: XP to reach |
 | ---: | ---: | ---: | ---: | ---: | ---: |
 | 5 | 1,118 | 1,703 | 2.3 | 2.1 | 8,512 |
 | 10 | 3,162 | 11,106 | 8.9 | 8.4 | 55,524 |
@@ -288,15 +288,15 @@ Data: `src/engine/config/dungeons.ts` (`DUNGEON_RUN` skip rule, `COMBAT`, `ENEMI
 
 Five dungeons, one enemy each. All of it is data (`DUNGEONS`, `ENEMIES`); no dungeon has its own code.
 
-| # | id | Name | Enemy (HP · dmg · def · strikes every) | Base search (DEX 10) | Unlock | Win: XP · gold | Loot |
+| # | id | Name | Enemy (HP · dmg · def · strikes every) | Base search (core DEX 10) | Unlock | Win: XP · gold | Loot |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
-| 1 | `rat_cellar` | Rat Cellar | Rat 30 · 3–5 · 2 · 1 s | 2:00 (1:50) | — | 35 · 2–5 | Rat Skin 50% |
-| 2 | `bat_cave` | Bat Cave | Bat 60 · 6–9 · 6 · 1 s | 3:00 (2:50) | 10 wins in Rat Cellar | 60 · 6–12 | Bat Wing 40% |
-| 3 | `wolf_den` | Wolf Den | Wolf 110 · 10–14 · 12 · 1 s | 5:00 (4:50) | 15 wins in Bat Cave | 140 · 15–30 | Wolf Pelt 30% |
-| 4 | `forgotten_crypt` | Forgotten Crypt | Skeleton 180 · 15–20 · 20 · 1 s | 8:00 (7:50) | 25 wins in Wolf Den | 300 · 35–60 | Old Bone 25% |
-| 5 | `troll_bridge` | Troll Bridge | Troll 300 · 22–30 · 30 · 1 s | 12:00 (11:50) | 40 wins in Crypt | 650 · 80–130 | Troll Hide 20% |
+| 1 | `rat_cellar` | Rat Cellar | Rat 30 · 3–5 · 2 · 1 s | 2:00 (1:51) | — | 35 · 2–5 | Rat Skin 50% |
+| 2 | `bat_cave` | Bat Cave | Bat 60 · 6–9 · 6 · 1 s | 3:00 (2:46) | 10 wins in Rat Cellar | 60 · 6–12 | Bat Wing 40% |
+| 3 | `wolf_den` | Wolf Den | Wolf 110 · 10–14 · 12 · 1 s | 5:00 (4:36) | 15 wins in Bat Cave | 140 · 15–30 | Wolf Pelt 30% |
+| 4 | `forgotten_crypt` | Forgotten Crypt | Skeleton 180 · 15–20 · 20 · 1 s | 8:00 (7:21) | 25 wins in Wolf Den | 300 · 35–60 | Old Bone 25% |
+| 5 | `troll_bridge` | Troll Bridge | Troll 300 · 22–30 · 30 · 1 s | 12:00 (11:01) | 40 wins in Crypt | 650 · 80–130 | Troll Hide 20% |
 
-Every tier uses the same search rule (−1 s per DEX, minimum 1:00), skip rule, combat, regen and auto-repeat. Loot items are stackable commons in the item catalog. Each enemy has its own `attackIntervalMs` (all 1000 today).
+Every tier uses the same search rule (1.16.0: `activityTimeMs(base, 60 s, core DEX bp)`, core DEX on the diminishing curve, floor 1:00; it replaced −1 s per DEX), skip rule, combat, regen and auto-repeat. Loot items are stackable commons in the item catalog. Each enemy has its own `attackIntervalMs` (all 1000 today).
 
 Reach (1000 fights per cell with the real combat code, full HP; 2026-10-26, before live combat): a hero with base attributes (STR/END 10) beats Bat Cave from Lv 1 and Wolf Den from about Lv 6–7. The Crypt needs about STR/END 20 at Lv 10 (98% wins) and the Troll about STR/END 30 at Lv 20; at STR/END 10 both are 0%. So tiers 4–5 wait for Training (M3), as intended. With every interval at 1 s the fights are the same strike for strike (see "Fight"); regen now also runs during the fight (slightly in the hero's favour) and the cap moved from 50 rounds to 60 s, so this still holds.
 
@@ -350,7 +350,7 @@ While the dungeon activity is active, runs follow each other back-to-back, live 
 
 ### Skip (search only)
 
-`SKIP_DUNGEON_RUN` costs `ceil(remainingMs / 60 000)` stamina (1 per started minute of **search** left, at least 1: 1:50 → 2, 0:30 → 1) and ends the search now: the fight starts at once, at the current HP, and **always plays live** from that moment. **No HP regen for the skipped time** (owner decision, as before). During the fight the skip is refused with **`FIGHT_IN_PROGRESS`** (the UI hides the button). Not enough stamina → `NOT_ENOUGH_STAMINA`, nothing changes (the UI greys the button). No dungeon running → `NO_DUNGEON_RUN`.
+`SKIP_DUNGEON_RUN` costs `ceil(remainingMs / 60 000)` stamina (1 per started minute of **search** left, at least 1: 2:00 → 2, 0:30 → 1) and ends the search now: the fight starts at once, at the current HP, and **always plays live** from that moment. **No HP regen for the skipped time** (owner decision, as before). During the fight the skip is refused with **`FIGHT_IN_PROGRESS`** (the UI hides the button). Not enough stamina → `NOT_ENOUGH_STAMINA`, nothing changes (the UI greys the button). No dungeon running → `NO_DUNGEON_RUN`.
 
 The command is bound to what the player saw: `{ run, maxCost }`, where `run` is the run number on screen (`DungeonRunView.run` = lifetime runs + 1) and `maxCost` the cost on the button. If the search on screen already ended by the time the command is applied (time passes between the tap and `now`, and the client simulates first), the skip fails with `FIGHT_IN_PROGRESS` while that run's fight goes on, and with **`RUN_CHANGED`** once the run is over (the next run has a new number); a real cost above `maxCost` is also `RUN_CHANGED`. Nothing is spent in any of these cases, so a skip never charges more than shown and never skips the next run instead. The UI stays quiet on both: the screen already shows the fight or the new search. At 0 HP the skip stays enabled and the UI warns "Certain loss — 0 HP" (the fight is an immediate `no_hp` loss). It is a logged command, replayed like any other. Waiting is always free.
 
