@@ -259,6 +259,8 @@ export class LocalGameClient implements GameClient {
     /** Adds mining levels (default 1), to test rock unlocks. Logged as DEBUG_ADD_MINING_LEVEL. */
     addMiningLevel: (levels = 1): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_MINING_LEVEL', levels }),
     finishConstruction: (): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_FINISH_CONSTRUCTION' }),
+    /** Opens the next crafting pipe (up to 8). Logged as DEBUG_UNLOCK_PIPE. */
+    unlockPipe: (): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_UNLOCK_PIPE' }),
 
     resetSave: (): Promise<void> =>
       this.serial(async () => {

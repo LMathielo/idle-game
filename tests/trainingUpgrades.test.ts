@@ -25,7 +25,7 @@ import {
   upgradeView,
 } from '../src/engine';
 import type { CommandInput } from '../src/client/types';
-import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, v12Skills } from './helpers';
+import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, V13_ADDED, v12Skills } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v11 save + its action log, written by the 1.10.0 engine before Training Grounds upgrades (tests/fixtures). */
@@ -259,10 +259,13 @@ describe('frozen v11 save (tests/fixtures/save-v11.json), 1.10.0 → 1.11.0 (eng
     expect(V11_SAVE.activity).toMatchObject({ kind: 'training', attribute: 'strength' });
     expect(new Set(V11_LOG.map((r) => r.engineVersion))).toEqual(new Set(['1.10.0']));
     expect(hashState(V11_SAVE)).toBe(V11_LOG.at(-1)!.stateHash);
-    // Since 1.12.0 (save v12) it also runs the v11 → v12 skill migration: only the skills change.
-    const { character, saveVersion: _v, ...rest } = loadSave(V11_SAVE);
-    const { character: rc, saveVersion: _rv, ...rawRest } = V11_SAVE;
+    // Since 1.12.0 (save v12) it also runs the v11 → v12 skill migration: only the skills change. Since 1.13.0 (save v13)
+    // the Crafting house (locked) and the idle pipes are added, and smithing is dropped.
+    const { character, saveVersion: _v, buildings, crafting, ...rest } = loadSave(V11_SAVE);
+    const { character: rc, saveVersion: _rv, buildings: rb, ...rawRest } = V11_SAVE;
     expect(rest).toEqual(rawRest);
+    expect(buildings).toEqual({ ...rb, crafting: V13_ADDED.craftingBuilding });
+    expect(crafting).toEqual(V13_ADDED.crafting);
     expect(character).toEqual({ ...rc, skills: v12Skills(rc.skills) });
   });
 

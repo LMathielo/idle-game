@@ -1,5 +1,6 @@
 import { merchantStockSlots } from './bonuses';
 import { newBuildingsState } from './buildings';
+import { newCraftingState } from './crafting';
 import { STARTING_HERO } from './config/newGame';
 import { INVENTORY_CAPACITY } from './config/items';
 import { STAMINA } from './config/stamina';
@@ -49,6 +50,7 @@ export function newGame(seed: number, now: number): GameState {
     buildings,
     construction: null,
     workers: newWorkersState(),
+    crafting: newCraftingState(),
     nextItemSerial: 1,
     stats: { totalActions: 0, itemsGathered: {} },
     flags: { debugUsed: false },

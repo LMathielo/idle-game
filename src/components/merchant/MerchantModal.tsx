@@ -31,6 +31,7 @@ export function MerchantModal() {
   return (
     <ModalScreen
       title="Merchant"
+      buildingId="merchant"
       closeLabel="Close merchant"
       headerRight={
         <Text style={styles.gold} accessibilityLabel={`${formatNumber(gold)} gold`}>

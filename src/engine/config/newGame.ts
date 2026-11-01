@@ -15,5 +15,5 @@ export const STARTING_HERO = {
   equipment: ['rusty_gladius', 'linen_tunic', 'worn_sandals', 'wooden_axe', 'wooden_pickaxe'],
   /** Starting inventory stacks. */
   inventory: [{ itemId: 'bread', quantity: 3 }],
-  skills: ['woodcutting', 'mining', 'fishing', 'smithing'] satisfies SkillKey[],
+  skills: ['woodcutting', 'mining', 'fishing'] satisfies SkillKey[],
 } as const;

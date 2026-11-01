@@ -9,6 +9,7 @@ import {
   type Character,
   effectiveAttributes,
   getDerivedStats,
+  intCraftReductionBp,
   hpView,
   type RangePart,
   type Stamina,
@@ -29,8 +30,12 @@ const ATTRIBUTE_EFFECTS: Record<AttributeKey, string | null> = {
   // Rat Cellar's timing; every tier uses the same −1 s per DEX today (config/dungeons.ts).
   dexterity: `−${DUNGEONS.rat_cellar.search.perDexterityMs / 1000}s dungeon search`,
   endurance: `+${STATS.defensePerEndurance} defense, +${STATS.hpRegen.perEndurance} HP/min`,
+  // INT's effect depends on its value (a diminishing curve), so it is filled in from the engine in the component.
   intelligence: null,
 };
+
+/** INT 10 → "−8.3% crafting time" (intCraftReductionBp: diminishing, cap 50%). */
+const intEffect = (bp: number) => `−${Number((bp / 100).toFixed(1))}% crafting time`;
 
 const ATTRIBUTES = ATTRIBUTE_KEYS.map((key) => ({
   key,
@@ -102,7 +107,9 @@ export const StatusPanel = memo(function StatusPanel({ level, attributes, equipm
     void measureAnchor(node).then((anchor) => anchor && setInfo({ key, anchor }));
   }, []);
   const closeInfo = useCallback(() => setInfo(null), []);
-  const attrInfo = info ? ATTRIBUTES.find((a) => a.key === info.key) : undefined;
+  const intBp = intCraftReductionBp({ character: { attributes }, training });
+  const attrs = useMemo(() => ATTRIBUTES.map((a) => (a.key === 'intelligence' ? { ...a, effect: intEffect(intBp), active: true } : a)), [intBp]);
+  const attrInfo = info ? attrs.find((a) => a.key === info.key) : undefined;
 
   const rows: { key: StatKey; label: string; value: string; note?: string; detail: string }[] = [
     { key: 'damage', label: 'Damage', value: range(stats.damage.min, stats.damage.max), detail: `Damage ${range(stats.damage.min, stats.damage.max)} = ${describeRange(stats.damage.breakdown)}` },
@@ -127,7 +134,7 @@ export const StatusPanel = memo(function StatusPanel({ level, attributes, equipm
   return (
     <Panel title="Status">
       <View style={styles.attrGrid}>
-        {ATTRIBUTES.map((a) => (
+        {attrs.map((a) => (
           <AttributeCell key={a.key} attr={a} effective={effective[a.key]} onInfo={openInfo} />
         ))}
       </View>

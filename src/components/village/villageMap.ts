@@ -7,7 +7,7 @@ export const WORLD = { w: 360, h: 560 } as const;
 /** The original 180x390 village inside the world: the map starts centred on it. */
 export const CORE = { x: 90, y: 40, w: 180, h: 390 } as const;
 
-export type VillageAction = 'storage' | 'merchant' | 'dungeon' | 'training' | 'woodcutting' | 'mine' | 'town_hall';
+export type VillageAction = 'storage' | 'merchant' | 'dungeon' | 'training' | 'woodcutting' | 'mine' | 'town_hall' | 'crafting';
 
 /**
  * The centre of each sign, world px. Landmarks (core px, + CORE offset) from tools/generate-village.py:
@@ -15,7 +15,9 @@ export type VillageAction = 'storage' | 'merchant' | 'dungeon' | 'training' | 'w
  * over the stall's awning, town_hall on the hall's roof under the bell tower, storage in front of the barn, training on
  * the yard's top fence.
  */
-export const SIGNS: readonly { key: VillageAction; label: string; icon: string; x: number; y: number }[] = [
+export type PlotId = 'west' | 'east' | 'south_west' | 'south_east';
+
+export const SIGNS: readonly { key: VillageAction; label: string; icon: string; x: number; y: number; plot?: PlotId }[] = [
   { key: 'dungeon', label: 'Dungeon', icon: '💀', x: 234, y: 171 },
   { key: 'mine', label: 'Mine Shaft', icon: '⛏️', x: 135, y: 171 },
   { key: 'woodcutting', label: 'Woodcutting', icon: '🪓', x: 135, y: 254 },
@@ -23,15 +25,17 @@ export const SIGNS: readonly { key: VillageAction; label: string; icon: string; 
   { key: 'town_hall', label: 'Town Hall', icon: '🏛️', x: 218, y: 280 },
   { key: 'storage', label: 'Storage', icon: '📦', x: 129, y: 329 },
   { key: 'training', label: 'Training', icon: '⚔️', x: 222, y: 315 },
+  // On a plot outside the core (centre of PLOTS.east): reached by panning the map.
+  { key: 'crafting', label: 'Crafting', icon: '🔨', x: 314, y: 327, plot: 'east' },
 ];
 
-/** Empty plots (x0, y0, x1, y1 world px) for future buildings. No signs yet. */
-export const PLOTS = {
+/** Building plots (x0, y0, x1, y1 world px) outside the core. `east` holds the Crafting house (1.13.0); the rest are empty. */
+export const PLOTS: Record<PlotId, readonly [number, number, number, number]> = {
   west: [18, 292, 62, 318],
   east: [292, 314, 336, 340],
   south_west: [106, 496, 148, 528],
   south_east: [214, 496, 256, 528],
-} as const;
+};
 
 /** Max zoom = this × the starting zoom (the core filling the screen). */
 export const MAX_ZOOM_FACTOR = 2.5;

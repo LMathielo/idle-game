@@ -88,7 +88,16 @@ export function progressMs(state: GameState): number | undefined {
   return a && 'progressMs' in a ? a.progressMs : undefined;
 }
 
-/** Skills as the v11 → v12 migration leaves them (total XP kept, level recomputed on the 1.12.0 skill curve). */
+/**
+ * Skills as the migrations leave them: v11 → v12 (total XP kept, level recomputed on the 1.12.0 skill curve), then
+ * v12 → v13 (the unused `smithing` skill dropped).
+ */
 export function v12Skills<T extends Record<string, unknown>>(skills: T): T {
-  return Object.fromEntries(Object.entries(skills).map(([k, v]) => [k, v12SkillProgress(v)])) as T;
+  return Object.fromEntries(Object.entries(skills).filter(([k]) => k !== 'smithing').map(([k, v]) => [k, v12SkillProgress(v)])) as T;
 }
+
+/** What the v12 → v13 migration adds to a document (frozen: Crafting locked, 2 of 8 pipes open, idle, empty ledger). */
+export const V13_ADDED = {
+  crafting: { pipesUnlocked: 2, pipes: [null, null, null, null, null, null, null, null], remainders: {}, nextJobSerial: 1 },
+  craftingBuilding: { state: 'locked', level: 0 },
+} as const;

@@ -12,3 +12,4 @@ export * from './merchant';
 export * from './mining';
 export * from './buildings';
 export * from './workers';
+export * from './crafting';

@@ -117,6 +117,8 @@ export interface GameClient {
     addMiningLevel(levels?: number): Promise<DispatchResult>;
     /** Finishes the builder's current upgrade now, for free. Logged as DEBUG_FINISH_CONSTRUCTION. */
     finishConstruction(): Promise<DispatchResult>;
+    /** Opens the next crafting pipe (up to 8). Logged as DEBUG_UNLOCK_PIPE. */
+    unlockPipe(): Promise<DispatchResult>;
     /** New game with a new seed and a real clock (offset 0). Logged, never deletes the log. */
     resetSave(): Promise<void>;
   };

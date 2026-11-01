@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 12 as const;
+export const CURRENT_SAVE_VERSION = 13 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -22,6 +22,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   9: migrateV9toV10,
   10: migrateV10toV11,
   11: migrateV11toV12,
+  12: migrateV12toV13,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -433,6 +434,33 @@ function migrateV11toV12(doc: SaveDoc): SaveDoc {
   const skills: Doc = {};
   for (const [key, skill] of Object.entries(oldSkills)) skills[key] = v12SkillProgress(skill);
   return { ...doc, saveVersion: 12, character: { ...character, skills } };
+}
+
+// ---- v12 → v13 (2026-11-01): the Crafting house, pipes, the yield ledger; smithing removed ----
+// Frozen literals: what a new save had in 1.13.0, whatever config/crafting.ts says later.
+const V13_CRAFTING_BUILDING = { state: 'locked', level: 0 } as const;
+const V13_PIPES_UNLOCKED = 2;
+const V13_PIPE_SLOTS = 8;
+
+/**
+ * Owner-approved (2026-11-01):
+ * - the Crafting house is added, locked (`buildings.crafting`), like on a new save;
+ * - `crafting` = 2 open pipes of 8, all idle, an empty fraction ledger, job serial 1;
+ * - the unused `smithing` skill is dropped (crafting has no skill);
+ * - everything else is kept.
+ */
+function migrateV12toV13(doc: SaveDoc): SaveDoc {
+  const character = isDoc(doc.character) ? doc.character : {};
+  const skills: Doc = { ...(isDoc(character.skills) ? character.skills : {}) };
+  delete skills.smithing;
+  const buildings = isDoc(doc.buildings) ? doc.buildings : {};
+  return {
+    ...doc,
+    saveVersion: 13,
+    buildings: { ...buildings, crafting: { ...V13_CRAFTING_BUILDING } },
+    crafting: { pipesUnlocked: V13_PIPES_UNLOCKED, pipes: Array.from({ length: V13_PIPE_SLOTS }, () => null), remainders: {}, nextJobSerial: 1 },
+    character: { ...character, skills },
+  };
 }
 
 export class SaveVersionError extends Error {}

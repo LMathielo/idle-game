@@ -78,7 +78,7 @@ export function TownHallModal() {
       : `🪙 ${formatNumber(hireCost)}${view.canHire ? '' : ' · not enough gold'}`;
 
   return (
-    <ModalScreen title={BUILDINGS.town_hall.name} closeLabel="Close town hall" headerRight={<Text style={styles.level}>Lv {level}</Text>}>
+    <ModalScreen title={BUILDINGS.town_hall.name} buildingId="town_hall" closeLabel="Close town hall" headerRight={<Text style={styles.level}>Lv {level}</Text>}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <Text style={styles.cardTitle} accessibilityRole="header">

@@ -197,7 +197,7 @@ export function buildingsView(state: GameState): BuildingView[] {
 }
 
 /** Removes `quantity` of a stackable item from the inventory (the caller checked there is enough). Mutates. */
-function consumeItem(draft: GameState, defId: string, quantity: number): void {
+export function consumeItem(draft: GameState, defId: string, quantity: number): void {
   let left = quantity;
   const items = draft.inventory.items;
   for (let i = 0; i < items.length && left > 0; ) {

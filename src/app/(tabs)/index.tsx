@@ -9,10 +9,10 @@ import { BuildSheet } from '../../components/buildings/BuildSheet';
 import { type VillageAction, VillageScene } from '../../components/VillageScene';
 import { formatCountdown, formatNumber } from '../../components/format';
 import type { AnchorRect } from '../../components/ui/InfoPopover';
-import { type ActivityKind, type BuildingId, constructionView, isBuilt } from '../../engine';
+import { type ActivityKind, type BuildingId, constructionView, craftingSign, isBuilt } from '../../engine';
 import { colors, fonts } from '../../theme';
 
-const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'mine' | 'town_hall' | 'dungeon' | 'training' | 'merchant'>, string> = {
+const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'mine' | 'town_hall' | 'dungeon' | 'training' | 'merchant' | 'crafting'>, string> = {
   storage: 'Storage',
 };
 
@@ -22,6 +22,7 @@ const SIGN_BUILDING: Partial<Record<VillageAction, BuildingId>> = {
   mine: 'mine_shaft',
   town_hall: 'town_hall',
   training: 'training_grounds',
+  crafting: 'crafting',
 };
 
 /** The sign of each building, for the "Upgrading 12:34" line. */
@@ -31,16 +32,18 @@ const BUILDING_SIGN: Record<BuildingId, VillageAction> = {
   town_hall: 'town_hall',
   training_grounds: 'training',
   merchant: 'merchant',
+  crafting: 'crafting',
 };
 
 /** The full-screen modal each built sign opens. */
-const SIGN_ROUTE: Partial<Record<VillageAction, '/dungeon' | '/training' | '/woodcutting' | '/mine' | '/merchant' | '/town-hall'>> = {
+const SIGN_ROUTE: Partial<Record<VillageAction, '/dungeon' | '/training' | '/woodcutting' | '/mine' | '/merchant' | '/town-hall' | '/crafting'>> = {
   dungeon: '/dungeon',
   training: '/training',
   woodcutting: '/woodcutting',
   mine: '/mine',
   merchant: '/merchant',
   town_hall: '/town-hall',
+  crafting: '/crafting',
 };
 
 /** The sign highlighted while an activity runs. */
@@ -62,9 +65,17 @@ export default function VillageScreen() {
     return out;
   }, [buildings]);
   const job = constructionView(state);
-  const badgeText = job ? `Upgrading ${formatCountdown(job.remainingMs)}` : null;
+  const badgeText = job ? `🔨 Upgrading ${formatCountdown(job.remainingMs)}` : null;
   const badgeKey = job ? BUILDING_SIGN[job.buildingId] : null;
-  const badge = useMemo(() => (badgeKey && badgeText ? { key: badgeKey, text: badgeText } : null), [badgeKey, badgeText]);
+  // The Crafting sign: "2/2 crafting · 0:42" (busy pipes / open pipes, shortest job left), "Inventory full", or nothing.
+  const pipes = craftingSign(state);
+  const craftText = pipes ? (pipes.held ? '⚒️ Inventory full' : `⚒️ ${pipes.busy}/${pipes.open} crafting · ${formatCountdown(pipes.nextJobDoneMs)}`) : null;
+  const badges = useMemo(() => {
+    const out: Partial<Record<VillageAction, string>> = {};
+    if (craftText) out.crafting = craftText;
+    if (badgeKey && badgeText) out[badgeKey] = badgeText; // an upgrade wins over the crafting line
+    return out;
+  }, [badgeKey, badgeText, craftText]);
   /** Bottom edge of the top HUD (safe area included); signs are kept below it. */
   const [hudBottom, setHudBottom] = useState(0);
   const onHudLayout = useCallback((e: LayoutChangeEvent) => {
@@ -117,7 +128,7 @@ export default function VillageScreen() {
         onAction={onAction}
         active={activity ? ACTIVITY_SIGN[activity.kind] : null}
         locked={locked}
-        badge={badge}
+        badges={badges}
         topReserve={hudBottom}
         bottomReserve={ACTIVITY_STRIP_HEIGHT}
       />

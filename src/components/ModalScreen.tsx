@@ -1,9 +1,12 @@
 // Shared shell for every village full-screen modal: header row (✕ + title + optional right slot),
 // safe-area padding, and the screen's own "While you were away" host. Every village modal route uses it.
 import { router } from 'expo-router';
-import { type ReactNode, useMemo } from 'react';
+import { memo, type ReactNode, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useGameState } from '../client/GameProvider';
+import { type BuildingId, buildingLevel, levelBonuses } from '../engine';
 import { colors, fonts } from '../theme';
+import { currentBonusLine } from './buildings/bonusText';
 import { AwayModal } from './AwayModal';
 import { DialogHost } from './ui/GameDialog';
 import { useScreenInsets } from './ui/insets';
@@ -19,6 +22,8 @@ type Props = {
   headerRight?: ReactNode;
   /** Extra header rows under the title row (e.g. an HP bar). */
   headerBelow?: ReactNode;
+  /** A building's modal: shows its current level's bonuses under the title ("Lv3 · −19% craft time"). */
+  buildingId?: BuildingId;
   children: ReactNode;
 };
 
@@ -36,7 +41,7 @@ export function closeVillageModal() {
  * reads the root provider's window insets through React context, which is correct for a full-screen
  * modal on iOS and Android alike.
  */
-export function ModalScreen({ title, closeLabel, onClose = closeVillageModal, headerRight, headerBelow, children }: Props) {
+export function ModalScreen({ title, closeLabel, onClose = closeVillageModal, headerRight, headerBelow, buildingId, children }: Props) {
   const insets = useScreenInsets();
   const bannerPosition = useMemo(() => ({ bottom: insets.bottom + PAD }), [insets.bottom]);
   return (
@@ -51,6 +56,7 @@ export function ModalScreen({ title, closeLabel, onClose = closeVillageModal, he
           </Text>
           {headerRight}
         </View>
+        {buildingId ? <BonusLine buildingId={buildingId} /> : null}
         {headerBelow}
       </View>
       <View style={[styles.body, { paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }]}>{children}</View>
@@ -65,6 +71,17 @@ export function ModalScreen({ title, closeLabel, onClose = closeVillageModal, he
 }
 
 const PAD = 12;
+
+/** UI rule (2026-11-01): every building modal shows its current level's bonuses under the header. */
+const BonusLine = memo(function BonusLine({ buildingId }: { buildingId: BuildingId }) {
+  const buildings = useGameState().buildings;
+  const text = currentBonusLine(buildingLevel({ buildings }, buildingId), levelBonuses({ buildings }, buildingId));
+  return (
+    <Text style={styles.bonus} numberOfLines={2}>
+      {text}
+    </Text>
+  );
+});
 
 
 const styles = StyleSheet.create({
@@ -81,4 +98,5 @@ const styles = StyleSheet.create({
   closeText: { fontFamily: fonts.bodyBold, fontSize: 26, color: colors.parchment },
   title: { flex: 1, fontFamily: fonts.title, fontSize: 24, color: colors.gold },
   body: { flex: 1 },
+  bonus: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.parchment, paddingHorizontal: PAD },
 });
