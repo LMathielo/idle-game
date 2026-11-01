@@ -18,9 +18,9 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - iOS + Android via Expo (SDK 58), tested through Expo Go. No web.
 - Single player for now; multiplayer later via a server that reuses the engine.
 
-## Current state (2026-10-31, engine 1.12.0)
+## Current state (2026-11-01, engine 1.13.0)
 
-- Two tabs: **Village** (pixel village hub with signs: Storage, Merchant, Dungeon, Training, Woodcutting, Mine Shaft, Town Hall) and **Hero** (XP, Status panel with 4 attributes, derived damage/defense, current/max HP with regen, mana and stamina, 11 equipment slots (incl. the axe and the pickaxe), 20-slot inventory, 4 skills).
+- Two tabs: **Village** (pixel village hub with signs: Storage, Merchant, Dungeon, Training, Woodcutting, Mine Shaft, Town Hall, and Crafting on the east plot) and **Hero** (XP, Status panel with 4 attributes, derived damage/defense, current/max HP with regen, mana and stamina, 11 equipment slots (incl. the axe and the pickaxe), 20-slot inventory, 3 skills: Woodcutting, Mining, Fishing).
 - **Buildings (2026-10-28):** Woodcutting, Mine Shaft, Town Hall and Training Grounds start **locked** (greyed sign with 🔒); tapping one opens a Build sheet with each requirement (have / need) and a Build button. Dungeon, Merchant and Storage are always built. Table below.
 - **Town Hall, upgrades and workers (2026-10-28, engine 1.10.0):** every building upgrades to Lv5 (never above the Town Hall) with **one builder**, paid up front, timed, live and offline; the sign shows "Upgrading 12:34". Bonuses per level (yield, sell prices, worker slots, merchant stock slots). The Town Hall hires **workers** who gather on any tree or rock the hero can work, at 25% of the hero's power each, for upkeep per minute. **Gathering yield is power-based**: power ÷ requirement items per action (Oak and Stone need 20 now). The Merchant rolls a **random stock** from a 12-item pool on each refresh. Tables below.
 - **Training Grounds upgrades (2026-10-28, engine 1.11.0):** the Training Grounds upgrade to Lv5 like every other building (Town Hall cap, half the Town Hall's cost); each level gives **+1 training XP per minute** (Lv1 = 1, Lv5 = 5), live, offline and for the stamina speed-up.
@@ -31,7 +31,8 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - **Woodcutting (2026-10-27):** the Woodcutting sign opens a full-screen modal with **5 trees** (Oak, Birch, Maple, Yew, Ironwood) in a swipeable carousel. Each tree needs a woodcutting level and a **woodcutting strength** (WS = 10 × level + STR + axe). New **axe** equipment slot; everyone has the Wooden Axe (+1 WS). Logs every 1:50 on Oak at DEX 10, skippable with stamina. Training can be sped up with stamina (1 per minute).
 - **Merchant (2026-10-27):** the Merchant sign opens a full-screen modal with **Buy | Sell** tabs. Slot 1 is always Health Potion ×10; since 1.10.0 the other slots are rolled from a pool on each refresh (table below); 5 refresh charges (+1 per 2 h). Tapping an item on the Hero tab opens an info sheet with **Equip / Use / Unequip**. Item names are colored by quality.
 - **UI kit, village map, skill XP (2026-10-31, engine 1.12.0):** see "UI rules" below. Woodcutting / Mining Lv1 → 15 takes about a day of gathering (skill XP base 100, steeper from Lv15); existing saves keep their total skill XP and jump levels.
-- Storage shows "coming soon". No storage, crafting or item affixes yet.
+- **Crafting (2026-11-01, engine 1.13.0):** the Crafting house (east plot, locked on a new save) turns logs and ore into planks, Stone Bricks and ingots in **timed pipes** that run side by side, beside anything the hero does, live and offline (8h cap). 2 of 8 pipes open (3–4 "Unlocks later", 5–8 "Premium — coming soon"; no unlock yet, debug only). A job = recipe × quantity, all materials paid at start; **x10 mode** crafts 10× for stamina; **Insta** finishes the current craft for stamina; **Cancel** refunds what is not done. INT shortens craft time (its first effect). The unused Smithing skill is gone. Tables below.
+- Storage shows "coming soon". No storage, gear crafting or item affixes yet.
 - Technical details: `docs/ENGINE.md`.
 - Delivery: PRs land on `dev` (test preview in Expo Go, EAS branch `dev`); the owner releases `dev` → `main` (EAS branch `main`) after testing.
 
@@ -40,7 +41,8 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 - **Dialogs:** every confirmation and every alert ("Not possible", "Could not save", errors) is a **GameDialog**: pixel styled, Pixelify title, Inter body, red confirm when the action loses something. Android back or a tap outside = cancel. Never the native alert.
 - **Info:** tapping an item or anything with info opens an **InfoPopover**: a squared box next to the tapped element (above or below, kept on screen), with that element's actions as buttons inside. A tap outside closes it. Used for items (Equip / Use / Unequip / Buy / Sell), locked buildings (Build), upgrades (Upgrade), hero stats and attributes, locked dungeons, trees and rocks (ⓘ).
 - **Hold-to-repeat:** stamina skips (woodcutting, mining, dungeon search), training speed-ups and the debug buttons (not Reset save) repeat while held: one action on touch, then every 100 ms after 400 ms. A repeat stops on release, when stamina or gold runs out (silently, no dialog), or when the button turns off.
-- **Village map:** drag and pinch-zoom (up to 2.5×), never past the map's edge; it opens centred on the village. Signs keep their size; the HUD and the activity strip stay fixed on top. Empty roped plots are where future buildings go.
+- **Village map:** drag and pinch-zoom (up to 2.5×), never past the map's edge; it opens centred on the village. Signs keep their size; the HUD and the activity strip stay fixed on top. Empty roped plots are where future buildings go (the Crafting house is on the east plot).
+- **Building bonuses (2026-11-01):** every building modal (Woodcutting, Mine Shaft, Merchant, Town Hall, Training Grounds, Crafting) shows its **current level's bonuses** as a line under the header, e.g. "Lv3 · −19% craft time", "Lv2 · +20% log yield", "Lv1 · no bonus yet". The Upgrade box keeps its now / next comparison.
 
 ## Buildings (2026-10-28)
 
@@ -52,6 +54,7 @@ A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, 
 | Mine Shaft | locked | 50 gold | mining |
 | Town Hall | locked | hero Lv5, 20 Oak Logs, 20 Stone, 100 gold | workers; caps every other building's level |
 | Training Grounds | locked | hero Lv10, Town Hall Lv1, 50 Oak Logs, 50 Stone, 250 gold | training, with Tier 1 included; XP/min by level |
+| Crafting (2026-11-01) | locked | Woodcutting and Mine Shaft built, 30 Oak Logs, 30 Stone, 150 gold | crafting pipes; craft time and yield by level |
 
 ## Building upgrades (2026-10-28, engine 1.10.0)
 
@@ -73,8 +76,33 @@ One builder: one upgrade at a time, paid up front (gold + items), timed on engin
 | Mine Shaft | — | +20% stone/ore yield | +40% | +60% | +80% |
 | Merchant | 5 stock slots | 7 | 9 | 11 | 13 |
 | Training Grounds | 1 training XP/min | 2 XP/min | 3 | 4 | 5 |
+| Crafting | — (100% craft time) | −10% craft time (90%) | −19% (81%) | −27.1% (72.9%), +10% crafted yield | −34.39% (65.61%), +20% crafted yield |
 
 Yield multiplier = 1 + Town Hall bonus + the skill's building bonus (hero and workers). Sell price = floor(catalog × 1.2) at Town Hall Lv2+.
+
+## Crafting (2026-11-01, engine 1.13.0)
+
+| Rule | Value |
+| --- | --- |
+| Pipes | 8 slots shown; 2 open on a new save (`pipesUnlocked`, max 8). Pipes 3–4 "Unlocks later", 5–8 "Premium — coming soon" (no unlock or purchase yet; debug "Unlock next pipe") |
+| Not an activity | never uses the hero; never stops or is stopped by woodcutting, mining, dungeons or training; pipes run in parallel; live and offline, 8h cap, same clock rules |
+| Job | recipe × quantity (≥ 1, Max button) × mode (x1 / x10). All materials of the whole job taken at start; pipes never compete for materials. Crafts run back to back; each craft's time is set when it starts (an upgrade or trained INT counts from the next craft) |
+| Output | into the inventory as each craft finishes; no stack and no free slot → the pipe waits ("Inventory full"), timer held, nothing lost, resumes when room appears |
+| Craft time | max(1 s, ceil(base × house time × (1 − INT reduction))); INT reduction = 50% × INT ÷ (INT + 50) (effective INT: 10 → 8.33%, 50 → 25%, 100 → 33.3%) |
+| Yield (normal items) | output × (1 + house yield); the fraction is kept hidden per item and pays one more item when it reaches 1 (no randomness) |
+| x10 mode | 10× inputs and output in the same time; stamina per craft = max(1, ceil(9 × craft minutes)), whole job paid at start |
+| Insta | finishes the current craft now for ceil(remaining minutes) stamina, at least 1 (hold to repeat); refused when the inventory has no room |
+| Cancel | (confirmation) refunds the materials of every craft not delivered (the one in progress too) and the stamina of every x10 craft not started (stamina refund capped at max) |
+
+| Tier | Recipe | Input | Output | Base time | Sell |
+| ---: | --- | --- | --- | ---: | ---: |
+| 1 | Oak Plank / Stone Brick | 2 Oak Logs / 2 Stone | 1 | 5 s | 2 |
+| 2 | Birch Plank / Copper Ingot | 4 Birch Logs / 4 Copper Ore | 1 | 10 s | 12 |
+| 3 | Maple Plank / Iron Ingot | 8 Maple Logs / 8 Iron Ore | 1 | 20 s | 64 |
+| 4 | Yew Plank / Silver Ingot | 16 Yew Logs / 16 Silver Ore | 1 | 40 s | 320 |
+| 5 | Ironwood Plank / Gold Ingot | 32 Ironwood Logs / 32 Gold Ore | 1 | 80 s | 1,600 |
+
+Crafted items are common (white), stackable, and sell for the sell value of their inputs. No crafting skill, no XP, no level gates.
 
 ## Workers (2026-10-28, engine 1.10.0)
 
@@ -221,6 +249,10 @@ Moved to [`STATUS.md`](STATUS.md) (refined and unrefined roadmap, current versio
 | 2026-10-31 | **Village map:** pan + pinch-zoom, world 360×560 with the old village as its core and 4 empty plots for future buildings | Room to grow, testable now |
 | 2026-10-31 | **Skill XP rebalance (engine 1.12.0, save v12):** skill base 500 → 100, growth 1.07 from Lv15, 1.08 from Lv40, 1.18 from Lv100 (hero curve unchanged). Lv15 = 31,998 XP ≈ 23.5 h (Oak to Lv5, then Birch). Migration keeps each skill's total XP and recomputes the level | Lv15 took ~117 h; target was one day. Late game still long (Lv30 ≈ 215 h) |
 | 2026-10-31 | Review council sized by complexity: 1 reviewer (small: docs, small UI fixes), 2 (normal), 3 (high risk: save, time, formulas, replay, CI); Sonnet, medium. `docs/STATUS.md` added as the "where we are" page (version, release notes, refined/unrefined roadmap), updated by every feature PR | Token cost again; and one page lets a fresh session pick up without the chat history |
+| 2026-11-01 | **Crafting house (PR A, engine 1.13.0, save v13):** new building (Woodcutting + Mine Shaft, 30 Oak, 30 Stone, 150 g; east plot), Lv1–5 with the standard upgrade rules; craft time ×0.9 per level from Lv2, +10% / +20% normal-item yield at Lv4 / Lv5. 8 pipe slots, 2 open; pipes 3–4 later, 5–8 premium (no mechanic yet). 10 material recipes (planks, Stone Brick, Copper / Iron / Silver / Gold **Ingot**), inputs and time doubling per tier, sell = inputs' sell value. Jobs pay all materials up front; x10 mode for stamina; insta; cancel refunds | First sink for gathered materials beyond buildings; feeds gear crafting (PR B) |
+| 2026-11-01 | **INT's first effect:** −craft time on a diminishing curve, cap 50%, k 50 (`diminishing(value, cap, k) = cap × value ÷ (value + k)`, shared helper, data in `STAT_EFFECTS`). Several reductions multiply. **Smithing skill removed** (crafting has no skill); the v13 migration drops it | A use for INT; one curve for future attribute effects |
+| 2026-11-01 | **UI rule:** every building modal shows its current level's bonuses under the header ("Lv1 · no bonus yet") | The player always sees what the building gives now |
+| 2026-11-01 | Engineering choices for crafting (engineer, flagged): (1) Insta is **refused** (`INVENTORY_FULL`, no stamina spent) when the output would not fit, and while the pipe waits for room. (2) A cancel's stamina refund is **capped at max** (no stamina banked above the bar through a long x10 job). (3) A cancel whose refund would not fit is refused (`INVENTORY_FULL`), so nothing is lost. (4) Same-instant order: hero → builder → crews → pipes (pipe order); held pipes retry at the start of each step and after every command. (5) The Crafting sign shows "2/2 crafting · 0:42" (busy / open pipes, shortest job left) or "Inventory full", and the upgrade timer when it upgrades. (6) START_CRAFT carries the stamina shown (`maxCost`, `COST_CHANGED`) | Nothing lost, no stamina exploit, deterministic |
 
 ## Stamina projection (2026-10-27, search-only skip)
 

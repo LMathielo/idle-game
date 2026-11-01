@@ -4,7 +4,7 @@ Guide for AI agents (and humans) working in this repo. Read it fully before chan
 
 ## Project
 
-Mobile idle/incremental RPG inspired by Gladiatus. POC scope: two tabs. **Village** (main screen: pixel village background with buttons for Storage, Merchant, Dungeon, Training, Woodcutting, Mine Shaft, Town Hall; buildings that must be built first show a locked sign that opens a Build sheet; built buildings upgrade through an Upgrade sheet in their modal, and the Town Hall runs the workers) and **Hero** (stats, XP, equipment slots, inventory, skills). Combat is automated and non-interactive; the UI only visualizes it.
+Mobile idle/incremental RPG inspired by Gladiatus. POC scope: two tabs. **Village** (main screen: pixel village background with buttons for Storage, Merchant, Dungeon, Training, Woodcutting, Mine Shaft, Town Hall, Crafting; buildings that must be built first show a locked sign that opens a Build sheet; built buildings upgrade through an Upgrade sheet in their modal, and the Town Hall runs the workers) and **Hero** (stats, XP, equipment slots, inventory, skills). Combat is automated and non-interactive; the UI only visualizes it.
 
 UI kit (`src/components/ui/`): **never use the native `Alert` API**: every confirmation and alert goes through **GameDialog** (`useDialog().confirm / alert / notPossible / saveFailed`; `useCommand()` dispatches with dialog errors). **Info → InfoPopover** (anchored on the tapped element via `measureAnchor`, actions inside, tap outside closes); no new bottom sheets for info. Repeated actions (stamina skips, speed-ups, debug) use PixelButton **`repeat`** (useHoldRepeat): repeat ticks must stay quiet and return false when refused. An RN `<Modal>` can't present over another one or over a full-screen modal from the root on iOS: dialogs are hosted per screen root (root layout + ModalScreen), and popovers / pickers step aside while a dialog or the away summary is up.
 
@@ -76,9 +76,9 @@ Before declaring a task done: `npm run typecheck` and `npm test` must pass and `
 
 Navigation uses **Expo Router**. Routes live in `src/app/`; every file there is a screen and `_layout.tsx` files define navigators. The root is a Stack (`expo-router/stack`) holding the `(tabs)` group plus one route per village modal. Tabs come from `expo-router/js-tabs` (the root `Tabs` export is deprecated in SDK 58). Keep non-route code outside `src/app/`.
 
-**Village sign = full-screen modal.** A sign opens its own route with `presentation: 'fullScreenModal'` (iOS full screen, no swipe-down; Android falls back to `modal`) and an in-screen ✕. Sub-views (e.g. a dungeon's detail) stay inside the modal; never push a screen inside the tabs. Android back steps out of a sub-view before it closes the modal (`BackHandler` in the modal). Under Reduce Motion the modal fades instead of sliding. Each modal route must be listed in `VILLAGE_MODAL_PATHS` in `src/app/_layout.tsx` and hosts its own `<AwayModal />` (iOS cannot present the root's RN Modal over a full-screen modal).
+**Village sign = full-screen modal.** A sign opens its own route with `presentation: 'fullScreenModal'` (iOS full screen, no swipe-down; Android falls back to `modal`) and an in-screen ✕. Sub-views (e.g. a dungeon's detail) stay inside the modal; never push a screen inside the tabs. Android back steps out of a sub-view before it closes the modal (`BackHandler` in the modal). Under Reduce Motion the modal fades instead of sliding. Each modal route must be listed in `VILLAGE_MODAL_PATHS` (`src/components/village/modalPaths.ts`) and hosts its own `<AwayModal />` (iOS cannot present the root's RN Modal over a full-screen modal).
 
-**Every village modal is built on `ModalScreen`** (`src/components/ModalScreen.tsx`): it draws the header row (✕ + title + a compact right slot, plus optional rows under it), pads for the safe area and mounts the screen's `<AwayModal />` and `<UnlockBanner />`. Do not hand-roll a modal header or wrap a modal in `<SafeAreaView>`: on iOS a `fullScreenModal` lives outside the root `SafeAreaProvider`'s native view, so the native `SafeAreaView` reads its own insets while the modal is still off-screen (top = 0) and never updates, and the header ends up under the status bar. `ModalScreen` uses `useSafeAreaInsets()` (root window insets via context) instead.
+**Every village modal is built on `ModalScreen`** (`src/components/ModalScreen.tsx`): it draws the header row (✕ + title + a compact right slot, plus optional rows under it; a building's modal passes `buildingId` and gets its current level's bonus line, "Lv3 · −19% craft time"), pads for the safe area and mounts the screen's `<AwayModal />` and `<UnlockBanner />`. Do not hand-roll a modal header or wrap a modal in `<SafeAreaView>`: on iOS a `fullScreenModal` lives outside the root `SafeAreaProvider`'s native view, so the native `SafeAreaView` reads its own insets while the modal is still off-screen (top = 0) and never updates, and the header ends up under the status bar. `ModalScreen` uses `useSafeAreaInsets()` (root window insets via context) instead.
 
 ## Layout
 
@@ -87,7 +87,8 @@ src/app/              routes: _layout.tsx (fonts, GameProvider, root Stack: tabs
                       (tabs)/_layout.tsx (tabs + activity strip), (tabs)/index.tsx (Village), (tabs)/hero.tsx (Hero),
                       dungeon.tsx (Dungeon full-screen modal), training.tsx (Training full-screen modal),
                       woodcutting.tsx (Woodcutting full-screen modal), mine.tsx (Mine Shaft full-screen modal),
-                      merchant.tsx (Merchant full-screen modal), town-hall.tsx (Town Hall full-screen modal)
+                      merchant.tsx (Merchant full-screen modal), town-hall.tsx (Town Hall full-screen modal),
+                      crafting.tsx (Crafting full-screen modal)
 src/components/       UI building blocks (PixelButton, Panel/Bar, LiveBar, VillageScene (pan + pinch map), ActivityStrip, AwayModal, UnlockBanner, ModalScreen, DebugPanel, StatusPanel)
 src/components/ui/    UI kit: GameDialog (provider + hosts + useDialog), InfoPopover (+ rows, actions, measureAnchor), useHoldRepeat, useCommand, insets
 src/components/village/ villageMap.ts: world size, core offset, sign anchors, empty plots, camera limits / clamp (pure, tested)
@@ -96,9 +97,10 @@ src/components/training/ Training modal (tier panel + one row per attribute, sta
 src/components/woodcutting/ Woodcutting modal (header with level/XP/WS/stamina, paged tree carousel)
 src/components/mining/ Mine Shaft modal (mirrors Woodcutting: level/XP/MS/stamina, paged rock carousel)
 src/components/buildings/ BuildSheet (a locked building's requirements + Build, as an InfoPopover), UpgradeSheet + UpgradeEntry (level, bonuses, cost, builder; InfoPopover),
-                      TownHallModal (level, workers: hire / assign picker / unassign / dismiss, crews, upkeep), bonusText
+                      TownHallModal (level, workers: hire / assign picker / unassign / dismiss, crews, upkeep), bonusText (bonus lines, currentBonusLine)
 src/components/items/  ItemSlot (quality-framed slot, reports its anchor), ItemSheet (item InfoPopover + actions), QuantityStepper, itemInfo (labels, stat lines)
 src/components/merchant/ Merchant modal (Buy | Sell tabs, stock grid, refresh charges, buy/sell sheets)
+src/components/crafting/ Crafting modal (8 pipe rows: job progress with a live "xx.yy%", Insta, Cancel; the recipe picker sub-view: Materials tab, Equipment coming soon)
 src/engine/           pure TS game rules: types, rng, progression, simulate, commands, stats (derived stats), stamina, hp (current HP + regen),
                       dungeon (runs = search + live fight, skip, per-dungeon counters, unlocks), combat (strike timing, damage, log), danger (danger hint), hash, migrations,
                       replay (spans + MIGRATE anchors), training (tiers, timed training, views),
@@ -107,9 +109,11 @@ src/engine/           pure TS game rules: types, rng, progression, simulate, com
                       UPGRADE_BUILDING, the builder, requirement / upgrade / construction views), bonuses (per-level building bonuses),
                       workers (hire, assign, crews, upkeep, views), world (the world walk: hero activity + builder + crews in time order),
                       upgradeEffects (what an upgrade changes besides the level),
-                      merchant (stock roll, refresh charges, buy/sell), equipment (equip/unequip/use)
+                      merchant (stock roll, refresh charges, buy/sell), equipment (equip/unequip/use),
+                      crafting (pipes, START_CRAFT / INSTA_CRAFT / CANCEL_CRAFT, craft time, x10, yield ledger, views),
+                      diminishing (diminishingBp: the shared diminishing-returns curve)
 src/engine/config/    tunables as data: xpCurve, woodcutting (WS, trees, skip), mining (MS, rocks, skip; own numbers), buildings (requirements, upgrade costs, per-level bonuses), workers (hire, crew share, upkeep), dungeons (search time, skip, combat incl. fight time limit, enemies with attack intervals, dungeons), items (catalog: quality, description, prices, damage/armor/WS/heal), merchant (charges, fixed slot, random pool, starter stock),
-                      stats (incl. HP regen), stamina, time, newGame, training (curve, tiers, prices), dev (DEV_TOOLS_ENABLED)
+                      crafting (pipes, recipes, x10 and insta stamina), stats (incl. HP regen, STAT_EFFECTS), stamina, time, newGame, training (curve, tiers, prices), dev (DEV_TOOLS_ENABLED)
 src/client/           GameClient boundary: LocalGameClient, repositories (SQLite / in-memory), clock, React provider + hooks
 src/theme.ts          palette and fonts
 tests/                Vitest tests (engine rules, time rules, client, real SQL via node:sqlite, engine import guard, golden hash + frozen save fixtures)
@@ -118,7 +122,7 @@ docs/ENGINE.md        engine, time rules, XP curve, storage and action-log desig
 assets/images/        village.png (generated by tools/generate-village.py: 360x560 world with the 180x390 village as its core, upscaled 4x)
 ```
 
-UI reads state only through `useGameState()` / `useGameClient()` (`src/client/GameProvider.tsx`). Never import engine rules into a screen to compute game outcomes; read-only selectors (`activityView`, `dungeonRunView` (search countdown or the live fight), `dungeonUnlockView`, `dungeonTotals`, `dangerHint`, `hpView`, `itemQuantity`, `getDerivedStats`, `staminaView`, `trainingView`, `woodcuttingView`, `woodcutActivityView`, `woodcuttingStrength`, `miningView`, `mineActivityView`, `miningStrength`, `buildingView`, `isBuilt`, `buildingLevel`, `upgradeView`, `constructionView`, `workersView`, `crewViews`, `nodeChoices`, `sellPriceOf`, `yieldMultiplierBp`, `effectiveAttributes`, `merchantView`, `maxBuyable`, `slotsNeeded`, `freeSlots`, `getItemDef`) are fine. Anything that shows or uses an attribute's value reads the **effective** one (base + trained), never `character.attributes` alone.
+UI reads state only through `useGameState()` / `useGameClient()` (`src/client/GameProvider.tsx`). Never import engine rules into a screen to compute game outcomes; read-only selectors (`activityView`, `dungeonRunView` (search countdown or the live fight), `dungeonUnlockView`, `dungeonTotals`, `dangerHint`, `hpView`, `itemQuantity`, `getDerivedStats`, `staminaView`, `trainingView`, `woodcuttingView`, `woodcutActivityView`, `woodcuttingStrength`, `miningView`, `mineActivityView`, `miningStrength`, `buildingView`, `isBuilt`, `buildingLevel`, `upgradeView`, `constructionView`, `workersView`, `crewViews`, `nodeChoices`, `sellPriceOf`, `yieldMultiplierBp`, `effectiveAttributes`, `merchantView`, `maxBuyable`, `slotsNeeded`, `freeSlots`, `getItemDef`, `craftingView`, `craftJobView`, `craftingSign`, `recipeView`, `maxCrafts`, `intCraftReductionBp`, `levelBonuses`) are fine. Anything that shows or uses an attribute's value reads the **effective** one (base + trained), never `character.attributes` alone.
 
 Village sign positions are world pixels of the artwork (`SIGNS` in `src/components/village/villageMap.ts`, printed by `tools/generate-village.py`). If the background changes, re-run the script and update them (and `PLOTS`). The map pans and zooms (Gesture Handler v3 hooks + Reanimated, UI thread only, no setState in gestures); it opens centred on the core between the HUD and the activity strip (`topReserve` / `bottomReserve`); `tests/villageMap.test.ts` checks every sign is visible at start on 375×667, 390×844 and 430×932.
 

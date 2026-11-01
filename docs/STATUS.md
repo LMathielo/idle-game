@@ -4,21 +4,27 @@ The "where we are" page. Read it first when starting a new session. Owned by the
 
 Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.md), engine rules in [`ENGINE.md`](ENGINE.md), deferred review findings in [`TECH_DEBT.md`](TECH_DEBT.md), workflow in [`../AGENTS.md`](../AGENTS.md).
 
-## Current version (2026-10-31)
+## Current version (2026-11-01)
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.12.0** | 1.1.0 |
-| Save | **v12** | v2 |
-| Contents | Everything below, up to PR #19 | M1 only (PRs #1–#2) |
+| Engine | **1.13.0** (this PR) | 1.1.0 |
+| Save | **v13** (this PR) | v2 |
+| Contents | Everything below, up to PR #20, plus Crafting PR A once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is 17 PRs behind `dev` (#3–#19). The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
-- **Open PRs:** #20 (this tech-debt list, docs only).
+- **Open PRs:** Crafting PR A (`feat/crafting`).
 - **Workflow:** product owner (orchestrator) → one `game-engineer` per feature → 1–3 reviewers by complexity (`.claude/skills/pr-review-council`) → owner merges.
 
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.13.0 · save v13
+- **Crafting PR A — Crafting house, pipes, materials:**
+  - **Crafting house** on the east plot (Woodcutting + Mine Shaft, 30 Oak, 30 Stone, 150 g), Lv1–5: −10% craft time per level from Lv2 (×0.9 each), +10% / +20% crafted yield at Lv4 / Lv5.
+  - **Pipes:** 2 of 8 open, running side by side beside the hero, live and offline. Planks, Stone Bricks and Copper / Iron / Silver / Gold Ingots from logs and ore; x10 mode for stamina, Insta, Cancel with refunds; a full inventory holds a pipe until there is room.
+  - **INT** shortens crafting (diminishing, cap 50%); **Smithing** removed. Every building modal shows its current bonuses under the header.
 
 ### Docs only (engine 1.12.0)
 - **#20 Tech debt list:** new [`TECH_DEBT.md`](TECH_DEBT.md) gathers every below-bar review finding from PRs #2–#19; the review council now appends to it each round.
@@ -75,9 +81,10 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 
 Decided and scoped; ready to brief to an engineer. Top = next.
 
-1. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
-2. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
-3. **Cleanup PR** working through [`TECH_DEBT.md`](TECH_DEBT.md) (review findings below the fix bar, from PRs #2–#19).
+1. **Crafting PR B: gear crafting, item quality and rarity.** (After PR A; the pipe / job shape already has a `ready` status for a crafted item waiting for a Done tap.)
+2. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
+3. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
+4. **Cleanup PR** working through [`TECH_DEBT.md`](TECH_DEBT.md) (review findings below the fix bar, from PRs #2–#19).
 
 ## Roadmap: unrefined
 
@@ -91,17 +98,19 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 - **Worker upkeep:** it is expensive early (1g/min per worker against about 2g/min from dungeons). Watch how it feels.
 
 **Buildings and economy**
-- Future buildings go on the empty map plots (west of the barn, east by the fields, two south of the river).
+- Future buildings go on the empty map plots (west of the barn, two south of the river; the east plot holds the Crafting house since 1.13.0).
 - Town Hall Lv3–5 passive bonuses (the data shape is ready).
 - Storage itself (capacity, a stash) is still "coming soon". Dungeon and Storage stay non-upgradable for now (owner decision 2026-10-28); revisit only if they get a bonus.
 - Cancelling an upgrade, and a second builder.
 - Offline cap upgrade (8h → more), and a stamina max upgrade.
 - Bulk selling of logs and ore.
-- Crafting and smithing with logs, ore and geodes (the `smithing` skill key already exists).
+- Crafting pipes 3–4: an unlock mechanic (play-based).
+- Crafting pipes 5–8: a premium purchase.
+- Small rebalance PR: move DEX's −1 s per point (dungeon search, gathering) onto the shared diminishing helper (`diminishingBp`, `STAT_EFFECTS`).
 
 **Combat and dungeons**
 - Multi-enemy runs and bosses (needs a save-shape change: `ActiveFight` holds one enemy).
-- Hit chance and crits from DEX; a use for INT and mana.
+- Hit chance and crits from DEX; a combat use for INT and mana (INT already shortens crafting).
 - Attack-speed gear (the `attackIntervalModMs` hook exists, unused).
 - Unlock rules beyond wins (e.g. hero level).
 
