@@ -1,4 +1,4 @@
-// Contrast of item quality colors on the panels they appear on (WCAG AA: ≥ 4.5:1 for text).
+// Contrast of item rarity colors on the panels they appear on (WCAG AA: ≥ 4.5:1 for text).
 import { describe, expect, it } from 'vitest';
 import { ITEM_RARITIES } from '../src/engine';
 import { colors, rarityColors } from '../src/theme';
@@ -13,8 +13,8 @@ const contrast = (a: string, b: string) => {
   return (x + 0.05) / (y + 0.05);
 };
 
-describe('quality colors', () => {
-  it('cover every quality and pass 4.5:1 on the item sheet and slot backgrounds', () => {
+describe('rarity colors', () => {
+  it('cover every rarity and pass 4.5:1 on the item sheet and slot backgrounds', () => {
     expect(Object.keys(rarityColors).sort()).toEqual([...ITEM_RARITIES].sort());
     for (const q of ITEM_RARITIES) {
       expect(contrast(rarityColors[q], colors.sheet)).toBeGreaterThanOrEqual(4.5);

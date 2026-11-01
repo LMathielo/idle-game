@@ -21,12 +21,12 @@ export const colors = {
   dangerEasy: '#2f6b2b',
   dangerTough: '#7a5c12',
   dangerDeadly: '#a3281c',
-  // Item sheets and the merchant grid sit on this dark panel; every quality color below passes 4.5:1 on it
+  // Item sheets and the merchant grid sit on this dark panel; every rarity color below passes 4.5:1 on it
   // (tests/theme.test.ts).
   sheet: '#3a2a1c',
 } as const;
 
-/** Item name colors by quality (catalog `quality`). Readable (≥ 4.5:1) on colors.sheet and colors.slot. */
+/** Item name and slot frame colors by rarity (the instance's for gear, else the catalog's). Readable (≥ 4.5:1) on colors.sheet and colors.slot. */
 export const rarityColors = {
   junk: '#b0a89c', // gray
   common: '#f5efe2', // white
