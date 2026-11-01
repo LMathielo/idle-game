@@ -51,6 +51,8 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
   const crafted = Object.entries(summary.itemsCrafted);
   // Older summaries (before 1.14.0) have no craftsReady.
   const ready = Object.entries(summary.craftsReady ?? {});
+  // Material pipes that spent time waiting for materials (1.15.0; older summaries have none): one line per pipe and item.
+  const waits = summary.craftWaits ?? [];
   const skills = Object.entries(summary.skillXpGained) as [SkillKey, number][];
   const trained = Object.entries(summary.trainingXpGained) as [AttributeKey, number][];
   const maxed = summary.trainingMaxed;
@@ -98,6 +100,11 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       {crafted.map(([id, n]) => (
         <Line key={`c-${id}`} label={`${itemIcon(id)} ${itemName(id)}`} value={`+${formatNumber(n)}`} />
       ))}
+      {waits.map((w) => (
+        <Text key={`wait-${w.pipe}-${w.defId}`} style={styles.muted}>
+          ⏳ Pipe {w.pipe + 1} waited for {itemName(w.defId)}
+        </Text>
+      ))}
       {ready.length > 0 ? <Text style={styles.section}>✅ Ready to collect (Crafting)</Text> : null}
       {ready.map(([id, n]) => (
         <Line key={`r-${id}`} label={`${itemIcon(id)} ${itemName(id)}`} value={`×${formatNumber(n)}`} />
@@ -138,6 +145,7 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       summary.workerActions === 0 &&
       summary.craftsCompleted === 0 &&
       ready.length === 0 &&
+      waits.length === 0 &&
       summary.buildingsUpgraded.length === 0 &&
       !backward ? (
         <Text style={styles.muted}>Nothing was gathered.</Text>

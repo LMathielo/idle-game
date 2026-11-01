@@ -331,42 +331,42 @@ export type WorkersState = {
 
 // ---------- Crafting (save v13) ----------
 
-/** x1 crafts the recipe as written; x10 crafts ten times the inputs and output in the same time (stamina per craft). */
-export type CraftMode = 'x1' | 'x10';
-
 /**
- * A pipe's job state. `running`: the current craft's timer runs. `held`: the current craft finished but its output did
- * not fit (no stack, no free slot); the timer is held and the output is delivered as soon as room appears (materials
- * only). `ready`: a gear craft finished; the pipe holds the rolled piece until COLLECT_CRAFT (Done) and starts nothing
- * else (save v14).
+ * A pipe's job state. `running`: the current craft's timer runs. `waiting` (1.15.0, materials): the next craft lacks
+ * inputs; no time passes and nothing is taken until they are there. `held`: the current craft finished but its output
+ * did not fit (no stack, no free slot); the timer is held and the output is delivered as soon as room appears
+ * (materials only). `ready`: a gear craft finished; the pipe holds the rolled piece until COLLECT_CRAFT (Done) and
+ * starts nothing else (save v14).
  */
-export type CraftJobStatus = 'running' | 'held' | 'ready';
+export type CraftJobStatus = 'running' | 'waiting' | 'held' | 'ready';
 
 /**
- * One crafting job in a pipe: `quantity` crafts of `recipeId`, back to back. Every input (and, in x10 mode, every
- * craft's stamina) was paid when the job started. Each craft's duration is fixed when that craft starts (`craftMs`), so
- * a house upgrade or trained INT counts from the next craft. Output goes to the inventory as each craft finishes.
+ * One crafting job in a pipe (save v15). A material job is continuous: crafts run back to back until STOP_CRAFT, each
+ * taking its inputs when it starts (or waiting for them). A gear job is one piece, paid at start. Each craft's duration
+ * is fixed when that craft starts (`craftMs`), so a house upgrade or trained INT counts from the next craft.
  */
 export type CraftJob = {
   /** Job serial (`crafting.nextJobSerial` when it started): commands name the job they were shown. */
   id: number;
   recipeId: string;
-  mode: CraftMode;
-  /** Crafts in the job, ≥ 1. */
-  quantity: number;
-  /** Crafts finished and delivered, 0..quantity − 1 while the job exists. The current craft is number done + 1. */
+  /** Crafts finished and delivered since the job started ("Crafted N"). The current (or next) craft is number done + 1. */
   done: number;
-  /** Duration of the current craft, ms (fixed when it started). */
+  /** Duration of the current craft, ms (fixed when it started); 0 while waiting. */
   craftMs: number;
-  /** Time into the current craft, ms (= craftMs while held). */
+  /** Time into the current craft, ms (= craftMs while held or ready; 0 while waiting). */
   progressMs: number;
-  /** Stamina paid per craft at job start (x10 mode; 0 in x1): a cancel refunds it for the crafts not yet started. */
-  staminaPerCraft: number;
+  /** The current craft was made ×10 by X10_CRAFT (10× inputs and output in the same time). Gear: always false. */
+  x10: boolean;
+  /**
+   * Material jobs migrated from save v14 only: crafts whose inputs were already taken (the refund did not fit in the
+   * inventory). The next crafts use them before drawing new inputs; Stop refunds them. Missing = 0.
+   */
+  prepaid?: number;
   status: CraftJobStatus;
   /** Engine time the job started. Informational only. */
   startedAt: number;
   /**
-   * Gear jobs only (save v14; always one craft, x1): the stamina invested at start (never refunded) and the piece's
+   * Gear jobs only (save v14; always one craft): the stamina invested at start (never refunded) and the piece's
    * quality and rarity, rolled at start with the seeded RNG. Never shown before COLLECT_CRAFT.
    */
   gear?: GearRoll & { staminaInvested: number };
@@ -404,7 +404,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 14;
+  saveVersion: 15;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -474,8 +474,14 @@ export type GameEvent =
   | { type: 'WORKERS_PAUSED'; upkeepDue: number }
   /** Upkeep is covered again: the crews resume. */
   | { type: 'WORKERS_RESUMED' }
-  /** START_CRAFT paid and the pipe started its job. */
-  | { type: 'CRAFT_STARTED'; pipe: number; jobId: number; recipeId: string; quantity: number; mode: CraftMode }
+  /** START_CRAFT: the pipe started its job (a material job may start waiting). */
+  | { type: 'CRAFT_STARTED'; pipe: number; jobId: number; recipeId: string }
+  /** A material pipe's next craft lacks inputs: it waits (1.15.0). */
+  | { type: 'CRAFT_WAITING'; pipe: number; jobId: number }
+  /** X10_CRAFT: the craft in progress (number `craft`) makes 10× (1.15.0). */
+  | { type: 'CRAFT_X10'; pipe: number; jobId: number; craft: number; stamina: number }
+  /** STOP_CRAFT: a material job ended; the craft in progress refunded (1.15.0). */
+  | { type: 'CRAFT_STOPPED'; pipe: number; jobId: number }
   /** One craft finished and its output went into the inventory. */
   | { type: 'CRAFT_COMPLETED'; pipe: number; jobId: number; itemId: string; quantity: number }
   /** A craft finished but its output does not fit: the pipe waits for room (nothing is lost). */
@@ -484,9 +490,7 @@ export type GameEvent =
   | { type: 'CRAFT_READY'; pipe: number; jobId: number; defId: string }
   /** COLLECT_CRAFT: the gear piece went into the inventory as `itemId`; the pipe is idle. */
   | { type: 'CRAFT_COLLECTED'; pipe: number; jobId: number; itemId: string; defId: string }
-  /** The job's last craft was delivered: the pipe is idle. */
-  | { type: 'CRAFT_JOB_DONE'; pipe: number; jobId: number }
-  /** CANCEL_CRAFT: the job ended early, unfinished crafts refunded. */
+  /** CANCEL_CRAFT (gear): the job ended early, its inputs refunded. */
   | { type: 'CRAFT_JOB_CANCELLED'; pipe: number; jobId: number }
   | { type: 'PIPE_UNLOCKED'; pipes: number };
 
@@ -532,5 +536,7 @@ export type SimulationSummary = {
   itemsCrafted: Record<string, number>;
   /** Gear crafts that finished during this period and wait in their pipe for Done, per item (save v14). */
   craftsReady: Record<string, number>;
+  /** Material pipes that spent time waiting, per pipe and missing input, in first-seen order (save v15). */
+  craftWaits: { pipe: number; defId: string }[];
   anomalies: ClockAnomalyEvent[];
 };

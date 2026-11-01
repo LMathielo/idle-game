@@ -3,22 +3,23 @@
 //
 //   craft time  = max(minCraftMs, ceil(baseMs × house time bp / 10 000 × (1 − INT reduction)))    (integer ms)
 //   INT reduction = diminishing(effective INT, STAT_EFFECTS.intelligence.craftTime)               (config/stats.ts)
-//   output / craft = output × mode multiplier × (10 000 + house yield bp) / 10 000; the fraction goes to a ledger
-//   x10 stamina / craft = max(1, ceil(x10.staminaPerMinute × craft time / 1 min)), paid for the whole job up front
+//   output / craft = output × (1, or x10.multiplier for a ×10 craft) × (10 000 + house yield bp) / 10 000; the fraction
+//                    goes to a ledger
+//   x10 tap        = (x10.multiplier − 1) × the inputs now + max(1, ceil(x10.staminaPerMinute × craft time / 1 min))
+//                    stamina, on the craft in progress only (1.15.0)
 //   insta = ceil(remaining minutes) stamina, at least 1 (the rule of every skip)
+//
+// Continuous material pipes (1.15.0, owner-approved 2026-11-01): a material job has no quantity and no mode. Each craft
+// takes its inputs when it starts; with too few the pipe waits (no time passes) and starts the instant they are there.
 //
 // Gear recipes (1.14.0, owner-approved 2026-11-01): one piece per job (x1 only, no yield bonus), made from its tier's
 // bricks / ingots and planks (config/gear.ts); stamina invested at start raises the quality floor; the piece's quality
 // and rarity are rolled at start and it waits in the pipe (`ready`) until Done.
 
-import type { CraftMode } from '../types';
 import { GEAR_PIECE_IDS, GEAR_PIECES, GEAR_SETS, type RarityWeight } from './gear';
 
 const SEC = 1000;
 const MIN_MS = 60 * SEC;
-
-/** Crafting modes: x1 crafts the recipe as written; x10 crafts ten times the inputs and output in the same time. */
-export const CRAFT_MODES = ['x1', 'x10'] as const satisfies readonly CraftMode[];
 
 export const CRAFTING = {
   /** Pipe slots shown in the Crafting house (and stored in the save). */
@@ -29,12 +30,11 @@ export const CRAFTING = {
   freePipes: 4,
   /** No craft is ever faster than this. */
   minCraftMs: 1 * SEC,
-  /** Most crafts in one job (keeps every product far below 2^53). Gear jobs: always 1. */
-  maxJobQuantity: 100_000,
-  /** Output and input multiplier per mode. */
-  modeMultiplier: { x1: 1, x10: 10 } satisfies Record<CraftMode, number>,
-  /** x10 mode: stamina per craft = max(1, ceil(staminaPerMinute × craft ms ÷ 1 min)). Normal items only. */
-  x10: { staminaPerMinute: 9 },
+  /**
+   * ×10 tap on a material craft in progress (1.15.0): the craft makes `multiplier`× its output in the same time; the tap
+   * takes the (multiplier − 1)× extra inputs and max(1, ceil(staminaPerMinute × craft ms ÷ 1 min)) stamina. Normal items only.
+   */
+  x10: { multiplier: 10, staminaPerMinute: 9 },
   /** Insta (finish the current craft now): staminaPerStep per started step left, at least one step. */
   insta: { stepMs: 1 * MIN_MS, staminaPerStep: 1 },
   /** The yield fraction ledger counts thousandths of an item: one more item per 1000. */
@@ -50,9 +50,9 @@ export type RecipeDef = {
   kind: RecipeKind;
   /** 1–5: inputs and time double every tier. */
   tier: number;
-  /** Consumed per craft (× the mode multiplier). */
+  /** Consumed per craft (× 10 for a ×10 craft). */
   inputs: readonly { defId: string; quantity: number }[];
-  /** Produced per craft (× the mode multiplier, × the house yield). */
+  /** Produced per craft (× 10 for a ×10 craft, × the house yield). */
   output: { defId: string; quantity: number };
   /** Craft time before the house level and INT. */
   baseMs: number;
@@ -176,8 +176,4 @@ export const RECIPES: Record<RecipeId, RecipeDef> = {
 
 export function isRecipeId(id: unknown): id is RecipeId {
   return typeof id === 'string' && Object.prototype.hasOwnProperty.call(RECIPES, id);
-}
-
-export function isCraftMode(mode: unknown): mode is CraftMode {
-  return typeof mode === 'string' && (CRAFT_MODES as readonly string[]).includes(mode);
 }

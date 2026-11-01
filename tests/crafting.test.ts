@@ -1,11 +1,12 @@
-// Crafting house (engine 1.13.0): pipes, material recipes, craft time (house × INT, diminishing), x10 mode, insta,
-// cancel refunds, the yield fraction ledger, inventory-full holds, and the time rules (split invariance, cap, clock).
+// Crafting house (engine 1.13.0; continuous material pipes 1.15.0): pipes, material recipes, craft time (house × INT,
+// diminishing), inputs per craft and waiting, pipe order, the ×10 tap, insta, Stop refunds, the yield fraction ledger,
+// inventory-full holds, and the time rules (split invariance with waiting pipes, cap, clock, away lines).
 import { describe, expect, it } from 'vitest';
 import {
   applyCommand,
   BUILDINGS,
   type Command,
-  CRAFTING,
+  craftingSign,
   craftingView,
   craftJobView,
   craftMsFor,
@@ -13,6 +14,7 @@ import {
   type GameState,
   hashState,
   intCraftReductionBp,
+  mergeSummaries,
   newGame,
   RECIPE_IDS,
   RECIPES,
@@ -45,7 +47,8 @@ function expectError(s: GameState, c: Input, code: string, at = T0) {
   expect(r.ok ? 'ok' : r.error.code).toBe(code);
 }
 
-const start = (pipe: number, recipeId: string, quantity: number, mode: 'x1' | 'x10' = 'x1', maxCost = 1000): Input => ({ type: 'START_CRAFT', pipe, recipeId, quantity, mode, maxCost });
+/** START_CRAFT in `pipe`, or (undefined) in the first free open pipe, as the Recipes view sends it. */
+const start = (pipe: number | undefined, recipeId: string): Input => (pipe === undefined ? { type: 'START_CRAFT', recipeId } : { type: 'START_CRAFT', pipe, recipeId });
 
 function withLevel(s: GameState, level: number): GameState {
   return { ...s, buildings: { ...s.buildings, town_hall: { state: 'built', level: 5 }, crafting: { state: 'built', level } } };
@@ -126,7 +129,7 @@ describe('craft time', () => {
   });
 
   it("each craft's duration is fixed when it starts: INT gained mid-job counts from the next craft", () => {
-    let s = apply(game(), start(0, 'oak_plank', 3), T0);
+    let s = apply(game(), start(0, 'oak_plank'), T0);
     expect(s.crafting.pipes[0]!.craftMs).toBe(4584);
     s = apply(s, { type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'intelligence', amount: 40 }, T0 + 1000);
     expect(s.crafting.pipes[0]!.craftMs).toBe(4584); // the craft in progress keeps its time
@@ -135,107 +138,236 @@ describe('craft time', () => {
   });
 });
 
-describe('START_CRAFT', () => {
-  it('consumes every input of the whole job at once and starts the pipe; not an activity', () => {
+describe('START_CRAFT (1.15.0: continuous material pipes)', () => {
+  it("takes only the first craft's inputs and starts the pipe; no quantity, no mode, no stamina; not an activity", () => {
     const s0 = game();
-    const r = run(s0, start(0, 'oak_plank', 20));
+    const r = run(s0, start(0, 'oak_plank'));
     if (!r.ok) throw new Error(r.error.message);
-    expect(qty(r.state, 'oak_logs')).toBe(1000 - 40);
-    expect(r.state.crafting.pipes[0]).toMatchObject({ id: 1, recipeId: 'oak_plank', mode: 'x1', quantity: 20, done: 0, progressMs: 0, staminaPerCraft: 0, status: 'running' });
+    expect(qty(r.state, 'oak_logs')).toBe(1000 - 2);
+    expect(r.state.crafting.pipes[0]).toEqual({ id: 1, recipeId: 'oak_plank', done: 0, craftMs: 4584, progressMs: 0, x10: false, status: 'running', startedAt: T0 });
     expect(r.state.crafting.nextJobSerial).toBe(2);
     expect(r.state.activity).toBeNull();
     expect(r.state.stamina).toEqual(s0.stamina);
-    expect(r.events).toContainEqual({ type: 'CRAFT_STARTED', pipe: 0, jobId: 1, recipeId: 'oak_plank', quantity: 20, mode: 'x1' });
+    expect(r.events).toContainEqual({ type: 'CRAFT_STARTED', pipe: 0, jobId: 1, recipeId: 'oak_plank' });
   });
 
   it('typed errors change nothing', () => {
-    const s = game({ oak_logs: 10, stone: 100 });
+    const s = game({ oak_logs: 10 });
     const locked = { ...s, buildings: { ...s.buildings, crafting: { state: 'locked' as const, level: 0 } } };
-    expectError(locked, start(0, 'oak_plank', 1), 'BUILDING_LOCKED');
-    expectError(s, start(2, 'oak_plank', 1), 'PIPE_LOCKED');
-    expectError(s, start(7, 'oak_plank', 1), 'PIPE_LOCKED');
-    expectError(s, start(8, 'oak_plank', 1), 'INVALID_COMMAND');
-    expectError(s, start(-1, 'oak_plank', 1), 'INVALID_COMMAND');
-    expectError(s, start(0, 'mithril_bar', 1), 'UNKNOWN_RECIPE');
-    expectError(s, { type: 'START_CRAFT', pipe: 0, recipeId: 'oak_plank', quantity: 1, mode: 'x3' as 'x1', maxCost: 0 }, 'INVALID_COMMAND');
-    for (const q of [0, -1, 1.5, CRAFTING.maxJobQuantity + 1, Number.NaN]) expectError(s, start(0, 'oak_plank', q), 'INVALID_AMOUNT');
-    expectError(s, start(0, 'oak_plank', 1, 'x1', -1), 'INVALID_AMOUNT');
-    expectError(s, start(0, 'oak_plank', 6), 'NOT_ENOUGH_ITEMS'); // 12 logs needed, 10 held
-    expectError(s, start(0, 'birch_plank', 1), 'NOT_ENOUGH_ITEMS');
-    expectError(s, start(0, 'stone_brick', 3, 'x10', 2), 'COST_CHANGED'); // 3 crafts × 1 stamina shown as 2
-    const tired = { ...s, stamina: { ...s.stamina, current: 2 } };
-    expectError(tired, start(0, 'stone_brick', 3, 'x10', 3), 'NOT_ENOUGH_STAMINA');
-    const busy = apply(s, start(0, 'oak_plank', 1), T0);
-    expectError(busy, start(0, 'stone_brick', 1), 'PIPE_BUSY');
-    // A refused command never touches its input.
+    expectError(locked, start(0, 'oak_plank'), 'BUILDING_LOCKED');
+    expectError(s, start(2, 'oak_plank'), 'PIPE_LOCKED');
+    expectError(s, start(7, 'oak_plank'), 'PIPE_LOCKED');
+    expectError(s, start(8, 'oak_plank'), 'INVALID_COMMAND');
+    expectError(s, start(-1, 'oak_plank'), 'INVALID_COMMAND');
+    expectError(s, start(0, 'mithril_bar'), 'UNKNOWN_RECIPE');
+    expectError(s, { type: 'START_CRAFT', pipe: 0, recipeId: 'oak_plank', maxCost: -1 }, 'INVALID_AMOUNT');
+    expectError(s, { type: 'START_CRAFT', pipe: 0, recipeId: 'oak_plank', maxCost: 5, stamina: 5 }, 'INVALID_AMOUNT'); // only gear takes stamina
+    const busy = apply(s, start(0, 'oak_plank'), T0);
+    expectError(busy, start(0, 'stone_brick'), 'PIPE_BUSY');
+    const frozen = JSON.parse(JSON.stringify(busy));
+    run(busy, start(0, 'stone_brick'));
+    expect(busy).toEqual(frozen);
+  });
+
+  it('Recipes view: no pipe → the first free open pipe; ALL_PIPES_BUSY when every open pipe is busy', () => {
+    let s = apply(game(), start(0, 'oak_plank'), T0);
+    expect(craftingView(s).freePipe).toBe(1);
+    const r = run(s, start(undefined, 'stone_brick'));
+    if (!r.ok) throw new Error(r.error.message);
+    expect(r.state.crafting.pipes[1]).toMatchObject({ recipeId: 'stone_brick', status: 'running' });
+    s = r.state;
+    expect(craftingView(s).freePipe).toBeNull();
+    expectError(s, start(undefined, 'oak_plank'), 'ALL_PIPES_BUSY');
+    // A locked pipe is never chosen; a freed one is.
+    s = apply(s, { type: 'STOP_CRAFT', pipe: 0, jobId: 1 }, T0);
+    expect(apply(s, start(undefined, 'birch_plank'), T0).crafting.pipes[0]).toMatchObject({ recipeId: 'birch_plank', status: 'waiting' });
+  });
+
+  it('with too few inputs the pipe starts waiting ("Waiting for Oak Logs (1/2)"): no time passes, nothing is taken', () => {
+    const r = run(game({ oak_logs: 1 }), start(0, 'oak_plank'));
+    if (!r.ok) throw new Error(r.error.message);
+    expect(r.state.crafting.pipes[0]).toMatchObject({ status: 'waiting', done: 0, craftMs: 0, progressMs: 0 });
+    expect(r.events).toContainEqual({ type: 'CRAFT_WAITING', pipe: 0, jobId: 1 });
+    expect(qty(r.state, 'oak_logs')).toBe(1);
+    const v = craftJobView(r.state, 0)!;
+    expect([v.waitingFor, v.remainingMs, v.fraction, v.x10Tap, v.refund]).toEqual([[{ defId: 'oak_logs', have: 1, need: 2 }], 0, 0, null, []]);
+    const later = simulate(r.state, T0 + HOUR);
+    expect(later.state.crafting.pipes[0]).toEqual(r.state.crafting.pipes[0]);
+    expect(qty(later.state, 'oak_logs')).toBe(1);
+    expect(later.summary.craftWaits).toEqual([{ pipe: 0, defId: 'oak_logs' }]);
+    expectError(later.state, { type: 'INSTA_CRAFT', pipe: 0, jobId: 1, craft: 1, maxCost: 1 }, 'CRAFT_WAITING', T0 + HOUR);
+    expect(craftingSign(later.state)).toMatchObject({ busy: 1, waiting: true });
+  });
+});
+
+describe('continuous crafting', () => {
+  it('crafts back to back, each craft taking its 2 logs when it starts, until the logs run out; then it waits', () => {
+    let s = apply(game({ oak_logs: 7 }), start(0, 'oak_plank'), T0);
+    expect(qty(s, 'oak_logs')).toBe(5);
+    s = simulate(s, T0 + 2 * 4584).state;
+    expect(s.crafting.pipes[0]).toMatchObject({ done: 2, status: 'running', progressMs: 0 });
+    expect(qty(s, 'oak_logs')).toBe(1); // craft 3 took its 2 at T0 + 9 168
+    const r = simulate(s, T0 + HOUR);
+    expect(qty(r.state, 'oak_plank')).toBe(3);
+    expect(r.state.crafting.pipes[0]).toMatchObject({ done: 3, status: 'waiting' });
+    expect(craftJobView(r.state, 0)!.waitingFor).toEqual([{ defId: 'oak_logs', have: 1, need: 2 }]);
+    expect(r.summary.craftWaits).toEqual([{ pipe: 0, defId: 'oak_logs' }]);
+  });
+
+  it('a command that brings the inputs (a refund here) starts a waiting pipe at that instant', () => {
+    let s = apply(game({ oak_logs: 3 }), start(0, 'oak_plank'), T0);
+    s = apply(s, start(1, 'oak_plank'), T0);
+    expect(s.crafting.pipes[1]).toMatchObject({ status: 'waiting' });
+    const r = run(s, { type: 'STOP_CRAFT', pipe: 0, jobId: 1 }, T0 + 1000);
+    if (!r.ok) throw new Error(r.error.message);
+    expect(r.state.crafting.pipes[0]).toBeNull();
+    expect(r.state.crafting.pipes[1]).toMatchObject({ status: 'running', progressMs: 0, craftMs: 4584 });
+    expect(qty(r.state, 'oak_logs')).toBe(1);
+  });
+
+  it('pipes share one inventory: at one instant they draw in pipe order', () => {
+    // Pipes 1 and 2 wait for Oak Logs; one craft's worth arrives: pipe 1 takes it, pipe 2 keeps waiting.
+    let s = apply(game({ oak_logs: 0 }), start(1, 'oak_plank'), T0);
+    s = apply(s, start(0, 'oak_plank'), T0);
+    const fed = cloneState(s);
+    addStackable(fed.inventory, 'oak_logs', 3);
+    const t = simulate(fed, T0 + 1000).state;
+    expect([t.crafting.pipes[0]!.status, t.crafting.pipes[1]!.status]).toEqual(['running', 'waiting']);
+    expect(qty(t, 'oak_logs')).toBe(1);
+  });
+
+  it('resumes at the exact instant of a log cut (woodcutting), split or not', () => {
+    // No logs: the pipe waits; the hero cuts Oak beside it.
+    let s = apply(game({ oak_logs: 0 }), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
+    s = apply(s, start(0, 'oak_plank'), T0);
+    const alone = apply(game({ oak_logs: 0 }), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
+    // The first instant the hero alone has ≥ 2 logs.
+    let lo = T0;
+    let hi = T0 + 10 * MIN;
+    while (hi - lo > 1) {
+      const m = Math.floor((lo + hi) / 2);
+      if (qty(simulate(alone, m).state, 'oak_logs') >= 2) hi = m;
+      else lo = m;
+    }
+    const cut = hi;
+    expect(simulate(s, cut - 1).state.crafting.pipes[0]!.status).toBe('waiting');
+    const at = simulate(s, cut).state;
+    expect(at.crafting.pipes[0]).toMatchObject({ status: 'running', progressMs: 0 }); // started at that very instant
+    expect(qty(at, 'oak_logs')).toBe(qty(simulate(alone, cut).state, 'oak_logs') - 2);
+    const big = simulate(s, cut + 700).state;
+    expect(big.crafting.pipes[0]).toMatchObject({ status: 'running', progressMs: 700 });
+    let split = s;
+    for (let t = T0 + 999; t < cut + 700; t += 999) split = simulate(split, t).state;
+    expect(hashState(simulate(split, cut + 700).state)).toBe(hashState(big));
+  });
+});
+
+describe('×10 tap (X10_CRAFT)', () => {
+  const tap = (s: GameState, pipe = 0): Extract<Input, { type: 'X10_CRAFT' }> => {
+    const v = craftJobView(s, pipe)!;
+    return { type: 'X10_CRAFT', pipe, jobId: v.id, craft: v.craftNumber, maxCost: v.x10Tap?.stamina ?? 1 };
+  };
+
+  it('stamina = max(1, ceil(9 × craftMs / 1 min)) (unchanged)', () => {
+    expect([1000, 4584, 6666, 6667, 60_000, 73_336].map(x10StaminaPerCraft)).toEqual([1, 1, 1, 2, 9, 12]);
+  });
+
+  it('takes 9× the inputs now and the stamina; that craft makes 10× in the same time, progress kept; the next is ×1', () => {
+    let s = apply(game({ oak_logs: 100 }), start(0, 'oak_plank'), T0);
+    s = simulate(s, T0 + 2000).state;
+    expect(craftJobView(s, 0)!.x10Tap).toEqual({ items: [{ defId: 'oak_logs', quantity: 18 }], stamina: 1, blocked: null });
+    const r = run(s, tap(s), T0 + 2000);
+    if (!r.ok) throw new Error(r.error.message);
+    s = r.state;
+    expect([qty(s, 'oak_logs'), s.stamina.current]).toEqual([100 - 2 - 18, 99]);
+    expect(s.crafting.pipes[0]).toMatchObject({ x10: true, progressMs: 2000, craftMs: 4584, done: 0 });
+    expect(r.events).toContainEqual({ type: 'CRAFT_X10', pipe: 0, jobId: 1, craft: 1, stamina: 1 });
+    expect(craftJobView(s, 0)!.x10Tap).toBeNull(); // already ×10
+    s = simulate(s, T0 + 4584).state;
+    expect(qty(s, 'oak_plank')).toBe(10);
+    expect(s.crafting.pipes[0]).toMatchObject({ x10: false, done: 1, progressMs: 0 });
+    expect(qty(s, 'oak_logs')).toBe(78);
+  });
+
+  it('a long craft: 12 stamina for a Gold Ingot (73 336 ms); insta works on a ×10 craft', () => {
+    let s = apply(game({ gold_ore: 640 }), start(0, 'gold_ingot'), T0);
+    s = simulate(s, T0 + 10_000).state;
+    expect(craftJobView(s, 0)!.x10Tap).toMatchObject({ items: [{ defId: 'gold_ore', quantity: 288 }], stamina: 12 });
+    s = apply(s, tap(s), T0 + 10_000);
+    expect(s.stamina.current).toBe(88);
+    const v = craftJobView(s, 0)!;
+    s = apply(s, { type: 'INSTA_CRAFT', pipe: 0, jobId: v.id, craft: v.craftNumber, maxCost: v.instaCost }, T0 + 10_000);
+    expect(qty(s, 'gold_ingot')).toBe(10);
+    expect(s.stamina.current).toBe(88 - 2);
+    expect(s.crafting.pipes[0]).toMatchObject({ x10: false, done: 1 });
+  });
+
+  it('every rule and error; refused taps change nothing', () => {
+    let s = apply(game({ oak_logs: 12 }), start(0, 'oak_plank'), T0); // 10 logs left: not enough for 18
+    s = simulate(s, T0 + 1000).state;
+    const ok = tap(s);
+    expect(craftJobView(s, 0)!.x10Tap).toMatchObject({ stamina: 1, blocked: 'Needs 18 Oak Logs' });
+    expectError(s, ok, 'NOT_ENOUGH_ITEMS', T0 + 1000);
+    s = cloneState(s);
+    addStackable(s.inventory, 'oak_logs', 100);
+    expectError(s, { ...ok, maxCost: 0 }, 'INVALID_AMOUNT', T0 + 1000);
+    expectError(s, { ...ok, craft: 0 }, 'INVALID_COMMAND', T0 + 1000);
+    expectError(s, { ...ok, pipe: 9 }, 'INVALID_COMMAND', T0 + 1000);
+    expectError(s, { ...ok, pipe: 1 }, 'NO_CRAFT_JOB', T0 + 1000);
+    expectError(s, { ...ok, jobId: 2 }, 'CRAFT_CHANGED', T0 + 1000);
+    expectError(s, { ...ok, craft: 2 }, 'CRAFT_CHANGED', T0 + 1000);
+    expectError(s, ok, 'CRAFT_CHANGED', T0 + 4584); // that craft finished meanwhile
+    const tired = { ...s, stamina: { ...s.stamina, current: 0 } };
+    expect(craftJobView(tired, 0)!.x10Tap!.blocked).toBe('Not enough stamina');
+    expectError(tired, ok, 'NOT_ENOUGH_STAMINA', T0 + 1000);
+    const slow = { ...s, crafting: { ...s.crafting, pipes: s.crafting.pipes.map((j, i) => (i === 0 && j ? { ...j, craftMs: 60_000 } : j)) } };
+    expectError(slow, ok, 'COST_CHANGED', T0 + 1000); // 9 stamina now, 1 shown
+    const tapped = apply(s, ok, T0 + 1000);
+    expectError(tapped, ok, 'ALREADY_X10', T0 + 1000);
+    // Waiting, held and gear pipes have no ×10.
+    const waiting = apply(game({ oak_logs: 1 }), start(0, 'oak_plank'), T0);
+    expectError(waiting, { type: 'X10_CRAFT', pipe: 0, jobId: 1, craft: 1, maxCost: 1 }, 'CRAFT_WAITING');
+    const held = simulate(fill(apply(game({ oak_logs: 100 }), start(0, 'oak_plank'), T0)), T0 + HOUR).state;
+    expect(held.crafting.pipes[0]!.status).toBe('held');
+    expect(craftJobView(held, 0)!.x10Tap).toBeNull();
+    expectError(held, { type: 'X10_CRAFT', pipe: 0, jobId: 1, craft: 1, maxCost: 1 }, 'INVENTORY_FULL', T0 + HOUR);
+    const gear = apply(game({ stone_brick: 10, oak_plank: 10 }), { type: 'START_CRAFT', pipe: 0, recipeId: 'stone_sword', maxCost: 0, stamina: 0 }, T0);
+    expect(craftJobView(gear, 0)!.x10Tap).toBeNull();
+    expectError(gear, { type: 'X10_CRAFT', pipe: 0, jobId: 1, craft: 1, maxCost: 100 }, 'INVALID_COMMAND');
     const frozen = JSON.parse(JSON.stringify(s));
-    run(s, start(0, 'oak_plank', 6));
+    run(s, { ...ok, maxCost: 0 }, T0 + 1000);
     expect(s).toEqual(frozen);
   });
-
-  it('pipes never compete for materials: the second job only sees what the first left', () => {
-    let s = game({ oak_logs: 10 });
-    s = apply(s, start(0, 'oak_plank', 4), T0);
-    expectError(s, start(1, 'oak_plank', 2), 'NOT_ENOUGH_ITEMS');
-    s = apply(s, start(1, 'oak_plank', 1), T0);
-    expect(qty(s, 'oak_logs')).toBe(0);
-    s = simulate(s, T0 + HOUR).state;
-    expect(qty(s, 'oak_plank')).toBe(5);
-  });
 });
 
-describe('x10 mode', () => {
-  it('10× inputs and output in the same time; stamina per craft = max(1, ceil(9 × craftMs / 1 min)), paid up front', () => {
-    expect([1000, 4584, 6666, 6667, 60_000, 73_336].map(x10StaminaPerCraft)).toEqual([1, 1, 1, 2, 9, 12]);
-    const s0 = game({ gold_ore: 640 });
-    const view = craftingView(s0).recipes.find((r) => r.recipeId === 'gold_ingot')!;
-    expect(view.craftMs).toBe(73_336); // 80 s × 0.9167
-    expect(view.x10StaminaPerCraft).toBe(12);
-    expect(view.max).toEqual({ x1: 20, x10: 2 });
-    let s = apply(s0, start(0, 'gold_ingot', 2, 'x10', 24), T0);
-    expect(s.stamina.current).toBe(100 - 24);
-    expect(qty(s, 'gold_ore')).toBe(0);
-    s = simulate(s, T0 + 73_336).state;
-    expect(qty(s, 'gold_ingot')).toBe(10);
-    expect(s.crafting.pipes[0]).toMatchObject({ done: 1 });
-  });
-
-  it('the Max button respects stamina too', () => {
-    const s = { ...game({ stone: 1000 }), stamina: { current: 7, max: 100, progressMs: 0 } };
-    expect(craftingView(s).recipes.find((r) => r.recipeId === 'stone_brick')!.max).toEqual({ x1: 500, x10: 7 });
-  });
-});
-
-describe('cancel and insta', () => {
-  it('CANCEL_CRAFT: inputs of every craft not delivered back (the one in progress too), stamina of every x10 craft not started', () => {
-    let s = apply(game({ stone: 200 }), start(0, 'stone_brick', 5, 'x10', 5), T0); // 100 stone, 5 stamina
-    expect([qty(s, 'stone'), s.stamina.current]).toEqual([100, 95]);
-    s = simulate(s, T0 + 4584 * 2 + 100).state; // 2 crafts delivered, the third in progress
-    expect(qty(s, 'stone_brick')).toBe(20);
-    expectError(s, { type: 'CANCEL_CRAFT', pipe: 0, jobId: 99 }, 'CRAFT_CHANGED', T0 + 9300);
-    expectError(s, { type: 'CANCEL_CRAFT', pipe: 1, jobId: 1 }, 'NO_CRAFT_JOB', T0 + 9300);
-    const r = run(s, { type: 'CANCEL_CRAFT', pipe: 0, jobId: 1 }, T0 + 9300);
+describe('Stop and insta', () => {
+  it('STOP_CRAFT refunds the craft in progress (a ×10 one: all 20 inputs), never its stamina; bound to the job shown', () => {
+    let s = apply(game({ stone: 200 }), start(0, 'stone_brick'), T0);
+    s = simulate(s, T0 + 4584 + 100).state; // craft 1 delivered, craft 2 in progress
+    s = apply(s, { type: 'X10_CRAFT', pipe: 0, jobId: 1, craft: 2, maxCost: 1 }, T0 + 4684);
+    expect([qty(s, 'stone'), qty(s, 'stone_brick'), s.stamina.current]).toEqual([200 - 2 - 2 - 18, 1, 99]);
+    expectError(s, { type: 'STOP_CRAFT', pipe: 0, jobId: 99 }, 'CRAFT_CHANGED', T0 + 4700);
+    expectError(s, { type: 'STOP_CRAFT', pipe: 1, jobId: 1 }, 'NO_CRAFT_JOB', T0 + 4700);
+    expectError(s, { type: 'CANCEL_CRAFT', pipe: 0, jobId: 1 }, 'INVALID_COMMAND', T0 + 4700); // Cancel is for gear
+    expect(craftJobView(s, 0)!.refund).toEqual([{ defId: 'stone', quantity: 20 }]);
+    const r = run(s, { type: 'STOP_CRAFT', pipe: 0, jobId: 1 }, T0 + 4700);
     if (!r.ok) throw new Error(r.error.message);
-    expect(qty(r.state, 'stone')).toBe(100 + 3 * 20);
-    expect(qty(r.state, 'stone_brick')).toBe(20);
-    expect(r.state.stamina.current).toBe(95 + 2);
+    expect([qty(r.state, 'stone'), qty(r.state, 'stone_brick'), r.state.stamina.current]).toEqual([198, 1, 99]);
     expect(r.state.crafting.pipes[0]).toBeNull();
-    expect(r.events).toContainEqual({ type: 'CRAFT_JOB_CANCELLED', pipe: 0, jobId: 1 });
+    expect(r.events).toContainEqual({ type: 'CRAFT_STOPPED', pipe: 0, jobId: 1 });
   });
 
-  it('the stamina refund never goes above max; a refund that would not fit is refused (nothing lost)', () => {
-    let s = apply(game({ stone: 200 }), start(0, 'stone_brick', 10, 'x10', 10), T0);
-    s = { ...s, stamina: { ...s.stamina, current: 99 } };
-    const r = run(s, { type: 'CANCEL_CRAFT', pipe: 0, jobId: 1 }, T0);
-    expect(r.ok && r.state.stamina).toEqual({ current: 100, max: 100, progressMs: 0 });
-    // All 200 stone went into the job (stack gone); fill every slot: the refund has no room.
-    const full = cloneState(s);
-    for (let i = 0; full.inventory.items.length < full.inventory.capacity; i += 1) full.inventory.items.push({ id: `x${i}`, defId: 'iron_helm', name: 'Iron Helm', icon: '⛑️', slot: 'helmet' });
-    expectError(full, { type: 'CANCEL_CRAFT', pipe: 0, jobId: 1 }, 'INVENTORY_FULL');
+  it('a waiting pipe just becomes free; a refund that would not fit is refused (nothing lost)', () => {
+    const waiting = apply(game({ oak_logs: 1 }), start(0, 'oak_plank'), T0);
+    const r = run(waiting, { type: 'STOP_CRAFT', pipe: 0, jobId: 1 }, T0);
+    expect(r.ok && [r.state.crafting.pipes[0], qty(r.state, 'oak_logs')]).toEqual([null, 1]);
+    // The first craft took the last 2 logs (stack gone); every slot filled: the refund has no room.
+    const full = fill(apply(game({ oak_logs: 2 }), start(0, 'oak_plank'), T0));
+    expectError(full, { type: 'STOP_CRAFT', pipe: 0, jobId: 1 }, 'INVENTORY_FULL');
   });
 
   it('INSTA_CRAFT: ceil(remaining minutes) stamina (≥ 1) finishes the current craft now; bound to the craft and cost shown', () => {
-    let s = apply(game({ gold_ore: 64 }), start(0, 'gold_ingot', 2), T0); // 73 336 ms per craft
+    let s = apply(game({ gold_ore: 64 }), start(0, 'gold_ingot'), T0); // 73 336 ms per craft
     s = simulate(s, T0 + 10_000).state;
     const v = craftJobView(s, 0)!;
     expect([v.remainingMs, v.instaCost, v.craftNumber]).toEqual([63_336, 2, 1]);
@@ -247,12 +379,11 @@ describe('cancel and insta', () => {
     s = apply(s, { type: 'INSTA_CRAFT', pipe: 0, jobId: 1, craft: 1, maxCost: 2 }, T0 + 10_000);
     expect(qty(s, 'gold_ingot')).toBe(1);
     expect(s.stamina.current).toBe(98);
-    expect(s.crafting.pipes[0]).toMatchObject({ done: 1, progressMs: 0 });
-    // The last craft: the pipe goes idle.
+    expect(s.crafting.pipes[0]).toMatchObject({ done: 1, progressMs: 0, status: 'running' });
+    // The second craft took the last 32 ore; insta on it: the pipe then waits.
     s = apply(s, { type: 'INSTA_CRAFT', pipe: 0, jobId: 1, craft: 2, maxCost: 2 }, T0 + 10_000);
-    expect(s.crafting.pipes[0]).toBeNull();
+    expect(s.crafting.pipes[0]).toMatchObject({ done: 2, status: 'waiting' });
     expect(qty(s, 'gold_ingot')).toBe(2);
-    expectError(s, { type: 'INSTA_CRAFT', pipe: 0, jobId: 1, craft: 3, maxCost: 2 }, 'NO_CRAFT_JOB', T0 + 10_000);
   });
 });
 
@@ -265,28 +396,29 @@ function fill(s: GameState): GameState {
 
 describe('inventory full', () => {
   it('a finished craft whose output does not fit holds the pipe (timer held, nothing lost) and delivers when room appears', () => {
-    let s = fill(apply(game({ oak_logs: 10 }), start(0, 'oak_plank', 3), T0)); // no oak_plank stack yet
+    let s = fill(apply(game({ oak_logs: 10 }), start(0, 'oak_plank'), T0)); // no oak_plank stack yet
     const r = simulate(s, T0 + HOUR);
     s = r.state;
     expect(s.crafting.pipes[0]).toMatchObject({ done: 0, status: 'held', progressMs: 4584 });
     expect(r.events).toContainEqual({ type: 'CRAFT_HELD', pipe: 0, jobId: 1 });
     expect(r.summary.craftsCompleted).toBe(0);
+    expect(qty(s, 'oak_logs')).toBe(8); // held: the next craft has not taken anything
     expectError(s, { type: 'INSTA_CRAFT', pipe: 0, jobId: 1, craft: 1, maxCost: 1 }, 'INVENTORY_FULL', T0 + HOUR);
     // A sale frees a slot: the held craft delivers at once, the next craft starts then.
     s = apply(s, { type: 'SELL_ITEM', itemId: 'helm#0', quantity: 1 }, T0 + HOUR);
     expect(qty(s, 'oak_plank')).toBe(1);
     expect(s.crafting.pipes[0]).toMatchObject({ done: 1, status: 'running', progressMs: 0 });
-    s = simulate(s, T0 + HOUR + 2 * 4584).state;
-    expect(qty(s, 'oak_plank')).toBe(3);
-    expect(s.crafting.pipes[0]).toBeNull();
+    s = simulate(s, T0 + 2 * HOUR).state;
+    expect(qty(s, 'oak_plank')).toBe(5);
+    expect(s.crafting.pipes[0]).toMatchObject({ done: 5, status: 'waiting' });
   });
 
   it('an existing stack always takes the output; insta is refused when the output has no room', () => {
-    let s = apply(game({ oak_logs: 10, oak_plank: 1 }), start(0, 'oak_plank', 2), T0);
+    let s = apply(game({ oak_logs: 10, oak_plank: 1 }), start(0, 'oak_plank'), T0);
     s = fill(s);
     s = simulate(s, T0 + 2 * 4584).state;
     expect(qty(s, 'oak_plank')).toBe(3);
-    let t = fill(apply(game({ oak_logs: 10 }), start(0, 'oak_plank', 2), T0));
+    let t = fill(apply(game({ oak_logs: 10 }), start(0, 'oak_plank'), T0));
     expectError(t, { type: 'INSTA_CRAFT', pipe: 0, jobId: 1, craft: 1, maxCost: 1 }, 'INVENTORY_FULL');
     t = simulate(t, T0 + 1000).state;
     expect(t.stamina.current).toBe(100);
@@ -295,7 +427,7 @@ describe('inventory full', () => {
 
 describe('yield and the fraction ledger', () => {
   it('Lv5: 10 crafts of 1 → 12 planks, whole numbers only, the rest in thousandths', () => {
-    let s = apply(withLevel(game({ oak_logs: 100 }), 5), start(0, 'oak_plank', 10), T0);
+    let s = apply(withLevel(game({ oak_logs: 20 }), 5), start(0, 'oak_plank'), T0);
     const ms = s.crafting.pipes[0]!.craftMs;
     expect(ms).toBe(3008);
     s = simulate(s, T0 + 3 * ms).state;
@@ -307,59 +439,82 @@ describe('yield and the fraction ledger', () => {
     const r = simulate(s, T0 + 10 * ms);
     expect(qty(r.state, 'oak_plank')).toBe(12);
     expect(r.summary.itemsCrafted).toEqual({ oak_plank: 6 });
+    expect(r.state.crafting.pipes[0]).toMatchObject({ done: 10, status: 'waiting' }); // 20 logs = 10 crafts
     expect(r.state.inventory.items.every((i) => Number.isSafeInteger(i.quantity ?? 1))).toBe(true);
   });
 
-  it('Lv4 x10: +10% of the whole output (11 per craft); sale prices unchanged', () => {
-    let s = apply(withLevel(game({ stone: 100 }), 4), start(0, 'stone_brick', 5, 'x10'), T0);
+  it('Lv4 ×10: +10% of the whole output (11 for one ×10 craft); sale prices unchanged', () => {
+    let s = apply(withLevel(game({ stone: 20 }), 4), start(0, 'stone_brick'), T0);
+    s = apply(s, { type: 'X10_CRAFT', pipe: 0, jobId: 1, craft: 1, maxCost: 1 }, T0);
     s = simulate(s, T0 + HOUR).state;
-    expect(qty(s, 'stone_brick')).toBe(55);
+    expect(qty(s, 'stone_brick')).toBe(11);
     expect(sellPriceOf(s, 'stone_brick')).toBe(2);
   });
 });
 
 describe('time rules', () => {
-  /** Two pipes, woodcutting, an Oak crew and a house upgrade, all at once. */
+  /** Two Oak pipes competing for the hero's and a crew's logs, a Stone pipe waiting all along, and a house upgrade. */
   function busy(): GameState {
-    let s = game({ oak_logs: 2000, stone: 2000 }, 11);
+    let s = game({ oak_logs: 30, stone: 25 }, 11);
     s = { ...s, character: { ...s.character, gold: 10_000 }, buildings: { ...s.buildings, town_hall: { state: 'built', level: 3 } } };
-    s = apply(s, start(0, 'oak_plank', 200), T0);
-    s = apply(s, start(1, 'stone_brick', 40, 'x10', 40), T0 + 1234);
+    s = apply(s, { type: 'UPGRADE_BUILDING', buildingId: 'crafting', level: 2 }, T0); // 25 Oak, 25 Stone: 5 logs left
+    s = apply(s, { type: 'DEBUG_UNLOCK_PIPE' }, T0);
+    s = apply(s, start(0, 'oak_plank'), T0 + 1000);
+    s = apply(s, start(1, 'oak_plank'), T0 + 1234);
+    s = apply(s, start(2, 'stone_brick'), T0 + 1234);
     s = apply(s, { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0 + 2000);
     s = apply(s, { type: 'HIRE_WORKER', maxCost: 100 }, T0 + 2000);
-    s = apply(s, { type: 'ASSIGN_WORKER', workerId: 'w1', node: 'oak' }, T0 + 2000);
-    s = apply(s, { type: 'UPGRADE_BUILDING', buildingId: 'crafting', level: 2 }, T0 + 3000);
+    s = apply(s, { type: 'ASSIGN_WORKER', workerId: 'w1', node: 'oak' }, T0 + 3000);
     return s;
   }
 
-  it('split invariance: 1 s ticks = 7 s / 13 s splits = one big simulate, byte for byte', () => {
+  it('split invariance with waiting pipes: 1 s ticks = 7 s / 13 s splits = one big simulate, byte for byte', () => {
     const s0 = busy();
     const end = T0 + 3000 + 30 * MIN;
-    const big = simulate(s0, end).state;
+    const big = simulate(s0, end);
     for (const step of [1000, 7000, 13_000]) {
       let s = s0;
       for (let t = T0 + 3000 + step; t < end; t += step) s = simulate(s, t).state;
       s = simulate(s, end).state;
-      expect(hashState(s)).toBe(hashState(big));
+      expect(hashState(s)).toBe(hashState(big.state));
     }
-    expect(big.buildings.crafting.level).toBe(2);
-    expect(qty(big, 'oak_plank')).toBeGreaterThan(200 - 1); // done before 30 min
-    expect(big.crafting.pipes[1]).toBeNull();
+    expect(big.state.buildings.crafting.level).toBe(2);
+    // Both Oak pipes crafted from what the hero and the crew cut; pipe 1 waited at times, the Stone pipe all along.
+    expect(big.state.crafting.pipes[0]!.done + big.state.crafting.pipes[1]!.done).toBe(qty(big.state, 'oak_plank'));
+    expect(big.state.crafting.pipes[0]!.done).toBeGreaterThan(big.state.crafting.pipes[1]!.done);
+    expect(big.state.crafting.pipes[2]).toMatchObject({ status: 'waiting', done: 0 });
+    expect(big.summary.craftWaits).toEqual(expect.arrayContaining([{ pipe: 1, defId: 'oak_logs' }, { pipe: 2, defId: 'stone' }]));
   });
 
-  it('offline cap: 10 h away crafts only 8 h; a backward clock grants nothing; garbage time is a no-op', () => {
-    const s0 = apply(game({ oak_logs: 100_000 }), start(0, 'oak_plank', 10_000), T0);
+  it('offline cap: 10 h away crafts only 8 h, waiting pipes included; a backward clock grants nothing; garbage time is a no-op', () => {
+    let s0 = apply(game({ oak_logs: 100_000 }), start(0, 'oak_plank'), T0);
+    s0 = apply(s0, start(1, 'stone_brick'), T0); // no stone: waits the whole time
     const r = simulate(s0, T0 + 10 * HOUR);
     expect(r.summary.craftsCompleted).toBe(Math.floor((8 * HOUR) / 4584));
     expect(r.summary.itemsCrafted.oak_plank).toBe(Math.floor((8 * HOUR) / 4584));
+    expect(r.summary.craftWaits).toEqual([{ pipe: 1, defId: 'stone' }]);
+    expect(r.state.crafting.pipes[1]).toEqual(s0.crafting.pipes[1]);
     const back = simulate(r.state, T0 + 5 * HOUR);
     expect(back.state).toBe(r.state);
     expect(back.summary.anomalies[0]).toMatchObject({ kind: 'backward' });
     expect(simulate(r.state, Number.NaN).state).toBe(r.state);
   });
 
+  it('a waiting pipe fed during an 8 h stretch away resumes then, and the away lines merge per pipe and item', () => {
+    let s = apply(game({ oak_logs: 0 }), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
+    s = apply(s, start(0, 'oak_plank'), T0);
+    s = apply(s, start(1, 'oak_plank'), T0);
+    const away = simulate(s, T0 + 10 * HOUR);
+    expect(away.summary.craftsCompleted).toBeGreaterThan(0);
+    expect(away.summary.craftWaits).toEqual([
+      { pipe: 0, defId: 'oak_logs' },
+      { pipe: 1, defId: 'oak_logs' },
+    ]);
+    expect(mergeSummaries(away.summary, away.summary).craftWaits).toEqual(away.summary.craftWaits);
+  });
+
   it('pipes never use the hero: a dungeon, training or woodcutting starts and stops beside them', () => {
-    let s = apply(game(), start(0, 'oak_plank', 100), T0);
+    let s = apply(game(), start(0, 'oak_plank'), T0);
     s = apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0 + 1000);
     s = apply(s, { type: 'START_ACTIVITY', kind: 'training', attribute: 'intelligence' }, T0 + 2000);
     s = apply(s, { type: 'STOP_ACTIVITY' }, T0 + 3000);
@@ -393,28 +548,30 @@ describe('debug and the client', () => {
     await client.dispatch({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' });
     clock.advance(HOUR);
     await client.resume();
-    const logs = qty(client.getState(), 'oak_logs');
-    expect(logs).toBeGreaterThan(20);
+    expect(qty(client.getState(), 'oak_logs')).toBeGreaterThan(20);
     const send = async (c: Input) => {
       const r = await client.dispatch(c);
       if (!r.ok) throw new Error(r.error.message);
     };
-    await send(start(0, 'oak_plank', Math.floor(logs / 4)));
+    await send(start(0, 'oak_plank'));
     await send({ type: 'DEBUG_UNLOCK_PIPE' });
-    await send(start(2, 'oak_plank', 1, 'x1', 0));
-    clock.advance(5 * SEC);
+    await send(start(undefined, 'stone_brick')); // no stone: waits in pipe 2
+    clock.advance(2 * SEC);
     await client.tick();
-    const j = craftJobView(client.getState(), 0)!;
+    let j = craftJobView(client.getState(), 0)!;
+    await send({ type: 'X10_CRAFT', pipe: 0, jobId: j.id, craft: j.craftNumber, maxCost: j.x10Tap!.stamina });
     await send({ type: 'INSTA_CRAFT', pipe: 0, jobId: j.id, craft: j.craftNumber, maxCost: j.instaCost });
-    await send({ type: 'CANCEL_CRAFT', pipe: 0, jobId: j.id });
+    j = craftJobView(client.getState(), 0)!;
+    await send({ type: 'STOP_CRAFT', pipe: 0, jobId: j.id });
+    await send({ type: 'STOP_CRAFT', pipe: 1, jobId: craftJobView(client.getState(), 1)!.id });
     clock.advance(10 * MIN);
     await client.resume();
     const rows = await repo.getAllLog();
-    for (const t of ['START_CRAFT', 'INSTA_CRAFT', 'CANCEL_CRAFT', 'DEBUG_UNLOCK_PIPE']) expect(rows.some((r) => r.type === t)).toBe(true);
+    for (const t of ['START_CRAFT', 'X10_CRAFT', 'INSTA_CRAFT', 'STOP_CRAFT', 'DEBUG_UNLOCK_PIPE']) expect(rows.some((r) => r.type === t)).toBe(true);
     const report = replayLogReport(rows.map(({ seq: _s, synced: _y, ...r }) => r));
     expect(hashState(report.state!)).toBe(hashState(client.getState()));
   });
 });
 
 // Keeps the Command import used for readers: every crafting command is part of the union.
-export type _CraftCommands = Extract<Command, { type: 'START_CRAFT' | 'INSTA_CRAFT' | 'CANCEL_CRAFT' | 'DEBUG_UNLOCK_PIPE' }>;
+export type _CraftCommands = Extract<Command, { type: 'START_CRAFT' | 'INSTA_CRAFT' | 'X10_CRAFT' | 'STOP_CRAFT' | 'CANCEL_CRAFT' | 'DEBUG_UNLOCK_PIPE' }>;

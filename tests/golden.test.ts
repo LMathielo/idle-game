@@ -62,6 +62,17 @@
 // its gear listings to the 1.13.0 terms after each refresh (`as113Stock`): seen in the v13 shape (`asV13`) the whole
 // 1.13.0 script still hashes to the 1.13.0 pin. The script gained a 1.14.0 segment (a real refresh and a rolled buy,
 // three gear jobs with invested stamina, a cancel, an insta, ready pipes through 2 h, Done, equip).
+// 1.14.0 → 1.15.0 (2026-11-01): save v15 (continuous material pipes: inputs taken per craft, waiting, the ×10 tap,
+// Stop, Recipes starts into the first free pipe). The 1.13.0 jobs are rewritten as 1.15.0 commands with the same
+// outcomes: START without quantity / mode, a ×10 tap on each Stone Brick craft as it starts (instead of the x10 job),
+// Stop instead of Cancel, and a Stop at the instant each finite job (3, 3, 300 crafts) ended in 1.14.0 (the craft just
+// started is refunded). Every crafting outcome is the 1.14.0 one, with two exceptions: (1) the Copper Ore stack, emptied
+// for an instant by its 4th craft and refunded by Stop, would come back at the end of the bag: a patch puts it back
+// (`restoreStackAt`); (2) the two extra Stops come before the "~9 h away" stretch, which is capped at 8 h, so the hero
+// gets 69.606 s more: STR training XP 2 → 5 at the end of the 1.13.0 script (177 → 180 at the end of 1.14.0) and one
+// more Stone (619 → 620). With those values put back (`as114Hero`) and seen at save v14 (`asV14`), the 1.13.0 and
+// 1.14.0 pins hold. The script gained a 1.15.0 segment (waiting Oak pipes fed by woodcutting across a boundary and
+// 5 h away, two pipes competing, Recipes starts and the "all busy" refusal, a ×10 tap and an insta, Stop).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -118,6 +129,9 @@ const H = G + 4 * SEC + 2 * HOUR;
 /** End of the 1.13.0 script; the 1.14.0 segment starts here. */
 const I = H + 21 * MIN + 2 * SEC + 9 * HOUR;
 
+/** End of the 1.14.0 script; the 1.15.0 segment starts here. */
+const J = I + 3 * HOUR + 3 * SEC;
+
 /** BUY_ITEM of the first gear listing in the stock at the price shown (1.14.0: gear prices follow the rolled quality). */
 const buyFirstGear = (id: string, s: GameState): Command => {
   const slot = s.merchant.stock.findIndex((l) => l?.quality !== undefined);
@@ -131,10 +145,23 @@ const instaShown = (id: string, pipe: number) => (s: GameState): Command => {
   return { id, type: 'INSTA_CRAFT', pipe, jobId: j.id, craft: j.craftNumber, maxCost: j.instaCost };
 };
 
-/** A START_CRAFT with the stamina cost the screen shows (x10 mode). */
-const craftShown = (id: string, pipe: number, recipeId: 'stone_brick', quantity: number) => (s: GameState): Command => {
-  const r = craftingView(s).recipes.find((x) => x.recipeId === recipeId)!;
-  return { id, type: 'START_CRAFT', pipe, recipeId, quantity, mode: 'x10', maxCost: r.x10StaminaPerCraft * quantity };
+/** The ×10 tap the UI would send for the craft on screen in `pipe` (1.15.0). */
+const x10Shown = (id: string, pipe: number) => (s: GameState): Command => {
+  const j = craftJobView(s, pipe)!;
+  return { id, type: 'X10_CRAFT', pipe, jobId: j.id, craft: j.craftNumber, maxCost: j.x10Tap!.stamina };
+};
+
+/** The Stop the UI would send for the job on screen in `pipe` (1.15.0). */
+const stopShown = (id: string, pipe: number) => (s: GameState): Command => ({ id, type: 'STOP_CRAFT', pipe, jobId: craftJobView(s, pipe)!.id });
+
+/**
+ * 1.15.0: a stack the per-craft rule emptied for an instant (the craft took its last units) and Stop refunded comes back
+ * at the end of the bag; 1.14.0 never emptied it (the job's inputs were taken up front). Put it back where it was.
+ */
+const restoreStackAt = (defId: string, index: number) => (s: GameState): GameState => {
+  const items = s.inventory.items.filter((i) => i.defId !== defId);
+  items.splice(index, 0, s.inventory.items.find((i) => i.defId === defId)!);
+  return { ...s, inventory: { ...s.inventory, items } };
 };
 
 /**
@@ -145,6 +172,28 @@ const craftShown = (id: string, pipe: number, recipeId: 'stone_brick', quantity:
 function asV12(s: GameState): unknown {
   const { crafting: _c, buildings: { crafting: _b, ...buildings }, character, ...rest } = asV13(s);
   return { ...rest, saveVersion: 12, buildings, character: { ...character, skills: { ...character.skills, smithing: { level: 1, xp: 0, xpToNext: 100 } } } };
+}
+
+/**
+ * A 1.15.0 state seen in the v14 shape: at save v14. Only for states whose pipes are all idle (the 1.13.0 and 1.14.0
+ * scripts end that way), the only place the v15 shape differs.
+ */
+function asV14(s: GameState): GameState {
+  if (s.crafting.pipes.some((p) => p !== null)) throw new Error('asV14: a pipe is busy');
+  return { ...s, saveVersion: 14 } as unknown as GameState;
+}
+
+/**
+ * 1.15.0: the translated 1.13.0 script stops its Copper Ingot and Oak Plank pipes at H + 21 min 17.502 s and
+ * H + 22 min 10.606 s (when their 1.14.0 jobs ended), after the bread sale at H + 21 min 1 s. Those two simulate points
+ * come before the "~9 h away" stretch, which is capped at 8 h, so the hero is granted 69.606 s more in all: 3 more STR
+ * training XP (2 XP/min) and, from that STR, one more Stone in the 1.14.0 segment. Nothing else moves. This puts the
+ * 1.14.0 values back, to check that every other outcome is exactly the 1.14.0 one.
+ */
+function as114Hero(s: GameState, str: { xp: number; progressMs: number }, stone?: number): GameState {
+  const attributes = { ...s.training.attributes, strength: { ...s.training.attributes.strength, ...str } };
+  const items = stone === undefined ? s.inventory.items : s.inventory.items.map((i) => (i.id === 'stone' ? { ...i, quantity: stone } : i));
+  return { ...s, training: { ...s.training, attributes }, inventory: { ...s.inventory, items } };
 }
 
 /**
@@ -293,11 +342,18 @@ const SCRIPT: Step[] = [
   // (gear unequipped, a shield bought) holds the Copper Ingot pipe opened by debug, a sale frees a slot and it delivers;
   // ~8 h away. STR training runs beside all of it.
   { at: H + 1 * SEC, cmd: { id: 'c1', type: 'BUILD', buildingId: 'crafting' } }, // 30 Oak Logs, 30 Stone, 150 gold
-  { at: H + 2 * SEC, cmd: { id: 'c2', type: 'START_CRAFT', pipe: 0, recipeId: 'oak_plank', quantity: 300, mode: 'x1', maxCost: 0 } },
-  { at: H + 3 * SEC, cmd: craftShown('c3', 1, 'stone_brick', 5), id: 'c3' },
+  { at: H + 2 * SEC, cmd: { id: 'c2', type: 'START_CRAFT', pipe: 0, recipeId: 'oak_plank' } },
+  // 1.15.0: the x10 job of 5 = a continuous Stone Brick pipe with a ×10 tap on each craft as it starts (crafts 1–3; Stop
+  // ends it during craft 3, as the 1.14.0 cancel did), at the instants the 1.14.0 crafts started (4,584 ms each).
+  { at: H + 3 * SEC, cmd: { id: 'c3', type: 'START_CRAFT', pipe: 1, recipeId: 'stone_brick' } },
+  { at: H + 3 * SEC, cmd: x10Shown('c3a', 1), id: 'c3a' },
+  { at: H + 3 * SEC + 4584 }, // the screen at that instant
+  { at: H + 3 * SEC + 4584, cmd: x10Shown('c3b', 1), id: 'c3b' },
   { at: H + 10 * SEC + 500 }, // mid-craft in both pipes
   { at: H + 12 * SEC, cmd: { id: 'c4', type: 'UPGRADE_BUILDING', buildingId: 'crafting', level: 2 } }, // 250 g, 25 Oak, 25 Stone, 15 min
-  { at: H + 15 * SEC, cmd: (s) => ({ id: 'c5', type: 'CANCEL_CRAFT', pipe: 1, jobId: craftJobView(s, 1)!.id }), id: 'c5' },
+  { at: H + 3 * SEC + 2 * 4584 }, // the screen at that instant
+  { at: H + 3 * SEC + 2 * 4584, cmd: x10Shown('c4b', 1), id: 'c4b' },
+  { at: H + 15 * SEC, cmd: stopShown('c5', 1), id: 'c5' },
   { at: H + 20 * SEC }, // the screen at that moment
   { at: H + 20 * SEC, cmd: instaShown('c6', 0), id: 'c6' },
   { at: H + 20 * MIN }, // the upgrade completed at H + 12 s + 15 min, mid-job
@@ -309,10 +365,19 @@ const SCRIPT: Step[] = [
   { at: H + 20 * MIN + 6 * SEC, cmd: { id: 'c12', type: 'UNEQUIP_ITEM', slot: 'pickaxe' } },
   { at: H + 20 * MIN + 7 * SEC, cmd: { id: 'c13', type: 'BUY_ITEM', slot: 1, defId: 'iron_shield', quantity: 1, maxUnitPrice: 550 } }, // 19 of 20 slots
   { at: H + 20 * MIN + 8 * SEC, cmd: { id: 'c14', type: 'DEBUG_UNLOCK_PIPE' } },
-  { at: H + 20 * MIN + 9 * SEC, cmd: { id: 'c15', type: 'START_CRAFT', pipe: 1, recipeId: 'birch_plank', quantity: 3, mode: 'x1', maxCost: 0 } },
-  { at: H + 20 * MIN + 9 * SEC, cmd: { id: 'c16', type: 'START_CRAFT', pipe: 2, recipeId: 'copper_ingot', quantity: 3, mode: 'x1', maxCost: 0 } }, // 12 of 16 ore: the stack stays
+  { at: H + 20 * MIN + 9 * SEC, cmd: { id: 'c15', type: 'START_CRAFT', pipe: 1, recipeId: 'birch_plank' } },
+  { at: H + 20 * MIN + 9 * SEC, cmd: { id: 'c16', type: 'START_CRAFT', pipe: 2, recipeId: 'copper_ingot' } }, // 4 of 16 ore per craft
+  // 1.15.0: the 1.14.0 jobs of 3, 3 and 300 crafts = continuous pipes stopped at the instant their last craft delivered
+  // (the next craft, just started, is refunded), at the instants the 1.14.0 jobs ended.
+  { at: H + 1_233_753 }, // the screen at that instant
+  { at: H + 1_233_753, cmd: stopShown('c15s', 1), id: 'c15s' }, // Birch Plank: 3 crafted
   { at: H + 21 * MIN }, // the Birch Plank took the last slot; the Copper Ingot pipe is held
   { at: H + 21 * MIN + 1 * SEC, cmd: { id: 'c17', type: 'SELL_ITEM', itemId: 'bread', quantity: 3 } }, // a free slot: it delivers at once
+  { at: H + 1_277_502 }, // the screen at that instant
+  { at: H + 1_277_502, cmd: stopShown('c17s', 2), id: 'c17s' }, // Copper Ingot: 3 crafted; the 4th took the last 4 ore
+  { at: H + 1_277_502, patch: restoreStackAt('copper_ore', 8) },
+  { at: H + 1_330_606 }, // the screen at that instant
+  { at: H + 1_330_606, cmd: stopShown('c17o', 0), id: 'c17o' }, // Oak Plank: 300 crafted
   { at: H + 21 * MIN + 2 * SEC + 9 * HOUR }, // ~9 h away (capped at 8 h)
   // 1.14.0: gear quality and rarity. Debug gold, then a real refresh rolls the gear listings (own stream); the shield is sold by its
   // quality and the first rolled piece is bought at the price shown. Gear crafting: a Stone Sword with 20 stamina invested
@@ -323,9 +388,9 @@ const SCRIPT: Step[] = [
   { at: I + 1 * SEC, cmd: { id: 'q1', type: 'REFRESH_MERCHANT' } },
   { at: I + 2 * SEC, cmd: (s) => ({ id: 'q2', type: 'SELL_ITEM', itemId: s.inventory.items.find((i) => i.defId === 'iron_shield')!.id, quantity: 1 }), id: 'q2' },
   { at: I + 3 * SEC, cmd: (s) => buyFirstGear('q3', s), id: 'q3' },
-  { at: I + 4 * SEC, cmd: { id: 'q4', type: 'START_CRAFT', pipe: 0, recipeId: 'stone_sword', quantity: 1, mode: 'x1', maxCost: 20, stamina: 20 } },
-  { at: I + 5 * SEC, cmd: { id: 'q5', type: 'START_CRAFT', pipe: 1, recipeId: 'stone_helm', quantity: 1, mode: 'x1', maxCost: 0, stamina: 0 } },
-  { at: I + 6 * SEC, cmd: { id: 'q6', type: 'START_CRAFT', pipe: 2, recipeId: 'stone_gloves', quantity: 1, mode: 'x1', maxCost: 5, stamina: 5 } },
+  { at: I + 4 * SEC, cmd: { id: 'q4', type: 'START_CRAFT', pipe: 0, recipeId: 'stone_sword', maxCost: 20, stamina: 20 } },
+  { at: I + 5 * SEC, cmd: { id: 'q5', type: 'START_CRAFT', pipe: 1, recipeId: 'stone_helm', maxCost: 0, stamina: 0 } },
+  { at: I + 6 * SEC, cmd: { id: 'q6', type: 'START_CRAFT', pipe: 2, recipeId: 'stone_gloves', maxCost: 5, stamina: 5 } },
   { at: I + 1 * MIN + 500 }, // mid-craft in three pipes
   { at: I + 1 * MIN + 1 * SEC, cmd: (s) => ({ id: 'q7', type: 'CANCEL_CRAFT', pipe: 2, jobId: craftJobView(s, 2)!.id }), id: 'q7' },
   { at: I + 1 * MIN + 2 * SEC, cmd: instaShown('q8', 1), id: 'q8' },
@@ -336,6 +401,23 @@ const SCRIPT: Step[] = [
   { at: I + 2 * HOUR + 2 * SEC, cmd: (s) => ({ id: 'q10', type: 'COLLECT_CRAFT', pipe: 1, jobId: craftJobView(s, 1)!.id }), id: 'q10' },
   { at: I + 2 * HOUR + 3 * SEC, cmd: (s) => ({ id: 'q11', type: 'EQUIP_ITEM', itemId: s.inventory.items.find((i) => i.defId === 'stone_sword')!.id }), id: 'q11' },
   { at: I + 3 * HOUR + 3 * SEC }, // 1 h more
+  // 1.15.0: continuous material pipes. Every Oak Log sold, the hero on Oak; an Oak Plank pipe started with no logs waits,
+  // a second one started from the Recipes view (no pipe: the first free one) competes with it for the hero's and the
+  // crew's logs (pipe order at each instant), a third Recipes start (Stone Bricks) fills the last open pipe; a simulate
+  // boundary while waiting / crafting, a ×10 tap and an insta on the Stone craft, a Stop with its refund, 5 h away.
+  { at: J + 1 * SEC, cmd: { id: 'u1', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } },
+  { at: J + 2 * SEC }, // the screen at that instant
+  { at: J + 2 * SEC, cmd: (s) => ({ id: 'u2', type: 'SELL_ITEM', itemId: 'oak_logs', quantity: qtyOf(s, 'oak_logs') }), id: 'u2' },
+  { at: J + 3 * SEC, cmd: { id: 'u3', type: 'START_CRAFT', pipe: 0, recipeId: 'oak_plank' } }, // no logs: waits
+  { at: J + 4 * SEC, cmd: { id: 'u4', type: 'START_CRAFT', recipeId: 'oak_plank' } }, // Recipes view: pipe 2
+  { at: J + 5 * SEC, cmd: { id: 'u5', type: 'START_CRAFT', recipeId: 'stone_brick' } }, // Recipes view: pipe 3, the last
+  { at: J + 1 * MIN + 500 }, // a simulate boundary mid-wait / mid-craft
+  { at: J + 20 * MIN },
+  { at: J + 20 * MIN + 1 * SEC }, // the screen at that instant
+  { at: J + 20 * MIN + 1 * SEC, cmd: x10Shown('u6', 2), id: 'u6' },
+  { at: J + 20 * MIN + 1 * SEC, cmd: instaShown('u7', 2), id: 'u7' }, // the ×10 craft, finished now
+  { at: J + 20 * MIN + 1 * SEC, cmd: stopShown('u8', 2), id: 'u8' }, // the next craft (×1) just took its 2 Stone
+  { at: J + 20 * MIN + 4 * SEC + 5 * HOUR }, // 5 h away: both Oak pipes live off the hero's and the crew's logs
 ];
 
 function runScript(steps: Step[] = SCRIPT) {
@@ -390,6 +472,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.12.0', 12],
       ['1.13.0', 13],
       ['1.14.0', 14],
+      ['1.15.0', 15],
     ]);
   });
 });
@@ -1111,21 +1194,23 @@ describe('golden', () => {
 
 describe('golden 1.13.0: the Crafting house', () => {
   const at = (id: string) => runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => (x.id ?? (typeof x.cmd === 'object' ? x.cmd.id : undefined)) === id)));
-  it('build, two pipes (x1 and x10 paid up front), a cancel with refunds, an insta, an upgrade mid-job, a held pipe, ~8 h away', () => {
-    // BUILD paid 150 gold, 30 Oak Logs and 30 Stone; x1 jobs cost no stamina, the x10 job 1 stamina per craft up front.
+  it('build, two pipes (x1 and x10 crafts), a stop with refunds, an insta, an upgrade mid-job, a held pipe, ~8 h away', () => {
+    // BUILD paid 150 gold, 30 Oak Logs and 30 Stone; a craft takes its 2 inputs when it starts (1.15.0), no stamina.
     const c3 = at('c3');
     expect(c3.buildings.crafting).toEqual({ state: 'built', level: 1 });
-    expect(c3.crafting.pipes[0]).toMatchObject({ id: 1, recipeId: 'oak_plank', quantity: 300, done: 0, craftMs: 4584, status: 'running' }); // 5 s × (1 − 8.33%)
+    expect(c3.crafting.pipes[0]).toMatchObject({ id: 1, recipeId: 'oak_plank', done: 0, craftMs: 4584, x10: false, status: 'running' }); // 5 s × (1 − 8.33%)
     expect(c3.stamina.current).toBe(100);
+    // 1.15.0: each Stone Brick craft is tapped ×10 as it starts (18 more Stone and 1 stamina each), as the 1.14.0 x10 job paid them.
     const c4 = at('c4');
-    expect(c4.crafting.pipes[1]).toMatchObject({ mode: 'x10', quantity: 5, staminaPerCraft: 1, craftMs: 4584 });
-    expect(c4.stamina.current).toBe(95);
-    // Cancel at H + 15 s: crafts 1–2 delivered (20 bricks), craft 3 in progress → 3 crafts × 20 Stone back; crafts 4–5 not started → 2 stamina back.
+    expect(c4.crafting.pipes[1]).toMatchObject({ recipeId: 'stone_brick', done: 1, x10: true, craftMs: 4584 });
+    expect(c4.stamina.current).toBe(98);
+    // Stop at H + 15 s: crafts 1–2 delivered (20 bricks), craft 3 (×10) in progress → its 20 Stone back, its stamina not.
+    // The same totals as the 1.14.0 cancel (100 Stone and 5 stamina paid up front, 60 Stone and 2 stamina back).
     const c5 = at('c5');
     const c6 = at('c6');
     expect(c6.crafting.pipes[1]).toBeNull();
     expect(c6.stamina.current).toBe(97);
-    expect(qtyOf(c6, 'stone') - qtyOf(c5, 'stone')).toBe(60);
+    expect(qtyOf(c6, 'stone') - qtyOf(c5, 'stone')).toBe(20);
     expect(qtyOf(c6, 'stone_brick')).toBe(20);
     // The upgrade to Lv2 completed mid-job: the crafts after it take 4,126 ms (×0.9), the earlier ones 4,584 ms.
     const c7 = at('c7');
@@ -1141,8 +1226,10 @@ describe('golden 1.13.0: the Crafting house', () => {
     expect([qtyOf(s, 'oak_plank'), qtyOf(s, 'stone_brick'), qtyOf(s, 'birch_plank'), qtyOf(s, 'copper_ingot')]).toEqual([300, 20, 3, 3]);
     expect(s.flags.debugUsed).toBe(true);
     expect(s.activity).toEqual(expect.objectContaining({ kind: 'training', attribute: 'strength' })); // pipes never touch the hero
-    // 1.14.0: in the v13 shape (no gear rolls) the whole 1.13.0 script still hashes to the 1.13.0 pin.
-    expect({ engineVersion: '1.13.0', hash: hashState(asV13(s)) }).toEqual({ engineVersion: '1.13.0', hash: '073a47bf' });
+    // In the v13 shape (no gear rolls), with the 1.14.0 STR training (see as114Hero: the translated Stops grant 69.606 s
+    // more before the 8 h cap), the whole 1.13.0 script still hashes to the 1.13.0 pin: every other outcome is the same.
+    expect(s.training.attributes.strength).toEqual({ level: 18, xp: 5, progressMs: 10_212 }); // 1.14.0: xp 2, 51,000 ms
+    expect({ engineVersion: '1.13.0', hash: hashState(asV13(asV14(as114Hero(s, { xp: 2, progressMs: 51_000 })))) }).toEqual({ engineVersion: '1.13.0', hash: '073a47bf' });
   });
 });
 
@@ -1178,12 +1265,57 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     // Insta: the helm is ready at once and waits; the sword finished during the 2 h and waits too.
     const q8b = at('q8b');
     expect(q8b.crafting.pipes.slice(0, 2).map((j) => j?.status)).toEqual(['ready', 'ready']);
-    const s = runScript();
+    const s = at('u1'); // the whole 1.14.0 script
     expect(s.crafting.pipes.every((p) => p === null)).toBe(true);
     expect(s.character.equipment.weapon).toMatchObject({ id: 'stone_sword#6', quality: 100, rarity: 'rare' });
     expect(s.inventory.items.find((i) => i.defId === 'stone_helm')).toMatchObject({ id: 'stone_helm#7', quality: 21, rarity: 'epic' });
     expect(getDerivedStats(s).damage.breakdown[0]).toMatchObject({ source: 'weapon', min: 4, max: 6 }); // 100% of 4–6
     expect(qtyOf(s, 'stone_brick')).toBe(13);
-    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(s) }).toEqual({ engineVersion: '1.14.0', gold: 3762, hash: 'f6345886' });
+    // In the v14 shape with the 1.14.0 STR training and Stone (see as114Hero), the 1.14.0 pin holds: gear outcomes unchanged.
+    expect([s.training.attributes.strength, qtyOf(s, 'stone')]).toEqual([{ level: 19, xp: 180, progressMs: 16_212 }, 620]); // 1.14.0: 177 XP, 57,000 ms; 619
+    expect({ gold: s.character.gold, hash: hashState(asV14(as114Hero(s, { xp: 177, progressMs: 57_000 }, 619))) }).toEqual({ gold: 3762, hash: 'f6345886' });
+  });
+});
+
+describe('golden 1.15.0: continuous material pipes', () => {
+  const at = (id: string) => runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => (x.id ?? (typeof x.cmd === 'object' ? x.cmd.id : undefined)) === id)));
+  it('woodcutting feeds waiting Oak pipes across a boundary and offline, two pipes compete, Recipes starts, ×10 + insta, Stop', () => {
+    const u4 = at('u4');
+    expect(qtyOf(u4, 'oak_logs')).toBe(0);
+    expect(u4.crafting.pipes[0]).toMatchObject({ recipeId: 'oak_plank', status: 'waiting', done: 0 });
+    // Recipes view: no pipe named → the first free open pipe; with all 3 busy, ALL_PIPES_BUSY.
+    const u6 = at('u6');
+    expect(u6.crafting.pipes.slice(0, 3).map((j) => j?.recipeId)).toEqual(['oak_plank', 'oak_plank', 'stone_brick']);
+    const busy = applyCommand(u6, { id: 'ux', type: 'START_CRAFT', recipeId: 'birch_plank' }, J + 20 * MIN + 1 * SEC);
+    expect(!busy.ok && busy.error.code).toBe('ALL_PIPES_BUSY');
+    // Two pipes, one inventory: pipe 1 draws first at every instant, so it crafted more.
+    const [p0, p1] = u6.crafting.pipes;
+    expect(p0!.done).toBeGreaterThan(p1!.done);
+    expect(p0!.done + p1!.done).toBe(qtyOf(u6, 'oak_plank') - qtyOf(u4, 'oak_plank'));
+    // ×10 on the Stone craft in progress: 18 more Stone and 1 stamina; insta finishes it with 10 bricks.
+    const u7 = at('u7');
+    expect(u7.crafting.pipes[2]).toMatchObject({ x10: true });
+    expect([qtyOf(u6, 'stone') - qtyOf(u7, 'stone'), u6.stamina.current - u7.stamina.current]).toEqual([18, 1]);
+    const u8 = at('u8');
+    expect(qtyOf(u8, 'stone_brick') - qtyOf(u7, 'stone_brick')).toBe(10);
+    expect(u8.crafting.pipes[2]).toMatchObject({ x10: false, done: u7.crafting.pipes[2]!.done + 1 });
+    // Stop: the craft in progress (×1, it took 2 Stone right after the insta) gives its 2 Stone back.
+    const afterStop = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => x.id === 'u8') + 1));
+    expect(afterStop.crafting.pipes[2]).toBeNull();
+    expect(qtyOf(afterStop, 'stone') - qtyOf(u8, 'stone')).toBe(2);
+    const s = runScript();
+    // Across the boundary at J + 1 min 0.5 s both Oak pipes had waited for the hero's first logs and were crafting.
+    const boundary = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => x.at === J + MIN + 500) + 1));
+    expect(boundary.crafting.pipes.slice(0, 2).map((j) => j?.status)).toEqual(['running', 'running']);
+    // 5 h away: both live off the logs as they are cut (each cut goes to pipe 1 first) and wait in between.
+    expect(s.crafting.pipes.slice(0, 2).map((j) => j && [j.status, j.done])).toEqual([
+      ['waiting', 827],
+      ['waiting', 642],
+    ]);
+    expect(qtyOf(s, 'oak_logs')).toBe(0);
+    expect(s.crafting.pipes[2]).toBeNull();
+    expect(s.crafting.pipes[0]!.done).toBeGreaterThan(p0!.done);
+    expect(s.crafting.pipes[0]!.done).toBeGreaterThan(s.crafting.pipes[1]!.done);
+    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(s) }).toEqual({ engineVersion: '1.15.0', gold: 10_580, hash: 'eaf63de1' });
   });
 });

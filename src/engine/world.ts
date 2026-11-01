@@ -9,15 +9,19 @@
 //   1. the hero's events due at that instant (a log cut, a fight ending with its gold, a training level),
 //   2. the builder (an upgrade completing, so its bonus counts for the crews right after),
 //   3. the crews' actions due at that instant (in WORKER_NODE_IDS order),
-//   4. the pipes' crafts due at that instant (in pipe order): each delivers (or holds while the inventory is full) and
-//      the next craft starts with a duration read right then (house level and INT after 1–2),
+//   4. the pipes at that instant (in pipe order): a craft due delivers (or holds while the inventory is full) and the
+//      next craft takes its inputs and starts with a duration read right then (house level and INT after 1–2), or
+//      waits; a waiting pipe starts if its inputs are there now (1.15.0: the hero's log, a crew's yield, an earlier
+//      pipe's output),
 //   5. at the start of the next step: idle flags and upkeep (settleWorkers: a new minute is charged, or the crews
-//      pause / resume on gold), then held pipes deliver if their output fits now (settleCrafting).
+//      pause / resume on gold), then held pipes deliver if their output fits now and waiting pipes start if their
+//      inputs are there (settleCrafting). The walk settles the pipes once more when it ends.
+// While a pipe waits for inputs, the hero's next event also ends a step (a log or an ore can feed it at that instant).
 // So the result does not depend on where simulate() calls are split. Without anything in the village the walk is a
 // single step: exactly the hero's activity over the whole granted time.
 import { advanceConstruction, constructionRemainingMs, type UpgradeEffect } from './buildings';
 import { cloneState } from './clone';
-import { advancePipes, anyPipeRunning, pipesNextEventMs, settleCrafting } from './crafting';
+import { advancePipes, anyPipeActive, anyPipeWaiting, notePipeWaits, pipesNextEventMs, settleCrafting } from './crafting';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { dungeonNextEventMs } from './dungeon';
 import { miningNextEventMs } from './mining';
@@ -31,7 +35,7 @@ export type HeroStep = (ms: number) => void;
 
 /** True when the village has its own timers to walk (else the hero's activity runs alone). */
 export function villageIsBusy(state: Pick<GameState, 'construction' | 'workers' | 'crafting'>): boolean {
-  return state.construction !== null || anyCrew(state) || anyPipeRunning(state);
+  return state.construction !== null || anyCrew(state) || anyPipeActive(state);
 }
 
 function anyCrew(state: Pick<GameState, 'workers'>): boolean {
@@ -93,7 +97,8 @@ export function advanceWorld(
     if (build !== null) dt = Math.min(dt, build);
     dt = Math.min(dt, crewsNextEventMs(draft));
     dt = Math.min(dt, pipesNextEventMs(draft));
-    if (waitingOnHero(draft)) dt = Math.min(dt, heroNextEventMs(draft));
+    if (waitingOnHero(draft) || anyPipeWaiting(draft)) dt = Math.min(dt, heroNextEventMs(draft));
+    notePipeWaits(draft, dt, summary);
     heroStep(dt);
     advanceConstruction(draft, dt, events, summary, onUpgraded);
     advanceCrews(draft, dt, summary);
@@ -105,4 +110,7 @@ export function advanceWorld(
       return;
     }
   }
+  // The end of the granted time is an instant like any other: what is due at it settles now (a no-op unless something
+  // happened at it), so the state a later command sees does not depend on where simulate() calls were split.
+  settleCrafting(draft, events, summary);
 }

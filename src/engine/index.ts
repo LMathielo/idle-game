@@ -155,24 +155,24 @@ export {
 } from './workers';
 export { diminishingBp } from './diminishing';
 export {
-  anyPipeRunning,
-  cancelRefund,
+  anyPipeActive,
   collectedItemId,
   craftingSign,
   craftingView,
   craftJobView,
   craftMs,
   craftMsFor,
-  craftStaminaCost,
+  firstFreePipe,
   gearQualityFloor,
   houseTimeBp,
   houseYieldBp,
   instaCost,
   intCraftReductionBp,
-  maxCrafts,
   newCraftingState,
   recipeView,
+  stopRefund,
   x10StaminaPerCraft,
+  x10TapCost,
   type CraftErrorCode,
   type CraftingSign,
   type CraftingView,
@@ -181,6 +181,7 @@ export {
   type PipeSlotState,
   type PipeView,
   type RecipeView,
+  type X10TapView,
 } from './crafting';
 export {
   baseSellPrice,

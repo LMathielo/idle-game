@@ -8,17 +8,25 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.14.0** (PR B, stacked on #21) | 1.1.0 |
-| Save | **v14** (PR B) | v2 |
-| Contents | Everything below, up to PR #20, plus Crafting PR A (#21) and PR B once merged | M1 only (PRs #1–#2) |
+| Engine | **1.15.0** (continuous pipes, once merged; 1.14.0 before) | 1.1.0 |
+| Save | **v15** (continuous pipes, once merged; v14 before) | v2 |
+| Contents | Everything below, up to Crafting PR B (#22), plus continuous pipes once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is 17 PRs behind `dev` (#3–#19). The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
-- **Open PRs:** #21 Crafting PR A (`feat/crafting`); #22 Crafting PR B (`feat/crafting-gear`, stacked on #21: merge #21 first).
+- **Open PRs:** continuous material pipes, ×10 tap, Recipes button (`feat/crafting-continuous`).
 - **Workflow:** product owner (orchestrator) → one `game-engineer` per feature → 1–3 reviewers by complexity (`.claude/skills/pr-review-council`) → owner merges.
 
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.15.0 · save v15
+- **Crafting: continuous material pipes** (`feat/crafting-continuous`):
+  - **Start = pick a recipe, Start.** No quantity, no Max, no x10 mode. A material pipe crafts until **Stop**; each craft takes its materials when it starts and shows "Crafted 37", time left and xx.yy%.
+  - **Waiting:** out of materials, the pipe shows "Waiting for Oak Logs (1/2)", no time passes, and it starts again the instant logs arrive (woodcutting, workers, another pipe, a buy). Pipes share materials, in pipe order. Sign: "Waiting for materials" when every busy pipe waits; the away summary lists "Pipe 1 waited for Oak Logs".
+  - **×10 is a tap** on the running craft (18 more logs + the same stamina cost → 10× output, that craft only). **Stop** refunds the craft in progress. Gear jobs unchanged.
+  - **Recipes** button in the Crafting header: every recipe even when all pipes are busy; Start goes into the first free pipe ("All pipes busy" otherwise).
+  - Save v15: running jobs become continuous; materials of crafts not yet started (and their ×10 stamina) come back, nothing lost.
 
 ### Engine 1.14.0 · save v14
 - **#22 Crafting PR B — gear crafting, item quality and rarity:**

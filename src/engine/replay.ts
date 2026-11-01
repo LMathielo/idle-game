@@ -54,6 +54,8 @@ export const LOG_TYPES = [
   'UNASSIGN_WORKER',
   'START_CRAFT',
   'INSTA_CRAFT',
+  'X10_CRAFT',
+  'STOP_CRAFT',
   'CANCEL_CRAFT',
   'COLLECT_CRAFT',
   'DEBUG_UNLOCK_PIPE',
@@ -190,6 +192,8 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'UNASSIGN_WORKER':
     case 'START_CRAFT':
     case 'INSTA_CRAFT':
+    case 'X10_CRAFT':
+    case 'STOP_CRAFT':
     case 'CANCEL_CRAFT':
     case 'COLLECT_CRAFT':
     case 'DEBUG_UNLOCK_PIPE': {

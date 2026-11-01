@@ -67,15 +67,17 @@ export default function VillageScreen() {
   const job = constructionView(state);
   const badgeText = job ? `🔨 Upgrading ${formatCountdown(job.remainingMs)}` : null;
   const badgeKey = job ? BUILDING_SIGN[job.buildingId] : null;
-  // The Crafting sign: "Iron Sword ready" (a finished gear piece waits for Done), "Inventory full", "2/2 crafting · 0:42"
-  // (busy pipes / open pipes, shortest job left), or nothing.
+  // The Crafting sign: "Iron Sword ready" (a finished gear piece waits for Done), "Inventory full", "Waiting for
+  // materials" (every busy pipe waits), "2/2 crafting · 0:04" (busy pipes / open pipes, shortest craft left), or nothing.
   const pipes = craftingSign(state);
   const craftText = pipes
     ? pipes.readyName
       ? `✅ ${pipes.readyName} ready`
       : pipes.held
         ? '⚒️ Inventory full'
-        : `⚒️ ${pipes.busy}/${pipes.open} crafting · ${formatCountdown(pipes.nextJobDoneMs)}`
+        : pipes.waiting
+          ? '⚒️ Waiting for materials'
+          : `⚒️ ${pipes.busy}/${pipes.open} crafting · ${formatCountdown(pipes.nextCraftMs)}`
     : null;
   const badges = useMemo(() => {
     const out: Partial<Record<VillageAction, string>> = {};

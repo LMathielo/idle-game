@@ -203,10 +203,10 @@ describe('save migrations', () => {
     expect(bare.inventory.items).toEqual([]);
   });
 
-  it('newest save loads unchanged; a new game is already v14', () => {
+  it('newest save loads unchanged; a new game is already v15', () => {
     const s = newGame(77, T0);
-    expect(s.saveVersion).toBe(14);
-    expect(CURRENT_SAVE_VERSION).toBe(14);
+    expect(s.saveVersion).toBe(15);
+    expect(CURRENT_SAVE_VERSION).toBe(15);
     expect(loadSave(s)).toEqual(s);
   });
 
