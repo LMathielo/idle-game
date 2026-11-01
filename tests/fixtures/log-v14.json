@@ -1,0 +1,213 @@
+[
+  {
+    "commandId": "v15fx-2",
+    "type": "NEW_GAME",
+    "payload": {
+      "seed": 3554416254
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.14.0",
+    "stateHash": "9fb354a8",
+    "seq": 1,
+    "synced": false
+  },
+  {
+    "commandId": "v15fx-3",
+    "type": "DEBUG_ADD_GOLD",
+    "payload": {
+      "type": "DEBUG_ADD_GOLD",
+      "amount": 3000,
+      "id": "v15fx-3"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.14.0",
+    "stateHash": "298e479a",
+    "seq": 2,
+    "synced": false
+  },
+  {
+    "commandId": "v15fx-4",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "woodcutting",
+      "id": "v15fx-4"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.14.0",
+    "stateHash": "52871ee3",
+    "seq": 3,
+    "synced": false
+  },
+  {
+    "commandId": "v15fx-5",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "mine_shaft",
+      "id": "v15fx-5"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.14.0",
+    "stateHash": "e4781fe2",
+    "seq": 4,
+    "synced": false
+  },
+  {
+    "commandId": "v15fx-6",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "crafting",
+      "id": "v15fx-6"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.14.0",
+    "stateHash": "27fa96d9",
+    "seq": 5,
+    "synced": false
+  },
+  {
+    "commandId": "v15fx-7",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "woodcutting",
+      "treeId": "oak",
+      "id": "v15fx-7"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.14.0",
+    "stateHash": "a11a1d04",
+    "seq": 6,
+    "synced": false
+  },
+  {
+    "commandId": "v15fx-8",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 7200000,
+        "grantedMs": 7200000,
+        "actions": 65,
+        "oresMined": 0,
+        "itemsGained": {
+          "oak_logs": 141
+        },
+        "itemsLost": {},
+        "skillXpGained": {
+          "woodcutting": 1625
+        },
+        "skillLevelsGained": {
+          "woodcutting": 3
+        },
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "buildingsUpgraded": [],
+        "workerActions": 0,
+        "workerItemsGained": {},
+        "workerItemsLost": {},
+        "upkeepPaid": 0,
+        "craftsCompleted": 0,
+        "itemsCrafted": {},
+        "craftsReady": {},
+        "anomalies": []
+      }
+    },
+    "clientTime": 1793628000000,
+    "engineVersion": "1.14.0",
+    "stateHash": "3498e1d1",
+    "seq": 7,
+    "synced": false
+  },
+  {
+    "commandId": "v15fx-9",
+    "type": "START_CRAFT",
+    "payload": {
+      "type": "START_CRAFT",
+      "pipe": 0,
+      "recipeId": "oak_plank",
+      "quantity": 20,
+      "mode": "x1",
+      "maxCost": 0,
+      "id": "v15fx-9"
+    },
+    "clientTime": 1793628000000,
+    "engineVersion": "1.14.0",
+    "stateHash": "a709f308",
+    "seq": 8,
+    "synced": false
+  },
+  {
+    "commandId": "v15fx-10",
+    "type": "START_CRAFT",
+    "payload": {
+      "type": "START_CRAFT",
+      "pipe": 1,
+      "recipeId": "oak_plank",
+      "quantity": 3,
+      "mode": "x10",
+      "maxCost": 3,
+      "id": "v15fx-10"
+    },
+    "clientTime": 1793628000000,
+    "engineVersion": "1.14.0",
+    "stateHash": "6fb8f132",
+    "seq": 9,
+    "synced": false
+  },
+  {
+    "commandId": "v15fx-11",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 7000,
+        "grantedMs": 7000,
+        "actions": 0,
+        "oresMined": 0,
+        "itemsGained": {},
+        "itemsLost": {},
+        "skillXpGained": {},
+        "skillLevelsGained": {},
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "buildingsUpgraded": [],
+        "workerActions": 0,
+        "workerItemsGained": {},
+        "workerItemsLost": {},
+        "upkeepPaid": 0,
+        "craftsCompleted": 2,
+        "itemsCrafted": {
+          "oak_plank": 11
+        },
+        "craftsReady": {},
+        "anomalies": []
+      }
+    },
+    "clientTime": 1793628007000,
+    "engineVersion": "1.14.0",
+    "stateHash": "0b6a73be",
+    "seq": 10,
+    "synced": false
+  }
+]

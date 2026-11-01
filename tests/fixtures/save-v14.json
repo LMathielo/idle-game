@@ -1,0 +1,289 @@
+{
+  "saveVersion": 14,
+  "rng": {
+    "seed": 1139803368
+  },
+  "time": {
+    "lastSimulatedAt": 1793628007000,
+    "highestSeenAt": 1793628007000
+  },
+  "offline": {
+    "capMs": 28800000,
+    "efficiency": 1
+  },
+  "activity": {
+    "kind": "woodcutting",
+    "treeId": "oak",
+    "startedAt": 1793620800000,
+    "progressMs": 57000
+  },
+  "stamina": {
+    "current": 97,
+    "max": 100,
+    "progressMs": 7000
+  },
+  "dungeon": {
+    "lastFight": null,
+    "totals": {
+      "runs": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "byDungeon": {}
+  },
+  "training": {
+    "tier": 0,
+    "attributes": {
+      "strength": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "dexterity": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "endurance": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "intelligence": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      }
+    }
+  },
+  "merchant": {
+    "charges": 5,
+    "chargeProgressMs": 0,
+    "stock": [
+      {
+        "defId": "health_potion_t1",
+        "quantity": 10,
+        "unitPrice": 12
+      },
+      {
+        "defId": "iron_axe",
+        "quantity": 1,
+        "unitPrice": 600,
+        "quality": 25,
+        "rarity": "common"
+      },
+      {
+        "defId": "iron_pickaxe",
+        "quantity": 1,
+        "unitPrice": 600,
+        "quality": 25,
+        "rarity": "common"
+      },
+      {
+        "defId": "iron_sword",
+        "quantity": 1,
+        "unitPrice": 500,
+        "quality": 25,
+        "rarity": "common"
+      },
+      {
+        "defId": "iron_helm",
+        "quantity": 1,
+        "unitPrice": 400,
+        "quality": 25,
+        "rarity": "common"
+      }
+    ]
+  },
+  "buildings": {
+    "woodcutting": {
+      "state": "built",
+      "level": 1
+    },
+    "mine_shaft": {
+      "state": "built",
+      "level": 1
+    },
+    "town_hall": {
+      "state": "locked",
+      "level": 0
+    },
+    "training_grounds": {
+      "state": "locked",
+      "level": 0
+    },
+    "merchant": {
+      "state": "built",
+      "level": 1
+    },
+    "crafting": {
+      "state": "built",
+      "level": 1
+    }
+  },
+  "construction": null,
+  "workers": {
+    "list": [],
+    "nextSerial": 1,
+    "crews": {},
+    "paused": false,
+    "minuteLeftMs": 0,
+    "paidPerMin": 0
+  },
+  "crafting": {
+    "pipesUnlocked": 2,
+    "pipes": [
+      {
+        "id": 1,
+        "recipeId": "oak_plank",
+        "mode": "x1",
+        "quantity": 20,
+        "done": 1,
+        "craftMs": 4584,
+        "progressMs": 2416,
+        "staminaPerCraft": 0,
+        "status": "running",
+        "startedAt": 1793628000000
+      },
+      {
+        "id": 2,
+        "recipeId": "oak_plank",
+        "mode": "x10",
+        "quantity": 3,
+        "done": 1,
+        "craftMs": 4584,
+        "progressMs": 2416,
+        "staminaPerCraft": 1,
+        "status": "running",
+        "startedAt": 1793628000000
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "remainders": {},
+    "nextJobSerial": 3
+  },
+  "nextItemSerial": 1,
+  "stats": {
+    "totalActions": 65,
+    "itemsGathered": {
+      "oak_logs": 141
+    }
+  },
+  "flags": {
+    "debugUsed": true
+  },
+  "character": {
+    "name": "Lucius",
+    "title": "Novice Gladiator",
+    "level": 1,
+    "xp": 0,
+    "xpToNext": 100,
+    "hp": 50,
+    "hpRegenProgress": 0,
+    "gold": 3025,
+    "attributes": {
+      "strength": 10,
+      "dexterity": 10,
+      "endurance": 10,
+      "intelligence": 10
+    },
+    "equipment": {
+      "weapon": {
+        "id": "start-rusty_gladius",
+        "defId": "rusty_gladius",
+        "name": "Rusty Gladius",
+        "icon": "🗡️",
+        "slot": "weapon",
+        "rarity": "common",
+        "quality": 25
+      },
+      "armor": {
+        "id": "start-linen_tunic",
+        "defId": "linen_tunic",
+        "name": "Linen Tunic",
+        "icon": "🥋",
+        "slot": "armor",
+        "rarity": "common",
+        "quality": 25
+      },
+      "boots": {
+        "id": "start-worn_sandals",
+        "defId": "worn_sandals",
+        "name": "Worn Sandals",
+        "icon": "👢",
+        "slot": "boots",
+        "rarity": "common",
+        "quality": 25
+      },
+      "axe": {
+        "id": "start-wooden_axe",
+        "defId": "wooden_axe",
+        "name": "Wooden Axe",
+        "icon": "🪓",
+        "slot": "axe",
+        "rarity": "common",
+        "quality": 25
+      },
+      "pickaxe": {
+        "id": "start-wooden_pickaxe",
+        "defId": "wooden_pickaxe",
+        "name": "Wooden Pickaxe",
+        "icon": "⛏️",
+        "slot": "pickaxe",
+        "rarity": "common",
+        "quality": 25
+      }
+    },
+    "skills": {
+      "woodcutting": {
+        "level": 4,
+        "xp": 722,
+        "xpToNext": 800
+      },
+      "mining": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      },
+      "fishing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      }
+    }
+  },
+  "inventory": {
+    "capacity": 20,
+    "items": [
+      {
+        "id": "bread",
+        "defId": "bread",
+        "name": "Bread",
+        "icon": "🍞",
+        "stackable": true,
+        "quantity": 3
+      },
+      {
+        "id": "oak_logs",
+        "defId": "oak_logs",
+        "name": "Oak Logs",
+        "icon": "🪵",
+        "stackable": true,
+        "quantity": 41
+      },
+      {
+        "id": "oak_plank",
+        "defId": "oak_plank",
+        "name": "Oak Plank",
+        "icon": "🪚",
+        "stackable": true,
+        "quantity": 11
+      }
+    ]
+  }
+}
