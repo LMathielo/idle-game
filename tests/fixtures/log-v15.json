@@ -1,0 +1,182 @@
+[
+  {
+    "commandId": "v16fx-2",
+    "type": "NEW_GAME",
+    "payload": {
+      "seed": 3554416254
+    },
+    "clientTime": 1793534400000,
+    "engineVersion": "1.15.0",
+    "stateHash": "61fdfc15",
+    "seq": 1,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-3",
+    "type": "DEBUG_ADD_GOLD",
+    "payload": {
+      "type": "DEBUG_ADD_GOLD",
+      "amount": 2000,
+      "id": "v16fx-3"
+    },
+    "clientTime": 1793534400000,
+    "engineVersion": "1.15.0",
+    "stateHash": "6024afee",
+    "seq": 2,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-4",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "training_grounds",
+      "id": "v16fx-4"
+    },
+    "clientTime": 1793534400000,
+    "engineVersion": "1.15.0",
+    "stateHash": "d8dc743c",
+    "seq": 3,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-5",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "woodcutting",
+      "id": "v16fx-5"
+    },
+    "clientTime": 1793534400000,
+    "engineVersion": "1.15.0",
+    "stateHash": "07bef8d7",
+    "seq": 4,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-6",
+    "type": "DEBUG_GRANT_HERO_XP",
+    "payload": {
+      "type": "DEBUG_GRANT_HERO_XP",
+      "amount": 500,
+      "id": "v16fx-6"
+    },
+    "clientTime": 1793534400000,
+    "engineVersion": "1.15.0",
+    "stateHash": "c6a90b38",
+    "seq": 5,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-7",
+    "type": "DEBUG_ADD_ATTRIBUTE",
+    "payload": {
+      "type": "DEBUG_ADD_ATTRIBUTE",
+      "attribute": "strength",
+      "amount": 3,
+      "id": "v16fx-7"
+    },
+    "clientTime": 1793534400000,
+    "engineVersion": "1.15.0",
+    "stateHash": "adcde023",
+    "seq": 6,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-8",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "training",
+      "attribute": "dexterity",
+      "id": "v16fx-8"
+    },
+    "clientTime": 1793534400000,
+    "engineVersion": "1.15.0",
+    "stateHash": "95706b26",
+    "seq": 7,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-9",
+    "type": "DEBUG_ADD_TRAINING_XP",
+    "payload": {
+      "type": "DEBUG_ADD_TRAINING_XP",
+      "xp": 130,
+      "id": "v16fx-9"
+    },
+    "clientTime": 1793534400000,
+    "engineVersion": "1.15.0",
+    "stateHash": "fe72d99a",
+    "seq": 8,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-10",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "training",
+      "attribute": "intelligence",
+      "id": "v16fx-10"
+    },
+    "clientTime": 1793534400000,
+    "engineVersion": "1.15.0",
+    "stateHash": "4d13384f",
+    "seq": 9,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-11",
+    "type": "DEBUG_ADD_TRAINING_XP",
+    "payload": {
+      "type": "DEBUG_ADD_TRAINING_XP",
+      "xp": 20,
+      "id": "v16fx-11"
+    },
+    "clientTime": 1793534400000,
+    "engineVersion": "1.15.0",
+    "stateHash": "0eab1421",
+    "seq": 10,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-12",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "dungeon",
+      "dungeonId": "rat_cellar",
+      "id": "v16fx-12"
+    },
+    "clientTime": 1793534400000,
+    "engineVersion": "1.15.0",
+    "stateHash": "8b5e77d1",
+    "seq": 11,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-13",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1793534430000,
+    "engineVersion": "1.15.0",
+    "stateHash": "a2dbe7ac",
+    "seq": 12,
+    "synced": false
+  },
+  {
+    "commandId": "v16fx-14",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1793534447000,
+    "engineVersion": "1.15.0",
+    "stateHash": "6811466b",
+    "seq": 13,
+    "synced": false
+  }
+]
