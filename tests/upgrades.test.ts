@@ -181,7 +181,7 @@ describe('UPGRADE_BUILDING', () => {
     s = apply(s, { type: 'UPGRADE_BUILDING', buildingId: 'town_hall', level: 2 }, T0);
     const r = simulate(s, T0 + HOUR);
     expect(r.state.activity).toMatchObject({ kind: 'woodcutting', treeId: 'oak' });
-    expect(r.summary.actions).toBe(32); // 1:50 per cut
+    expect(r.summary.actions).toBe(30); // 2:00 per cut (core DEX 0)
     expect(r.state.buildings.town_hall.level).toBe(2);
   });
 

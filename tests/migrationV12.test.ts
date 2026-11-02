@@ -26,7 +26,7 @@ import {
   woodcuttingView,
 } from '../src/engine';
 import { cumulativeXp, xpToNext } from '../src/engine/progression';
-import { HOUR, makeClient, MIN, T0, V13_ADDED, woodcuttingGame, withoutGearRolls } from './helpers';
+import { HOUR, makeClient, MIN, T0, V13_ADDED, woodcuttingGame, withoutGearRolls, v16Attributes } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v11 save + log written by the 1.11.0 engine: WC Lv4 (63 XP), Mining Lv3 (536 XP), Oak running mid-log. */
@@ -198,7 +198,7 @@ describe('frozen v11 save (tests/fixtures/save-v11-skills.json), engine 1.11.0 â
     expect(character.skills).not.toHaveProperty('smithing'); // dropped in v13
     const { skills: _s, ...otherCharacter } = character;
     const { skills: _rs, ...rawOther } = rc;
-    expect(otherCharacter).toEqual(rawOther);
+    expect(otherCharacter).toEqual({ ...rawOther, attributes: v16Attributes(rawOther.attributes) }); // v16: extra normal points
     expect(hashState(withoutGearRolls(loadSave(V11_SAVE)))).toBe(hashState(s));
   });
 
@@ -222,7 +222,7 @@ describe('frozen v11 save (tests/fixtures/save-v11-skills.json), engine 1.11.0 â
     clock.advance(HOUR);
     await client.resume();
     expect(client.getState().activity).toMatchObject({ kind: 'woodcutting', treeId: 'oak' });
-    expect(client.getState().stats.totalActions).toBeGreaterThan(logsBefore + 30);
+    expect(client.getState().stats.totalActions).toBeGreaterThanOrEqual(logsBefore + 30); // 2:00 per cut since 1.16.0
     expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'mining', rockId: 'stone' })).ok).toBe(true);
 
     const report = replayLogReport(entries(await repo.getAllLog()));

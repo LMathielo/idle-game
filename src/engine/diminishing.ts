@@ -3,7 +3,7 @@
 //   diminishing(value, cap, k) = cap × value ÷ (value + k)        (value ≥ 0; half the cap at value = k)
 //
 // Worked in basis points and floored, so it is exact and deterministic. Parameters live in data
-// (config/stats.ts STAT_EFFECTS). Only INT's crafting-time reduction uses it today (1.13.0).
+// (config/stats.ts STAT_EFFECTS). Core INT's crafting time (1.13.0) and core DEX's activity time (1.16.0) use it.
 
 /** floor(capBp × value ÷ (value + k)) in basis points; 0 for a value ≤ 0 or not a number, never above capBp. */
 export function diminishingBp(value: number, capBp: number, k: number): number {

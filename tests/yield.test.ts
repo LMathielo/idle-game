@@ -3,14 +3,14 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, type GameState, nextInt, ROCKS, simulate, TREES } from '../src/engine';
 import { rollYield, yieldBp } from '../src/engine/gathering';
-import { builtGame, cmd, MIN, qty, SEC, T0 } from './helpers';
+import { builtGame, cmd, MIN, qty, SEC, T0, withCore } from './helpers';
 
-const OAK_MS = 2 * MIN - 10 * SEC; // DEX 10
+const OAK_MS = 2 * MIN; // core DEX 0 (1.16.0)
 
-/** A hero with `str` extra STR (base attribute) and woodcutting / mining started on Oak / Stone. */
+/** A hero with `str` CORE STR (training levels: core STR raises WS / MS since 1.16.0) and woodcutting / mining started on Oak / Stone. */
 function gatherer(kind: 'woodcutting' | 'mining', str = 0, seed = 7): GameState {
   let s = builtGame(seed, T0);
-  s = { ...s, character: { ...s.character, attributes: { ...s.character.attributes, strength: s.character.attributes.strength + str } } };
+  s = withCore(s, { strength: str });
   const c = kind === 'woodcutting' ? cmd({ type: 'START_ACTIVITY', kind, treeId: 'oak' }) : cmd({ type: 'START_ACTIVITY', kind, rockId: 'stone' });
   const r = applyCommand(s, c, T0);
   if (!r.ok) throw new Error(r.error.message);
@@ -79,8 +79,8 @@ describe('hero yield on the trees and rocks', () => {
     }
   });
 
-  it('power 30 on Oak (STR 19 extra → WS 30): 1 log per cut plus 50% chance, i.e. ~1.5 per cut', () => {
-    const s = gatherer('woodcutting', 9); // 10 (level) + 19 STR + 1 axe = 30
+  it('power 30 on Oak (core STR 9 → WS 30): 1 log per cut plus 50% chance, i.e. ~1.5 per cut', () => {
+    const s = gatherer('woodcutting', 9); // 10 (level) + 10 base + 9 core STR + 1 axe = 30
     const r = simulate(s, T0 + 200 * OAK_MS);
     expect(r.summary.actions).toBe(200); // levels up along the way, so WS rises above 30
     const per = (r.summary.itemsGained.oak_logs ?? 0) / r.summary.actions;

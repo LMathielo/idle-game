@@ -13,7 +13,7 @@ import { colors, fonts } from '../theme';
 
 const HOUR = 3_600_000;
 
-const ATTRIBUTE_BUTTONS = ATTRIBUTE_KEYS.map((key) => ({ key, label: `+1 ${ATTRIBUTE_NAMES[key].short}` }));
+const ATTRIBUTE_BUTTONS = ATTRIBUTE_KEYS.map((key) => ({ key, label: `+1 ${ATTRIBUTE_NAMES[key].short} (normal)` }));
 
 /** Debug commands that the engine refuses (e.g. not enough stamina) come back as `{ ok: false }`. */
 function isRejected(result: unknown): result is { ok: false; error: { message: string } } {
@@ -104,7 +104,7 @@ export function DebugPanel() {
             <PixelButton label="+1,000 gold" repeat={run(() => client.debug.addGold(1000))} accessibilityHint="Debug: adds 1,000 gold" />
             <PixelButton label="Unlock next pipe" repeat={run(() => client.debug.unlockPipe())} accessibilityHint="Debug: opens the next crafting pipe" />
             {ATTRIBUTE_BUTTONS.map((a) => (
-              <PixelButton key={a.key} label={a.label} repeat={run(() => client.debug.addAttribute(a.key))} />
+              <PixelButton key={a.key} label={a.label} repeat={run(() => client.debug.addAttribute(a.key))} accessibilityHint="Debug: adds one extra normal point (not core)" />
             ))}
             <PixelButton label="Reset save" onPress={confirmReset} />
           </View>

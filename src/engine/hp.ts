@@ -1,6 +1,6 @@
 // Current HP and its regen (pure). Max HP is derived (getDerivedStats); current HP is stored.
 //
-//   regen per minute = hpRegen.basePerMin + hpRegen.perEndurance × END     (END 10 → 15/min)
+//   regen per minute = hpRegen.basePerMin + hpRegen.perEndurance × total END     (END 0 → 15/min, 1.16.0)
 //
 // The remainder is banked in character.hpRegenProgress in "HP·ms per minute" units: each ms adds the
 // rate, and every 60 000 units is 1 HP. Integer math only, exact across resumes and rate changes.
@@ -12,7 +12,7 @@ import type { Character } from './types';
 /** Units of hpRegenProgress per HP: one minute. */
 export const HP_REGEN_UNIT = 60_000;
 
-/** Uses the EFFECTIVE endurance (base + trained). */
+/** Uses the TOTAL endurance (normal + core). */
 export function hpRegenPerMinute(state: AttributeInput): number {
   const rate = STATS.hpRegen.basePerMin + STATS.hpRegen.perEndurance * effectiveAttributes(state).endurance;
   return Math.max(0, rate);

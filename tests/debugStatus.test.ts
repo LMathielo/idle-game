@@ -43,7 +43,7 @@ describe('debug: stamina and attributes', () => {
       });
     }
     expect(s.flags.debugUsed).toBe(false);
-    expect(s.character.attributes.strength).toBe(10);
+    expect(s.character.attributes.strength).toBe(0);
   });
 
   it('refill sets the bar full and clears the timer', () => {
@@ -89,7 +89,7 @@ describe('debug: stamina and attributes', () => {
     );
     const replayed = await verifyLog(repo);
     expect(hashState(replayed)).toBe(hashState(client.getState()));
-    expect(replayed.character.attributes).toEqual({ strength: 11, dexterity: 10, endurance: 11, intelligence: 13 });
+    expect(replayed.character.attributes).toEqual({ strength: 1, dexterity: 0, endurance: 1, intelligence: 3 }); // extra normal points
     expect(replayed.stamina.current).toBe(100);
   });
 
@@ -101,7 +101,7 @@ describe('debug: stamina and attributes', () => {
       { type: 'RESUME', payload: {}, clientTime: T0 + MIN + HOUR },
     ]));
     expect(state?.flags.debugUsed).toBe(true);
-    expect(state?.character.attributes.strength).toBe(12);
+    expect(state?.character.attributes.strength).toBe(2);
     expect(state?.stamina).toEqual({ current: 82, max: 100, progressMs: 0 });
   });
 });

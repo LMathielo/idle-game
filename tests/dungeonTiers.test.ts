@@ -25,9 +25,8 @@ import {
   simulate,
 } from '../src/engine';
 import { formatClock } from '../src/components/format';
-import { apply, cmd, HOUR, MIN, SEC, T0, builtGame } from './helpers';
+import { apply, cmd, HOUR, MIN, SEC, T0, builtGame, withCore } from './helpers';
 
-const DEX10 = { dexterity: 10 };
 
 /** A new game with counters set directly (the state is plain data), to test the rules around them. */
 function withCounters(byDungeon: GameState['dungeon']['byDungeon'], seed = 7): GameState {
@@ -111,28 +110,32 @@ describe('tier table (config)', () => {
 });
 
 describe('search time per tier', () => {
-  it('DEX 10: 1:50, 2:50, 4:50, 7:50, 11:50', () => {
-    expect(DUNGEON_IDS.map((id) => formatClock(searchMsFor(id, DEX10)))).toEqual(['1:50', '2:50', '4:50', '7:50', '11:50']);
+  it('core DEX 0: 2:00, 3:00, 5:00, 8:00, 12:00; core DEX 10 (833 bp): 1:51, 2:46, 4:36, 7:21, 11:01', () => {
+    const g = builtGame(1, T0);
+    expect(DUNGEON_IDS.map((id) => formatClock(searchMsFor(id, g)))).toEqual(['2:00', '3:00', '5:00', '8:00', '12:00']);
+    expect(DUNGEON_IDS.map((id) => searchMsFor(id, withCore(g, { dexterity: 10 })))).toEqual([110_004, 165_006, 275_010, 440_016, 660_024]);
+    expect(DUNGEON_IDS.map((id) => formatClock(searchMsFor(id, withCore(g, { dexterity: 10 }))))).toEqual(['1:51', '2:46', '4:36', '7:21', '11:01']);
   });
 
-  it('−1 s per DEX on every tier, never under 1:00', () => {
+  it('the core DEX curve on every tier (1.16.0): 50 → −25%, never 50%, never under 1:00; normal DEX never counts', () => {
+    const g = builtGame(1, T0);
     for (const id of DUNGEON_IDS) {
       const base = DUNGEONS[id].search.baseMs;
-      expect(searchMsFor(id, { dexterity: 11 })).toBe(base - 11 * SEC);
-      expect(searchMsFor(id, { dexterity: 10_000 })).toBe(MIN);
-      expect(searchMsFor(id, { dexterity: (base - MIN) / SEC })).toBe(MIN); // exactly at the floor
-      expect(searchMsFor(id, { dexterity: (base - MIN) / SEC - 1 })).toBe(MIN + SEC);
+      expect(searchMsFor(id, withCore(g, { dexterity: 50 }))).toBe((base * 3) / 4);
+      expect(searchMsFor(id, withCore(g, { dexterity: 1_000_000 }))).toBe(Math.max(MIN, Math.ceil((base * 5001) / 10_000)));
+      expect(searchMsFor(id, withCore(g, { dexterity: 1_000_000 }))).toBeGreaterThan(base / 2);
+      expect(searchMsFor(id, { ...g, character: { ...g.character, level: 40, attributes: { ...g.character.attributes, dexterity: 10_000 } } } as GameState)).toBe(base);
     }
   });
 
-  it('a Bat Cave search ends at exactly 2:50 with DEX 10, then the fight starts', () => {
+  it('a Bat Cave search ends at exactly 3:00 with core DEX 0, then the fight starts', () => {
     const r = startDungeon(withCounters({ rat_cellar: { runs: 10, wins: 10, losses: 0 } }), 'bat_cave');
     if (!r.ok) throw new Error(r.error.message);
-    expect(dungeonRunView(simulate(r.state, T0 + 170 * SEC - 1).state)).toMatchObject({ phase: 'search', remainingMs: 1 });
-    const fight = simulate(r.state, T0 + 170 * SEC).state;
-    expect(dungeonRunView(fight)).toMatchObject({ dungeonId: 'bat_cave', run: 11, searchMs: 170 * SEC, phase: 'fight' });
+    expect(dungeonRunView(simulate(r.state, T0 + 180 * SEC - 1).state)).toMatchObject({ phase: 'search', remainingMs: 1 });
+    const fight = simulate(r.state, T0 + 180 * SEC).state;
+    expect(dungeonRunView(fight)).toMatchObject({ dungeonId: 'bat_cave', run: 11, searchMs: 180 * SEC, phase: 'fight' });
     expect(dungeonRunView(fight)?.fight).toMatchObject({ enemyId: 'bat', enemyHp: 60, elapsedMs: 0 });
-    const done = simulate(r.state, T0 + 170 * SEC + COMBAT.maxFightMs).state;
+    const done = simulate(r.state, T0 + 180 * SEC + COMBAT.maxFightMs).state;
     expect(dungeonTotals(done, 'bat_cave').runs).toBe(1);
   });
 });
@@ -236,7 +239,7 @@ describe('determinism on higher tiers', () => {
     let s = withCounters({ rat_cellar: { runs: 10, wins: 10, losses: 0 }, bat_cave: { runs: 15, wins: 15, losses: 0 } }, 21);
     s = { ...s, character: { ...s.character, attributes: { ...s.character.attributes, strength: 40, endurance: 40 } } };
     s = apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den' }, T0);
-    const span = 3 * searchMsFor('wolf_den', s.character.attributes) + 30 * SEC; // three 4:50 searches + three short fights
+    const span = 3 * searchMsFor('wolf_den', s) + 30 * SEC; // three 5:00 searches + three short fights
     let ticked = s;
     for (let t = SEC; t <= span; t += SEC) ticked = simulate(ticked, T0 + t).state;
     const once = simulate(s, T0 + span).state;
@@ -278,17 +281,17 @@ describe('DUNGEON_LOCKED', () => {
 
 describe('rewards and loot per tier', () => {
   it.each(DUNGEON_IDS)('%s: every win gives its XP, gold in range and only its own loot, near the drop chance', (id) => {
-    // A hero who always wins in one hit: huge STR/END, DEX at the 1:00 floor. Counters open every tier.
-    const base = withCounters(ALL_OPEN, 99);
+    // A hero who always wins in one hit: huge STR/END, core DEX near the curve's cap. Counters open every tier.
+    const base = withCore(withCounters(ALL_OPEN, 99), { dexterity: 1_000_000 });
     let s: GameState = {
       ...base,
-      character: { ...base.character, attributes: { strength: 5000, dexterity: 5000, endurance: 5000, intelligence: 10 } },
+      character: { ...base.character, attributes: { strength: 5000, dexterity: 0, endurance: 5000, intelligence: 0 } },
       inventory: { ...base.inventory, capacity: 100 },
     };
     s = apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: id }, T0);
     const before = dungeonTotals(s, id);
-    const r = simulate(s, T0 + 8 * HOUR); // 1:00 searches + a one-strike fight (1 s) each
-    const runs = Math.floor((8 * HOUR) / (MIN + SEC)); // 472
+    const r = simulate(s, T0 + 8 * HOUR); // ~half-length searches + a one-strike fight (1 s) each
+    const runs = Math.floor((8 * HOUR) / (searchMsFor(id, s) + SEC));
     const d = DUNGEONS[id];
     expect(dungeonTotals(r.state, id)).toEqual({ runs: before.runs + runs, wins: before.wins + runs, losses: 0 });
     expect(r.summary.dungeon).toEqual({ runs, wins: runs, losses: 0 });
@@ -309,7 +312,7 @@ describe('rewards and loot per tier', () => {
     let s = withCounters({ rat_cellar: { runs: 10, wins: 10, losses: 0 } }, 4);
     s = { ...s, character: { ...s.character, attributes: { ...s.character.attributes, strength: 500, endurance: 500 } } };
     s = apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'bat_cave' }, T0);
-    const r = simulate(s, T0 + searchMsFor('bat_cave', s.character.attributes) + COMBAT.maxFightMs).state;
+    const r = simulate(s, T0 + searchMsFor('bat_cave', s) + COMBAT.maxFightMs).state;
     const f = r.dungeon.lastFight!;
     expect(f.won).toBe(true);
     expect(f.rewards.heroXp).toBe(60);
@@ -391,7 +394,7 @@ describe('danger hint', () => {
   it('a strong hero sees every tier as Easy; a hero who cannot win within the time limit sees Deadly', () => {
     const strong = { ...fresh, character: { ...fresh.character, attributes: { ...fresh.character.attributes, strength: 1000, endurance: 1000 } } };
     expect(levels(strong as GameState)).toEqual(['easy', 'easy', 'easy', 'easy', 'easy']);
-    const weak = { ...fresh, character: { ...fresh.character, equipment: {}, attributes: { ...fresh.character.attributes, strength: 0, endurance: 10_000 } } };
+    const weak = { ...fresh, character: { ...fresh.character, equipment: {}, attributes: { ...fresh.character.attributes, strength: -10, endurance: 10_000 } } }; // total STR −10: no base damage
     // Unarmed 1–2 vs the troll's 300 HP: 300 hits = 300 s > 60 s, even though the troll barely scratches.
     expect(dangerHint(weak as GameState, 'troll_bridge')).toMatchObject({ level: 'deadly' });
   });

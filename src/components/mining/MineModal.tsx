@@ -114,9 +114,9 @@ export function MineModal() {
           <Bar value={view.xp} max={view.xpToNext} color={colors.skill} label={`Lv ${view.level} · ${formatNumber(view.xp)} / ${formatNumber(view.xpToNext)} XP`} />
           <Text
             style={styles.ms}
-            accessibilityLabel={`Mining strength ${view.ms.value}: ${ms.level} from level, ${ms.strength} from strength, ${ms.pickaxe} from pickaxe`}
+            accessibilityLabel={`Mining strength ${view.ms.value}: ${ms.level} from level, ${ms.base} base, ${ms.strength} from core strength, ${ms.pickaxe} from pickaxe`}
           >
-            💪 MS {formatNumber(view.ms.value)} <Text style={styles.msParts}>= {formatNumber(ms.level)} level + {formatNumber(ms.strength)} STR + {formatNumber(ms.pickaxe)} pickaxe</Text>
+            💪 MS {formatNumber(view.ms.value)} <Text style={styles.msParts}>= {formatNumber(ms.level)} level + {formatNumber(ms.base)} base + {formatNumber(ms.strength)} core STR + {formatNumber(ms.pickaxe)} pickaxe</Text>
           </Text>
         </View>
       }

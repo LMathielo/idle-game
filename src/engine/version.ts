@@ -1,5 +1,5 @@
 /** Engine rules version, stored on every action_log row. Bump when rules change outcomes. */
-export const ENGINE_VERSION = '1.15.0';
+export const ENGINE_VERSION = '1.16.0';
 
 /**
  * Every engine version that ever shipped, oldest first, with the save version it wrote. Append a row on
@@ -24,6 +24,7 @@ export const RELEASED_ENGINES: readonly { engine: string; save: number }[] = [
   { engine: '1.13.0', save: 13 }, // Crafting house, pipes, material recipes; INT craft time; smithing removed
   { engine: '1.14.0', save: 14 }, // gear crafting; gear quality (stats and prices) and instance rarity; Merchant gear rolls
   { engine: '1.15.0', save: 15 }, // continuous material pipes (inputs per craft, waiting), ×10 tap, Stop
+  { engine: '1.16.0', save: 16 }, // normal + core attributes, +5 per level, new hero at 0; core DEX time curve, core STR power
 ];
 
 /** Position of a released engine version in RELEASED_ENGINES, or -1 when it never shipped. */

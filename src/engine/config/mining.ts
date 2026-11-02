@@ -7,10 +7,13 @@ const SEC_MS = 1000;
 const MIN_MS = 60 * SEC_MS;
 
 export const MINING = {
-  /** Mining strength: MS = msPerLevel × mining level + effective STR + pickaxe bonus (catalog). */
+  /**
+   * Mining strength: MS = msPerLevel × mining level + msBase + CORE STR + pickaxe bonus (catalog). Normal STR does not
+   * count (1.16.0): rocks stay gated by skill level, tools and training. msBase = the old starting 10 STR.
+   */
   msPerLevel: 10,
-  /** Time per ore: max(minOreMs, rock base − perDexterityMs × effective DEX). Stone at DEX 10 = 1:50. */
-  perDexterityMs: 1 * SEC_MS,
+  msBase: 10,
+  /** Time per ore: max(minOreMs, ceil(rock base × (1 − core DEX reduction))), STAT_EFFECTS.dexterity.activityTime. */
   minOreMs: 10 * SEC_MS,
   /** Skip cost: staminaPerStep per started stepMs of the ore left (rounded up, at least one step). */
   skip: { stepMs: 1 * MIN_MS, staminaPerStep: 1 },

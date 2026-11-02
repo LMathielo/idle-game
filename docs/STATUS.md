@@ -8,20 +8,27 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.15.0** (continuous pipes, once merged; 1.14.0 before) | 1.1.0 |
-| Save | **v15** (continuous pipes, once merged; v14 before) | v2 |
-| Contents | Everything below, up to Crafting PR B (#22), plus continuous pipes once merged | M1 only (PRs #1–#2) |
+| Engine | **1.16.0** (core stats, once merged; 1.15.0 before) | 1.1.0 |
+| Save | **v16** (core stats, once merged; v15 before) | v2 |
+| Contents | Everything below, up to continuous pipes (#23), plus core stats once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is 17 PRs behind `dev` (#3–#19). The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
-- **Open PRs:** continuous material pipes, ×10 tap, Recipes button (`feat/crafting-continuous`).
+- **Open PRs:** core and normal stats, DEX time on the diminishing curve, heroes start at 0 (`feat/core-stats`).
 - **Workflow:** product owner (orchestrator) → one `game-engineer` per feature → 1–3 reviewers by complexity (`.claude/skills/pr-review-council`) → owner merges.
 
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
 
+### Engine 1.16.0 · save v16
+- **Core and normal stats** (`feat/core-stats`):
+  - **Two kinds of points:** each attribute = **normal** (+5 per hero level above 1 on every attribute, plus extra points: debug now, gear later) + **core** (the Training level; Training is the only source). The Hero tab shows the total ("DEX 120"); tapping it shows "110 DEX + 10 core DEX" and what each part does.
+  - **A new hero starts at 0** everywhere; the old starting 10 moved into the hero's base numbers (damage +10, defense +10, HP regen 15/min, WS / MS +10), so a new hero fights and gathers like before.
+  - **Totals** give STR +1 damage, END +1 defense and +1 HP/min. **Core points only:** DEX shortens dungeon searches, cuts and ores on the diminishing curve (core 10 → −8.3%, 50 → −25%, never 50%; replaces −1 s per DEX; a new hero's searches and cuts take 2:00), INT shortens crafting, STR adds to WS / MS. Workers unchanged.
+  - Save v16: stored attributes keep only what was added on top of 10; training levels become core; level points apply at once.
+
 ### Engine 1.15.0 · save v15
-- **Crafting: continuous material pipes** (`feat/crafting-continuous`):
+- **#23 Crafting: continuous material pipes** (`feat/crafting-continuous`):
   - **Start = pick a recipe, Start.** No quantity, no Max, no x10 mode. A material pipe crafts until **Stop**; each craft takes its materials when it starts and shows "Crafted 37", time left and xx.yy%.
   - **Waiting:** out of materials, the pipe shows "Waiting for Oak Logs (1/2)", no time passes, and it starts again the instant logs arrive (woodcutting, workers, another pipe, a buy). Pipes share materials, in pipe order. Sign: "Waiting for materials" when every busy pipe waits; the away summary lists "Pipe 1 waited for Oak Logs".
   - **×10 is a tap** on the running craft (18 more logs + the same stamina cost → 10× output, that craft only). **Stop** refunds the craft in progress. Gear jobs unchanged.
@@ -95,9 +102,10 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 
 Decided and scoped; ready to brief to an engineer. Top = next.
 
-1. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
-2. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
-3. **Cleanup PR** working through [`TECH_DEBT.md`](TECH_DEBT.md) (review findings below the fix bar, from PRs #2–#19).
+1. **Enemy rebalance for level stats:** +5 normal points per level make dungeons easy (Troll beatable at ~Lv10 untrained); rescale enemy HP/damage/defense so each tier needs about today's effort; revisit whether normal STR should count toward gathering power.
+2. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
+3. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
+4. **Cleanup PR** working through [`TECH_DEBT.md`](TECH_DEBT.md) (review findings below the fix bar, from PRs #2–#19).
 
 ## Roadmap: unrefined
 
@@ -119,11 +127,11 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 - Bulk selling of logs and ore.
 - Crafting pipes 3–4: an unlock mechanic (play-based).
 - Crafting pipes 5–8: a premium purchase.
-- Small rebalance PR: move DEX's −1 s per point (dungeon search, gathering) onto the shared diminishing helper (`diminishingBp`, `STAT_EFFECTS`).
 
 **Combat and dungeons**
 - Multi-enemy runs and bosses (needs a save-shape change: `ActiveFight` holds one enemy).
 - Hit chance and crits from DEX; a combat use for INT and mana (INT already shortens crafting).
+- Core STR / END special mechanics (core STR only adds gathering power today; core END has none).
 - Attack-speed gear (the `attackIntervalModMs` hook exists, unused).
 - Unlock rules beyond wins (e.g. hero level).
 
@@ -133,6 +141,7 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 - Stat jumps between rarity tiers (today rarity is colour only; quality alone scales stats).
 - Minimum-quality mechanics (the `minQuality` hook is 0: upgrades, skills or consumables could raise it).
 - Random affixes stored on item instances.
+- Sources of normal stats beyond levelling (gear affixes).
 - Pixel sprites replacing emoji icons.
 
 **Gathering**

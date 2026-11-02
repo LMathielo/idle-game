@@ -6,10 +6,13 @@ const SEC_MS = 1000;
 const MIN_MS = 60 * SEC_MS;
 
 export const WOODCUTTING = {
-  /** Woodcutting strength: WS = wsPerLevel × woodcutting level + effective STR + axe bonus (catalog). */
+  /**
+   * Woodcutting strength: WS = wsPerLevel × woodcutting level + wsBase + CORE STR + axe bonus (catalog). Normal STR does
+   * not count (1.16.0): trees stay gated by skill level, tools and training. wsBase = the old starting 10 STR.
+   */
   wsPerLevel: 10,
-  /** Cut time per log: max(minLogMs, tree base − perDexterityMs × effective DEX). Oak at DEX 10 = 1:50. */
-  perDexterityMs: 1 * SEC_MS,
+  wsBase: 10,
+  /** Cut time per log: max(minLogMs, ceil(tree base × (1 − core DEX reduction))), STAT_EFFECTS.dexterity.activityTime. */
   minLogMs: 10 * SEC_MS,
   /** Skip cost: staminaPerStep per started stepMs of the log left (rounded up, at least one step). */
   skip: { stepMs: 1 * MIN_MS, staminaPerStep: 1 },

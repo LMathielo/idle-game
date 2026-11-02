@@ -27,7 +27,7 @@ import {
   simulate,
 } from '../src/engine';
 import { makeItem } from '../src/engine/inventory';
-import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, v12Skills, withBuilt, withoutGearRolls } from './helpers';
+import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, v12Skills, withBuilt, withoutGearRolls, v16Attributes } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v9 save + its action log, written by the 1.8.0 engine before buildings (tests/fixtures). */
@@ -366,7 +366,7 @@ describe('frozen v9 save (tests/fixtures/save-v9.json) → v10', () => {
     expect(rest).toEqual(rawRest);
     const { pickaxe: _p, ...equipment } = character.equipment;
     // v11 → v12 (1.12.0) then recomputes each skill's level from its total XP on the new skill curve.
-    expect({ ...character, equipment }).toEqual({ ...rc, skills: v12Skills({ ...rc.skills, mining: { level: 1, xp: 0, xpToNext: 500 } }) });
+    expect({ ...character, equipment }).toEqual({ ...rc, attributes: v16Attributes(rc.attributes), skills: v12Skills({ ...rc.skills, mining: { level: 1, xp: 0, xpToNext: 500 } }) });
     expect({ ...merchant, stock: merchant.stock.map((x, i) => (i === 4 ? null : x)) }).toEqual(rm);
     expect(hashState(withoutGearRolls(loadSave(V9_SAVE)))).toBe(hashState(s));
   });
@@ -396,11 +396,11 @@ describe('frozen v9 save (tests/fixtures/save-v9.json) → v10', () => {
     expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'mining', rockId: 'stone' })).ok).toBe(true);
     clock.advance(40 * MIN);
     await client.resume();
-    // 40 min / 1:50 = 21 ores; since 1.12.0 mining levels up faster (Lv5 in that time), so MS and the yield rise.
-    expect(qty(client.getState(), 'stone')).toBe(34);
+    // 40 min / 2:00 = 20 ores (1.16.0); since 1.12.0 mining levels up faster (Lv5 in that time), so MS and the yield rise.
+    expect(qty(client.getState(), 'stone')).toBe(32);
     // Town Hall: Lv6 ≥ 5, 36 Oak Logs, 21 Stone, 165 gold.
     expect((await client.dispatch({ type: 'BUILD', buildingId: 'town_hall' })).ok).toBe(true);
-    expect([qty(client.getState(), 'oak_logs'), qty(client.getState(), 'stone'), client.getState().character.gold]).toEqual([16, 14, 65]);
+    expect([qty(client.getState(), 'oak_logs'), qty(client.getState(), 'stone'), client.getState().character.gold]).toEqual([16, 12, 65]); // 32 − 20 Stone
     // Training Grounds need hero Lv10: refused, nothing logged for it.
     expect(await client.dispatch({ type: 'BUILD', buildingId: 'training_grounds' })).toMatchObject({ ok: false, error: { code: 'REQUIREMENTS_NOT_MET' } });
     // The Training Tier bought under 1.8.0 is kept, but the Training Grounds are locked.

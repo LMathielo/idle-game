@@ -9,9 +9,9 @@ export const ATTRIBUTE_KEYS = ['strength', 'dexterity', 'endurance', 'intelligen
 export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
 
 /**
- * Plain integers. `character.attributes` holds the BASE values (10 for a new hero, plus debug points); the
- * training levels in `state.training` add to them. Rules always read effective = base + trained
- * (effectiveAttributes() in src/engine/attributes.ts).
+ * Plain integers. `character.attributes` holds the stored EXTRA normal points (0 for a new hero; debug points now,
+ * gear later). Level points (5 × (level − 1)) and core points (training levels) are added by
+ * src/engine/attributes.ts: total = normal + core (effectiveAttributes), core = training level (coreAttributes).
  */
 export type Attributes = Record<AttributeKey, number>;
 
@@ -404,7 +404,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 15;
+  saveVersion: 16;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */

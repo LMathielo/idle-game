@@ -23,15 +23,14 @@
 // Pipes are NOT an activity: they never use the hero and never stop (or get stopped by) gathering, dungeons or
 // training. They share one inventory: at one instant they draw their inputs in pipe order, after the hero, the builder
 // and the crews (see world.ts).
-import { effectiveAttributes, type AttributeInput } from './attributes';
+import { intCraftReductionBp } from './attributes';
 import { levelBonuses } from './bonuses';
 import { consumeItem, isBuilt } from './buildings';
 import { BUILDINGS } from './config/buildings';
 import { CRAFTING, isRecipeId, RECIPE_IDS, RECIPES, type RecipeDef, type RecipeId } from './config/crafting';
 import { GEAR } from './config/gear';
 import { getItemDef } from './config/items';
-import { BASIS_POINTS, STAT_EFFECTS } from './config/stats';
-import { diminishingBp } from './diminishing';
+import { BASIS_POINTS } from './config/stats';
 import { gearStatsAt, type GearStats, rarityOdds, rollQuality, rollRarity } from './gear';
 import { addStackable, freeSlots, makeItem } from './inventory';
 import { itemQuantity } from './selectors';
@@ -82,12 +81,6 @@ export function houseYieldBp(state: Pick<GameState, 'buildings'>): number {
   return levelBonuses(state, 'crafting').craftYieldBp ?? 0;
 }
 
-/** INT's craft time reduction, bp: diminishing(effective INT, cap 50%, k 50). */
-export function intCraftReductionBp(state: AttributeInput): number {
-  const { capBp, k } = STAT_EFFECTS.intelligence.craftTime;
-  return diminishingBp(effectiveAttributes(state).intelligence, capBp, k);
-}
-
 /**
  * Craft time, ms: max(minCraftMs, ceil(baseMs × timeBp / 10 000 × (10 000 − intBp) / 10 000)). The two reductions
  * multiply. Integer math: the product stays far below 2^53 (80 000 × 10 000 × 10 000 = 8e12).
@@ -97,7 +90,7 @@ export function craftMsFor(baseMs: number, timeBp: number, intBp: number): numbe
   return Math.max(CRAFTING.minCraftMs, Math.ceil(scaled / (BASIS_POINTS * BASIS_POINTS)));
 }
 
-/** Effective craft time of a recipe right now (house level and effective INT). */
+/** Effective craft time of a recipe right now (house level and core INT). */
 export function craftMs(state: GameState, recipeId: RecipeId): number {
   return craftMsFor(RECIPES[recipeId].baseMs, houseTimeBp(state), intCraftReductionBp(state));
 }

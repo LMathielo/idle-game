@@ -48,7 +48,7 @@ export function TrainingModal() {
     async (tier: number, price: number, cap: number) => {
       const ok = await dialog.confirm({
         title: `Unlock Tier ${tier}?`,
-        message: `Costs ${formatNumber(price)} gold. Attributes can then be trained up to level ${cap}.`,
+        message: `Costs ${formatNumber(price)} gold. Core attributes can then be trained up to level ${cap}.`,
         confirmLabel: `Unlock · ${formatNumber(price)} g`,
       });
       if (ok) await send({ type: 'UNLOCK_TRAINING_TIER', tier });
@@ -72,7 +72,8 @@ export function TrainingModal() {
       <ScrollView contentContainerStyle={styles.content}>
         {clockPaused ? <Text style={styles.paused}>⏸ Paused: your device clock moved back. Training waits until it catches up.</Text> : null}
         <TierPanel view={view} onUnlock={onUnlock} />
-        <Panel title="Attributes">
+        <Panel title="Core attributes">
+          <Text style={styles.note}>Each training level is +1 core point. Core points also drive the special effects (DEX: faster search and gathering, INT: faster crafting, STR: gathering strength).</Text>
           {view.tier === 0 ? <Text style={styles.note}>Unlock Tier 1 to start training.</Text> : null}
           {view.attributes.map((a) => (
             <AttributeRow
@@ -150,8 +151,8 @@ type RowProps = {
 
 const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused, stamina, onTrain, onPause, onSpeedup }: RowProps) {
   const names = ATTRIBUTE_NAMES[view.attribute];
-  const value = `${names.short} ${formatNumber(view.effective)} (${formatNumber(view.base)} + ${formatNumber(view.trained)} trained)`;
-  const level = `${formatNumber(view.trained)}/${formatNumber(view.cap)}`;
+  const value = `${names.short} ${formatNumber(view.total)} (${formatNumber(view.normal)} + ${formatNumber(view.core)} core)`;
+  const level = `Core ${formatNumber(view.core)}/${formatNumber(view.cap)}`;
   const maxedText = nextTier ? `Maxed — unlock Tier ${nextTier}` : 'Maxed';
   const status = locked
     ? 'Locked — unlock Tier 1'
@@ -163,7 +164,7 @@ const AttributeRow = memo(function AttributeRow({ view, locked, nextTier, paused
 
   return (
     <View style={[styles.row, view.active && styles.rowActive, (locked || view.maxed) && styles.rowDim]}>
-      <View style={styles.rowTop} accessible accessibilityLabel={`${names.label} ${view.effective}: ${view.base} base plus ${view.trained} trained. ${locked ? '' : `Training level ${view.trained} of ${view.cap}. `}${status}${view.active ? '. Training now' : ''}`}>
+      <View style={styles.rowTop} accessible accessibilityLabel={`${names.label} ${view.total}: ${view.normal} plus ${view.core} core. ${locked ? '' : `Core level ${view.core} of ${view.cap}. `}${status}${view.active ? '. Training now' : ''}`}>
         <Text style={styles.rowValue}>{value}</Text>
         {locked ? null : <Text style={styles.rowLevel}>{level}</Text>}
       </View>

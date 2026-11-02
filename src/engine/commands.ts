@@ -1,6 +1,5 @@
 // Player commands. Serializable, validated here (never in the UI), applied after simulating to `now`.
 import { grantHeroXp } from './activities';
-import { effectiveAttributes } from './attributes';
 import { build, buildingForActivity, completeBuilding, completeConstruction, isBuilt, startUpgrade, type UpgradeErrorCode } from './buildings';
 import { onUpgraded } from './upgradeEffects';
 import { cloneState } from './clone';
@@ -359,7 +358,7 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       // The run the player saw finished (simulating to now, or earlier): never resolve the next one instead.
       if (run !== draft.dungeon.totals.runs + 1) return fail('RUN_CHANGED', 'That run already finished');
       if (a.phase === 'fight') return fail('FIGHT_IN_PROGRESS', 'The fight has started: it plays out live and cannot be skipped');
-      const remainingMs = Math.max(0, searchMsFor(a.dungeonId, effectiveAttributes(draft)) - a.progressMs);
+      const remainingMs = Math.max(0, searchMsFor(a.dungeonId, draft) - a.progressMs);
       const cost = skipCost(remainingMs);
       if (cost > maxCost) return fail('RUN_CHANGED', `Skipping now costs ${cost}, more than the ${maxCost} shown`);
       const spent = spendStamina(draft, cost);
@@ -378,7 +377,7 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       if (typeof log !== 'number' || !Number.isSafeInteger(log) || log <= 0) return fail('INVALID_COMMAND', `Invalid log ${String(log)}`);
       // The log the player saw finished (simulating to now, or earlier): never finish the next one instead.
       if (log !== draft.stats.totalActions + 1) return fail('LOG_CHANGED', 'That log already finished');
-      const remainingMs = Math.max(0, logMsFor(a.treeId, effectiveAttributes(draft)) - a.progressMs);
+      const remainingMs = Math.max(0, logMsFor(a.treeId, draft) - a.progressMs);
       const cost = woodcutSkipCost(remainingMs);
       if (cost > maxCost) return fail('LOG_CHANGED', `Skipping now costs ${cost}, more than the ${maxCost} shown`);
       const spent = spendStamina(draft, cost);
@@ -398,7 +397,7 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       if (typeof ore !== 'number' || !Number.isSafeInteger(ore) || ore <= 0) return fail('INVALID_COMMAND', `Invalid ore ${String(ore)}`);
       // The ore the player saw finished (simulating to now, or earlier): never finish the next one instead.
       if (ore !== draft.stats.totalActions + 1) return fail('ORE_CHANGED', 'That ore already finished');
-      const remainingMs = Math.max(0, oreMsFor(a.rockId, effectiveAttributes(draft)) - a.progressMs);
+      const remainingMs = Math.max(0, oreMsFor(a.rockId, draft) - a.progressMs);
       const cost = mineSkipCost(remainingMs);
       if (cost > maxCost) return fail('ORE_CHANGED', `Skipping now costs ${cost}, more than the ${maxCost} shown`);
       const spent = spendStamina(draft, cost);

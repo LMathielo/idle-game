@@ -2,11 +2,11 @@
 // and read-only views. Mirrors woodcutting.ts rule for rule, but reads only config/mining.ts, so the two skills
 // can diverge later. See docs/ENGINE.md ("Mining").
 //
-//   MS            = msPerLevel × mining level + effective STR + pickaxe bonus (item catalog)
-//   time / ore    = max(minOreMs, rock base − perDexterityMs × effective DEX)
+//   MS            = msPerLevel × mining level + msBase + CORE STR + pickaxe bonus (item catalog)   (1.16.0)
+//   time / ore    = max(minOreMs, ceil(rock base × (1 − core DEX reduction)))                   (1.16.0)
 //   unlocked      ⇔ mining level ≥ rock reqLevel AND MS ≥ rock reqMs
 //   skip cost     = ceil(remaining min) stamina, at least 1
-import { effectiveAttributes, type TrainingLevels } from './attributes';
+import { activityTimeMs, dexActivityReductionBp, type CoreInput, type TrainingLevels } from './attributes';
 import { cloneState } from './clone';
 import { gearStats } from './gear';
 import { MINING, ROCK_IDS, ROCKS } from './config/mining';
@@ -17,20 +17,22 @@ import { rollYield, yieldBp } from './gathering';
 import { addStackable } from './inventory';
 import { addXp } from './progression';
 import { chance } from './rng';
-import type { Attributes, Character, GameEvent, GameState, MiningActivity, RockId, SimulationSummary } from './types';
+import type { Character, GameEvent, GameState, MiningActivity, RockId, SimulationSummary } from './types';
 
 // ---------- mining strength ----------
 
 /** What mining strength reads. A GameState fits. */
-export type MsInput = { character: Pick<Character, 'attributes' | 'equipment' | 'skills'>; training: TrainingLevels };
+export type MsInput = { character: Pick<Character, 'equipment' | 'skills'>; training: TrainingLevels };
 
 export type MiningStrength = {
   value: number;
-  /** The three parts add up to `value`. */
+  /** The four parts add up to `value`. */
   breakdown: {
     /** msPerLevel × mining level. */
     level: number;
-    /** Effective STR (base + trained). */
+    /** The hero base (MINING.msBase: the old starting 10 STR). */
+    base: number;
+    /** CORE STR (the training level). Normal STR does not count (1.16.0). */
     strength: number;
     /** The equipped pickaxe's bonus from the catalog (0 with no pickaxe or an unknown one). */
     pickaxe: number;
@@ -49,16 +51,17 @@ export function pickaxeBonus(equipment: Character['equipment']): number {
 
 export function miningStrength(state: MsInput): MiningStrength {
   const level = MINING.msPerLevel * state.character.skills.mining.level;
-  const strength = effectiveAttributes(state).strength;
+  const base = MINING.msBase;
+  const strength = state.training.attributes.strength.level;
   const pickaxe = pickaxeBonus(state.character.equipment);
-  return { value: level + strength + pickaxe, breakdown: { level, strength, pickaxe, pickaxeDefId: state.character.equipment.pickaxe?.defId ?? null } };
+  return { value: level + base + strength + pickaxe, breakdown: { level, base, strength, pickaxe, pickaxeDefId: state.character.equipment.pickaxe?.defId ?? null } };
 }
 
 // ---------- rocks ----------
 
-/** Time to mine one ore: max(minOreMs, base − perDexterityMs × DEX). Pass EFFECTIVE attributes. */
-export function oreMsFor(rockId: RockId, attributes: Pick<Attributes, 'dexterity'>): number {
-  return Math.max(MINING.minOreMs, ROCKS[rockId].baseMs - MINING.perDexterityMs * attributes.dexterity);
+/** Time to mine one ore: max(minOreMs, ceil(base × (1 − core DEX reduction))). Workers do not use it. */
+export function oreMsFor(rockId: RockId, state: CoreInput): number {
+  return activityTimeMs(ROCKS[rockId].baseMs, MINING.minOreMs, dexActivityReductionBp(state));
 }
 
 /** Stamina to skip the rest of an ore: staminaPerStep per started step left, at least one step. */
@@ -133,7 +136,7 @@ export function mineOre(draft: GameState, rockId: RockId, summary: SimulationSum
 export function advanceMining(draft: GameState, activity: MiningActivity, grantedMs: number, summary: SimulationSummary, events: GameEvent[]): void {
   if (!(grantedMs > 0)) return;
   activity.progressMs += grantedMs * draft.offline.efficiency;
-  const oreMs = oreMsFor(activity.rockId, effectiveAttributes(draft));
+  const oreMs = oreMsFor(activity.rockId, draft);
   let owned = false;
   let guard = 0;
   while (activity.progressMs >= oreMs && guard < MAX_ACTIONS_PER_SIMULATION) {
@@ -156,7 +159,7 @@ export function miningNextEventMs(state: GameState): number {
   const a = state.activity;
   const efficiency = state.offline.efficiency;
   if (a?.kind !== 'mining' || !(efficiency > 0)) return Number.POSITIVE_INFINITY;
-  return Math.ceil(Math.max(0, oreMsFor(a.rockId, effectiveAttributes(state)) - a.progressMs) / efficiency);
+  return Math.ceil(Math.max(0, oreMsFor(a.rockId, state) - a.progressMs) / efficiency);
 }
 
 // ---------- read-only views for the UI ----------
@@ -217,7 +220,7 @@ export function rockView(state: GameState, rockId: RockId): RockView {
     icon: rock.icon,
     reqLevel: rock.reqLevel,
     reqMs: rock.reqMs,
-    oreMs: oreMsFor(rockId, effectiveAttributes(state)),
+    oreMs: oreMsFor(rockId, state),
     xpPerOre: rock.xpPerOre,
     oreItemId: rock.oreItemId,
     rareDrops: MINING.rareDrops,
@@ -229,7 +232,7 @@ export function rockView(state: GameState, rockId: RockId): RockView {
 export function mineActivityView(state: GameState): MineActivityView | null {
   const a = state.activity;
   if (a?.kind !== 'mining') return null;
-  const oreMs = oreMsFor(a.rockId, effectiveAttributes(state));
+  const oreMs = oreMsFor(a.rockId, state);
   const progress = Math.min(a.progressMs, oreMs);
   const remainingMs = Math.max(0, oreMs - progress);
   return {

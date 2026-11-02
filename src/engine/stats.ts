@@ -1,6 +1,6 @@
 // Derived combat stats. Computed from the save on demand, never stored (pure, read-only).
 //
-//   damage / defense: final = round(base × (1 + Σ percent)) + flat from attributes
+//   damage / defense: final = round(gear × (1 + Σ percent)) + hero base + flat from TOTAL attributes (1.16.0)
 //   maxHp   = hp.base   + hp.perLevel   × (level − 1)
 //   maxMana = mana.base + mana.perLevel × (level − 1)
 //   attackIntervalMs = max(attackInterval.minMs, attackInterval.baseMs + Σ gear attackIntervalModMs)
@@ -42,7 +42,7 @@ export type DerivedStats = {
 
 /**
  * What getDerivedStats reads. A GameState fits; UIs can pass just these slices. `training` is required:
- * STR/END count with their training levels (effective attributes), so it can't be left out by mistake.
+ * STR/END count as totals (level points + extra + core), so it can't be left out by mistake.
  */
 export type StatsInput = { character: Pick<Character, 'level' | 'attributes' | 'equipment'>; training: TrainingLevels };
 
@@ -95,8 +95,11 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
       bonuses: bonuses.damage.map((b) => ({ ...b })),
     });
   }
+  // Hero base (the old starting 10 STR, 1.16.0), then the total STR; neither is scaled by percent bonuses.
+  damageParts.push({ source: 'base', min: STATS.baseDamage, max: STATS.baseDamage });
   const strFlat = attributes.strength * STATS.damagePerStrength;
   damageParts.push({ source: 'strength', min: strFlat, max: strFlat });
+  const flatDamage = STATS.baseDamage + strFlat;
 
   // ---- defense ----
   const defenseParts: ValuePart[] = [];
@@ -113,8 +116,10 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
   if (scaledDefense !== baseDefense) {
     defenseParts.push({ source: 'percent', value: scaledDefense - baseDefense, bonuses: bonuses.defense.map((b) => ({ ...b })) });
   }
+  defenseParts.push({ source: 'base', value: STATS.baseDefense });
   const endFlat = attributes.endurance * STATS.defensePerEndurance;
   defenseParts.push({ source: 'endurance', value: endFlat });
+  const flatDefense = STATS.baseDefense + endFlat;
 
   // ---- attack interval ----
   const intervalParts: ValuePart[] = [{ source: 'base', value: STATS.attackInterval.baseMs }];
@@ -138,8 +143,8 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
   const manaFromLevel = STATS.mana.perLevel * levelsAbove1;
 
   return {
-    damage: { min: scaledMin + strFlat, max: scaledMax + strFlat, breakdown: damageParts },
-    defense: { value: scaledDefense + endFlat, breakdown: defenseParts },
+    damage: { min: scaledMin + flatDamage, max: scaledMax + flatDamage, breakdown: damageParts },
+    defense: { value: scaledDefense + flatDefense, breakdown: defenseParts },
     maxHp: {
       value: STATS.hp.base + hpFromLevel,
       breakdown: [
