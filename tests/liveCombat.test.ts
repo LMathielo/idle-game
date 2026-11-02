@@ -269,21 +269,29 @@ describe('determinism across simulate boundaries', () => {
   });
 
   /**
-   * Shifts the timeline (initial search progress) until T0 + 8 h falls inside a fight with strikes already landed
-   * and at least one more second of fight to go. `s` is the state at exactly 8 h (no cap: requested = 8 h).
-   * Wolf Den (1.16.0): a new hero loses there in a few seconds, so it never levels up and every fight lasts several
-   * strikes. On the Rat Cellar, 8 h of wins give level points that make every fight a one-strike kill.
+   * A timeline where T0 + 8 h falls inside a fight with strikes already landed and at least one more second of fight to
+   * go. `s` is the state at exactly 8 h (no cap: requested = 8 h). Wolf Den (1.16.0): a new hero loses there in a few
+   * seconds, so it never levels up and every fight lasts several strikes (on the Rat Cellar, 8 h of wins give level
+   * points that make every fight a one-strike kill). The search progress at the start, 252,250 ms, was found once by
+   * scanning 0..5:00 in 250 ms steps (about 1,000 full 8 h simulates, too slow to repeat in every test); computed once per
+   * file and checked, so a rules change that moves the fights fails here loudly.
    */
+  const CAP_IN_FIGHT_PROGRESS_MS = 252_250;
+  let capPick: { g: GameState; s: GameState } | null = null;
   function capInsideFight(): { g: GameState; s: GameState } {
-    const base = runningIn('wolf_den', 31);
-    for (let p = 0; p < searchMsFor('wolf_den', base); p += 250) {
-      const g = structuredClone(base);
-      if (g.activity?.kind === 'dungeon') g.activity.progressMs = p;
-      const s = simulate(g, T0 + 8 * HOUR).state;
-      const f = fightOf(s);
-      if (f && f.log.length >= 2 && f.elapsedMs % 1000 !== 0 && fightOf(simulate(s, T0 + 8 * HOUR + 1000).state)) return { g, s };
-    }
-    throw new Error('no timeline with the cap inside a fight');
+    if (capPick) return capPick;
+    const g = structuredClone(runningIn('wolf_den', 31));
+    if (g.activity?.kind !== 'dungeon') throw new Error('not in a dungeon');
+    g.activity.progressMs = CAP_IN_FIGHT_PROGRESS_MS;
+    const s = simulate(g, T0 + 8 * HOUR).state;
+    const f = fightOf(s);
+    // Guard: the cap really lands inside a fight (≥ 2 strikes, not on a whole second, still fighting 1 s later).
+    expect(f).not.toBeNull();
+    expect(f!.log.length).toBeGreaterThanOrEqual(2);
+    expect(f!.elapsedMs % 1000).not.toBe(0);
+    expect(fightOf(simulate(s, T0 + 8 * HOUR + 1000).state)).not.toBeNull();
+    capPick = { g, s };
+    return capPick;
   }
 
   it('the 8 h cap lands mid-fight: that fight is finished past the cap, exactly as live play; nothing else progresses', () => {
