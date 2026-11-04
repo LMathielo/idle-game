@@ -24,6 +24,11 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#19, note] Village map pixel art is bilinear-upscaled when zoomed (up to ~1.4× native), so it looks soft. Visual call: nearest-neighbour or a higher-res PNG.
 - [#22, 40] "✓ Ready" green text on `woodDark` isn't in `tests/theme.test.ts`. Add the pair to the contrast test.
 - [#23, 62] `crafting/CraftingModal.tsx` ~316 — the ×10 disabled reason ("Needs 12 Iron Ore") is a one-line sublabel on a ~105 pt button at 375 pt and may truncate. Put ×10 on its own row or show the reason as a line under the buttons.
+- [#25, 55] `hud/HeroHud.tsx` — the fixed-size HUD's texts scale with the OS font size and get clipped by `overflow: hidden`. Set `allowFontScaling={false}` or `maxFontSizeMultiplier={1}` on the HUD texts.
+- [#25, 35] `StatusPanel.tsx` `useSpending.confirm` — a fast double tap on Confirm can queue two dialogs; confirming both spends twice (no refunds). Add an in-flight ref or disable Confirm while confirming.
+- [#25, 30] `app/(tabs)/index.tsx`, `hero.tsx` — both tabs stay mounted, so the hidden tab's HUD keeps recomputing each tick. Gate with `useIsFocused` or use `freezeOnBlur`.
+- [#25, 25] `hud/HeroHud.tsx` vs the Hero `ScrollView` — left inset 8 vs 12. Share one inset constant.
+- [#25, 15] `StatusPanel.tsx` `confirm` — pending edits made while the send is in flight are wiped by `update(NO_PENDING)`. Clear only if pending still equals the sent payload.
 
 ## Engine and data
 
@@ -32,6 +37,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#9, note] Training's rate multiplier is integer-only. Revisit in the PR that gives INT an effect.
 - [#21, 50] `engine/crafting.ts` — 8 pipes at the 1 s floor over 8 h offline emit ~230k `CRAFT_COMPLETED` events in one simulate (under the step guard). Aggregate events per pipe per simulate.
 - [#21, 40] `engine/crafting.ts` `advancePipes` — `progressMs += ms × efficiency` is float; could be off by 1 ms at a split boundary with fractional efficiency. Use integer math like the workers.
+- [#25, 20] `engine/replay.ts` — replay applies every command with `allowDebug: true`, so `DEBUG_ADD_UNSPENT_POINTS` replays as valid (pre-existing for all debug commands; `markDebugUsed` flags the save). Server-side replay should reject debug commands.
 
 ## Tests
 
@@ -41,6 +47,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#19, 45] `ui/useHoldRepeat.ts`, `ui/useCommand.ts` — no tests for the 400/100 ms schedule, stop on refusal/disable/unmount, or the one-at-a-time guard. Extract a pure scheduler and test it with fake timers.
 - [#19, 25] Only woodcutting's "Lv15 ≈ 23.5 h" is tested. Tie `ROCKS` to `TREES` (same XP and base time) or run `hoursTo` over both.
 - [#22, 30] No test for a nonzero `minQuality` (hook, 0 today). Add one when the first mechanic sets it.
+- [#25, 40] `tests/dungeon.test.ts` (8 h cap test) — no longer asserts HP and mana are full after the 12 h beyond the cap. Assert both equal their max.
+- [#25, 25] `tests/statPoints.test.ts` — no tick-vs-resume case for a spend mid-woodcutting with a hired crew. Add one.
 
 ## Docs and workflow
 

@@ -618,8 +618,9 @@ function migrateV15toV16(doc: SaveDoc): SaveDoc {
 }
 
 // ---- v16 → v17 (2026-11-03): spendable level-up points, current mana ----
-// The automatic +5 on every attribute per level above 1 (derived in 1.16.0, never stored) is replaced by 5 UNSPENT points
-// per level: a hero gets 5 × (level − 1) unspent points to spend himself. Stored extra points (debug) and training levels
+// A deliberate reset: 1.16.0 gave 20 points per level above 1 (+5 on each of the 4 attributes, derived, never stored);
+// 1.17.0 gives 5 CHOSEN points per level, so a hero gets 5 × (level − 1) unspent points to spend himself and ends up with
+// fewer total points than in 1.16.0 (owner decision 2026-11-03). Stored extra points (debug) and training levels
 // are kept as they are. Mana becomes a stored pool and starts full. Frozen literals: the points per level and the 1.16.0
 // max mana formula (20 + 5 per level above 1).
 
