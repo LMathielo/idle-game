@@ -4,6 +4,7 @@
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
+import { SAVE_DB_NAME, SAVE_SLOT } from '../client/saveSlot';
 import { ATTRIBUTE_KEYS } from '../engine';
 import { ATTRIBUTE_NAMES, formatDuration } from './format';
 import { Panel } from './Panel';
@@ -74,6 +75,9 @@ export function DebugPanel() {
         <View style={styles.body}>
           <Text style={styles.info}>
             Clock offset: {clockOffsetMs === 0 ? 'none' : `${sign}${formatDuration(Math.abs(clockOffsetMs))}`}
+          </Text>
+          <Text style={styles.info}>
+            Save slot: {SAVE_SLOT} ({SAVE_DB_NAME})
           </Text>
           {logInfo ? <Text style={styles.info}>{logInfo}</Text> : null}
           <View style={styles.grid}>

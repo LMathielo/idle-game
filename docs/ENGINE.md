@@ -749,6 +749,8 @@ Tiers 1 and 2, per attribute (time at 1 XP per minute, while training that attri
 - SQLite gives atomic transactions, so a log row and the state it produced are always written together.
 - The `('game_state','main')` document has the same shape as a future server MongoDB `players` document, so sync maps 1:1.
 
+**Save slots.** Each build opens its own file (client layer, `src/client/saveSlot.ts`; the engine never sees it): `idle-game.db` for `main` and local runs, `idle-game-dev.db` for `dev` (seeded once from `idle-game.db` by `seedSave.ts` when still empty), `idle-game-<branch>.db` for a PR preview. The slot is baked at publish time through `EXPO_PUBLIC_SAVE_SLOT`.
+
 The repository talks to a small `SqlDatabase` interface. The app passes `expo-sqlite` (async API, `withExclusiveTransactionAsync`); tests pass Node's built-in SQLite, so the real SQL is under test.
 
 ### Save versions

@@ -92,10 +92,26 @@ npx expo start --tunnel   # scan the QR code with Expo Go
    - **Deployment branches and tags → Selected branches and tags → Add rule** `main`, and again for `dev`.
    - **Environment secrets → Add secret** `EXPO_TOKEN` with the same token.
    - Then delete the repo-level secret (**Settings → Secrets and variables → Actions → `EXPO_TOKEN` → Remove**). From then on only runs on `main`/`dev` can read the token, even if someone edits the workflow on another branch.
+   - **Not compatible with PR previews** (owner decision 2026-11-04: previews use the repo-level secret). Keep the repo-level secret while you want the `expo-test` label to work; the trade-off is that a branch pushed to this repo can read the token.
+
+## Previewing a PR before merging
+
+Add the label **`expo-test`** to a pull request (into `dev` or `main`) to try it in Expo Go before merging it. The workflow `expo-preview.yml` then:
+
+- runs install, typecheck and tests, and publishes an EAS Update on an **EAS branch named exactly like the PR's git branch** (`feat/xyz` shows up as `feat/xyz` on expo.dev → project → Updates);
+- posts **one comment** on the PR (edited on every republish, never a second one) with the EAS branch, commit, save slot, an **Open in Expo Go** link and a QR code;
+- republishes on every push while the label is on;
+- **removes the preview** (deletes the EAS branch and edits the comment) when you take the label off or the PR is closed or merged.
+
+A PR whose branch is `main` or `dev` (the release PR) is refused: those two publish through `eas-update.yml` only.
+
+**Each build has its own save**, so previews never touch your progress: `main` keeps `idle-game.db` (your existing progress), `dev` uses `idle-game-dev.db` (copied once from `idle-game.db` on its first launch), and a PR preview starts fresh in `idle-game-<branch>.db`. Hero tab → Debug shows which slot you are on. A local `npx expo start` behaves like `main`.
+
+**Token check.** Previews read `EXPO_TOKEN` as a **repo-level** secret, so it must stay there: Settings → Secrets and variables → Actions → **Repository secrets** → `EXPO_TOKEN`. (If you later move it only into the `expo-publish` environment, previews stop working with "EXPO_TOKEN secret is missing".)
 
 ## Branching
 
 - `main`: stable, only what you tested on `dev`. Publishes EAS branch `main`. Changed only by a release PR from `dev`.
 - `dev`: default branch and test preview. Publishes EAS branch `dev`. Every feature/fix PR targets it.
-- `feat/...`, `fix/...`, `chore/...`, `exp/...`: one task each, cut from `dev`, merged into `dev` via PR. Never published.
+- `feat/...`, `fix/...`, `chore/...`, `exp/...`: one task each, cut from `dev`, merged into `dev` via PR. Published to Expo Go only while the PR has the `expo-test` label (see above).
 - Only the owner merges, into `dev` and into `main`.

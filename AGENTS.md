@@ -34,7 +34,9 @@ The owner works mostly from a phone. Keep that in mind:
 | --- | --- | --- | --- |
 | `main` | Stable: only code the owner tested on `dev`. Protected by a ruleset (PR + `CI` check, merge commit only). | EAS branch `main` | Owner only, via release PR `dev` → `main` |
 | `dev` | Integration and test preview. Default branch, so new PRs target it. | EAS branch `dev` | Owner only |
-| `feat/*`, `fix/*`, `chore/*`, `exp/*` | One task each, cut from `origin/dev`, PR into `dev` | Never | — |
+| `feat/*`, `fix/*`, `chore/*`, `exp/*` | One task each, cut from `origin/dev`, PR into `dev` | Only while its PR has the label `expo-test` (EAS branch = git branch, own save slot; `expo-preview.yml`) | — |
+
+Each build has its own save file (`src/client/saveSlot.ts`): `main` keeps `idle-game.db`, `dev` uses `idle-game-dev.db`, a preview `idle-game-<branch>.db`. Only the owner adds the `expo-test` label.
 
 Flow: `feat/*` → PR into `dev` (CI + council) → owner merges → `dev` preview → owner tests in Expo Go → release PR `dev` → `main` → owner merges → `main` preview.
 
