@@ -5,6 +5,7 @@ import { useGameClient, useGameState } from '../../client/GameProvider';
 import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
 import { DebugPanel } from '../../components/DebugPanel';
 import { formatNumber } from '../../components/format';
+import { IconText, SkillIcon } from '../../components/art/Sprites';
 import { HeroHud } from '../../components/hud/HeroHud';
 import { defOf, SLOT_LABELS } from '../../components/items/itemInfo';
 import { ItemSheet, type SheetAction } from '../../components/items/ItemSheet';
@@ -18,10 +19,10 @@ import { DEV_TOOLS_ENABLED } from '../../engine/config/dev';
 import type { Character, EquipmentSlot, Inventory, Item, SkillKey } from '../../engine/types';
 import { colors, fonts } from '../../theme';
 
-const SKILL_LABELS: Record<SkillKey, { label: string; icon: string }> = {
-  woodcutting: { label: 'Woodcutting', icon: '🪓' },
-  mining: { label: 'Mining', icon: '⛏️' },
-  fishing: { label: 'Fishing', icon: '🎣' },
+const SKILL_LABELS: Record<SkillKey, string> = {
+  woodcutting: 'Woodcutting',
+  mining: 'Mining',
+  fishing: 'Fishing',
 };
 
 // Paper-doll layout: 3 columns, null = empty cell
@@ -117,7 +118,14 @@ const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress }: { eq
 const InventoryPanel = memo(function InventoryPanel({ inventory, gold, onPress }: { inventory: Inventory; gold: number; onPress: PressHandler }) {
   const slots: (Item | undefined)[] = Array.from({ length: inventory.capacity }, (_, i) => inventory.items[i]);
   return (
-    <Panel title={`Inventory ${inventory.items.length}/${inventory.capacity} · 🪙 ${formatNumber(gold)}`}>
+    <Panel
+      title={`Inventory ${inventory.items.length}/${inventory.capacity} ·`}
+      titleExtra={
+        <IconText icon="gold" size={18} style={styles.goldText} accessibilityLabel={`${formatNumber(gold)} gold`}>
+          {formatNumber(gold)}
+        </IconText>
+      }
+    >
       <View style={styles.invGrid}>
         {slots.map((item, i) => (
           <View key={i} style={styles.invCell}>
@@ -136,9 +144,9 @@ const SkillsPanel = memo(function SkillsPanel({ skills }: { skills: Character['s
         const s = skills[k];
         return (
           <View key={k} style={styles.skillRow}>
-            <Text style={styles.skillName}>
-              {SKILL_LABELS[k].icon} {SKILL_LABELS[k].label} <Text style={styles.skillLevel}>Lv {s.level}</Text>
-            </Text>
+            <IconText image={<SkillIcon skill={k} />} style={styles.skillName}>
+              {SKILL_LABELS[k]} <Text style={styles.skillLevel}>Lv {s.level}</Text>
+            </IconText>
             <Bar value={s.xp} max={s.xpToNext} color={colors.skill} label={`${formatNumber(s.xp)} / ${formatNumber(s.xpToNext)}`} />
           </View>
         );
@@ -237,5 +245,6 @@ const styles = StyleSheet.create({
 
   skillRow: { marginBottom: 10, gap: 4 },
   skillName: { fontFamily: fonts.body, fontSize: 14, color: colors.ink },
+  goldText: { fontFamily: fonts.title, fontSize: 20, color: colors.ink },
   skillLevel: { fontFamily: fonts.bodyBold, color: colors.skill },
 });

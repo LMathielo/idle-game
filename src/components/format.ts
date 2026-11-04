@@ -57,10 +57,6 @@ export function itemName(id: string): string {
   return getItemDef(id)?.name ?? id;
 }
 
-export function itemIcon(id: string): string {
-  return getItemDef(id)?.icon ?? '❔';
-}
-
 export function formatNumber(n: number): string {
   return n.toLocaleString('en-US');
 }

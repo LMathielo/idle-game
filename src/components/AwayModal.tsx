@@ -1,7 +1,10 @@
 // "While you were away" summary, shown after a resume with at least one action or any clock anomaly.
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
-import { ATTRIBUTE_NAMES, formatAwayDuration, formatNumber, itemIcon, itemName } from './format';
+import type { ReactNode } from 'react';
+import { GameIcon, IconText, ItemIcon, SkillIcon } from './art/Sprites';
+import type { IconName } from './art/images';
+import { ATTRIBUTE_NAMES, formatAwayDuration, formatNumber, itemName } from './format';
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
 import { colors, fonts } from '../theme';
@@ -67,19 +70,19 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
 
       {summary.dungeon.runs > 0 ? (
         <Line
-          label="💀 Dungeon runs"
+          label="Dungeon runs"
           value={`${formatNumber(summary.dungeon.runs)} (${formatNumber(summary.dungeon.wins)} won, ${formatNumber(summary.dungeon.losses)} lost)`}
         />
       ) : null}
       {summary.dungeonsUnlocked.length > 0 ? (
-        <Line label="🔓 Unlocked" value={summary.dungeonsUnlocked.map((id) => DUNGEONS[id].name).join(', ')} />
+        <Line icon={<GameIcon name="unlocked" />} label="Unlocked" value={summary.dungeonsUnlocked.map((id) => DUNGEONS[id].name).join(', ')} />
       ) : null}
-      {summary.heroXpGained > 0 ? <Line label="✨ Hero XP" value={`+${formatNumber(summary.heroXpGained)}`} /> : null}
-      {summary.goldGained > 0 ? <Line label="🪙 Gold" value={`+${formatNumber(summary.goldGained)}`} /> : null}
-      {summary.actions > 0 ? <Line label="🪓 Logs cut" value={formatNumber(summary.actions)} /> : null}
-      {summary.oresMined > 0 ? <Line label="⛏️ Ores mined" value={formatNumber(summary.oresMined)} /> : null}
+      {summary.heroXpGained > 0 ? <Line icon={<GameIcon name="hero_xp" />} label="Hero XP" value={`+${formatNumber(summary.heroXpGained)}`} /> : null}
+      {summary.goldGained > 0 ? <Line icon={<GameIcon name="gold" />} label="Gold" value={`+${formatNumber(summary.goldGained)}`} /> : null}
+      {summary.actions > 0 ? <Line icon={<SkillIcon skill="woodcutting" />} label="Logs cut" value={formatNumber(summary.actions)} /> : null}
+      {summary.oresMined > 0 ? <Line icon={<SkillIcon skill="mining" />} label="Ores mined" value={formatNumber(summary.oresMined)} /> : null}
       {gained.map(([id, n]) => (
-        <Line key={id} label={`${itemIcon(id)} ${itemName(id)}`} value={`+${formatNumber(n)}`} />
+        <Line key={id} icon={<ItemIcon defId={id} size={16} />} label={itemName(id)} value={`+${formatNumber(n)}`} />
       ))}
       {skills.map(([skill, xp]) => {
         const levels = summary.skillLevelsGained[skill] ?? 0;
@@ -92,33 +95,34 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
         );
       })}
       {summary.heroLevelsGained > 0 ? <Line label="Hero levels" value={`+${summary.heroLevelsGained}`} /> : null}
-      {summary.workerActions > 0 ? <Text style={styles.section}>👷 Workers</Text> : null}
+      {summary.workerActions > 0 ? <Section icon="workers">Workers</Section> : null}
       {workerGained.map(([id, n]) => (
-        <Line key={`w-${id}`} label={`${itemIcon(id)} ${itemName(id)}`} value={`+${formatNumber(n)}`} />
+        <Line key={`w-${id}`} icon={<ItemIcon defId={id} size={16} />} label={itemName(id)} value={`+${formatNumber(n)}`} />
       ))}
-      {summary.craftsCompleted > 0 ? <Text style={styles.section}>🔨 Crafted</Text> : null}
+      {summary.craftsCompleted > 0 ? <Section icon="crafting">Crafted</Section> : null}
       {crafted.map(([id, n]) => (
-        <Line key={`c-${id}`} label={`${itemIcon(id)} ${itemName(id)}`} value={`+${formatNumber(n)}`} />
+        <Line key={`c-${id}`} icon={<ItemIcon defId={id} size={16} />} label={itemName(id)} value={`+${formatNumber(n)}`} />
       ))}
       {waits.map((w) => (
         <Text key={`wait-${w.pipe}-${w.defId}`} style={styles.muted}>
-          ⏳ Pipe {w.pipe + 1} waited for {itemName(w.defId)}
+          Pipe {w.pipe + 1} waited for {itemName(w.defId)}
         </Text>
       ))}
-      {ready.length > 0 ? <Text style={styles.section}>✅ Ready to collect (Crafting)</Text> : null}
+      {ready.length > 0 ? <Section icon="ready">Ready to collect (Crafting)</Section> : null}
       {ready.map(([id, n]) => (
-        <Line key={`r-${id}`} label={`${itemIcon(id)} ${itemName(id)}`} value={`×${formatNumber(n)}`} />
+        <Line key={`r-${id}`} icon={<ItemIcon defId={id} size={16} />} label={itemName(id)} value={`×${formatNumber(n)}`} />
       ))}
-      {summary.upkeepPaid > 0 ? <Line label="🪙 Upkeep paid" value={`−${formatNumber(summary.upkeepPaid)}`} cost /> : null}
+      {summary.upkeepPaid > 0 ? <Line icon={<GameIcon name="gold" />} label="Upkeep paid" value={`−${formatNumber(summary.upkeepPaid)}`} cost /> : null}
       {summary.buildingsUpgraded.map((u) => (
-        <Line key={`${u.buildingId}-${u.level}`} label={`🔨 ${BUILDINGS[u.buildingId].name} upgraded`} value={`Lv ${u.level}`} />
+        <Line key={`${u.buildingId}-${u.level}`} icon={<GameIcon name="upgrade" />} label={`${BUILDINGS[u.buildingId].name} upgraded`} value={`Lv ${u.level}`} />
       ))}
       {trained.map(([attribute, xp]) => {
         const levels = summary.trainingLevelsGained[attribute] ?? 0;
         return (
           <Line
             key={attribute}
-            label={`🏋️ ${ATTRIBUTE_NAMES[attribute].short} training`}
+            icon={<GameIcon name="training" />}
+            label={`${ATTRIBUTE_NAMES[attribute].short} training`}
             value={`+${formatNumber(xp)} XP${levels > 0 ? ` (+${levels} Lv)` : ''}`}
           />
         );
@@ -154,12 +158,26 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
   );
 }
 
-function Line({ label, value, cost }: { label: string; value: string; cost?: boolean }) {
+function Line({ label, value, cost, icon }: { label: string; value: string; cost?: boolean; icon?: ReactNode }) {
   return (
     <View style={styles.line}>
-      <Text style={styles.label}>{label}</Text>
+      {icon ? (
+        <IconText image={icon} style={styles.label} rowStyle={styles.labelRow}>
+          {label}
+        </IconText>
+      ) : (
+        <Text style={styles.label}>{label}</Text>
+      )}
       <Text style={[styles.value, cost && styles.cost]}>{value}</Text>
     </View>
+  );
+}
+
+function Section({ icon, children }: { icon: IconName; children: ReactNode }) {
+  return (
+    <IconText icon={icon} style={styles.section} rowStyle={styles.sectionRow}>
+      {children}
+    </IconText>
   );
 }
 
@@ -178,7 +196,9 @@ const styles = StyleSheet.create({
   label: { fontFamily: fonts.body, fontSize: 15, color: colors.ink },
   value: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.skill },
   cost: { color: colors.dangerDeadly },
-  section: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink, marginTop: 6 },
+  labelRow: { flexShrink: 1, gap: 6 },
+  section: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
+  sectionRow: { marginTop: 6, gap: 6 },
   warn: { fontFamily: fonts.bodyBold, fontSize: 14, lineHeight: 19, color: colors.goldDark },
   lost: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.hp },
   muted: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft },

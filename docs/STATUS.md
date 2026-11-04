@@ -4,21 +4,28 @@ The "where we are" page. Read it first when starting a new session. Owned by the
 
 Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.md), engine rules in [`ENGINE.md`](ENGINE.md), deferred review findings in [`TECH_DEBT.md`](TECH_DEBT.md), workflow in [`../AGENTS.md`](../AGENTS.md).
 
-## Current version (2026-11-03)
+## Current version (2026-11-04)
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.17.0** (stat points + HUD, once merged; 1.16.0 before) | 1.1.0 |
-| Save | **v17** (stat points + HUD, once merged; v16 before) | v2 |
-| Contents | Everything below, up to core stats (#24), plus stat points + HUD once merged | M1 only (PRs #1–#2) |
+| Engine | **1.17.0** (unchanged by the pixel art, a UI-only change) | 1.1.0 |
+| Save | **v17** | v2 |
+| Contents | Everything below, up to stat points + HUD (#25), plus the pixel art once merged | M1 only (PRs #1–#2) |
 
-- **Release pending:** `main` is behind `dev` by PRs #3–#24. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
-- **Open PRs:** spendable level-up points, STR → WS / MS, mana pool, hero HUD (`feat/stat-points-hud`).
+- **Release pending:** `main` is behind `dev` by PRs #3–#25. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
+- **Open PRs:** pixel art replaces every emoji, village split into background + buildings (`feat/pixel-art-assets`).
 - **Workflow:** product owner (orchestrator) → one `game-engineer` per feature → 1–3 reviewers by complexity (`.claude/skills/pr-review-council`) → owner merges.
 
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### UI only (engine 1.17.0) · pixel art
+- **Pixel art replaces every emoji** (`feat/pixel-art-assets`):
+  - **Village:** the approved daytime village, drawn as a background plus one sprite per building. A building that isn't built yet isn't drawn; its sign stays, greyed with a padlock. Signs are text only, at their new spots; the map opens a little further out so every sign fits.
+  - **Art everywhere:** hero portrait (HUD, dungeon), enemy sprites (dungeon cards, live fight), all 70 items (inventory, merchant, popovers), trees and rocks, skill icons, and pixel symbols for gold, stamina, XP, locked, upgrade, crafting, workers and more.
+  - **No emoji in any text:** titles, activity strip, away summary, timer pills, sheets and buttons show a pixel image next to the words, or just the words. ✕ ✓ ✗ stay as text.
+  - **Asset pipeline:** `tools/art` (Python) rebuilds every image into `assets/images/`; the old village script and image are gone. A test fails when an item, enemy, tree, rock or skill has no art, and another when an emoji appears in `src/`.
 
 ### Engine 1.17.0 · save v17
 - **Stat points, mana, hero HUD** (`feat/stat-points-hud`):
@@ -154,7 +161,6 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 - Minimum-quality mechanics (the `minQuality` hook is 0: upgrades, skills or consumables could raise it).
 - Random affixes stored on item instances.
 - Sources of normal stats beyond levelling (gear affixes).
-- Pixel sprites replacing emoji icons.
 
 **Gathering**
 - Fishing or a third gathering skill (after the gathering refactor).

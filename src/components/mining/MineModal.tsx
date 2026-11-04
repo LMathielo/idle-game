@@ -2,13 +2,14 @@
 // (MS) and stamina; a horizontal paged carousel with one card per rock. Rules stay in the engine: this file reads
 // miningView() and dispatches START_ACTIVITY {kind:'mining', rockId} / STOP_ACTIVITY / SKIP_MINE. Locked rocks are
 // refused by the engine too (ROCK_LOCKED).
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, type HostInstance, ScrollView, type ListRenderItem, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useGameSnapshot } from '../../client/GameProvider';
 import { type CrewView, crewViews, mineActivityView, type MineActivityView, miningView, type RockId, type RockView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { confirmCancelRun } from '../dungeon/confirmCancelRun';
-import { formatBp, formatClock, formatNumber, formatPerMin, itemIcon, itemName } from '../format';
+import { GameIcon, IconText, ItemIcon, NodeIcon } from '../art/Sprites';
+import { formatBp, formatClock, formatNumber, formatPerMin, itemName } from '../format';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
 import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
@@ -105,9 +106,9 @@ export function MineModal() {
       buildingId="mine_shaft"
       closeLabel="Close mine shaft"
       headerRight={
-        <Text style={styles.stamina} accessibilityLabel={`Stamina ${stamina} of ${state.stamina.max}`}>
-          ⚡ {stamina}/{state.stamina.max}
-        </Text>
+        <IconText icon="stamina" style={styles.stamina} accessibilityLabel={`Stamina ${stamina} of ${state.stamina.max}`}>
+          {stamina}/{state.stamina.max}
+        </IconText>
       }
       headerBelow={
         <View style={styles.headerBelow}>
@@ -116,12 +117,12 @@ export function MineModal() {
             style={styles.ms}
             accessibilityLabel={`Mining strength ${view.ms.value}: ${ms.level} from level, ${ms.base} base, ${ms.strength} from core strength, ${ms.pickaxe} from pickaxe`}
           >
-            💪 MS {formatNumber(view.ms.value)} <Text style={styles.msParts}>= {formatNumber(ms.level)} level + {formatNumber(ms.base)} base + {formatNumber(ms.strength)} STR + {formatNumber(ms.pickaxe)} pickaxe</Text>
+            MS {formatNumber(view.ms.value)} <Text style={styles.msParts}>= {formatNumber(ms.level)} level + {formatNumber(ms.base)} base + {formatNumber(ms.strength)} STR + {formatNumber(ms.pickaxe)} pickaxe</Text>
           </Text>
         </View>
       }
     >
-      {clockPaused ? <Text style={styles.paused}>⏸ Paused: your device clock moved back. Ores wait until it catches up.</Text> : null}
+      {clockPaused ? <Text style={styles.paused}>Paused: your device clock moved back. Ores wait until it catches up.</Text> : null}
       <ScrollView contentContainerStyle={styles.scroll}>
         <FlatList
           data={view.rocks}
@@ -190,9 +191,7 @@ const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, p
 
   return (
     <View style={cardStyle}>
-      <Text style={styles.rockIcon} accessibilityElementsHidden importantForAccessibility="no">
-        {rock.icon}
-      </Text>
+      <NodeIcon node={rock.rockId} size={64} style={styles.rockIcon} />
       <View style={styles.titleRow}>
         <Text style={styles.rockName} accessibilityRole="header">
           {rock.name}
@@ -213,15 +212,18 @@ const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, p
         <Fact label="Time per swing" value={formatClock(rock.oreMs)} />
         <Fact label="Ores per swing" value={`×${formatBp(rock.yieldBp)}`} />
         <Fact label="XP per swing" value={formatNumber(rock.xpPerOre)} />
-        <Fact label="Ore" value={`${itemIcon(rock.oreItemId)} ${itemName(rock.oreItemId)}`} />
-        {geode ? <Fact label={`${itemIcon(geode.itemId)} ${itemName(geode.itemId)}`} value={`1 in ${formatNumber(Math.round(1 / geode.chance))}`} /> : null}
+        <Fact label="Ore" value={itemName(rock.oreItemId)} valueIcon={<ItemIcon defId={rock.oreItemId} size={16} />} />
+        {geode ? <Fact label={itemName(geode.itemId)} labelIcon={<ItemIcon defId={geode.itemId} size={16} />} value={`1 in ${formatNumber(Math.round(1 / geode.chance))}`} /> : null}
       </View>
 
       {crew ? (
-        <Text style={[styles.crew, crew.status !== 'working' && styles.crewOff]} accessibilityLabel={`${crew.workers} workers here, ${crew.status === 'working' ? `about ${formatPerMin(crew.itemsPerMin)} per minute` : crew.status}`}>
-          👷 {crew.workers} {crew.workers === 1 ? 'worker' : 'workers'} ·{' '}
-          {crew.status === 'working' ? `${formatPerMin(crew.itemsPerMin)} ${itemName(crew.itemId)}/min` : crew.status === 'idle' ? 'idle (you can’t work it now)' : 'paused (upkeep)'}
-        </Text>
+        <View style={styles.crewRow}>
+          <GameIcon name="workers" />
+          <Text style={[styles.crew, crew.status !== 'working' && styles.crewOff]} accessibilityLabel={`${crew.workers} workers here, ${crew.status === 'working' ? `about ${formatPerMin(crew.itemsPerMin)} per minute` : crew.status}`}>
+            {crew.workers} {crew.workers === 1 ? 'worker' : 'workers'} ·{' '}
+            {crew.status === 'working' ? `${formatPerMin(crew.itemsPerMin)} ${itemName(crew.itemId)}/min` : crew.status === 'idle' ? 'idle (you can’t work it now)' : 'paused (upkeep)'}
+          </Text>
+        </View>
       ) : null}
 
       {current ? (
@@ -235,12 +237,15 @@ const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, p
 
       <View style={styles.actions}>
         {!rock.unlocked ? (
-          <Text style={styles.locked}>🔒 Needs {missing.join(' and ')}</Text>
+          <IconText icon="locked" style={styles.locked}>
+            Needs {missing.join(' and ')}
+          </IconText>
         ) : current ? (
           <>
             <PixelButton label="Stop" onPress={onStop} active accessibilityLabel={`Stop mining ${rock.name}`} accessibilityHint="Your ores are kept" />
             <PixelButton
-              label={`Skip (${current.skipCost}⚡)`}
+              label={`Skip (${current.skipCost})`}
+              icon="stamina"
               repeat={skip}
               disabled={!canSkip}
               accessibilityLabel={`Skip this ore for ${current.skipCost} stamina`}
@@ -260,13 +265,13 @@ function RockInfo({ rock, anchor, onClose }: { rock: RockView | null; anchor: An
   if (!rock) return null;
   const drop = rock.rareDrops[0];
   return (
-    <InfoPopover anchor={anchor} onClose={onClose} title={rock.name} icon={rock.icon} subtitle={`Needs Lv ${rock.reqLevel} and ${formatNumber(rock.reqMs)} MS`}>
+    <InfoPopover anchor={anchor} onClose={onClose} title={rock.name} icon={<NodeIcon node={rock.rockId} />} subtitle={`Needs Lv ${rock.reqLevel} and ${formatNumber(rock.reqMs)} MS`}>
       <PopoverRow label="Time per swing" value={formatClock(rock.oreMs)} />
       <PopoverRow label="Ores per swing" value={`×${formatBp(rock.yieldBp)}`} />
       <PopoverRow label="XP per swing" value={formatNumber(rock.xpPerOre)} />
-      {drop ? <PopoverRow label={`${itemIcon(drop.itemId)} ${itemName(drop.itemId)}`} value={`1 in ${formatNumber(Math.round(1 / drop.chance))}`} /> : null}
+      {drop ? <PopoverRow icon={<ItemIcon defId={drop.itemId} size={16} />} label={itemName(drop.itemId)} value={`1 in ${formatNumber(Math.round(1 / drop.chance))}`} /> : null}
       <PopoverText tone="note">Ores per swing = your MS ÷ the MS needed, times your building bonuses; the decimals are the chance of one more. XP and the rare find are one per swing.</PopoverText>
-      {!rock.unlocked ? <PopoverText tone="bad">🔒 Not open yet: raise your level or MS.</PopoverText> : null}
+      {!rock.unlocked ? <PopoverText tone="bad">Not open yet: raise your level or MS.</PopoverText> : null}
     </InfoPopover>
   );
 }
@@ -279,11 +284,24 @@ function Req({ ok, label, detail }: { ok: boolean; label: string; detail: string
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+/** A label / value line; `labelIcon` / `valueIcon` (pixel images) sit before the text. */
+function Fact({ label, value, labelIcon, valueIcon }: { label: string; value: string; labelIcon?: ReactNode; valueIcon?: ReactNode }) {
   return (
     <View style={styles.fact}>
-      <Text style={styles.factLabel}>{label}</Text>
-      <Text style={styles.factValue}>{value}</Text>
+      {labelIcon ? (
+        <IconText image={labelIcon} style={styles.factLabel} rowStyle={styles.factSide}>
+          {label}
+        </IconText>
+      ) : (
+        <Text style={styles.factLabel}>{label}</Text>
+      )}
+      {valueIcon ? (
+        <IconText image={valueIcon} style={styles.factValue} rowStyle={styles.factSide}>
+          {value}
+        </IconText>
+      ) : (
+        <Text style={styles.factValue}>{value}</Text>
+      )}
     </View>
   );
 }
@@ -291,7 +309,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: 24 },
   titleRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
-  crew: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerEasy, textAlign: 'center' },
+  crew: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerEasy, textAlign: 'center' },
   crewOff: { color: colors.dangerDeadly },
   stamina: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.stamina },
   headerBelow: { paddingHorizontal: 12, gap: 4 },
@@ -310,7 +328,7 @@ const styles = StyleSheet.create({
   },
   cardActive: { borderColor: colors.gold, backgroundColor: '#f7ecd0' },
   cardLocked: { opacity: 0.6 },
-  rockIcon: { fontSize: 56, textAlign: 'center' },
+  rockIcon: { alignSelf: 'center' },
   rockName: { fontFamily: fonts.title, fontSize: 26, color: colors.ink, textAlign: 'center' },
   reqs: { flexDirection: 'row', justifyContent: 'center', gap: 14, flexWrap: 'wrap' },
   req: { fontFamily: fonts.bodyBold, fontSize: 15 },
@@ -320,12 +338,14 @@ const styles = StyleSheet.create({
   facts: { gap: 4 },
   fact: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   factLabel: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft },
+  factSide: { flexShrink: 1 },
   factValue: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink, textAlign: 'right' },
   running: { gap: 6 },
   countdown: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.ink, textAlign: 'center' },
   bar: { height: 14 },
   actions: { flexDirection: 'row', justifyContent: 'center', gap: 10, minHeight: 48, alignItems: 'center' },
   locked: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerDeadly, textAlign: 'center' },
+  crewRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5 },
 
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 12 },
   dot: { width: 10, height: 10, backgroundColor: colors.woodDark, borderWidth: 2, borderColor: colors.goldDark },

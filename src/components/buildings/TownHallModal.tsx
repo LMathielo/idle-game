@@ -9,7 +9,8 @@ import { useGameSnapshot } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
 import { BUILDINGS, buildingLevel, type CrewView, type NodeChoice, nodeChoices, upgradeView, type WorkerNodeId, workersView, type WorkerView } from '../../engine';
 import { colors, fonts } from '../../theme';
-import { formatNumber, formatPerMin, itemIcon, itemName } from '../format';
+import { GameIcon, IconText, ItemIcon, NodeIcon } from '../art/Sprites';
+import { formatNumber, formatPerMin, itemName } from '../format';
 import { ModalScreen } from '../ModalScreen';
 import { PixelButton } from '../PixelButton';
 import { useDialogShowing } from '../ui/GameDialog';
@@ -75,14 +76,15 @@ export function TownHallModal() {
     ? 'Build the Town Hall'
     : hireCost === null
       ? `Full (${view.cap}): upgrade the Town Hall`
-      : `🪙 ${formatNumber(hireCost)}${view.canHire ? '' : ' · not enough gold'}`;
+      : `${formatNumber(hireCost)}${view.canHire ? '' : ' · not enough gold'}`;
+  const hireSubIcon = view.unlocked && hireCost !== null ? 'gold' : undefined;
 
   return (
     <ModalScreen title={BUILDINGS.town_hall.name} buildingId="town_hall" closeLabel="Close town hall" headerRight={<Text style={styles.level}>Lv {level}</Text>}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <Text style={styles.cardTitle} accessibilityRole="header">
-            {BUILDINGS.town_hall.icon} Town Hall · Lv {level}
+            Town Hall · Lv {level}
           </Text>
           {bonuses.map((l) => (
             <Text key={l} style={styles.line}>
@@ -95,12 +97,12 @@ export function TownHallModal() {
 
         <View style={styles.card}>
           <View style={styles.titleRow}>
-            <Text style={styles.cardTitle} accessibilityRole="header">
-              👷 Workers {view.hired}/{view.cap}
-            </Text>
-            <Text style={styles.upkeep} accessibilityLabel={`Upkeep ${view.upkeepPerMin} gold per minute`}>
-              🪙 {formatNumber(view.upkeepPerMin)}/min
-            </Text>
+            <IconText icon="workers" size={22} style={styles.cardTitle} rowStyle={styles.titleIconRow} accessibilityLabel={`Workers ${view.hired} of ${view.cap}`}>
+              Workers {view.hired}/{view.cap}
+            </IconText>
+            <IconText icon="gold" style={styles.upkeep} accessibilityLabel={`Upkeep ${view.upkeepPerMin} gold per minute`}>
+              {formatNumber(view.upkeepPerMin)}/min
+            </IconText>
           </View>
           <Text style={styles.muted}>
             Each worker adds 25% of your power on a tree or rock you can work, also while the app is closed, and costs
@@ -108,11 +110,11 @@ export function TownHallModal() {
           </Text>
           {view.paused ? (
             <Text style={styles.warn} accessibilityRole="alert">
-              ⏸ Paused: not enough gold for the next minute of upkeep. Workers resume as soon as you have it.
+              Paused: not enough gold for the next minute of upkeep. Workers resume as soon as you have it.
             </Text>
           ) : null}
           <View style={styles.actions}>
-            <PixelButton label="Hire worker" sublabel={hireSub} onPress={hire} disabled={!view.canHire} stretch accessibilityHint="The price doubles for each worker you have" />
+            <PixelButton label="Hire worker" sublabel={hireSub} sublabelIcon={hireSubIcon} onPress={hire} disabled={!view.canHire} stretch accessibilityHint="The price doubles for each worker you have" />
           </View>
           {view.workers.map((w, i) => (
             <WorkerRow key={w.id} worker={w} name={`Worker ${i + 1}`} onAssign={setPicking} onUnassign={unassign} onDismiss={dismiss} />
@@ -146,7 +148,6 @@ type RowProps = {
 };
 
 const WorkerRow = memo(function WorkerRow({ worker, name, onAssign, onUnassign, onDismiss }: RowProps) {
-  const where = worker.node ? `${worker.icon} ${worker.nodeName}` : '';
   const statusStyle = worker.status === 'working' ? styles.ok : worker.status === 'unassigned' ? styles.small : styles.bad;
   const assign = useCallback(() => onAssign(worker.id), [onAssign, worker.id]);
   const unassign = useCallback(() => onUnassign(worker.id), [onUnassign, worker.id]);
@@ -154,9 +155,15 @@ const WorkerRow = memo(function WorkerRow({ worker, name, onAssign, onUnassign, 
   return (
     <View style={styles.worker}>
       <View style={styles.titleRow} accessible accessibilityLabel={`${name}, ${worker.nodeName ?? 'unassigned'}, ${STATUS_TEXT[worker.status]}`}>
-        <Text style={styles.workerName}>
-          {name} <Text style={styles.where}>{where}</Text>
-        </Text>
+        <View style={styles.workerWho}>
+          <Text style={styles.workerName}>{name}</Text>
+          {worker.node ? (
+            <>
+              <NodeIcon node={worker.node} size={16} />
+              <Text style={styles.where}>{worker.nodeName}</Text>
+            </>
+          ) : null}
+        </View>
         <Text style={[styles.status, statusStyle]}>{STATUS_SHORT[worker.status]}</Text>
       </View>
       {worker.status === 'idle' || worker.status === 'paused' ? <Text style={[styles.small, styles.bad]}>{STATUS_TEXT[worker.status]}</Text> : null}
@@ -173,15 +180,19 @@ const CrewLine = memo(function CrewLine({ crew }: { crew: CrewView }) {
   const per = crew.status === 'working' ? `${formatPerMin(crew.itemsPerMin)} ${itemName(crew.itemId)}/min` : crew.status === 'idle' ? 'idle' : 'paused';
   return (
     <View style={styles.crew} accessible accessibilityLabel={`${crew.name}, ${crew.workers} workers, ${per}, upkeep ${crew.upkeepPerMin} gold per minute`}>
-      <Text style={styles.line}>
-        {crew.icon} {crew.name}{' '}
-        <Text style={styles.small}>
-          · Tier {crew.tier} · {crew.workers} 👷
+      <View style={styles.crewRow}>
+        <NodeIcon node={crew.node} size={16} />
+        <Text style={styles.line}>
+          {crew.name} <Text style={styles.small}>· Tier {crew.tier} · {crew.workers}</Text>
         </Text>
-      </Text>
-      <Text style={[styles.small, crew.status === 'working' ? styles.ok : styles.bad]}>
-        {itemIcon(crew.itemId)} {per} · 🪙 {formatNumber(crew.upkeepPerMin)}/min
-      </Text>
+        <GameIcon name="workers" />
+      </View>
+      <View style={styles.crewRow}>
+        <ItemIcon defId={crew.itemId} size={16} />
+        <Text style={[styles.small, crew.status === 'working' ? styles.ok : styles.bad]}>{per} ·</Text>
+        <GameIcon name="gold" />
+        <Text style={[styles.small, crew.status === 'working' ? styles.ok : styles.bad]}>{formatNumber(crew.upkeepPerMin)}/min</Text>
+      </View>
     </View>
   );
 });
@@ -221,8 +232,8 @@ const ChoiceRow = memo(function ChoiceRow({ choice, current, onPick }: { choice:
   const disabled = !choice.available || current;
   const pick = useCallback(() => onPick(choice.node), [onPick, choice.node]);
   const detail = choice.available
-    ? `Tier ${choice.tier} · 🪙 ${formatNumber(choice.upkeepPerMin)}/min · +${formatPerMin(choice.itemsPerMinPerWorker)} ${itemName(choice.itemId)}/min`
-    : `🔒 ${choice.reason}`;
+    ? `Tier ${choice.tier} · upkeep ${formatNumber(choice.upkeepPerMin)} gold/min · +${formatPerMin(choice.itemsPerMinPerWorker)} ${itemName(choice.itemId)}/min`
+    : choice.reason;
   return (
     <Pressable
       onPress={pick}
@@ -234,11 +245,17 @@ const ChoiceRow = memo(function ChoiceRow({ choice, current, onPick }: { choice:
         choice.available ? `upkeep ${choice.upkeepPerMin} gold per minute, about ${formatPerMin(choice.itemsPerMinPerWorker)} ${itemName(choice.itemId)} per minute` : choice.reason
       }${current ? ', current' : ''}`}
     >
-      <Text style={styles.choiceName}>
-        {choice.icon} {choice.name}
+      <IconText image={<NodeIcon node={choice.node} size={20} />} style={styles.choiceName}>
+        {choice.name}
         {current ? <Text style={styles.choiceCurrent}>  (here now)</Text> : null}
-      </Text>
-      <Text style={[styles.choiceDetail, !choice.available && styles.choiceLocked]}>{detail}</Text>
+      </IconText>
+      {choice.available ? (
+        <Text style={styles.choiceDetail}>{detail}</Text>
+      ) : (
+        <IconText icon="locked" size={14} style={[styles.choiceDetail, styles.choiceLocked]}>
+          {detail}
+        </IconText>
+      )}
     </Pressable>
   );
 });
@@ -266,10 +283,13 @@ const styles = StyleSheet.create({
   bad: { color: colors.dangerDeadly },
   actions: { flexDirection: 'row', gap: 8 },
   worker: { gap: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.parchmentDark },
-  workerName: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
+  workerWho: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1, flexWrap: 'wrap' },
+  workerName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
   where: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft },
   status: { fontFamily: fonts.bodyBold, fontSize: 14 },
   crew: { gap: 2, paddingVertical: 4, borderTopWidth: 1, borderTopColor: colors.parchmentDark },
+  crewRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
+  titleIconRow: { flexShrink: 1, gap: 6 },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
   sheet: { maxHeight: '80%', backgroundColor: colors.sheet, borderTopWidth: 3, borderTopColor: colors.goldDark, paddingTop: 12 },

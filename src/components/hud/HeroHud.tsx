@@ -10,6 +10,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useGameState } from '../../client/GameProvider';
 import { hpView, manaView, staminaView } from '../../engine';
 import { colors, fonts } from '../../theme';
+import { HeroPortrait } from '../art/Sprites';
 import { formatLevelPercent, formatNumber } from '../format';
 import { HUD_BAR_GAP, HUD_BAR_HEIGHT, HUD_BARS_WIDTH, HUD_BORDER, HUD_GAP, HUD_HEIGHT, HUD_MARGIN_LEFT, HUD_MARGIN_TOP, HUD_PADDING, HUD_PORTRAIT, HUD_WIDTH } from './hudLayout';
 
@@ -66,7 +67,8 @@ const HudView = memo(function HudView({ name, level, unspent, hp, maxHp, mana, m
   const body = (
     <View style={styles.box}>
       <View style={styles.portrait}>
-        <Text style={styles.portraitIcon}>🧔</Text>
+        {/* Inside the 3 pt bevel: 48 pt, 1 pt per art pixel. */}
+        <HeroPortrait size={HUD_PORTRAIT - 6} />
         <View style={styles.levelBadge}>
           <Text style={styles.levelText}>{level}</Text>
         </View>
@@ -140,7 +142,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  portraitIcon: { fontSize: 30, lineHeight: 36 },
   levelBadge: {
     position: 'absolute',
     left: -3,

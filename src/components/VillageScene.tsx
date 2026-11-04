@@ -1,4 +1,4 @@
-// The village map: the artwork (assets/images/village.png, bigger than the screen) can be dragged in any direction and
+// The village map: the artwork (bigger than the screen) can be dragged in any direction and
 // pinch-zoomed (about the fingers' midpoint), clamped so it always covers the screen (no empty bars), from about the
 // whole width up to 2.5× the starting zoom. It starts centred on the core village. Signs keep their on-screen size while
 // zooming; their positions follow the map. A drag starting on a sign pans; a tap on a sign still opens it (the pan only
@@ -6,18 +6,30 @@
 //
 // Gestures and the camera live on the UI thread (Reanimated shared values + Gesture Handler v3 hooks); React only
 // re-renders when the game state changes. The HUD and the activity strip are overlays drawn by the screens above this.
+//
+// The artwork is the background (no buildings) plus one sprite per building, drawn back to front in the layout's order
+// at their world px box inside the same transformed view, so they pan and zoom with it. A building that is not built yet
+// is not drawn (its road ends on empty ground); its sign stays, greyed with the locked icon. Decor cottages always show.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { type HostInstance, Image, type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import type { AnchorRect } from './ui/InfoPopover';
 import { GestureDetector, usePanGesture, usePinchGesture, useSimultaneousGestures } from 'react-native-gesture-handler';
 import Animated, { type SharedValue, useAnimatedStyle, useSharedValue, withDecay } from 'react-native-reanimated';
 import { colors, fonts } from '../theme';
+import { GameIcon } from './art/Sprites';
+import { type IconName, VILLAGE_BACKGROUND, VILLAGE_PIECES, type VillagePieceId } from './art/images';
 import { PixelButton } from './PixelButton';
-import { clampCamera, mapLimits, SIGNS, type VillageAction, WORLD } from './village/villageMap';
+import { clampCamera, mapLimits, PIECES, SIGNS, type VillageAction, WORLD } from './village/villageMap';
 
 export type { VillageAction } from './village/villageMap';
 
-const village = require('../../assets/images/village.png');
+/** A timer pill under a sign: its symbol and text ("Upgrading 12:34", "2/2 crafting · 0:42"). */
+export type SignBadge = { icon: IconName; text: string };
+
+/** Each piece's box on the map, world px (1 pt per world px inside the transformed map view). */
+const pieceStyles = StyleSheet.create(
+  Object.fromEntries(PIECES.map((p) => [p.id, { position: 'absolute', left: p.x, top: p.y, width: p.w, height: p.h }] as const)),
+);
 
 /** Box each sign is centred in. Wider than any label so the text never wraps or gets squeezed. */
 const SIGN_BOX_W = 200;
@@ -38,10 +50,13 @@ type Props = {
   onAction?: (a: VillageAction, anchor: AnchorRect | null) => void;
   /** Sign of the running activity, drawn highlighted. */
   active?: VillageAction | null;
-  /** Signs of buildings not built yet: greyed with 🔒, still tappable (they open the Build box). */
+  /**
+   * Signs of buildings not built yet: their building is not drawn; the sign is greyed with the locked icon and stays
+   * tappable (it opens the Build box).
+   */
   locked?: ReadonlySet<VillageAction>;
-  /** Timer pills under signs, with their own icon ("🔨 Upgrading 12:34", "⚒️ 2/2 crafting · 0:42"). */
-  badges?: Partial<Record<VillageAction, string>>;
+  /** Timer pills under signs, each with its own symbol (upgrade: "Upgrading 12:34", crafting: "2/2 crafting · 0:42"). */
+  badges?: Partial<Record<VillageAction, SignBadge>>;
   /** Screen space covered by overlays (HUD, activity strip): the start view centres the core between them. */
   topReserve?: number;
   bottomReserve?: number;
@@ -161,7 +176,7 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
         {ready ? (
           <>
             <Animated.View style={[styles.map, mapStyle]} pointerEvents="none">
-              <Image source={village} style={styles.image} resizeMode="stretch" accessibilityIgnoresInvertColors />
+              <MapArt locked={locked} />
             </Animated.View>
             {SIGNS.map((s) => (
               <Sign
@@ -185,6 +200,20 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
   );
 });
 
+/** Background, then every building piece back to front; a building not built yet is left out. */
+const MapArt = memo(function MapArt({ locked }: { locked?: ReadonlySet<VillageAction> }) {
+  return (
+    <>
+      <Image source={VILLAGE_BACKGROUND} style={styles.image} resizeMode="stretch" fadeDuration={0} accessibilityIgnoresInvertColors />
+      {PIECES.map((p) => {
+        const source = VILLAGE_PIECES[p.id as VillagePieceId];
+        if (!source || (p.sign && locked?.has(p.sign))) return null;
+        return <Image key={p.id} source={source} style={pieceStyles[p.id]} resizeMode="stretch" fadeDuration={0} accessibilityIgnoresInvertColors />;
+      })}
+    </>
+  );
+});
+
 /** Stops a running flick (withDecay) so a new touch takes over at once. */
 function cancelDecay(tx: SharedValue<number>, ty: SharedValue<number>) {
   'worklet';
@@ -199,7 +228,7 @@ type SignProps = {
   ty: SharedValue<number>;
   locked: boolean;
   active: boolean;
-  badge?: string;
+  badge?: SignBadge;
   onAction?: (a: VillageAction, anchor: AnchorRect | null) => void;
   anchorOf: (sign: (typeof SIGNS)[number], button: { w: number; h: number }) => AnchorRect;
   /** Re-measures the scene root before a tap is handled (it can move, e.g. a tab bar change). */
@@ -226,18 +255,19 @@ const Sign = memo(function Sign({ sign, zoom, tx, ty, locked, active, badge, onA
         <PixelButton
           sign
           label={sign.label}
-          icon={locked ? '🔒' : sign.icon}
+          icon={locked ? 'locked' : undefined}
           muted={locked}
           active={!locked && active}
           onPress={press}
-          accessibilityLabel={locked ? `${sign.label}, not built` : badge ? `${sign.label}, ${badge}` : sign.label}
+          accessibilityLabel={locked ? `${sign.label}, not built` : badge ? `${sign.label}, ${badge.text}` : sign.label}
           accessibilityHint={locked ? 'Shows what it needs to build' : undefined}
         />
       </View>
       {badge ? (
         <View style={styles.badge} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no">
+          <GameIcon name={badge.icon} size={14} />
           <Text style={styles.badgeText} numberOfLines={1}>
-            {badge}
+            {badge.text}
           </Text>
         </View>
       ) : null}
@@ -258,7 +288,9 @@ const styles = StyleSheet.create({
     top: SIGN_BOX_H / 2 + SIGN_BUTTON_H / 2 + BADGE_GAP,
     height: BADGE_H,
     paddingHorizontal: 6,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: colors.woodDark,
     borderWidth: 1,
     borderColor: colors.gold,

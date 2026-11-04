@@ -2,11 +2,12 @@
 // need and met / unmet, and a Build button inside, enabled only when everything is met. Reads buildingView() through
 // the game state and dispatches BUILD; the engine re-checks every requirement (REQUIREMENTS_NOT_MET / ALREADY_BUILT
 // change nothing). Errors show inline.
-import { useCallback, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useRef, useState } from 'react';
 import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
 import { BUILDINGS, type BuildingId, buildingView, type RequirementView } from '../../engine';
 import { DEV_TOOLS_ENABLED } from '../../engine/config/dev';
-import { formatNumber, itemIcon, itemName } from '../format';
+import { GameIcon, ItemIcon } from '../art/Sprites';
+import { formatNumber, itemName } from '../format';
 import { PixelButton } from '../PixelButton';
 import { type AnchorRect, InfoPopover, POPOVER_BAD, POPOVER_GOOD, PopoverActions, PopoverRow, PopoverSection, PopoverText } from '../ui/InfoPopover';
 
@@ -19,16 +20,17 @@ type Props = {
   onBuilt: (name: string) => void;
 };
 
-function requirementText(r: RequirementView): { label: string; have: string; need: string } {
+/** A requirement's row: its pixel symbol (a building has none: plain text), label, have / need. */
+function requirementText(r: RequirementView): { icon?: ReactNode; label: string; have: string; need: string } {
   switch (r.kind) {
     case 'heroLevel':
-      return { label: '⭐ Hero level', have: formatNumber(r.have), need: formatNumber(r.need) };
+      return { icon: <GameIcon name="hero_level" />, label: 'Hero level', have: formatNumber(r.have), need: formatNumber(r.need) };
     case 'building':
-      return { label: `${BUILDINGS[r.buildingId].icon} ${BUILDINGS[r.buildingId].name}`, have: r.have > 0 ? 'built' : 'not built', need: 'built' };
+      return { label: BUILDINGS[r.buildingId].name, have: r.have > 0 ? 'built' : 'not built', need: 'built' };
     case 'item':
-      return { label: `${itemIcon(r.defId)} ${itemName(r.defId)}`, have: formatNumber(r.have), need: formatNumber(r.need) };
+      return { icon: <ItemIcon defId={r.defId} size={16} />, label: itemName(r.defId), have: formatNumber(r.have), need: formatNumber(r.need) };
     case 'gold':
-      return { label: '🪙 Gold', have: formatNumber(r.have), need: formatNumber(r.need) };
+      return { icon: <GameIcon name="gold" />, label: 'Gold', have: formatNumber(r.have), need: formatNumber(r.need) };
   }
 }
 
@@ -74,7 +76,7 @@ export function BuildSheet({ buildingId, anchor, onClose, onBuilt }: Props) {
 
   if (!view) return null;
   return (
-    <InfoPopover anchor={anchor} onClose={close} title={view.name} icon={view.icon} subtitle="🔒 Not built yet">
+    <InfoPopover anchor={anchor} onClose={close} title={view.name} icon={<GameIcon name="locked" size={32} />} subtitle="Not built yet">
       <PopoverText tone="note">{view.description}</PopoverText>
       <PopoverSection>Needs</PopoverSection>
       {view.requirements.map((r, i) => {
@@ -82,12 +84,13 @@ export function BuildSheet({ buildingId, anchor, onClose, onBuilt }: Props) {
         return (
           <PopoverRow
             key={i}
-            label={
+            icon={
               <>
-                <PopoverText tone={r.met ? 'good' : 'bad'}>{r.met ? '✓ ' : '✗ '}</PopoverText>
-                {t.label}
+                <PopoverText tone={r.met ? 'good' : 'bad'}>{r.met ? '✓' : '✗'}</PopoverText>
+                {t.icon}
               </>
             }
+            label={t.label}
             value={r.kind === 'building' ? t.have : `${t.have} / ${t.need}`}
             valueColor={r.met ? POPOVER_GOOD : POPOVER_BAD}
           />

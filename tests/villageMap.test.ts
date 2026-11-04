@@ -2,7 +2,7 @@
 // clamp that never shows an empty bar.
 import { describe, expect, it } from 'vitest';
 import { HUD_MARGIN_LEFT, HUD_WIDTH, hudBottom } from '../src/components/hud/hudLayout';
-import { CORE, clampCamera, mapLimits, PLOTS, SIGNS, WORLD } from '../src/components/village/villageMap';
+import { CORE, clampCamera, mapLimits, PIECES, PLOTS, SIGNS, WORLD } from '../src/components/village/villageMap';
 
 /** Signs on the core village (visible at start) and signs on a building plot outside it (reached by panning). */
 const CORE_SIGNS = SIGNS.filter((s) => !s.plot);
@@ -15,17 +15,21 @@ const SCREENS = [
 ];
 
 describe('village map', () => {
-  it('every core sign sits on the core village, every plot inside the world and outside the core', () => {
+  it('every core sign sits in the start framing; every plot is inside the world and empty ground in the art', () => {
     for (const s of CORE_SIGNS) {
       expect(s.x).toBeGreaterThan(CORE.x);
       expect(s.x).toBeLessThan(CORE.x + CORE.w);
       expect(s.y).toBeGreaterThan(CORE.y);
       expect(s.y).toBeLessThan(CORE.y + CORE.h);
     }
-    for (const [x0, y0, x1, y1] of Object.values(PLOTS)) {
+    // A plot's centre is under no building piece, except the building that stands on it (east = Crafting house).
+    const onPlot = new Map(SIGNS.filter((s) => s.plot).map((s) => [s.plot, s.key]));
+    for (const [plot, [x0, y0, x1, y1]] of Object.entries(PLOTS)) {
       expect(x0 >= 0 && y0 >= 0 && x1 <= WORLD.w && y1 <= WORLD.h).toBe(true);
-      const overlaps = x1 > CORE.x && x0 < CORE.x + CORE.w && y1 > CORE.y && y0 < CORE.y + CORE.h;
-      expect(overlaps).toBe(false);
+      const cx = (x0 + x1) / 2;
+      const cy = (y0 + y1) / 2;
+      const under = PIECES.filter((p) => cx >= p.x && cx < p.x + p.w && cy >= p.y && cy < p.y + p.h).map((p) => p.id);
+      expect(under, plot).toEqual(onPlot.has(plot as never) ? [onPlot.get(plot as never)] : []);
     }
   });
 
@@ -48,11 +52,11 @@ describe('village map', () => {
     }
   });
 
-  it('a plot sign (Crafting, 1.13.0) sits at its plot centre and pans fully into view between the HUD and the strip', () => {
+  it('a plot sign (Crafting, 1.13.0) sits on its plot and pans fully into view between the HUD and the strip', () => {
     expect(PLOT_SIGNS.map((s) => [s.key, s.plot])).toEqual([['crafting', 'east']]);
     for (const s of PLOT_SIGNS) {
       const [x0, y0, x1, y1] = PLOTS[s.plot!];
-      expect([s.x, s.y]).toEqual([(x0 + x1) / 2, (y0 + y1) / 2]);
+      expect(s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1).toBe(true);
       for (const view of SCREENS) {
         const top = 100;
         const bottom = 44;

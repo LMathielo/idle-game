@@ -3,10 +3,11 @@
 // builder busy, max level), and the Upgrade button inside. Reads upgradeView() / constructionView() and dispatches
 // UPGRADE_BUILDING (bound to the level shown); the engine re-checks everything. While this building is being upgraded
 // it shows the countdown, plus a debug "finish now" button. Errors show inline.
-import { useCallback, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useRef, useState } from 'react';
 import { useGameClient, useGameSnapshot } from '../../client/GameProvider';
 import { BUILDINGS, type BuildingId, constructionView, DEV_TOOLS_ENABLED, type RequirementView, upgradeView } from '../../engine';
-import { formatCountdown, formatHoursMinutes, formatNumber, itemIcon, itemName } from '../format';
+import { GameIcon, IconText, ItemIcon } from '../art/Sprites';
+import { formatCountdown, formatHoursMinutes, formatNumber, itemName } from '../format';
 import { PixelButton } from '../PixelButton';
 import { type AnchorRect, InfoPopover, POPOVER_BAD, POPOVER_GOOD, PopoverActions, PopoverRow, PopoverSection, PopoverText } from '../ui/InfoPopover';
 import { bonusLines, trainingRateStep } from './bonusText';
@@ -18,9 +19,9 @@ type Props = {
   onClose: () => void;
 };
 
-function costText(r: RequirementView): { label: string; have: string; need: string } {
-  if (r.kind === 'item') return { label: `${itemIcon(r.defId)} ${itemName(r.defId)}`, have: formatNumber(r.have), need: formatNumber(r.need) };
-  return { label: '🪙 Gold', have: formatNumber(r.have), need: formatNumber(r.need) };
+function costText(r: RequirementView): { icon: ReactNode; label: string; have: string; need: string } {
+  if (r.kind === 'item') return { icon: <ItemIcon defId={r.defId} size={16} />, label: itemName(r.defId), have: formatNumber(r.have), need: formatNumber(r.need) };
+  return { icon: <GameIcon name="gold" />, label: 'Gold', have: formatNumber(r.have), need: formatNumber(r.need) };
 }
 
 export function UpgradeSheet({ buildingId, anchor, onClose }: Props) {
@@ -74,11 +75,13 @@ export function UpgradeSheet({ buildingId, anchor, onClose }: Props) {
   else if (view.block === 'not_upgradable') blockText = "Can't be upgraded yet: its next level gives nothing.";
 
   return (
-    <InfoPopover anchor={anchor} onClose={close} title={def.name} icon={def.icon} subtitle={`Level ${view.level} / ${view.maxLevel}`}>
+    <InfoPopover anchor={anchor} onClose={close} title={def.name} icon={<GameIcon name="upgrade" size={32} />} subtitle={`Level ${view.level} / ${view.maxLevel}`}>
       {mine ? (
-        <PopoverText tone="gold">
-          🔨 Upgrading to Lv {mine.level} · {formatCountdown(mine.remainingMs)} left
-        </PopoverText>
+        <IconText icon="upgrade">
+          <PopoverText tone="gold">
+            Upgrading to Lv {mine.level} · {formatCountdown(mine.remainingMs)} left
+          </PopoverText>
+        </IconText>
       ) : null}
 
       <PopoverSection>Now (Lv {view.level})</PopoverSection>
@@ -95,18 +98,19 @@ export function UpgradeSheet({ buildingId, anchor, onClose }: Props) {
             return (
               <PopoverRow
                 key={i}
-                label={
+                icon={
                   <>
-                    <PopoverText tone={r.met ? 'good' : 'bad'}>{r.met ? '✓ ' : '✗ '}</PopoverText>
-                    {t.label}
+                    <PopoverText tone={r.met ? 'good' : 'bad'}>{r.met ? '✓' : '✗'}</PopoverText>
+                    {t.icon}
                   </>
                 }
+                label={t.label}
                 value={`${t.have} / ${t.need}`}
                 valueColor={r.met ? POPOVER_GOOD : POPOVER_BAD}
               />
             );
           })}
-          <PopoverRow label="⏳ Builder time" value={formatHoursMinutes(view.durationMs)} />
+          <PopoverRow label="Builder time" value={formatHoursMinutes(view.durationMs)} />
           <PopoverText tone="note">Paid up front. Upgrades go on while you play and while the app is closed; one at a time.</PopoverText>
         </>
       ) : null}
