@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
-    "@expo-google-fonts/jacquard-12": "^0.4.1",
+    "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/pixelify-sans": "^0.4.2",
     "@expo/vector-icons": "^15.0.2",
     "expo": "~58.0.19",
@@ -17,6 +17,7 @@
     "expo-updates": "~58.0.18",
     "react": "19.3.0",
     "react-native": "0.88.0",
+    "react-native-gesture-handler": "~3.3.0",
     "react-native-reanimated": "4.7.1",
     "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "~4.30.0",

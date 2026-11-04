@@ -1,0 +1,255 @@
+[
+  {
+    "commandId": "v4fx-2",
+    "type": "NEW_GAME",
+    "payload": {
+      "seed": 3554416254
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.3.0",
+    "stateHash": "a6c1bde8",
+    "seq": 1,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-3",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "woodcutting",
+      "id": "v4fx-3"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.3.0",
+    "stateHash": "332312b0",
+    "seq": 2,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-4",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 2400000,
+        "grantedMs": 2400000,
+        "actions": 817,
+        "itemsGained": {
+          "oak_logs": 817,
+          "bird_nest": 2
+        },
+        "itemsLost": {},
+        "skillXpGained": {
+          "woodcutting": 8170
+        },
+        "skillLevelsGained": {
+          "woodcutting": 3
+        },
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792932000000,
+    "engineVersion": "1.3.0",
+    "stateHash": "9638929a",
+    "seq": 3,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-5",
+    "type": "DEBUG_GRANT_HERO_XP",
+    "payload": {
+      "type": "DEBUG_GRANT_HERO_XP",
+      "amount": 10000,
+      "id": "v4fx-5"
+    },
+    "clientTime": 1792932000000,
+    "engineVersion": "1.3.0",
+    "stateHash": "050c7c7e",
+    "seq": 4,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-6",
+    "type": "DEBUG_ADD_ATTRIBUTE",
+    "payload": {
+      "type": "DEBUG_ADD_ATTRIBUTE",
+      "attribute": "dexterity",
+      "amount": 3,
+      "id": "v4fx-6"
+    },
+    "clientTime": 1792932000000,
+    "engineVersion": "1.3.0",
+    "stateHash": "c8de8d27",
+    "seq": 5,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-7",
+    "type": "DEBUG_ADD_ATTRIBUTE",
+    "payload": {
+      "type": "DEBUG_ADD_ATTRIBUTE",
+      "attribute": "endurance",
+      "amount": 2,
+      "id": "v4fx-7"
+    },
+    "clientTime": 1792932000000,
+    "engineVersion": "1.3.0",
+    "stateHash": "f248c8e5",
+    "seq": 6,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-8",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "dungeon",
+      "dungeonId": "rat_cellar_1",
+      "id": "v4fx-8"
+    },
+    "clientTime": 1792932000000,
+    "engineVersion": "1.3.0",
+    "stateHash": "bb3a311f",
+    "seq": 7,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-9",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 3600000,
+        "grantedMs": 3600000,
+        "actions": 0,
+        "itemsGained": {
+          "rat_skin": 8
+        },
+        "itemsLost": {},
+        "skillXpGained": {},
+        "skillLevelsGained": {},
+        "heroXpGained": 300,
+        "heroLevelsGained": 0,
+        "goldGained": 39,
+        "dungeon": {
+          "runs": 12,
+          "wins": 12,
+          "losses": 0
+        },
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792935600000,
+    "engineVersion": "1.3.0",
+    "stateHash": "d94bfb07",
+    "seq": 8,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-10",
+    "type": "DEBUG_SET_HERO_HP",
+    "payload": {
+      "type": "DEBUG_SET_HERO_HP",
+      "hp": 1,
+      "id": "v4fx-10"
+    },
+    "clientTime": 1792935600000,
+    "engineVersion": "1.3.0",
+    "stateHash": "2b334869",
+    "seq": 9,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-11",
+    "type": "DEBUG_FINISH_DUNGEON_RUN",
+    "payload": {
+      "type": "DEBUG_FINISH_DUNGEON_RUN",
+      "id": "v4fx-11"
+    },
+    "clientTime": 1792935600000,
+    "engineVersion": "1.3.0",
+    "stateHash": "9896a8bf",
+    "seq": 10,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-12",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 1817000,
+        "grantedMs": 1817000,
+        "actions": 0,
+        "itemsGained": {
+          "rat_skin": 2
+        },
+        "itemsLost": {},
+        "skillXpGained": {},
+        "skillLevelsGained": {},
+        "heroXpGained": 150,
+        "heroLevelsGained": 0,
+        "goldGained": 19,
+        "dungeon": {
+          "runs": 6,
+          "wins": 6,
+          "losses": 0
+        },
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792937417000,
+    "engineVersion": "1.3.0",
+    "stateHash": "020ce3f8",
+    "seq": 11,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-13",
+    "type": "DEBUG_SPEND_STAMINA",
+    "payload": {
+      "type": "DEBUG_SPEND_STAMINA",
+      "amount": 20,
+      "id": "v4fx-13"
+    },
+    "clientTime": 1792937417000,
+    "engineVersion": "1.3.0",
+    "stateHash": "233f4fcf",
+    "seq": 12,
+    "synced": false
+  },
+  {
+    "commandId": "v4fx-14",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 95000,
+        "grantedMs": 95000,
+        "actions": 0,
+        "itemsGained": {},
+        "itemsLost": {},
+        "skillXpGained": {},
+        "skillLevelsGained": {},
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792937512000,
+    "engineVersion": "1.3.0",
+    "stateHash": "a2da85e7",
+    "seq": 13,
+    "synced": false
+  }
+]

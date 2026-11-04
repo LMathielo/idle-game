@@ -1,78 +1,156 @@
-// Status strip shown above the tab bar while an activity runs.
-// The action bar is driven on the UI thread: each state update snaps it to the engine's
-// fraction, then a linear timing runs it to full over the remaining time.
-import { memo, useEffect } from 'react';
+// Status strip shown above the tab bar while an activity runs (woodcutting, mining, dungeon runs or training), or,
+// with no activity, while the builder upgrades a building.
+import { memo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useGameSnapshot } from '../client/GameProvider';
-import { activityView, itemQuantity } from '../engine';
+import { activityView, constructionView, DUNGEONS, ENEMIES, hpView, itemQuantity, ROCKS, TREES } from '../engine';
 import { colors, fonts } from '../theme';
-import { formatNumber } from './format';
-
-const ACTIVITY_LABELS = { woodcutting: { icon: '🪓', label: 'Woodcutting' } } as const;
+import { GameIcon, ItemIcon, SkillIcon } from './art/Sprites';
+import { ATTRIBUTE_NAMES, formatClock, formatCountdown, formatNumber, formatTrainingLeft } from './format';
+import { LiveBar } from './LiveBar';
 
 /** Fixed height: the strip floats over the screen, so scrollable screens reserve this much at the bottom. */
 export const ACTIVITY_STRIP_HEIGHT = 44;
 
+const PAUSED_A11Y = ', paused because the device clock moved back';
+
 export function ActivityStrip() {
   const { state, clockPaused } = useGameSnapshot();
   const view = activityView(state);
-  if (!view) return null;
-  const meta = ACTIVITY_LABELS[view.kind];
+  if (!view) {
+    // No hero activity: the strip shows the builder's job instead, when there is one.
+    const job = constructionView(state);
+    if (!job) return null;
+    return (
+      <StripView
+        icon={<GameIcon name="upgrade" />}
+        title={`${job.name} → Lv ${job.level} · ${formatCountdown(job.remainingMs)}`}
+        right="Builder"
+        a11y={`Upgrading ${job.name} to level ${job.level}, ${formatCountdown(job.remainingMs)} left${clockPaused ? PAUSED_A11Y : ''}`}
+        fraction={job.fraction}
+        remainingMs={job.remainingMs}
+        paused={clockPaused}
+        color={colors.gold}
+      />
+    );
+  }
+
+  if (view.kind === 'dungeon') {
+    const dungeon = DUNGEONS[view.dungeonId];
+    const hp = hpView(state);
+    const fight = view.fight;
+    if (fight) {
+      // Fight phase: the bar shows the enemy's HP lost (snapped on every engine tick, never animated ahead).
+      const enemy = ENEMIES[fight.enemyId];
+      const lost = fight.enemyMaxHp > 0 ? 1 - fight.enemyHp / fight.enemyMaxHp : 1;
+      return (
+        <StripView
+          icon={<GameIcon name="fight" />}
+          title={`${dungeon.name} · ${enemy.name} ${formatNumber(fight.enemyHp)}/${formatNumber(fight.enemyMaxHp)}`}
+          right={`HP ${formatNumber(hp.hp)}/${formatNumber(hp.maxHp)}`}
+          a11y={`${dungeon.name}, fighting ${enemy.name}, ${enemy.name} HP ${fight.enemyHp} of ${fight.enemyMaxHp}, your HP ${hp.hp} of ${hp.maxHp}${clockPaused ? PAUSED_A11Y : ''}`}
+          fraction={lost}
+          remainingMs={0}
+          paused
+          color={colors.hp}
+        />
+      );
+    }
+    return (
+      <StripView
+        icon={<GameIcon name="fight" />}
+        title={`${dungeon.name} · searching ${formatClock(view.remainingMs)}`}
+        right={`HP ${formatNumber(hp.hp)}/${formatNumber(hp.maxHp)}`}
+        a11y={`${dungeon.name}, searching for an opponent, ${formatClock(view.remainingMs)} left, HP ${hp.hp} of ${hp.maxHp}${clockPaused ? PAUSED_A11Y : ''}`}
+        fraction={view.fraction}
+        remainingMs={view.remainingMs}
+        paused={clockPaused}
+        color={colors.hp}
+      />
+    );
+  }
+
+  if (view.kind === 'training') {
+    const names = ATTRIBUTE_NAMES[view.attribute];
+    const left = formatTrainingLeft(view.remainingMs);
+    return (
+      <StripView
+        icon={<GameIcon name="training" />}
+        title={`Training core ${names.short} · Lv ${view.core} · ${left} to next`}
+        right={`${names.short} ${formatNumber(view.total)}`}
+        a11y={`Training core ${names.label}, level ${view.core} of ${view.cap}, ${left} to the next level, ${names.label} ${view.total}${clockPaused ? PAUSED_A11Y : ''}`}
+        fraction={view.fraction}
+        remainingMs={view.remainingMs}
+        paused={clockPaused}
+        color={colors.skill}
+      />
+    );
+  }
+
+  if (view.kind === 'mining') {
+    const rock = ROCKS[view.rockId];
+    const ores = itemQuantity(state, rock.oreItemId);
+    return (
+      <StripView
+        icon={<SkillIcon skill="mining" />}
+        title={`${rock.name} · ${formatClock(view.remainingMs)} · Lv ${view.skillLevel}`}
+        rightIcon={<ItemIcon defId={rock.oreItemId} size={16} />}
+        right={formatNumber(ores)}
+        a11y={`Mining ${rock.name}, ${formatClock(view.remainingMs)} to the next ore, mining level ${view.skillLevel}, ${ores} ${rock.name}${clockPaused ? PAUSED_A11Y : ''}`}
+        fraction={view.fraction}
+        remainingMs={view.remainingMs}
+        paused={clockPaused}
+        color={colors.skill}
+      />
+    );
+  }
+
+  const tree = TREES[view.treeId];
+  const logs = itemQuantity(state, tree.logItemId);
   return (
-    <ActivityStripView
-      icon={meta.icon}
-      label={meta.label}
-      level={view.skillLevel}
+    <StripView
+      icon={<SkillIcon skill="woodcutting" />}
+      title={`${tree.name} · ${formatClock(view.remainingMs)} · Lv ${view.skillLevel}`}
+      rightIcon={<ItemIcon defId={tree.logItemId} size={16} />}
+      right={formatNumber(logs)}
+      a11y={`Cutting ${tree.name}, ${formatClock(view.remainingMs)} to the next log, woodcutting level ${view.skillLevel}, ${logs} ${tree.name} logs${clockPaused ? PAUSED_A11Y : ''}`}
       fraction={view.fraction}
       remainingMs={view.remainingMs}
-      logs={itemQuantity(state, 'oak_logs')}
       paused={clockPaused}
+      color={colors.skill}
     />
   );
 }
 
 type ViewProps = {
-  icon: string;
-  label: string;
-  level: number;
+  /** Pixel symbol before the title. */
+  icon: ReactNode;
+  title: string;
+  /** Pixel symbol before the right-hand count (the item being gathered). */
+  rightIcon?: ReactNode;
+  right: string;
+  a11y: string;
   fraction: number;
   remainingMs: number;
-  logs: number;
   paused: boolean;
+  color: string;
 };
 
-const ActivityStripView = memo(function ActivityStripView({ icon, label, level, fraction, remainingMs, logs, paused }: ViewProps) {
-  const progress = useSharedValue(fraction);
-  const reducedMotion = useReducedMotion();
-
-  useEffect(() => {
-    progress.set(fraction);
-    if (!paused && !reducedMotion && remainingMs > 0) {
-      progress.set(withTiming(1, { duration: remainingMs, easing: Easing.linear }));
-    }
-  }, [fraction, remainingMs, paused, reducedMotion, progress]);
-
-  const fillStyle = useAnimatedStyle(() => ({ width: `${progress.get() * 100}%` }));
-
+const StripView = memo(function StripView({ icon, title, rightIcon, right, a11y, fraction, remainingMs, paused, color }: ViewProps) {
   return (
-    <View
-      style={styles.strip}
-      pointerEvents="none"
-      accessible
-      accessibilityRole="summary"
-      accessibilityLabel={`${label} level ${level}, ${logs} logs${paused ? ', paused because the device clock moved back' : ''}`}
-    >
+    <View style={styles.strip} pointerEvents="none" accessible accessibilityRole="summary" accessibilityLabel={a11y}>
       <View style={styles.row}>
+        {icon}
         <Text style={styles.title} numberOfLines={1}>
-          {icon} {label} · Lv {level}
-          {paused ? <Text style={styles.paused}>  ⏸ Paused</Text> : null}
+          {title}
+          {paused ? <Text style={styles.paused}>  Paused</Text> : null}
         </Text>
-        <Text style={styles.count}>🪵 {formatNumber(logs)}</Text>
+        <View style={styles.right}>
+          {rightIcon}
+          <Text style={styles.count}>{right}</Text>
+        </View>
       </View>
-      <View style={styles.barOuter}>
-        <Animated.View style={[styles.barFill, fillStyle]} />
-      </View>
+      <LiveBar fraction={fraction} remainingMs={remainingMs} paused={paused} color={color} />
     </View>
   );
 });
@@ -92,10 +170,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 4,
   },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.parchment },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  title: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.parchment },
+  right: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 2 },
   count: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold },
-  barOuter: { height: 10, backgroundColor: colors.slot, borderWidth: 2, borderColor: colors.slotBorder, overflow: 'hidden' },
-  barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: colors.skill },
-  paused: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.gold },
+  paused: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.gold },
 });

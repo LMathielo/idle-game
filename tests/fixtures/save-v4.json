@@ -1,0 +1,202 @@
+{
+  "saveVersion": 4,
+  "rng": {
+    "seed": 3512289251
+  },
+  "time": {
+    "lastSimulatedAt": 1792937512000,
+    "highestSeenAt": 1792937512000
+  },
+  "offline": {
+    "capMs": 28800000,
+    "efficiency": 1
+  },
+  "activity": {
+    "kind": "dungeon",
+    "dungeonId": "rat_cellar_1",
+    "startedAt": 1792932000000,
+    "progressMs": 190000
+  },
+  "stamina": {
+    "current": 80,
+    "max": 100,
+    "progressMs": 95000
+  },
+  "dungeon": {
+    "lastFight": {
+      "dungeonId": "rat_cellar_1",
+      "enemyId": "rat",
+      "won": true,
+      "endReason": "enemy_defeated",
+      "rounds": 3,
+      "heroHpStart": 70,
+      "heroHpEnd": 63,
+      "heroMaxHp": 70,
+      "enemyMaxHp": 30,
+      "enemyHpEnd": 0,
+      "rewards": {
+        "heroXp": 25,
+        "gold": 3,
+        "items": {},
+        "itemsLost": {}
+      },
+      "log": [
+        {
+          "round": 1,
+          "actor": "hero",
+          "roll": 14,
+          "dealt": 13,
+          "targetHpAfter": 17
+        },
+        {
+          "round": 1,
+          "actor": "enemy",
+          "roll": 5,
+          "dealt": 4,
+          "targetHpAfter": 66
+        },
+        {
+          "round": 2,
+          "actor": "hero",
+          "roll": 13,
+          "dealt": 13,
+          "targetHpAfter": 4
+        },
+        {
+          "round": 2,
+          "actor": "enemy",
+          "roll": 4,
+          "dealt": 3,
+          "targetHpAfter": 63
+        },
+        {
+          "round": 3,
+          "actor": "hero",
+          "roll": 12,
+          "dealt": 12,
+          "targetHpAfter": 0
+        }
+      ]
+    },
+    "totals": {
+      "runs": 19,
+      "wins": 18,
+      "losses": 1
+    }
+  },
+  "stats": {
+    "totalActions": 817,
+    "itemsGathered": {
+      "oak_logs": 817,
+      "bird_nest": 2
+    }
+  },
+  "flags": {
+    "debugUsed": true
+  },
+  "character": {
+    "name": "Lucius",
+    "title": "Novice Gladiator",
+    "level": 3,
+    "xp": 4707,
+    "xpToNext": 7794,
+    "hp": 70,
+    "hpRegenProgress": 0,
+    "gold": 83,
+    "attributes": {
+      "strength": 10,
+      "dexterity": 13,
+      "endurance": 12,
+      "intelligence": 10
+    },
+    "equipment": {
+      "weapon": {
+        "id": "start-rusty_gladius",
+        "defId": "rusty_gladius",
+        "name": "Rusty Gladius",
+        "icon": "🗡️",
+        "rarity": "common",
+        "slot": "weapon"
+      },
+      "armor": {
+        "id": "start-linen_tunic",
+        "defId": "linen_tunic",
+        "name": "Linen Tunic",
+        "icon": "🥋",
+        "rarity": "common",
+        "slot": "armor"
+      },
+      "boots": {
+        "id": "start-worn_sandals",
+        "defId": "worn_sandals",
+        "name": "Worn Sandals",
+        "icon": "👢",
+        "rarity": "common",
+        "slot": "boots"
+      }
+    },
+    "skills": {
+      "woodcutting": {
+        "level": 4,
+        "xp": 3658,
+        "xpToNext": 4000
+      },
+      "mining": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      },
+      "fishing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      },
+      "smithing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      }
+    }
+  },
+  "inventory": {
+    "capacity": 20,
+    "items": [
+      {
+        "id": "bread",
+        "defId": "bread",
+        "name": "Bread",
+        "icon": "🍞",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 3
+      },
+      {
+        "id": "oak_logs",
+        "defId": "oak_logs",
+        "name": "Oak Logs",
+        "icon": "🪵",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 817
+      },
+      {
+        "id": "bird_nest",
+        "defId": "bird_nest",
+        "name": "Bird Nest",
+        "icon": "🪺",
+        "rarity": "rare",
+        "stackable": true,
+        "quantity": 2
+      },
+      {
+        "id": "rat_skin",
+        "defId": "rat_skin",
+        "name": "Rat Skin",
+        "icon": "🐾",
+        "rarity": "common",
+        "stackable": true,
+        "quantity": 10
+      }
+    ]
+  }
+}

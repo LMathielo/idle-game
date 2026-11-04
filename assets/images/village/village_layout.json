@@ -1,0 +1,154 @@
+{
+ "world": {
+  "w": 360,
+  "h": 560,
+  "scale": 4
+ },
+ "background": "village_background.png",
+ "order": [
+  "dungeon",
+  "mine",
+  "merchant",
+  "woodcutting",
+  "training",
+  "town_hall",
+  "crafting",
+  "storage",
+  "cottage_thatch",
+  "cottage_slate",
+  "cottage_whitewash"
+ ],
+ "pieces": {
+  "dungeon": {
+   "kind": "building",
+   "file": "buildings/dungeon.png",
+   "x": 176,
+   "y": 181,
+   "w": 61,
+   "h": 66,
+   "z": 0,
+   "sign": {
+    "x": 206,
+    "y": 172
+   }
+  },
+  "mine": {
+   "kind": "building",
+   "file": "buildings/mine.png",
+   "x": 111,
+   "y": 211,
+   "w": 60,
+   "h": 42,
+   "z": 1,
+   "sign": {
+    "x": 124,
+    "y": 198
+   }
+  },
+  "merchant": {
+   "kind": "building",
+   "file": "buildings/merchant.png",
+   "x": 216,
+   "y": 244,
+   "w": 59,
+   "h": 62,
+   "z": 2,
+   "sign": {
+    "x": 244,
+    "y": 240
+   }
+  },
+  "woodcutting": {
+   "kind": "building",
+   "file": "buildings/woodcutting.png",
+   "x": 61,
+   "y": 264,
+   "w": 69,
+   "h": 79,
+   "z": 3,
+   "sign": {
+    "x": 104,
+    "y": 266
+   }
+  },
+  "training": {
+   "kind": "building",
+   "file": "buildings/training.png",
+   "x": 192,
+   "y": 297,
+   "w": 83,
+   "h": 70,
+   "z": 4,
+   "sign": {
+    "x": 238,
+    "y": 292
+   }
+  },
+  "town_hall": {
+   "kind": "building",
+   "file": "buildings/town_hall.png",
+   "x": 120,
+   "y": 270,
+   "w": 75,
+   "h": 81,
+   "z": 5,
+   "sign": {
+    "x": 160,
+    "y": 236
+   }
+  },
+  "crafting": {
+   "kind": "building",
+   "file": "buildings/crafting.png",
+   "x": 281,
+   "y": 306,
+   "w": 54,
+   "h": 68,
+   "z": 6,
+   "sign": {
+    "x": 320,
+    "y": 316
+   }
+  },
+  "storage": {
+   "kind": "building",
+   "file": "buildings/storage.png",
+   "x": 65,
+   "y": 349,
+   "w": 61,
+   "h": 62,
+   "z": 7,
+   "sign": {
+    "x": 91,
+    "y": 348
+   }
+  },
+  "cottage_thatch": {
+   "kind": "decor",
+   "file": "buildings/cottage_thatch.png",
+   "x": 199,
+   "y": 385,
+   "w": 49,
+   "h": 36,
+   "z": 8
+  },
+  "cottage_slate": {
+   "kind": "decor",
+   "file": "buildings/cottage_slate.png",
+   "x": 117,
+   "y": 411,
+   "w": 34,
+   "h": 36,
+   "z": 9
+  },
+  "cottage_whitewash": {
+   "kind": "decor",
+   "file": "buildings/cottage_whitewash.png",
+   "x": 241,
+   "y": 412,
+   "w": 31,
+   "h": 35,
+   "z": 10
+  }
+ }
+}

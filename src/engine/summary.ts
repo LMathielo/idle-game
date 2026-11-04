@@ -6,12 +6,28 @@ export function emptySummary(): SimulationSummary {
     requestedMs: 0,
     grantedMs: 0,
     actions: 0,
+    oresMined: 0,
     itemsGained: {},
     itemsLost: {},
     skillXpGained: {},
     skillLevelsGained: {},
     heroXpGained: 0,
     heroLevelsGained: 0,
+    goldGained: 0,
+    dungeon: { runs: 0, wins: 0, losses: 0 },
+    dungeonsUnlocked: [],
+    trainingXpGained: {},
+    trainingLevelsGained: {},
+    trainingMaxed: [],
+    buildingsUpgraded: [],
+    workerActions: 0,
+    workerItemsGained: {},
+    workerItemsLost: {},
+    upkeepPaid: 0,
+    craftsCompleted: 0,
+    itemsCrafted: {},
+    craftsReady: {},
+    craftWaits: [],
     anomalies: [],
   };
 }
@@ -22,26 +38,62 @@ function addMaps<M extends Partial<Record<string, number>>>(a: M, b: M): M {
   return out as M;
 }
 
+/** One entry per pipe and missing input, first seen first. Summaries stored before 1.15.0 have none. */
+export function mergeWaits(a: SimulationSummary['craftWaits'] | undefined, b: SimulationSummary['craftWaits'] | undefined): SimulationSummary['craftWaits'] {
+  const out = [...(a ?? [])];
+  for (const w of b ?? []) if (!out.some((x) => x.pipe === w.pipe && x.defId === w.defId)) out.push(w);
+  return out;
+}
+
 /** Combines two consecutive summaries (used to aggregate live ticks). */
 export function mergeSummaries(a: SimulationSummary, b: SimulationSummary): SimulationSummary {
   return {
     requestedMs: a.requestedMs + b.requestedMs,
     grantedMs: a.grantedMs + b.grantedMs,
     actions: a.actions + b.actions,
+    oresMined: a.oresMined + b.oresMined,
     itemsGained: addMaps(a.itemsGained, b.itemsGained),
     itemsLost: addMaps(a.itemsLost, b.itemsLost),
     skillXpGained: addMaps(a.skillXpGained, b.skillXpGained),
     skillLevelsGained: addMaps(a.skillLevelsGained, b.skillLevelsGained),
     heroXpGained: a.heroXpGained + b.heroXpGained,
     heroLevelsGained: a.heroLevelsGained + b.heroLevelsGained,
+    goldGained: a.goldGained + b.goldGained,
+    dungeon: {
+      runs: a.dungeon.runs + b.dungeon.runs,
+      wins: a.dungeon.wins + b.dungeon.wins,
+      losses: a.dungeon.losses + b.dungeon.losses,
+    },
+    dungeonsUnlocked: [...a.dungeonsUnlocked, ...b.dungeonsUnlocked],
+    trainingXpGained: addMaps(a.trainingXpGained, b.trainingXpGained),
+    trainingLevelsGained: addMaps(a.trainingLevelsGained, b.trainingLevelsGained),
+    trainingMaxed: [...a.trainingMaxed, ...b.trainingMaxed],
+    buildingsUpgraded: [...a.buildingsUpgraded, ...b.buildingsUpgraded],
+    workerActions: a.workerActions + b.workerActions,
+    workerItemsGained: addMaps(a.workerItemsGained, b.workerItemsGained),
+    workerItemsLost: addMaps(a.workerItemsLost, b.workerItemsLost),
+    upkeepPaid: a.upkeepPaid + b.upkeepPaid,
+    craftsCompleted: a.craftsCompleted + b.craftsCompleted,
+    itemsCrafted: addMaps(a.itemsCrafted, b.itemsCrafted),
+    craftsReady: addMaps(a.craftsReady, b.craftsReady),
+    craftWaits: mergeWaits(a.craftWaits, b.craftWaits),
     anomalies: [...a.anomalies, ...b.anomalies],
   };
 }
 
+/** Total training XP in a summary, over every attribute. */
+export function trainingXpTotal(s: Pick<SimulationSummary, 'trainingXpGained'>): number {
+  return Object.values(s.trainingXpGained).reduce<number>((n, v) => n + (v ?? 0), 0);
+}
+
 /**
- * Worth showing in "While you were away": any clock anomaly, or at least AWAY_SUMMARY_MIN_MS
- * of real time away with at least one action. A quick app switch never opens the modal.
+ * Worth showing in "While you were away": any clock anomaly, or at least AWAY_SUMMARY_MIN_MS of real time
+ * away with at least one log cut, ore mined, dungeon run, training XP point, training cap reached, upgrade finished,
+ * worker action or craft finished. A quick
+ * app switch never opens the modal.
  */
 export function isNoteworthy(s: SimulationSummary, minAwayMs: number = AWAY_SUMMARY_MIN_MS): boolean {
-  return s.anomalies.length > 0 || (s.requestedMs >= minAwayMs && s.actions > 0);
+  const progressed =
+    s.actions > 0 || s.oresMined > 0 || s.dungeon.runs > 0 || trainingXpTotal(s) > 0 || s.trainingMaxed.length > 0 || s.buildingsUpgraded.length > 0 || s.workerActions > 0 || s.craftsCompleted > 0 || Object.keys(s.craftsReady).length > 0;
+  return s.anomalies.length > 0 || (s.requestedMs >= minAwayMs && progressed);
 }

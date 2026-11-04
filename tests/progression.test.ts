@@ -4,16 +4,19 @@ import { HERO_XP_CURVE, SKILL_XP_CURVE } from '../src/engine/config/xpCurve';
 import { addXp, cumulativeXp, levelPower, xpToNext } from '../src/engine/progression';
 import { T0, cmd } from './helpers';
 
+// Hero base 100 since engine 1.8.0 (was 1500): table in docs/ENGINE.md.
 const REFERENCE: [number, number][] = [
-  [1, 1500],
-  [10, 47434],
-  [20, 134164],
-  [30, 401482],
-  [40, 1006856],
-  [50, 2768025],
-  [60, 7157802],
-  [80, 42644530],
-  [100, 230623682],
+  [1, 100],
+  [2, 283],
+  [5, 1118],
+  [10, 3162],
+  [20, 8944],
+  [30, 26765],
+  [40, 67124],
+  [50, 184535],
+  [60, 477187],
+  [80, 2842969],
+  [100, 15374912],
 ];
 
 describe('hero XP curve', () => {
@@ -46,9 +49,12 @@ describe('hero XP curve', () => {
     expect(cumulativeXp(HERO_XP_CURVE, 400)).toBe(Number.MAX_SAFE_INTEGER);
   });
 
-  it('skill curve uses base 500 with the same shape', () => {
-    expect(xpToNext(SKILL_XP_CURVE, 1)).toBe(500);
-    expect(Math.abs(xpToNext(SKILL_XP_CURVE, 20) - 134164 / 3)).toBeLessThanOrEqual(1);
+  it('skill curve (1.12.0): base 100, same as the hero to Lv15, then its own steeper segments (1.07 from 15, 1.08 from 40)', () => {
+    expect([1, 2, 5, 10, 14].map((l) => xpToNext(SKILL_XP_CURVE, l))).toEqual([1, 2, 5, 10, 14].map((l) => xpToNext(HERO_XP_CURVE, l)));
+    expect([15, 16, 20, 30].map((l) => xpToNext(SKILL_XP_CURVE, l))).toEqual([5809, 6848, 12545, 45336]);
+    expect([5, 10, 15, 20, 30].map((l) => cumulativeXp(SKILL_XP_CURVE, l))).toEqual([1703, 11106, 31998, 72891, 317081]);
+    // Steeper than the hero from Lv16 on.
+    for (let l = 16; l <= 120; l += 1) expect(xpToNext(SKILL_XP_CURVE, l)).toBeGreaterThan(xpToNext(HERO_XP_CURVE, l));
   });
 
   it('rejects invalid levels', () => {
@@ -79,8 +85,8 @@ describe('levelPower (runtime-independent L^power)', () => {
 
 describe('addXp', () => {
   it('processes multiple level-ups in one call and carries the excess', () => {
-    const start = { level: 1, xp: 0, xpToNext: 1500 };
-    const amount = 1500 + xpToNext(HERO_XP_CURVE, 2) + 123;
+    const start = { level: 1, xp: 0, xpToNext: 100 };
+    const amount = 100 + xpToNext(HERO_XP_CURVE, 2) + 123;
     const res = addXp(start, amount, HERO_XP_CURVE);
     expect(res.levelsGained).toBe(2);
     expect(res.progress).toEqual({ level: 3, xp: 123, xpToNext: xpToNext(HERO_XP_CURVE, 3) });
@@ -96,20 +102,20 @@ describe('addXp', () => {
   });
 
   it('total XP is conserved across level-ups', () => {
-    const res = addXp({ level: 1, xp: 0, xpToNext: 1500 }, 1_000_000, HERO_XP_CURVE);
+    const res = addXp({ level: 1, xp: 0, xpToNext: 100 }, 1_000_000, HERO_XP_CURVE);
     expect(cumulativeXp(HERO_XP_CURVE, res.progress.level) + res.progress.xp).toBe(1_000_000);
   });
 
   it('rejects negative or non-finite amounts', () => {
-    const p = { level: 1, xp: 0, xpToNext: 1500 };
+    const p = { level: 1, xp: 0, xpToNext: 100 };
     expect(() => addXp(p, -1, HERO_XP_CURVE)).toThrow();
     expect(() => addXp(p, Number.NaN, HERO_XP_CURVE)).toThrow();
     expect(() => addXp(p, Number.POSITIVE_INFINITY, HERO_XP_CURVE)).toThrow();
   });
 
   it('skill multi level-up with carry-over', () => {
-    const amount = 500 + xpToNext(SKILL_XP_CURVE, 2) + xpToNext(SKILL_XP_CURVE, 3) + 9;
-    const res = addXp({ level: 1, xp: 0, xpToNext: 500 }, amount, SKILL_XP_CURVE);
+    const amount = 100 + xpToNext(SKILL_XP_CURVE, 2) + xpToNext(SKILL_XP_CURVE, 3) + 9;
+    const res = addXp({ level: 1, xp: 0, xpToNext: 100 }, amount, SKILL_XP_CURVE);
     expect(res.levelsGained).toBe(3);
     expect(res.progress.level).toBe(4);
     expect(res.progress.xp).toBe(9);
@@ -119,12 +125,12 @@ describe('addXp', () => {
 describe('DEBUG_GRANT_HERO_XP', () => {
   it('levels the hero along the curve with carry-over', () => {
     const s0 = newGame(1, T0);
-    const res = applyCommand(s0, cmd({ type: 'DEBUG_GRANT_HERO_XP', amount: 10_000 }), T0);
+    const res = applyCommand(s0, cmd({ type: 'DEBUG_GRANT_HERO_XP', amount: 1_000 }), T0);
     if (!res.ok) throw new Error(res.error.message);
-    // 1500 (L1) + 4243 (L2) = 5743 → L3 with 4257 left (L3 needs 7794)
-    expect(res.state.character.level).toBe(3);
-    expect(res.state.character.xp).toBe(10_000 - 1500 - xpToNext(HERO_XP_CURVE, 2));
-    expect(res.state.character.xpToNext).toBe(xpToNext(HERO_XP_CURVE, 3));
+    // 100 (L1) + 283 (L2) + 520 (L3) = 903 → L4 with 97 left (L4 needs 800)
+    expect(res.state.character.level).toBe(4);
+    expect(res.state.character.xp).toBe(97);
+    expect(res.state.character.xpToNext).toBe(xpToNext(HERO_XP_CURVE, 4));
     expect(res.events.filter((e) => e.type === 'HERO_LEVEL_UP')).toHaveLength(1);
   });
 

@@ -1,70 +1,8 @@
-// Acted skills: interval and one action. Pure, operates on a draft state.
-import { ACTIVITIES, type ActivityConfig } from './config/activities';
-import { HERO_XP_CURVE, SKILL_XP_CURVE } from './config/xpCurve';
-import { addStackable } from './inventory';
+// Shared reward helpers (pure, operate on a draft state). Woodcutting rules live in woodcutting.ts.
+import { ATTRIBUTE_POINTS } from './config/stats';
+import { HERO_XP_CURVE } from './config/xpCurve';
 import { addXp } from './progression';
-import { chance } from './rng';
-import type { ActivityKind, GameEvent, GameState, SimulationSummary } from './types';
-
-/** Action interval for a skill level: base −1% of base per level above 1, floored. */
-export function actionIntervalMs(cfg: ActivityConfig, skillLevel: number): number {
-  const raw = cfg.baseIntervalMs * (1 - cfg.intervalReductionPerLevel * (skillLevel - 1));
-  return Math.max(cfg.minIntervalMs, Math.round(raw));
-}
-
-export function currentActionIntervalMs(state: GameState, kind: ActivityKind): number {
-  const cfg = ACTIVITIES[kind];
-  return actionIntervalMs(cfg, state.character.skills[cfg.skill].level);
-}
-
-function bump(map: Record<string, number>, key: string, by: number) {
-  if (by === 0) return;
-  map[key] = (map[key] ?? 0) + by;
-}
-
-/** Performs one action on `draft` (mutated), recording into `summary` and `events`. */
-export function performAction(
-  draft: GameState,
-  kind: ActivityKind,
-  summary: SimulationSummary,
-  events: GameEvent[],
-): void {
-  const cfg = ACTIVITIES[kind];
-
-  const gain = (itemId: string, qty: number) => {
-    const { added, lost } = addStackable(draft.inventory, itemId, qty);
-    bump(summary.itemsGained, itemId, added);
-    bump(summary.itemsLost, itemId, lost);
-    bump(draft.stats.itemsGathered, itemId, added);
-  };
-
-  for (const r of cfg.rewards) gain(r.itemId, r.quantity);
-
-  for (const drop of cfg.rareDrops) {
-    const roll = chance(draft.rng, drop.chance);
-    draft.rng = roll.rng;
-    if (roll.value) {
-      gain(drop.itemId, 1);
-      events.push({ type: 'RARE_DROP', itemId: drop.itemId });
-    }
-  }
-
-  if (cfg.skillXpPerAction > 0) {
-    const skill = draft.character.skills[cfg.skill];
-    const res = addXp(skill, cfg.skillXpPerAction, SKILL_XP_CURVE);
-    draft.character.skills[cfg.skill] = res.progress;
-    summary.skillXpGained[cfg.skill] = (summary.skillXpGained[cfg.skill] ?? 0) + cfg.skillXpPerAction;
-    if (res.levelsGained > 0) {
-      summary.skillLevelsGained[cfg.skill] = (summary.skillLevelsGained[cfg.skill] ?? 0) + res.levelsGained;
-      events.push({ type: 'SKILL_LEVEL_UP', skill: cfg.skill, level: res.progress.level });
-    }
-  }
-
-  if (cfg.heroXpPerAction > 0) grantHeroXp(draft, cfg.heroXpPerAction, summary, events);
-
-  draft.stats.totalActions += 1;
-  summary.actions += 1;
-}
+import type { GameEvent, GameState, SimulationSummary } from './types';
 
 export function grantHeroXp(draft: GameState, amount: number, summary: SimulationSummary | null, events: GameEvent[]) {
   const c = draft.character;
@@ -72,6 +10,9 @@ export function grantHeroXp(draft: GameState, amount: number, summary: Simulatio
   c.level = res.progress.level;
   c.xp = res.progress.xp;
   c.xpToNext = res.progress.xpToNext;
+  // 1.17.0: every level gained grants unspent attribute points (single and multi-level jumps, live, offline, debug XP).
+  // Max HP and max mana rise with the level; current HP and mana do not (they regenerate).
+  if (res.levelsGained > 0) c.unspentPoints += ATTRIBUTE_POINTS.unspentPerLevel * res.levelsGained;
   if (summary) {
     summary.heroXpGained += amount;
     summary.heroLevelsGained += res.levelsGained;

@@ -1,0 +1,592 @@
+{
+ "village/village_background.png": {
+  "w": 360,
+  "h": 560,
+  "scale": 4
+ },
+ "village/buildings/dungeon.png": {
+  "w": 61,
+  "h": 66,
+  "scale": 4
+ },
+ "village/buildings/mine.png": {
+  "w": 60,
+  "h": 42,
+  "scale": 4
+ },
+ "village/buildings/merchant.png": {
+  "w": 59,
+  "h": 62,
+  "scale": 4
+ },
+ "village/buildings/woodcutting.png": {
+  "w": 69,
+  "h": 79,
+  "scale": 4
+ },
+ "village/buildings/training.png": {
+  "w": 83,
+  "h": 70,
+  "scale": 4
+ },
+ "village/buildings/town_hall.png": {
+  "w": 75,
+  "h": 81,
+  "scale": 4
+ },
+ "village/buildings/crafting.png": {
+  "w": 54,
+  "h": 68,
+  "scale": 4
+ },
+ "village/buildings/storage.png": {
+  "w": 61,
+  "h": 62,
+  "scale": 4
+ },
+ "village/buildings/cottage_thatch.png": {
+  "w": 49,
+  "h": 36,
+  "scale": 4
+ },
+ "village/buildings/cottage_slate.png": {
+  "w": 34,
+  "h": 36,
+  "scale": 4
+ },
+ "village/buildings/cottage_whitewash.png": {
+  "w": 31,
+  "h": 35,
+  "scale": 4
+ },
+ "village/village_layout.json": {
+  "kind": "layout"
+ },
+ "portrait/hero.png": {
+  "w": 48,
+  "h": 48,
+  "scale": 8
+ },
+ "enemies/rat.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "enemies/bat.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "enemies/wolf.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "enemies/skeleton.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "enemies/troll.png": {
+  "w": 48,
+  "h": 48,
+  "scale": 8
+ },
+ "enemies/variants/giant_rat.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "enemies/variants/blight_rat.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "enemies/variants/vampire_bat.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "enemies/variants/dire_wolf.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "enemies/variants/skeleton_knight.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "enemies/variants/stone_troll.png": {
+  "w": 48,
+  "h": 48,
+  "scale": 8
+ },
+ "icons/gold.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/stamina.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/hero_xp.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/hero_level.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/locked.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/unlocked.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/upgrade.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/crafting.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/workers.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/ready.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/power.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/training.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/fight.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/unknown.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/skill_woodcutting.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/skill_mining.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/skill_fishing.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "items/stone_sword.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/stone_helm.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/stone_chestplate.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/stone_shield.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/stone_gloves.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/stone_boots.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/copper_sword.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/copper_helm.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/copper_chestplate.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/copper_shield.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/copper_gloves.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/copper_boots.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/iron_sword.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/iron_helm.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/iron_chestplate.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/iron_shield.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/iron_gloves.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/iron_boots.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/silver_sword.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/silver_helm.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/silver_chestplate.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/silver_shield.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/silver_gloves.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/silver_boots.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/gold_sword.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/gold_helm.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/gold_chestplate.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/gold_shield.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/gold_gloves.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/gold_boots.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/rusty_gladius.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/steel_sword.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/linen_tunic.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/worn_sandals.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/wooden_axe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/iron_axe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/steel_axe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/wooden_pickaxe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/iron_pickaxe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/steel_pickaxe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/oak_logs.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/birch_logs.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/maple_logs.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/yew_logs.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/ironwood_logs.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/oak_plank.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/birch_plank.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/maple_plank.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/yew_plank.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/ironwood_plank.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/stone.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/stone_brick.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/copper_ore.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/iron_ore.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/silver_ore.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/gold_ore.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/copper_ingot.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/iron_ingot.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/silver_ingot.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/gold_ingot.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/rat_skin.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/bat_wing.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/wolf_pelt.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/old_bone.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/troll_hide.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/bread.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/bird_nest.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/geode.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/health_potion_t1.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/greater_health_potion.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "trees/oak.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "trees/birch.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "trees/maple.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "trees/yew.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "trees/ironwood.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "_rocks": {
+  "stone": "items/stone.png",
+  "copper": "items/copper_ore.png",
+  "iron": "items/iron_ore.png",
+  "silver": "items/silver_ore.png",
+  "gold": "items/gold_ore.png"
+ }
+}

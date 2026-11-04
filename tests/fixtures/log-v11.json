@@ -1,0 +1,326 @@
+[
+  {
+    "commandId": "v11fx-2",
+    "type": "NEW_GAME",
+    "payload": {
+      "seed": 3554416254
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.10.0",
+    "stateHash": "fe6a5307",
+    "seq": 1,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-3",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "woodcutting",
+      "id": "v11fx-3"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.10.0",
+    "stateHash": "33aea1ef",
+    "seq": 2,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-4",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "mine_shaft",
+      "id": "v11fx-4"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.10.0",
+    "stateHash": "02a6b4aa",
+    "seq": 3,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-5",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "town_hall",
+      "id": "v11fx-5"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.10.0",
+    "stateHash": "c67f3c69",
+    "seq": 4,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-6",
+    "type": "DEBUG_ADD_WOODCUTTING_LEVEL",
+    "payload": {
+      "type": "DEBUG_ADD_WOODCUTTING_LEVEL",
+      "levels": 100,
+      "id": "v11fx-6"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.10.0",
+    "stateHash": "7702acab",
+    "seq": 5,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-7",
+    "type": "DEBUG_ADD_MINING_LEVEL",
+    "payload": {
+      "type": "DEBUG_ADD_MINING_LEVEL",
+      "levels": 100,
+      "id": "v11fx-7"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.10.0",
+    "stateHash": "3ad9926d",
+    "seq": 6,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-8",
+    "type": "DEBUG_ADD_GOLD",
+    "payload": {
+      "type": "DEBUG_ADD_GOLD",
+      "amount": 1500,
+      "id": "v11fx-8"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.10.0",
+    "stateHash": "7dcda2a7",
+    "seq": 7,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-9",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "woodcutting",
+      "treeId": "oak",
+      "id": "v11fx-9"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.10.0",
+    "stateHash": "ed98385b",
+    "seq": 8,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-10",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 240000,
+        "grantedMs": 240000,
+        "actions": 2,
+        "oresMined": 0,
+        "itemsGained": {
+          "oak_logs": 102
+        },
+        "itemsLost": {},
+        "skillXpGained": {
+          "woodcutting": 50
+        },
+        "skillLevelsGained": {},
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "buildingsUpgraded": [],
+        "workerActions": 0,
+        "workerItemsGained": {},
+        "workerItemsLost": {},
+        "upkeepPaid": 0,
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792929840000,
+    "engineVersion": "1.10.0",
+    "stateHash": "8a226bb6",
+    "seq": 9,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-11",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "mining",
+      "rockId": "stone",
+      "id": "v11fx-11"
+    },
+    "clientTime": 1792929840000,
+    "engineVersion": "1.10.0",
+    "stateHash": "af7c2c5a",
+    "seq": 10,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-12",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 240000,
+        "grantedMs": 240000,
+        "actions": 0,
+        "oresMined": 2,
+        "itemsGained": {
+          "stone": 102
+        },
+        "itemsLost": {},
+        "skillXpGained": {
+          "mining": 50
+        },
+        "skillLevelsGained": {},
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "buildingsUpgraded": [],
+        "workerActions": 0,
+        "workerItemsGained": {},
+        "workerItemsLost": {},
+        "upkeepPaid": 0,
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792930080000,
+    "engineVersion": "1.10.0",
+    "stateHash": "d551df26",
+    "seq": 11,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-13",
+    "type": "UPGRADE_BUILDING",
+    "payload": {
+      "type": "UPGRADE_BUILDING",
+      "buildingId": "town_hall",
+      "level": 2,
+      "id": "v11fx-13"
+    },
+    "clientTime": 1792930080000,
+    "engineVersion": "1.10.0",
+    "stateHash": "f5ce3b6a",
+    "seq": 12,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-14",
+    "type": "DEBUG_FINISH_CONSTRUCTION",
+    "payload": {
+      "type": "DEBUG_FINISH_CONSTRUCTION",
+      "id": "v11fx-14"
+    },
+    "clientTime": 1792930080000,
+    "engineVersion": "1.10.0",
+    "stateHash": "017c8188",
+    "seq": 13,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-15",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "training_grounds",
+      "id": "v11fx-15"
+    },
+    "clientTime": 1792930080000,
+    "engineVersion": "1.10.0",
+    "stateHash": "e6b295fc",
+    "seq": 14,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-16",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "training",
+      "attribute": "strength",
+      "id": "v11fx-16"
+    },
+    "clientTime": 1792930080000,
+    "engineVersion": "1.10.0",
+    "stateHash": "9690e4ff",
+    "seq": 15,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-46",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1792930110000,
+    "engineVersion": "1.10.0",
+    "stateHash": "b0b146fc",
+    "seq": 16,
+    "synced": false
+  },
+  {
+    "commandId": "v11fx-47",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 433000,
+        "grantedMs": 433000,
+        "actions": 0,
+        "oresMined": 0,
+        "itemsGained": {},
+        "itemsLost": {},
+        "skillXpGained": {},
+        "skillLevelsGained": {},
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {
+          "strength": 7
+        },
+        "trainingLevelsGained": {
+          "strength": 1
+        },
+        "trainingMaxed": [],
+        "buildingsUpgraded": [],
+        "workerActions": 0,
+        "workerItemsGained": {},
+        "workerItemsLost": {},
+        "upkeepPaid": 0,
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792930543000,
+    "engineVersion": "1.10.0",
+    "stateHash": "c375f623",
+    "seq": 17,
+    "synced": false
+  }
+]

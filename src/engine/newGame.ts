@@ -1,10 +1,19 @@
+import { merchantStockSlots } from './bonuses';
+import { newBuildingsState } from './buildings';
+import { newCraftingState } from './crafting';
 import { STARTING_HERO } from './config/newGame';
 import { INVENTORY_CAPACITY } from './config/items';
+import { STAMINA } from './config/stamina';
 import { DEFAULT_OFFLINE_CAP_MS, DEFAULT_OFFLINE_EFFICIENCY } from './config/time';
 import { HERO_XP_CURVE, SKILL_XP_CURVE } from './config/xpCurve';
+import { maxHpOf } from './hp';
+import { maxManaOf } from './mana';
 import { makeItem } from './inventory';
+import { newMerchantState } from './merchant';
 import { newProgress } from './progression';
 import { createRng } from './rng';
+import { newTrainingState } from './training';
+import { newWorkersState } from './workers';
 import type { Character, GameState, Item, SkillKey } from './types';
 import { CURRENT_SAVE_VERSION } from './migrations';
 
@@ -24,6 +33,13 @@ export function newGame(seed: number, now: number): GameState {
 
   const hero = newProgress(HERO_XP_CURVE);
   const items: Item[] = STARTING_HERO.inventory.map((s) => makeItem(s.itemId, s.quantity));
+  const attributes = { ...STARTING_HERO.attributes };
+  const training = newTrainingState();
+  const buildings = newBuildingsState();
+  const spentPoints = { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 };
+  const pools = { character: { level: hero.level, attributes, spentPoints, equipment }, training };
+  const maxHp = maxHpOf(pools);
+  const maxMana = maxManaOf(pools);
 
   return {
     saveVersion: CURRENT_SAVE_VERSION,
@@ -31,6 +47,15 @@ export function newGame(seed: number, now: number): GameState {
     time: { lastSimulatedAt: now, highestSeenAt: now },
     offline: { capMs: DEFAULT_OFFLINE_CAP_MS, efficiency: DEFAULT_OFFLINE_EFFICIENCY },
     activity: null,
+    stamina: { current: STAMINA.startMax, max: STAMINA.startMax, progressMs: 0 },
+    dungeon: { lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {} },
+    training,
+    merchant: newMerchantState(merchantStockSlots({ buildings })),
+    buildings,
+    construction: null,
+    workers: newWorkersState(),
+    crafting: newCraftingState(),
+    nextItemSerial: 1,
     stats: { totalActions: 0, itemsGathered: {} },
     flags: { debugUsed: false },
     character: {
@@ -39,10 +64,14 @@ export function newGame(seed: number, now: number): GameState {
       level: hero.level,
       xp: hero.xp,
       xpToNext: hero.xpToNext,
-      hp: STARTING_HERO.maxHp,
-      maxHp: STARTING_HERO.maxHp,
+      hp: maxHp,
+      hpRegenProgress: 0,
+      mana: maxMana,
+      manaRegenProgress: 0,
       gold: STARTING_HERO.gold,
-      attributes: { ...STARTING_HERO.attributes },
+      attributes,
+      spentPoints,
+      unspentPoints: 0,
       equipment,
       skills,
     },

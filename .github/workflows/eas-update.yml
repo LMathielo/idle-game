@@ -1,13 +1,17 @@
 name: Publish to Expo Go
 
-# Every push to main publishes an EAS Update. Open it in Expo Go on the phone
-# (expo.dev → project → Updates, or the QR code there). No local dev server needed.
+# A push to `dev` publishes an EAS Update on EAS branch `dev` (the owner's test preview).
+# A push to `main` publishes on EAS branch `main` (the last version the owner approved).
+# Open either one in Expo Go on the phone (expo.dev → project → Updates → pick the branch,
+# or the QR code there). No local dev server needed.
+#
+# Any other git branch never publishes: a manual run on it fails at the first step.
 #
 # First run only: links the project to the Expo account behind EXPO_TOKEN
-# (eas init + update:configure) and commits the resulting app.json back to main.
+# (eas init + update:configure) and commits the resulting app.json back to the branch.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 permissions:
@@ -20,26 +24,45 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    # EXPO_TOKEN can live in this environment's secrets, with deployment branches limited to
+    # main and dev (one-time owner step, see README "Harden the Expo token"). Until then the
+    # repo-level secret is used, so this works before and after the move.
+    environment: expo-publish
     steps:
-      - uses: actions/checkout@v4
+      # Must stay the first step: nothing (not even the first-run link commit) may run for other refs.
+      - name: Only main and dev publish
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          if [ "$REF_TYPE" != "branch" ] || { [ "$REF_NAME" != "main" ] && [ "$REF_NAME" != "dev" ]; }; then
+            echo "::error::Refusing to publish from '$REF_NAME' ($REF_TYPE). Only the main and dev branches publish EAS Updates. Merge your PR into dev to get a preview."
+            exit 1
+          fi
+          echo "Publishing to EAS Update branch: $REF_NAME"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+
+      # No caches in this job (npm here, EAS CLI below): it holds the Expo token, and setup-node
+      # recommends disabling caching for workflows with access to secrets (cache poisoning).
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
+          package-manager-cache: false
 
       - name: Check EXPO_TOKEN
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
-            echo "::error::EXPO_TOKEN secret is missing (repo Settings → Secrets and variables → Actions)."
+            echo "::error::EXPO_TOKEN secret is missing (Settings → Environments → expo-publish, or repo Settings → Secrets and variables → Actions)."
             exit 1
           fi
 
-      - uses: expo/expo-github-action@v8
+      - uses: expo/expo-github-action@v9
         with:
           eas-version: latest
+          eas-cache: false
           token: ${{ secrets.EXPO_TOKEN }}
 
       - run: npm ci
@@ -63,7 +86,29 @@ jobs:
             git push
           fi
 
+      # EAS branch name = git branch name (main or dev, enforced by the first step).
+      # Expo Go loads the latest update of a branch directly; no channel or build needed.
+      #
+      # Update message: the commit's first line. For a merge commit ("Merge pull request #N from
+      # owner/dev"), use the PR title instead (first non-empty line after line 1) plus "(#N)", so
+      # release updates on main are distinguishable in Expo Go and on expo.dev.
+      #
+      # --environment is intentionally omitted. eas-cli calls it required for SDK 55+, but does
+      # not enforce it when CI=true (GitHub Actions sets that), and every publish so far has
+      # worked without it. If a future eas-cli enforces it in CI, add --environment <name>.
       - name: Publish update
         env:
           MSG: ${{ github.event.head_commit.message || 'manual run' }}
-        run: eas update --branch main --platform all --message "$(echo "$MSG" | head -n1)" --non-interactive
+          EAS_BRANCH: ${{ github.ref_name }}
+        run: |
+          FIRST=$(printf '%s\n' "$MSG" | head -n1)
+          TITLE="$FIRST"
+          case "$FIRST" in
+            "Merge pull request #"*)
+              PR_TITLE=$(printf '%s\n' "$MSG" | tail -n +2 | grep -m1 -v '^[[:space:]]*$' || true)
+              PR_NUM=$(printf '%s\n' "$FIRST" | grep -o '#[0-9]*' | head -n1)
+              if [ -n "$PR_TITLE" ]; then TITLE="$PR_TITLE ($PR_NUM)"; fi
+              ;;
+          esac
+          echo "EAS branch: $EAS_BRANCH, message: $TITLE"
+          eas update --branch "$EAS_BRANCH" --platform all --message="$TITLE" --non-interactive

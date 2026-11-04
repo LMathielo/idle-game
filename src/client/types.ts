@@ -1,5 +1,5 @@
 // Contracts between the UI, the client and storage. No React, no Expo.
-import type { Command, CommandError, GameState, LogType, SimulationSummary } from '../engine';
+import type { AttributeKey, BuildingId, Command, CommandError, DungeonId, GameState, LogType, SimulationSummary } from '../engine';
 
 /** Wall clock. The app uses SystemClock; tests use a fake. */
 export interface Clock {
@@ -55,6 +55,8 @@ export type GameSnapshot = {
   clockPaused: boolean;
   /** Pending "While you were away" summary, cleared by dismissAwaySummary(). */
   awaySummary: SimulationSummary | null;
+  /** Dungeons unlocked since the banner was last dismissed (dismissUnlocks()), in unlock order. */
+  unlockedDungeons: readonly DungeonId[];
   /** Debug clock offset in ms (0 in normal play). */
   clockOffsetMs: number;
 };
@@ -82,6 +84,8 @@ export interface GameClient {
   /** Persists unsaved progress (app going to background). */
   persist(): Promise<void>;
   dismissAwaySummary(): void;
+  /** Clears the "dungeon unlocked" banner. */
+  dismissUnlocks(): void;
   getUnsyncedLog(limit?: number): Promise<LogRow[]>;
   getRecentLog(limit: number): Promise<LogRow[]>;
   countLog(): Promise<{ total: number; unsynced: number }>;
@@ -90,6 +94,33 @@ export interface GameClient {
     /** Moves the debug clock by `deltaMs` (negative = backwards), then resumes. */
     shiftClock(deltaMs: number): Promise<SimulationSummary>;
     grantHeroXp(amount: number): Promise<DispatchResult>;
+    spendStamina(amount: number): Promise<DispatchResult>;
+    refillStamina(): Promise<DispatchResult>;
+    addAttribute(attribute: AttributeKey, amount?: number): Promise<DispatchResult>;
+    /** Adds unspent attribute points (default 5, as one level-up). Logged as DEBUG_ADD_UNSPENT_POINTS. */
+    addUnspentPoints(amount?: number): Promise<DispatchResult>;
+    /** Sets current HP (0..max). Logged as DEBUG_SET_HERO_HP. */
+    setHeroHp(hp: number): Promise<DispatchResult>;
+    /** Resolves the current dungeon run's fight now, for free. Logged as DEBUG_FINISH_DUNGEON_RUN. */
+    finishDungeonRun(): Promise<DispatchResult>;
+    /** Adds wins to an unlocked dungeon's counters (default 10). Logged as DEBUG_ADD_DUNGEON_WINS. */
+    addDungeonWins(dungeonId: DungeonId, amount?: number): Promise<DispatchResult>;
+    /** Adds training XP (default 60 = 60 trained minutes) to the attribute being trained. Logged as DEBUG_ADD_TRAINING_XP. */
+    addTrainingXp(xp?: number): Promise<DispatchResult>;
+    /** Adds gold (default 1,000). Logged as DEBUG_ADD_GOLD. */
+    addGold(amount?: number): Promise<DispatchResult>;
+    /** Adds woodcutting levels (default 1), to test tree unlocks. Logged as DEBUG_ADD_WOODCUTTING_LEVEL. */
+    addWoodcuttingLevel(levels?: number): Promise<DispatchResult>;
+    /** +1 merchant refresh charge (never above max). Logged as DEBUG_ADD_MERCHANT_CHARGE. */
+    addMerchantCharge(): Promise<DispatchResult>;
+    /** Builds a locked building for free (requirements ignored, effects applied). Logged as DEBUG_BUILD. */
+    build(buildingId: BuildingId): Promise<DispatchResult>;
+    /** Adds mining levels (default 1), to test rock unlocks. Logged as DEBUG_ADD_MINING_LEVEL. */
+    addMiningLevel(levels?: number): Promise<DispatchResult>;
+    /** Finishes the builder's current upgrade now, for free. Logged as DEBUG_FINISH_CONSTRUCTION. */
+    finishConstruction(): Promise<DispatchResult>;
+    /** Opens the next crafting pipe (up to 8). Logged as DEBUG_UNLOCK_PIPE. */
+    unlockPipe(): Promise<DispatchResult>;
     /** New game with a new seed and a real clock (offset 0). Logged, never deletes the log. */
     resetSave(): Promise<void>;
   };

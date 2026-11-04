@@ -1,0 +1,274 @@
+[
+  {
+    "commandId": "v10fx-2",
+    "type": "NEW_GAME",
+    "payload": {
+      "seed": 3554416254
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.9.0",
+    "stateHash": "053f34df",
+    "seq": 1,
+    "synced": false
+  },
+  {
+    "commandId": "v10fx-3",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "dungeon",
+      "dungeonId": "rat_cellar",
+      "id": "v10fx-3"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.9.0",
+    "stateHash": "98ecfd40",
+    "seq": 2,
+    "synced": false
+  },
+  {
+    "commandId": "v10fx-4",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 10800000,
+        "grantedMs": 10800000,
+        "actions": 0,
+        "oresMined": 0,
+        "itemsGained": {
+          "rat_skin": 46
+        },
+        "itemsLost": {},
+        "skillXpGained": {},
+        "skillLevelsGained": {},
+        "heroXpGained": 3325,
+        "heroLevelsGained": 5,
+        "goldGained": 340,
+        "dungeon": {
+          "runs": 95,
+          "wins": 95,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [
+          "bat_cave"
+        ],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792940400000,
+    "engineVersion": "1.9.0",
+    "stateHash": "f7c1ddae",
+    "seq": 3,
+    "synced": false
+  },
+  {
+    "commandId": "v10fx-5",
+    "type": "BUILD",
+    "payload": {
+      "type": "BUILD",
+      "buildingId": "woodcutting",
+      "id": "v10fx-5"
+    },
+    "clientTime": 1792940400000,
+    "engineVersion": "1.9.0",
+    "stateHash": "8b3199b6",
+    "seq": 4,
+    "synced": false
+  },
+  {
+    "commandId": "v10fx-6",
+    "type": "BUILD",
+    "payload": {
+      "type": "BUILD",
+      "buildingId": "mine_shaft",
+      "id": "v10fx-6"
+    },
+    "clientTime": 1792940400000,
+    "engineVersion": "1.9.0",
+    "stateHash": "98b2759b",
+    "seq": 5,
+    "synced": false
+  },
+  {
+    "commandId": "v10fx-7",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "woodcutting",
+      "treeId": "oak",
+      "id": "v10fx-7"
+    },
+    "clientTime": 1792940400000,
+    "engineVersion": "1.9.0",
+    "stateHash": "3dc4dfb0",
+    "seq": 6,
+    "synced": false
+  },
+  {
+    "commandId": "v10fx-8",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 2700000,
+        "grantedMs": 2700000,
+        "actions": 24,
+        "oresMined": 0,
+        "itemsGained": {
+          "oak_logs": 24
+        },
+        "itemsLost": {},
+        "skillXpGained": {
+          "woodcutting": 600
+        },
+        "skillLevelsGained": {
+          "woodcutting": 1
+        },
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792943100000,
+    "engineVersion": "1.9.0",
+    "stateHash": "60b203af",
+    "seq": 7,
+    "synced": false
+  },
+  {
+    "commandId": "v10fx-9",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "mining",
+      "rockId": "stone",
+      "id": "v10fx-9"
+    },
+    "clientTime": 1792943100000,
+    "engineVersion": "1.9.0",
+    "stateHash": "686dbe63",
+    "seq": 8,
+    "synced": false
+  },
+  {
+    "commandId": "v10fx-10",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 2700000,
+        "grantedMs": 2700000,
+        "actions": 0,
+        "oresMined": 24,
+        "itemsGained": {
+          "stone": 24
+        },
+        "itemsLost": {},
+        "skillXpGained": {
+          "mining": 600
+        },
+        "skillLevelsGained": {
+          "mining": 1
+        },
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792945800000,
+    "engineVersion": "1.9.0",
+    "stateHash": "c82e521e",
+    "seq": 9,
+    "synced": false
+  },
+  {
+    "commandId": "v10fx-11",
+    "type": "BUILD",
+    "payload": {
+      "type": "BUILD",
+      "buildingId": "town_hall",
+      "id": "v10fx-11"
+    },
+    "clientTime": 1792945800000,
+    "engineVersion": "1.9.0",
+    "stateHash": "e3e13434",
+    "seq": 10,
+    "synced": false
+  },
+  {
+    "commandId": "v10fx-12",
+    "type": "BUY_ITEM",
+    "payload": {
+      "type": "BUY_ITEM",
+      "slot": 0,
+      "defId": "health_potion_t1",
+      "quantity": 2,
+      "maxUnitPrice": 12,
+      "id": "v10fx-12"
+    },
+    "clientTime": 1792945800000,
+    "engineVersion": "1.9.0",
+    "stateHash": "280d449c",
+    "seq": 11,
+    "synced": false
+  },
+  {
+    "commandId": "v10fx-13",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 67000,
+        "grantedMs": 67000,
+        "actions": 0,
+        "oresMined": 1,
+        "itemsGained": {
+          "stone": 1
+        },
+        "itemsLost": {},
+        "skillXpGained": {
+          "mining": 25
+        },
+        "skillLevelsGained": {},
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1792945867000,
+    "engineVersion": "1.9.0",
+    "stateHash": "814ec9a3",
+    "seq": 12,
+    "synced": false
+  }
+]

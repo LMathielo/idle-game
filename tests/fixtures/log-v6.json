@@ -1,0 +1,214 @@
+[
+  {
+    "commandId": "v6fx-2",
+    "type": "NEW_GAME",
+    "payload": {
+      "seed": 3554416254
+    },
+    "clientTime": 1793091600000,
+    "engineVersion": "1.5.0",
+    "stateHash": "19b2fd2d",
+    "seq": 1,
+    "synced": false
+  },
+  {
+    "commandId": "v6fx-3",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "woodcutting",
+      "id": "v6fx-3"
+    },
+    "clientTime": 1793091600000,
+    "engineVersion": "1.5.0",
+    "stateHash": "6e95e4dc",
+    "seq": 2,
+    "synced": false
+  },
+  {
+    "commandId": "v6fx-4",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 2700000,
+        "grantedMs": 2700000,
+        "actions": 921,
+        "itemsGained": {
+          "oak_logs": 921,
+          "bird_nest": 4
+        },
+        "itemsLost": {},
+        "skillXpGained": {
+          "woodcutting": 9210
+        },
+        "skillLevelsGained": {
+          "woodcutting": 4
+        },
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1793094300000,
+    "engineVersion": "1.5.0",
+    "stateHash": "9add662c",
+    "seq": 3,
+    "synced": false
+  },
+  {
+    "commandId": "v6fx-5",
+    "type": "DEBUG_ADD_GOLD",
+    "payload": {
+      "type": "DEBUG_ADD_GOLD",
+      "amount": 1000,
+      "id": "v6fx-5"
+    },
+    "clientTime": 1793094300000,
+    "engineVersion": "1.5.0",
+    "stateHash": "5074ba9a",
+    "seq": 4,
+    "synced": false
+  },
+  {
+    "commandId": "v6fx-6",
+    "type": "UNLOCK_TRAINING_TIER",
+    "payload": {
+      "type": "UNLOCK_TRAINING_TIER",
+      "tier": 1,
+      "id": "v6fx-6"
+    },
+    "clientTime": 1793094300000,
+    "engineVersion": "1.5.0",
+    "stateHash": "916f2657",
+    "seq": 5,
+    "synced": false
+  },
+  {
+    "commandId": "v6fx-7",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "training",
+      "attribute": "strength",
+      "id": "v6fx-7"
+    },
+    "clientTime": 1793094300000,
+    "engineVersion": "1.5.0",
+    "stateHash": "c783fd00",
+    "seq": 6,
+    "synced": false
+  },
+  {
+    "commandId": "v6fx-8",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 7200000,
+        "grantedMs": 7200000,
+        "actions": 0,
+        "itemsGained": {},
+        "itemsLost": {},
+        "skillXpGained": {},
+        "skillLevelsGained": {},
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {
+          "strength": 120
+        },
+        "trainingLevelsGained": {
+          "strength": 4
+        },
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1793101500000,
+    "engineVersion": "1.5.0",
+    "stateHash": "e90cdd1a",
+    "seq": 7,
+    "synced": false
+  },
+  {
+    "commandId": "v6fx-9",
+    "type": "DEBUG_SPEND_STAMINA",
+    "payload": {
+      "type": "DEBUG_SPEND_STAMINA",
+      "amount": 10,
+      "id": "v6fx-9"
+    },
+    "clientTime": 1793101500000,
+    "engineVersion": "1.5.0",
+    "stateHash": "e337fbae",
+    "seq": 8,
+    "synced": false
+  },
+  {
+    "commandId": "v6fx-10",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "woodcutting",
+      "id": "v6fx-10"
+    },
+    "clientTime": 1793101500000,
+    "engineVersion": "1.5.0",
+    "stateHash": "4210098e",
+    "seq": 9,
+    "synced": false
+  },
+  {
+    "commandId": "v6fx-11",
+    "type": "RESUME",
+    "payload": {
+      "summary": {
+        "requestedMs": 1201500,
+        "grantedMs": 1201500,
+        "actions": 417,
+        "itemsGained": {
+          "oak_logs": 417,
+          "bird_nest": 5
+        },
+        "itemsLost": {},
+        "skillXpGained": {
+          "woodcutting": 4170
+        },
+        "skillLevelsGained": {},
+        "heroXpGained": 0,
+        "heroLevelsGained": 0,
+        "goldGained": 0,
+        "dungeon": {
+          "runs": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "dungeonsUnlocked": [],
+        "trainingXpGained": {},
+        "trainingLevelsGained": {},
+        "trainingMaxed": [],
+        "anomalies": []
+      }
+    },
+    "clientTime": 1793102701500,
+    "engineVersion": "1.5.0",
+    "stateHash": "6f2800de",
+    "seq": 10,
+    "synced": false
+  }
+]

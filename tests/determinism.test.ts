@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, type Command, hashState, newGame, simulate } from '../src/engine';
 import { canonicalJson, fnv1a32 } from '../src/engine/hash';
-import { HOUR, MIN, SEC, T0 } from './helpers';
+import { HOUR, MIN, SEC, T0, builtGame } from './helpers';
 
 type Step = { at: number; cmd?: Command };
 
 const SCRIPT: Step[] = [
-  { at: T0 + SEC, cmd: { id: 'c1', type: 'START_ACTIVITY', kind: 'woodcutting' } },
+  { at: T0 + SEC, cmd: { id: 'c1', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } },
   { at: T0 + 10 * MIN },
   { at: T0 + 3 * HOUR },
   { at: T0 + 3 * HOUR + 5 * SEC, cmd: { id: 'c2', type: 'DEBUG_GRANT_HERO_XP', amount: 10_000 } },
@@ -16,7 +16,7 @@ const SCRIPT: Step[] = [
 ];
 
 function run(seed: number) {
-  let s = newGame(seed, T0);
+  let s = builtGame(seed, T0);
   const hashes: string[] = [];
   for (const step of SCRIPT) {
     if (step.cmd) {
@@ -39,12 +39,12 @@ describe('determinism', () => {
     expect(a.state).toEqual(b.state);
   });
 
-  it('the RNG is actually used: the seed advances by exactly one draw per action', () => {
+  it('the RNG is actually used: the seed advances by exactly two draws per action', () => {
     const { state } = run(424242);
     const actions = state.stats.totalActions;
-    expect(actions).toBeGreaterThan(5000);
-    // One bird-nest roll per action; mulberry32 adds 0x6d2b79f5 to the seed per draw.
-    expect(state.rng.seed).toBe((424242 + Math.imul(actions, 0x6d2b79f5)) >>> 0);
+    expect(actions).toBeGreaterThan(300);
+    // One yield roll and one bird-nest roll per action; mulberry32 adds 0x6d2b79f5 to the seed per draw.
+    expect(state.rng.seed).toBe((424242 + Math.imul(2 * actions, 0x6d2b79f5)) >>> 0);
   });
 
   it('a different seed gives a different outcome over a long run (not just a different seed)', () => {
@@ -59,8 +59,8 @@ describe('determinism', () => {
   });
 
   it('newGame is a pure function of (seed, now)', () => {
-    expect(hashState(newGame(9, T0))).toBe(hashState(newGame(9, T0)));
-    expect(hashState(newGame(9, T0))).not.toBe(hashState(newGame(9, T0 + 1)));
+    expect(hashState(builtGame(9, T0))).toBe(hashState(builtGame(9, T0)));
+    expect(hashState(builtGame(9, T0))).not.toBe(hashState(builtGame(9, T0 + 1)));
   });
 });
 

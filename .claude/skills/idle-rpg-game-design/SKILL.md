@@ -66,7 +66,7 @@ Use these as the default vocabulary. Adapt, don't copy.
 
 ## 7. UX conventions for this game
 
-- Medieval pixel style (see `src/theme.ts`): hard bevels, no rounded corners, Jacquard 12 titles, Pixelify Sans body.
+- Medieval pixel style (see `src/theme.ts`): hard bevels, no rounded corners, Pixelify Sans Bold titles/signs/tabs (`fonts.title`), Inter body (`fonts.body` / `fonts.bodyBold`).
 - Always show *why* something is locked and what unlocks it.
 - Numbers players compare (damage, armor, price) are shown with the delta vs. current gear (+12 / -3, green/red).
 - Mobile-first: thumb-reachable actions, large tap targets (≥44pt), no hover-only info.

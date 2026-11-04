@@ -1,0 +1,141 @@
+// The village map's pure geometry: signs and plots inside the world, the start camera centred on the core, and the
+// clamp that never shows an empty bar.
+import { describe, expect, it } from 'vitest';
+import { HUD_MARGIN_LEFT, HUD_WIDTH, hudBottom } from '../src/components/hud/hudLayout';
+import { CORE, clampCamera, mapLimits, PIECES, PLOTS, SIGNS, WORLD } from '../src/components/village/villageMap';
+
+/** Signs on the core village (visible at start) and signs on a building plot outside it (reached by panning). */
+const CORE_SIGNS = SIGNS.filter((s) => !s.plot);
+const PLOT_SIGNS = SIGNS.filter((s) => s.plot);
+
+const SCREENS = [
+  { w: 375, h: 667 },
+  { w: 390, h: 844 },
+  { w: 430, h: 932 },
+];
+
+describe('village map', () => {
+  it('every core sign sits in the start framing; every plot is inside the world and empty ground in the art', () => {
+    for (const s of CORE_SIGNS) {
+      expect(s.x).toBeGreaterThan(CORE.x);
+      expect(s.x).toBeLessThan(CORE.x + CORE.w);
+      expect(s.y).toBeGreaterThan(CORE.y);
+      expect(s.y).toBeLessThan(CORE.y + CORE.h);
+    }
+    // A plot's centre is under no building piece, except the building that stands on it (east = Crafting house).
+    const onPlot = new Map(SIGNS.filter((s) => s.plot).map((s) => [s.plot, s.key]));
+    for (const [plot, [x0, y0, x1, y1]] of Object.entries(PLOTS)) {
+      expect(x0 >= 0 && y0 >= 0 && x1 <= WORLD.w && y1 <= WORLD.h).toBe(true);
+      const cx = (x0 + x1) / 2;
+      const cy = (y0 + y1) / 2;
+      const under = PIECES.filter((p) => cx >= p.x && cx < p.x + p.w && cy >= p.y && cy < p.y + p.h).map((p) => p.id);
+      expect(under, plot).toEqual(onPlot.has(plot as never) ? [onPlot.get(plot as never)] : []);
+    }
+  });
+
+  it.each(SCREENS)('start camera on $w×$h: covers the screen, every sign visible between the HUD and the strip', (view) => {
+    const top = 100;
+    const bottom = 44;
+    const { camera, minZoom, maxZoom, start } = mapLimits(view, top, bottom);
+    expect(minZoom).toBeLessThanOrEqual(start);
+    expect(maxZoom).toBeCloseTo(start * 2.5);
+    expect(WORLD.w * minZoom).toBeGreaterThanOrEqual(view.w);
+    expect(WORLD.h * minZoom).toBeGreaterThanOrEqual(view.h);
+    expect(camera).toEqual(clampCamera(camera, view));
+    for (const s of CORE_SIGNS) {
+      const x = camera.tx + s.x * camera.zoom;
+      const y = camera.ty + s.y * camera.zoom;
+      expect(x).toBeGreaterThan(40);
+      expect(x).toBeLessThan(view.w - 40);
+      expect(y - 22).toBeGreaterThanOrEqual(top);
+      expect(y + 22 + 22).toBeLessThanOrEqual(view.h - bottom); // sign + an upgrade badge under it
+    }
+  });
+
+  it('a plot sign (Crafting, 1.13.0) sits on its plot and pans fully into view between the HUD and the strip', () => {
+    expect(PLOT_SIGNS.map((s) => [s.key, s.plot])).toEqual([['crafting', 'east']]);
+    for (const s of PLOT_SIGNS) {
+      const [x0, y0, x1, y1] = PLOTS[s.plot!];
+      expect(s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1).toBe(true);
+      for (const view of SCREENS) {
+        const top = 100;
+        const bottom = 44;
+        const { start } = mapLimits(view, top, bottom);
+        // Pan so the sign is centred in the visible band (clamped like a real drag), at the start zoom.
+        const bandMid = top + (view.h - top - bottom) / 2;
+        const c = clampCamera({ zoom: start, tx: view.w / 2 - s.x * start, ty: bandMid - s.y * start }, view);
+        const x = c.tx + s.x * c.zoom;
+        const y = c.ty + s.y * c.zoom;
+        expect(x).toBeGreaterThan(40);
+        expect(x).toBeLessThan(view.w - 40);
+        expect(y - 22).toBeGreaterThanOrEqual(top);
+        expect(y + 22 + 22).toBeLessThanOrEqual(view.h - bottom);
+      }
+    }
+  });
+
+  // 1.17.0: the hero HUD (top-left, fixed size) with each phone's real top inset: 375×667 (iPhone SE, 20), 390×844 (47),
+  // 430×932 (59). The map reserves the HUD's bottom edge, so every core sign starts fully below it (no overlap).
+  // The Village screen sits above the tab bar (49 + the bottom inset); the activity strip (44) floats over its bottom.
+  it.each([
+    { w: 375, h: 667, inset: 20, bottomInset: 0 },
+    { w: 390, h: 844, inset: 47, bottomInset: 34 },
+    { w: 430, h: 932, inset: 59, bottomInset: 34 },
+  ])('the hero HUD on $w×$h (top inset $inset) covers no core sign at the start view', ({ w, h, inset, bottomInset }) => {
+    expect(HUD_WIDTH).toBeGreaterThanOrEqual(170);
+    expect(HUD_WIDTH).toBeLessThanOrEqual(190);
+    expect(HUD_MARGIN_LEFT + HUD_WIDTH).toBeLessThan(w / 2 + 20); // top-left: about half a 375 pt screen
+    const view = { w, h: h - 49 - bottomInset };
+    const top = hudBottom(inset);
+    const bottom = 44;
+    const { camera } = mapLimits(view, top, bottom);
+    for (const s of CORE_SIGNS) {
+      const y = camera.ty + s.y * camera.zoom;
+      expect(y - 22).toBeGreaterThanOrEqual(top); // a sign's button is 44 high, centred on its anchor
+      expect(y + 22 + 22).toBeLessThanOrEqual(view.h - bottom);
+    }
+  });
+
+  it('clamp: the map edges never come inside the screen at any zoom', () => {
+    const view = SCREENS[1];
+    const { minZoom, maxZoom } = mapLimits(view);
+    for (const zoom of [minZoom, (minZoom + maxZoom) / 2, maxZoom]) {
+      for (const [tx, ty] of [[500, 500], [-99999, -99999], [0, 0]]) {
+        const c = clampCamera({ zoom, tx, ty }, view);
+        expect(c.tx).toBeLessThanOrEqual(0);
+        expect(c.ty).toBeLessThanOrEqual(0);
+        expect(c.tx + WORLD.w * zoom).toBeGreaterThanOrEqual(view.w - 1e-9);
+        expect(c.ty + WORLD.h * zoom).toBeGreaterThanOrEqual(view.h - 1e-9);
+      }
+    }
+  });
+
+  // 2026-11-04: signs keep their size while the map zooms, so neighbours must clear each other at the start zoom (zooming
+  // in only separates them). A sign is 44 pt tall; its width is the label in Pixelify Sans Bold 18 (measured, rounded up)
+  // + 30 pt of PixelButton chrome, + 20 pt for the padlock while its building is not built.
+  const LABEL_W: Record<string, number> = { dungeon: 76, mine: 98, merchant: 91, woodcutting: 116, training: 72, town_hall: 80, crafting: 80, storage: 76 };
+  const LOCKABLE = new Set(['woodcutting', 'mine', 'town_hall', 'training', 'crafting']);
+  function overlapsAtStart(view: { w: number; h: number }, padlocks: boolean): string[] {
+    const width = (key: string) => LABEL_W[key] + 30 + (padlocks && LOCKABLE.has(key) ? 20 : 0);
+    const { start } = mapLimits(view, 100, 44);
+    const out: string[] = [];
+    for (let i = 0; i < SIGNS.length; i++) {
+      for (let j = i + 1; j < SIGNS.length; j++) {
+        const a = SIGNS[i];
+        const b = SIGNS[j];
+        const apartX = Math.abs(a.x - b.x) * start >= (width(a.key) + width(b.key)) / 2;
+        const apartY = Math.abs(a.y - b.y) * start >= 44;
+        if (!apartX && !apartY) out.push(`${a.key}/${b.key}`);
+      }
+    }
+    return out;
+  }
+
+  it.each(SCREENS)('no two built signs overlap at the start zoom on $w×$h', (view) => {
+    expect(overlapsAtStart(view, false)).toEqual([]);
+  });
+
+  it.each(SCREENS)('no two signs overlap at the start zoom with padlocks (a new save) on $w×$h', (view) => {
+    expect(overlapsAtStart(view, true)).toEqual([]);
+  });
+});

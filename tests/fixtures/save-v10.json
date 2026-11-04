@@ -1,0 +1,321 @@
+{
+  "saveVersion": 10,
+  "rng": {
+    "seed": 1327381456
+  },
+  "time": {
+    "lastSimulatedAt": 1792945867000,
+    "highestSeenAt": 1792945867000
+  },
+  "offline": {
+    "capMs": 28800000,
+    "efficiency": 1
+  },
+  "activity": {
+    "kind": "mining",
+    "rockId": "stone",
+    "startedAt": 1792943100000,
+    "progressMs": 17000
+  },
+  "stamina": {
+    "current": 100,
+    "max": 100,
+    "progressMs": 0
+  },
+  "dungeon": {
+    "lastFight": {
+      "dungeonId": "rat_cellar",
+      "enemyId": "rat",
+      "won": true,
+      "endReason": "enemy_defeated",
+      "durationMs": 3000,
+      "heroHpStart": 100,
+      "heroHpEnd": 93,
+      "heroMaxHp": 100,
+      "enemyMaxHp": 30,
+      "enemyHpEnd": 0,
+      "rewards": {
+        "heroXp": 35,
+        "gold": 5,
+        "items": {
+          "rat_skin": 1
+        },
+        "itemsLost": {}
+      },
+      "log": [
+        {
+          "atMs": 1000,
+          "actor": "hero",
+          "strike": 1,
+          "roll": 12,
+          "dealt": 12,
+          "targetHpAfter": 18
+        },
+        {
+          "atMs": 1000,
+          "actor": "enemy",
+          "strike": 1,
+          "roll": 4,
+          "dealt": 3,
+          "targetHpAfter": 97
+        },
+        {
+          "atMs": 2000,
+          "actor": "hero",
+          "strike": 2,
+          "roll": 12,
+          "dealt": 12,
+          "targetHpAfter": 6
+        },
+        {
+          "atMs": 2000,
+          "actor": "enemy",
+          "strike": 2,
+          "roll": 5,
+          "dealt": 4,
+          "targetHpAfter": 93
+        },
+        {
+          "atMs": 3000,
+          "actor": "hero",
+          "strike": 3,
+          "roll": 12,
+          "dealt": 12,
+          "targetHpAfter": 0
+        }
+      ]
+    },
+    "totals": {
+      "runs": 95,
+      "wins": 95,
+      "losses": 0
+    },
+    "byDungeon": {
+      "rat_cellar": {
+        "runs": 95,
+        "wins": 95,
+        "losses": 0
+      }
+    }
+  },
+  "training": {
+    "tier": 0,
+    "attributes": {
+      "strength": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "dexterity": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "endurance": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "intelligence": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      }
+    }
+  },
+  "merchant": {
+    "charges": 5,
+    "chargeProgressMs": 0,
+    "stock": [
+      {
+        "defId": "health_potion_t1",
+        "quantity": 8,
+        "unitPrice": 12
+      },
+      {
+        "defId": "iron_axe",
+        "quantity": 1,
+        "unitPrice": 600
+      },
+      {
+        "defId": "iron_pickaxe",
+        "quantity": 1,
+        "unitPrice": 600
+      },
+      {
+        "defId": "iron_sword",
+        "quantity": 1,
+        "unitPrice": 500
+      },
+      {
+        "defId": "iron_helm",
+        "quantity": 1,
+        "unitPrice": 400
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "buildings": {
+    "woodcutting": {
+      "state": "built",
+      "level": 1
+    },
+    "mine_shaft": {
+      "state": "built",
+      "level": 1
+    },
+    "town_hall": {
+      "state": "built",
+      "level": 1
+    },
+    "training_grounds": {
+      "state": "locked",
+      "level": 0
+    }
+  },
+  "nextItemSerial": 1,
+  "stats": {
+    "totalActions": 49,
+    "itemsGathered": {
+      "oak_logs": 24,
+      "stone": 25
+    }
+  },
+  "flags": {
+    "debugUsed": false
+  },
+  "character": {
+    "name": "Lucius",
+    "title": "Novice Gladiator",
+    "level": 6,
+    "xp": 504,
+    "xpToNext": 1470,
+    "hp": 100,
+    "hpRegenProgress": 0,
+    "gold": 141,
+    "attributes": {
+      "strength": 10,
+      "dexterity": 10,
+      "endurance": 10,
+      "intelligence": 10
+    },
+    "equipment": {
+      "weapon": {
+        "id": "start-rusty_gladius",
+        "defId": "rusty_gladius",
+        "name": "Rusty Gladius",
+        "icon": "🗡️",
+        "slot": "weapon"
+      },
+      "armor": {
+        "id": "start-linen_tunic",
+        "defId": "linen_tunic",
+        "name": "Linen Tunic",
+        "icon": "🥋",
+        "slot": "armor"
+      },
+      "boots": {
+        "id": "start-worn_sandals",
+        "defId": "worn_sandals",
+        "name": "Worn Sandals",
+        "icon": "👢",
+        "slot": "boots"
+      },
+      "axe": {
+        "id": "start-wooden_axe",
+        "defId": "wooden_axe",
+        "name": "Wooden Axe",
+        "icon": "🪓",
+        "slot": "axe"
+      },
+      "pickaxe": {
+        "id": "start-wooden_pickaxe",
+        "defId": "wooden_pickaxe",
+        "name": "Wooden Pickaxe",
+        "icon": "⛏️",
+        "slot": "pickaxe"
+      }
+    },
+    "skills": {
+      "woodcutting": {
+        "level": 2,
+        "xp": 100,
+        "xpToNext": 1414
+      },
+      "mining": {
+        "level": 2,
+        "xp": 125,
+        "xpToNext": 1414
+      },
+      "fishing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      },
+      "smithing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 500
+      }
+    }
+  },
+  "inventory": {
+    "capacity": 20,
+    "items": [
+      {
+        "id": "bread",
+        "defId": "bread",
+        "name": "Bread",
+        "icon": "🍞",
+        "stackable": true,
+        "quantity": 3
+      },
+      {
+        "id": "rat_skin",
+        "defId": "rat_skin",
+        "name": "Rat Skin",
+        "icon": "🐾",
+        "stackable": true,
+        "quantity": 46
+      },
+      {
+        "id": "oak_logs",
+        "defId": "oak_logs",
+        "name": "Oak Logs",
+        "icon": "🪵",
+        "stackable": true,
+        "quantity": 4
+      },
+      {
+        "id": "stone",
+        "defId": "stone",
+        "name": "Stone",
+        "icon": "🪨",
+        "stackable": true,
+        "quantity": 5
+      },
+      {
+        "id": "health_potion_t1",
+        "defId": "health_potion_t1",
+        "name": "Health Potion (T1)",
+        "icon": "🧪",
+        "stackable": true,
+        "quantity": 2
+      }
+    ]
+  }
+}
