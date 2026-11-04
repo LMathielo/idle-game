@@ -42,9 +42,9 @@ export type DerivedStats = {
 
 /**
  * What getDerivedStats reads. A GameState fits; UIs can pass just these slices. `training` is required:
- * STR/END count as totals (level points + extra + core), so it can't be left out by mistake.
+ * STR/END count as totals (spent + extra + core), so it can't be left out by mistake.
  */
-export type StatsInput = { character: Pick<Character, 'level' | 'attributes' | 'equipment'>; training: TrainingLevels };
+export type StatsInput = { character: Pick<Character, 'level' | 'attributes' | 'spentPoints' | 'equipment'>; training: TrainingLevels };
 
 /** Fixed order so breakdowns are stable. */
 const SLOT_ORDER: readonly EquipmentSlot[] = ['weapon', 'shield', 'helmet', 'armor', 'gloves', 'boots', 'amulet', 'ring1', 'ring2'];

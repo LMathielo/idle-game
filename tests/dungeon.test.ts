@@ -14,7 +14,6 @@ import {
   resolveFight,
   searchMsFor,
   activityTimeMs,
-  levelPoints,
   simulate,
   skipCost,
 } from '../src/engine';
@@ -34,7 +33,7 @@ function withCharacter(s: GameState, patch: Partial<GameState['character']>): Ga
  * armor + `end`, exactly what "END `end`" gave before 1.16.0 (the old starting 10 moved into the base). Test-only.
  */
 function withOldEnd(s: GameState, end: number): GameState {
-  const extra = end - 10 - levelPoints(s.character.level) - s.training.attributes.endurance.level;
+  const extra = end - 10 - s.character.spentPoints.endurance - s.training.attributes.endurance.level;
   return withCharacter(s, { attributes: { ...s.character.attributes, endurance: extra } });
 }
 
@@ -399,8 +398,12 @@ describe('offline catch-up', () => {
     // Each run takes 1:50 + its fight (a few seconds for a fresh hero vs the Rat, never more than 60 s).
     expect(runs).toBeLessThanOrEqual(Math.floor((8 * HOUR) / (SEARCH_MS + SEC)));
     expect(runs).toBeGreaterThanOrEqual(Math.floor((8 * HOUR) / (SEARCH_MS + 10 * SEC)));
-    // The rest of the capped time is not lost: it sits in the run in progress.
-    expect(simulate(dungeonGame(), T0 + 8 * HOUR).state).toEqual({ ...r.state, time: { lastSimulatedAt: T0 + 8 * HOUR, highestSeenAt: T0 + 8 * HOUR } });
+    // The rest of the capped time is not lost: it sits in the run in progress. The 12 h beyond the cap only regenerate
+    // HP and mana (since 1.17.0 the hero gains no END from levels, so he is not full yet at the 8 h mark).
+    const at8 = simulate(dungeonGame(), T0 + 8 * HOUR).state;
+    const pools = (c: GameState['character']) => ({ hp: c.hp, hpRegenProgress: c.hpRegenProgress, mana: c.mana, manaRegenProgress: c.manaRegenProgress });
+    expect(at8.character.hp).toBeLessThanOrEqual(r.state.character.hp);
+    expect({ ...at8, character: { ...at8.character, ...pools(r.state.character) } }).toEqual({ ...r.state, time: { lastSimulatedAt: T0 + 8 * HOUR, highestSeenAt: T0 + 8 * HOUR } });
   });
 
   it('30 minutes away → runs back to back, rewards summed, HP consistent', () => {

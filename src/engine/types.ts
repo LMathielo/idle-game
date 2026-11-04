@@ -10,8 +10,8 @@ export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
 
 /**
  * Plain integers. `character.attributes` holds the stored EXTRA normal points (0 for a new hero; debug points now,
- * gear later). Level points (5 × (level − 1)) and core points (training levels) are added by
- * src/engine/attributes.ts: total = normal + core (effectiveAttributes), core = training level (coreAttributes).
+ * gear later) and `character.spentPoints` the points the player spent (1.17.0). src/engine/attributes.ts adds them up:
+ * normal = spent + extra, core = training level (coreAttributes), total = normal + core (effectiveAttributes).
  */
 export type Attributes = Record<AttributeKey, number>;
 
@@ -67,7 +67,7 @@ export type Character = {
   xpToNext: number;
   /**
    * Current HP, 0..maxHp. Max HP is derived (getDerivedStats), never stored. Regenerates in simulate()
-   * at 5 + END HP per minute (config/stats.ts); fights spend it. A level-up raises max, not current.
+   * at 15 + total END HP per minute (config/stats.ts); fights spend it. A level-up raises max, not current.
    */
   hp: number;
   /**
@@ -76,8 +76,23 @@ export type Character = {
    * exact even when the rate changes. Always 0 while hp >= maxHp.
    */
   hpRegenProgress: number;
+  /**
+   * Current mana, 0..maxMana (save v17). Max mana is derived (getDerivedStats); regenerates in simulate() at
+   * 5 + total INT per minute wherever HP regenerates (src/engine/mana.ts). Nothing spends it yet. A level-up raises max,
+   * not current (as HP).
+   */
+  mana: number;
+  /** Regen banked towards the next mana point, in "mana·ms per minute" units (as hpRegenProgress). 0 while full. */
+  manaRegenProgress: number;
   gold: number;
+  /** Stored EXTRA normal points (debug now, gear later). Not the spent points. */
   attributes: Attributes;
+  /**
+   * Points the player spent with SPEND_ATTRIBUTE_POINTS (save v17): permanent normal points, no refund. 0 for a new hero.
+   */
+  spentPoints: Attributes;
+  /** Points granted by hero level-ups (5 per level, config/stats.ts ATTRIBUTE_POINTS) and not spent yet (save v17). */
+  unspentPoints: number;
   equipment: Partial<Record<EquipmentSlot, Item>>;
   skills: Record<SkillKey, Skill>;
 };
@@ -404,7 +419,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 16;
+  saveVersion: 17;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */

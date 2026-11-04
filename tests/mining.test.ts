@@ -85,19 +85,20 @@ describe('config: rock table and formulas (own config, same numbers as the trees
   });
 });
 
-describe('mining strength (MS = 10 × level + 10 base + core STR + pickaxe, 1.16.0)', () => {
+describe('mining strength (MS = 10 × level + 10 base + total STR + pickaxe, 1.17.0)', () => {
   it('a new hero has MS 21 (10 + 10 base + 0 core STR + 1) with the Wooden Pickaxe equipped', () => {
     const s = builtGame(1, T0);
     expect(s.character.equipment.pickaxe).toEqual({ id: 'start-wooden_pickaxe', defId: 'wooden_pickaxe', name: 'Wooden Pickaxe', icon: '⛏️', slot: 'pickaxe', rarity: 'common', quality: 25 });
     expect(miningStrength(s)).toEqual({ value: 21, breakdown: { level: 10, base: 10, strength: 0, pickaxe: 1, pickaxeDefId: 'wooden_pickaxe' } });
   });
 
-  it('level 5 base hero = 61; core STR counts, normal STR (level points, extra) does not; no pickaxe or an unknown one gives 0; the axe never counts', () => {
+  it('level 5 base hero = 61; total STR counts 1:1 (core, spent and extra); no pickaxe or an unknown one gives 0; the axe never counts', () => {
     const s = withMining(builtGame(1, T0), 5);
     expect(miningStrength(s).value).toBe(61);
     expect(miningStrength(withCore(s, { strength: 39 })).breakdown).toMatchObject({ level: 50, base: 10, strength: 39, pickaxe: 1 });
-    const normal = { ...s, character: { ...s.character, level: 20, attributes: { ...s.character.attributes, strength: 500 } } };
-    expect(miningStrength(normal).value).toBe(61);
+    const normal = { ...s, character: { ...s.character, level: 20, attributes: { ...s.character.attributes, strength: 5 }, spentPoints: { ...s.character.spentPoints, strength: 7 } } };
+    expect(miningStrength(normal).value).toBe(73);
+    expect(miningStrength({ ...s, character: { ...s.character, level: 20 } } as GameState).value).toBe(61);
     const { pickaxe: _p, ...noPick } = s.character.equipment;
     expect(miningStrength({ ...s, character: { ...s.character, equipment: noPick } }).breakdown).toMatchObject({ pickaxe: 0, pickaxeDefId: null });
     const odd = { ...s.character.equipment, pickaxe: { ...s.character.equipment.pickaxe!, defId: 'nope' } };

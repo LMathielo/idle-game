@@ -131,6 +131,19 @@ export function withCore(state: GameState, core: Partial<Record<AttributeKey, nu
   return { ...state, training: { ...state.training, attributes } };
 }
 
+/**
+ * What the v16 → v17 migration adds to a character (1.17.0): nothing spent, 5 unspent points per level above 1, mana full
+ * at the 1.16.0 max (20 + 5 per level above 1). Spread it over a raw older character to get the migrated one.
+ */
+export function v17Added(level: number) {
+  return {
+    spentPoints: { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 },
+    unspentPoints: 5 * (level - 1),
+    mana: 20 + 5 * (level - 1),
+    manaRegenProgress: 0,
+  };
+}
+
 /** What the v15 → v16 migration does to stored attributes: they become extra normal points, max(0, old − 10). */
 export function v16Attributes<T extends Record<string, number>>(attributes: T): T {
   return Object.fromEntries(Object.entries(attributes).map(([k, v]) => [k, Math.max(0, v - 10)])) as T;

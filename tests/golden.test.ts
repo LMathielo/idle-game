@@ -73,6 +73,10 @@
 // more Stone (619 → 620). With those values put back (`as114Hero`) and seen at save v14 (`asV14`), the 1.13.0 and
 // 1.14.0 pins hold. The script gained a 1.15.0 segment (waiting Oak pipes fed by woodcutting across a boundary and
 // 5 h away, two pipes competing, Recipes starts and the "all busy" refusal, a ×10 tap and an insta, Stop).
+// 1.16.0 → 1.17.0 (2026-11-03): save v17 (spendable level-up points: 5 unspent per level instead of +5 on every attribute;
+// WS / MS from total STR; current mana with regen). Fewer automatic stats make a few fights last longer, so the RNG stream
+// moves and every pin was re-pinned (runs, gold, logs; the script still wins every fight). The 1.10.0-era refresh is put
+// back to the 1.16.0 roll (`listingAt`) so the later buys stay the same. The script gained a 1.17.0 segment (SCRIPT_117).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -80,7 +84,6 @@ import {
   getItemDef,
   applyCommand,
   effectiveAttributes,
-  levelPoints,
   woodcuttingStrength,
   type Command,
   craftJobView,
@@ -99,9 +102,10 @@ import {
   mineActivityView,
   trainingView,
   woodcutActivityView,
+  manaView,
   woodcuttingView,
 } from '../src/engine';
-import { HOUR, MIN, SEC, T0, v12Skills, v16Attributes, withBuilt, withCore, withoutGearRolls } from './helpers';
+import { HOUR, MIN, SEC, T0, v12Skills, v16Attributes, v17Added, withBuilt, withCore, withoutGearRolls } from './helpers';
 
 /** End of the 1.5.0 script; the 1.6.0 segment starts here. */
 const B = T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC;
@@ -274,6 +278,11 @@ const SCRIPT: Step[] = [
   { at: C + 10 * SEC + 5 * HOUR, patch: as113Stock }, // 1.14.0: gear listings on the 1.13.0 terms
   { at: C + 11 * SEC + 5 * HOUR, cmd: { id: 'm11', type: 'REFRESH_MERCHANT' } },
   { at: C + 11 * SEC + 5 * HOUR, patch: as113Stock }, // 1.14.0: gear listings on the 1.13.0 terms
+  // 1.17.0: the RNG stream before these refreshes moved (no automatic level points: some fights last longer), so the
+  // rolls differ; the stock the 1.16.0 engine rolled here is put back, so the later buys (Iron Pickaxe in slot 2) stay.
+  { at: C + 11 * SEC + 5 * HOUR, patch: listingAt(1, { defId: 'steel_axe', quantity: 1, unitPrice: 2500, quality: 25, rarity: 'common' }) },
+  { at: C + 11 * SEC + 5 * HOUR, patch: listingAt(2, { defId: 'iron_pickaxe', quantity: 1, unitPrice: 600, quality: 25, rarity: 'common' }) },
+  { at: C + 11 * SEC + 5 * HOUR, patch: listingAt(3, { defId: 'steel_sword', quantity: 1, unitPrice: 2000, quality: 25, rarity: 'common' }) },
   { at: C + 12 * SEC + 5 * HOUR, cmd: { id: 'm12', type: 'DEBUG_ADD_MERCHANT_CHARGE' } },
   { at: C + 13 * SEC + 5 * HOUR, cmd: { id: 'm13', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'birch' } },
   // 1.10.0: refreshes roll the stock (seeded); this one holds Iron Gloves in slot 4 (it held the Iron Helm before).
@@ -470,6 +479,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.14.0', 14],
       ['1.15.0', 15],
       ['1.16.0', 16],
+      ['1.17.0', 17],
     ]);
   });
 });
@@ -490,16 +500,16 @@ describe('golden', () => {
         "actions": 420,
         "dungeon": {
           "losses": 0,
-          "runs": 91,
-          "wins": 91,
+          "runs": 90,
+          "wins": 90,
         },
-        "gold": 356,
+        "gold": 353,
         "heroLevel": 12,
         "hp": [
           160,
           0,
         ],
-        "lastFightMs": 1000,
+        "lastFightMs": 2000,
         "stamina": {
           "current": 100,
           "max": 100,
@@ -529,26 +539,26 @@ describe('golden', () => {
     }).toMatchInlineSnapshot(`
       {
         "actions": 420,
-        "batWings": 17,
+        "batWings": 10,
         "byDungeon": {
           "bat_cave": {
             "losses": 0,
-            "runs": 49,
-            "wins": 49,
+            "runs": 48,
+            "wins": 48,
           },
           "rat_cellar": {
             "losses": 0,
-            "runs": 91,
-            "wins": 91,
+            "runs": 90,
+            "wins": 90,
           },
         },
-        "gold": 692,
+        "gold": 683,
         "heroLevel": 12,
         "hp": [
           160,
           0,
         ],
-        "lastFightMs": 1000,
+        "lastFightMs": 5000,
         "nests": 2,
         "stamina": {
           "current": 100,
@@ -585,37 +595,53 @@ describe('golden', () => {
           "byDungeon": {
             "bat_cave": {
               "losses": 0,
-              "runs": 49,
-              "wins": 49,
+              "runs": 48,
+              "wins": 48,
             },
             "rat_cellar": {
               "losses": 0,
-              "runs": 120,
-              "wins": 120,
+              "runs": 119,
+              "wins": 119,
             },
           },
           "lastFight": {
             "dungeonId": "rat_cellar",
-            "durationMs": 1000,
+            "durationMs": 2000,
             "endReason": "enemy_defeated",
             "enemyHpEnd": 0,
             "enemyId": "rat",
             "enemyMaxHp": 30,
-            "heroHpEnd": 170,
+            "heroHpEnd": 169,
             "heroHpStart": 170,
             "heroMaxHp": 170,
             "log": [
               {
                 "actor": "hero",
                 "atMs": 1000,
-                "dealt": 76,
-                "roll": 79,
+                "dealt": 16,
+                "roll": 17,
                 "strike": 1,
+                "targetHpAfter": 14,
+              },
+              {
+                "actor": "enemy",
+                "atMs": 1000,
+                "dealt": 1,
+                "roll": 3,
+                "strike": 1,
+                "targetHpAfter": 169,
+              },
+              {
+                "actor": "hero",
+                "atMs": 2000,
+                "dealt": 18,
+                "roll": 19,
+                "strike": 2,
                 "targetHpAfter": 0,
               },
             ],
             "rewards": {
-              "gold": 5,
+              "gold": 2,
               "heroXp": 35,
               "items": {},
               "itemsLost": {},
@@ -624,22 +650,22 @@ describe('golden', () => {
           },
           "totals": {
             "losses": 0,
-            "runs": 169,
-            "wins": 169,
+            "runs": 167,
+            "wins": 167,
           },
         },
-        "gold": 1001,
+        "gold": 974,
         "heroLevel": 13,
         "hp": [
           170,
           0,
         ],
         "logs": {
-          "birch_logs": 34,
-          "oak_logs": 1798,
+          "birch_logs": 40,
+          "oak_logs": 1845,
         },
         "rng": {
-          "seed": 2316947613,
+          "seed": 2880596583,
         },
         "stamina": {
           "current": 91,
@@ -704,10 +730,10 @@ describe('golden', () => {
         "actions": 487,
         "dungeon": {
           "losses": 0,
-          "runs": 199,
-          "wins": 199,
+          "runs": 197,
+          "wins": 197,
         },
-        "gold": 1323,
+        "gold": 1297,
         "heroLevel": 13,
         "hp": [
           170,
@@ -729,7 +755,7 @@ describe('golden', () => {
               "icon": "🪵",
               "id": "oak_logs",
               "name": "Oak Logs",
-              "quantity": 1698,
+              "quantity": 1745,
               "stackable": true,
             },
             {
@@ -737,7 +763,7 @@ describe('golden', () => {
               "icon": "🪺",
               "id": "bird_nest",
               "name": "Bird Nest",
-              "quantity": 2,
+              "quantity": 3,
               "stackable": true,
             },
             {
@@ -745,7 +771,7 @@ describe('golden', () => {
               "icon": "🐾",
               "id": "rat_skin",
               "name": "Rat Skin",
-              "quantity": 75,
+              "quantity": 67,
               "stackable": true,
             },
             {
@@ -753,7 +779,7 @@ describe('golden', () => {
               "icon": "🪽",
               "id": "bat_wing",
               "name": "Bat Wing",
-              "quantity": 17,
+              "quantity": 10,
               "stackable": true,
             },
             {
@@ -761,7 +787,7 @@ describe('golden', () => {
               "icon": "🪵",
               "id": "birch_logs",
               "name": "Birch Logs",
-              "quantity": 57,
+              "quantity": 64,
               "stackable": true,
             },
             {
@@ -775,19 +801,19 @@ describe('golden', () => {
           ],
         },
         "logs": {
-          "birch_logs": 57,
-          "oak_logs": 1698,
+          "birch_logs": 64,
+          "oak_logs": 1745,
         },
-        "nests": 2,
+        "nests": 3,
         "nextItemSerial": 3,
-        "seed": 1166006067,
+        "seed": 4249421417,
         "stamina": {
           "current": 100,
           "max": 100,
           "progressMs": 0,
         },
         "tier": 2,
-        "xp": 1517,
+        "xp": 1422,
       }
     `);
   });
@@ -798,7 +824,8 @@ describe('golden', () => {
     // 1.12.0: the skill curve (base 100) levels woodcutting and mining faster, so WS / MS and the yield rise. Was 1aed0f53.
     // 1.13.0: unchanged outcomes; seen in the v12 shape (no Crafting house, smithing back) the hash is the 1.12.0 one.
     // 1.16.0: re-pinned (was d6b0bd86): 2:00 cuts, ores and searches at core DEX 0, level points in every fight.
-    expect(hashState(asV12(s))).toBe('0aefeb9f');
+    // 1.17.0: re-pinned (was 0aefeb9f): no automatic level points (fights a little longer), points to spend, mana.
+    expect(hashState(asV12(s))).toBe('19a041ff');
   });
 
   it('the 1.11.0 segment: Training Grounds Lv2 completes mid-training (1 → 2 XP/min at that instant), speed-up at 2 XP/min', () => {
@@ -865,7 +892,7 @@ describe('golden', () => {
         "actions": 810,
         "activity": "training",
         "axe": "iron_axe",
-        "batWings": 17,
+        "batWings": 10,
         "buildings": {
           "merchant": {
             "level": 1,
@@ -891,26 +918,26 @@ describe('golden', () => {
         "byDungeon": {
           "bat_cave": {
             "losses": 0,
-            "runs": 49,
-            "wins": 49,
+            "runs": 48,
+            "wins": 48,
           },
           "rat_cellar": {
             "losses": 0,
-            "runs": 417,
-            "wins": 417,
+            "runs": 414,
+            "wins": 414,
           },
         },
         "construction": null,
         "dungeon": {
           "losses": 0,
-          "runs": 466,
-          "wins": 466,
+          "runs": 462,
+          "wins": 462,
         },
         "dungeonActivity": null,
         "engineVersion": "1.16.0",
         "gloves": "iron_gloves#2",
-        "gold": 1389,
-        "hash": "79daca03",
+        "gold": 1387,
+        "hash": "2f410208",
         "heroLevel": 15,
         "hp": [
           190,
@@ -920,10 +947,10 @@ describe('golden', () => {
           "endReason": "enemy_defeated",
           "won": true,
         },
-        "lastFightMs": 1000,
+        "lastFightMs": 2000,
         "logs": {
-          "birch_logs": 57,
-          "oak_logs": 6614,
+          "birch_logs": 64,
+          "oak_logs": 6680,
         },
         "merchant": {
           "chargeProgressMs": 0,
@@ -956,8 +983,8 @@ describe('golden', () => {
         "nests": 4,
         "nextItemSerial": 4,
         "ores": {
-          "copper_ore": 14,
-          "stone": 340,
+          "copper_ore": 16,
+          "stone": 373,
         },
         "pickaxe": "start-wooden_pickaxe",
         "potions": 2,
@@ -999,13 +1026,13 @@ describe('golden', () => {
           "crews": {
             "oak": {
               "idle": false,
-              "progressMs": 3000,
-              "workMs": 6000,
+              "progressMs": 63000,
+              "workMs": 126000,
             },
             "stone": {
               "idle": false,
-              "progressMs": 2000,
-              "workMs": 2000,
+              "progressMs": 62000,
+              "workMs": 62000,
             },
           },
           "list": [
@@ -1095,10 +1122,11 @@ describe('golden', () => {
       ['start-wooden_pickaxe', 'wooden_pickaxe'], // v10
     ]);
 
-    // Stats come from the catalog through the new defIds: 2–4 + 10 base + 15 STR (Lv4 level points), 3 armor + 10 base +
-    // 15 END, level 4 pools.
+    // Stats come from the catalog through the new defIds: 2–4 + 10 base, 3 armor + 10 base, level 4 pools. Since 1.17.0
+    // (v17) the Lv4 hero has 15 points to spend instead of +15 on every attribute, and full mana.
     const d = getDerivedStats(s);
-    expect([d.damage.min, d.damage.max, d.defense.value, d.maxHp.value, d.maxMana.value]).toEqual([27, 29, 28, 80, 35]);
+    expect([d.damage.min, d.damage.max, d.defense.value, d.maxHp.value, d.maxMana.value]).toEqual([12, 14, 13, 80, 35]);
+    expect([s.character.unspentPoints, s.character.mana]).toEqual([15, 35]);
 
     // Plays on: with Woodcutting built again, Oak logs every 2:00 at core DEX 0.
     const oak = applyCommand(withBuilt(s, ['woodcutting']), { id: 'v2-oak', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, s.time.lastSimulatedAt);
@@ -1137,6 +1165,7 @@ describe('golden', () => {
     };
     expect({ ...character, equipment }).toEqual({
       ...raw.character,
+      ...v17Added(5), // v17: 20 points to spend (Lv5), mana full
       attributes: v16Attributes(raw.character.attributes), // v16: stored points − 10 = extra normal points (DEX 5, END 2)
       skills: v12Skills(raw.character.skills), // v12: levels recomputed from total XP (WC Lv8 → Lv16)
       xp: undefined,
@@ -1214,7 +1243,9 @@ describe('golden 1.13.0: the Crafting house', () => {
     expect(s.training.attributes.strength).toEqual({ level: 18, xp: 5, progressMs: 10_212 }); // same as 1.15.0
     // 1.16.0 re-pin (was 073a47bf in the v13 shape, with the 1.14.0 STR training put back): the outcomes before the
     // segment moved (2:00 cuts and searches at core DEX 0, level points in every fight, a shifted RNG stream).
-    expect({ engineVersion: '1.16.0', hash: hashState(s) }).toEqual({ engineVersion: '1.16.0', hash: 'ea51d10b' });
+    // 1.17.0 re-pin (1.16.0: ea51d10b): no automatic level points (a few fights last longer, a shifted RNG stream), the
+    // new character fields (spent / unspent points, mana). Every crafting outcome above is unchanged.
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.17.0', hash: 'd3f87116' });
   });
 });
 
@@ -1225,23 +1256,23 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
   it('a rolled stock, a bought piece, gear jobs with invested stamina, a cancel, an insta, ready pipes, Done, equip', () => {
     // The refresh rolls each gear listing (quality 0–50, common / uncommon / rare) and fixes its price (buy × rarity).
     const q3 = at('q3');
-    // 1.16.0: re-pinned (the main RNG stream before the refresh moved, so the stock and the gear rolls differ).
+    // 1.16.0 and 1.17.0: re-pinned (the main RNG stream before the refresh moved, so the stock and the gear rolls differ).
     expect(q3.merchant.stock).toEqual([
       { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
-      { defId: 'iron_pickaxe', quantity: 1, unitPrice: 600, quality: 49, rarity: 'common' },
-      { defId: 'iron_chestplate', quantity: 1, unitPrice: 700, quality: 17, rarity: 'common' },
-      { defId: 'iron_helm', quantity: 1, unitPrice: 400, quality: 23, rarity: 'common' },
-      { defId: 'iron_boots', quantity: 1, unitPrice: 250, quality: 21, rarity: 'common' },
+      { defId: 'steel_axe', quantity: 1, unitPrice: 2500, quality: 4, rarity: 'common' },
+      { defId: 'iron_pickaxe', quantity: 1, unitPrice: 600, quality: 38, rarity: 'common' },
+      { defId: 'iron_axe', quantity: 1, unitPrice: 600, quality: 48, rarity: 'common' },
+      { defId: 'steel_pickaxe', quantity: 1, unitPrice: 2500, quality: 30, rarity: 'common' },
     ]);
-    const q4 = at('q4');
-    expect(q4.inventory.items.find((i) => i.id === 'iron_pickaxe#5')).toMatchObject({ quality: 49, rarity: 'common' });
-    expect(q3.character.gold - q4.character.gold).toBe(600);
+    const q4 = at('q4'); // the first gear listing: the Steel Axe
+    expect(q4.inventory.items.find((i) => i.id === 'steel_axe#5')).toMatchObject({ quality: 4, rarity: 'common' });
+    expect(q3.character.gold - q4.character.gold).toBe(2500);
     // Gear jobs: inputs and invested stamina paid at start; the roll is on the job (sword: floor 20).
     const q7 = at('q7');
     expect(q7.crafting.pipes.slice(0, 3).map((j) => j && { recipeId: j.recipeId, gear: j.gear, status: j.status })).toEqual([
-      { recipeId: 'stone_sword', gear: { staminaInvested: 20, quality: 38, rarity: 'uncommon' }, status: 'running' },
-      { recipeId: 'stone_helm', gear: { staminaInvested: 0, quality: 50, rarity: 'uncommon' }, status: 'running' },
-      { recipeId: 'stone_gloves', gear: { staminaInvested: 5, quality: 70, rarity: 'uncommon' }, status: 'running' },
+      { recipeId: 'stone_sword', gear: { staminaInvested: 20, quality: 53, rarity: 'uncommon' }, status: 'running' },
+      { recipeId: 'stone_helm', gear: { staminaInvested: 0, quality: 99, rarity: 'uncommon' }, status: 'running' },
+      { recipeId: 'stone_gloves', gear: { staminaInvested: 5, quality: 19, rarity: 'uncommon' }, status: 'running' },
     ]);
     // Cancel: the gloves' 2 bricks and 1 plank come back; the 5 stamina do not.
     const q8 = at('q8');
@@ -1253,13 +1284,15 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     expect(q8b.crafting.pipes.slice(0, 2).map((j) => j?.status)).toEqual(['ready', 'ready']);
     const s = at('u1'); // the whole 1.14.0 script
     expect(s.crafting.pipes.every((p) => p === null)).toBe(true);
-    expect(s.character.equipment.weapon).toMatchObject({ id: 'stone_sword#6', quality: 38, rarity: 'uncommon' });
-    expect(s.inventory.items.find((i) => i.defId === 'stone_helm')).toMatchObject({ id: 'stone_helm#7', quality: 50, rarity: 'uncommon' });
-    expect(getDerivedStats(s).damage.breakdown[0]).toMatchObject({ source: 'weapon', min: 3, max: 4 }); // 4–6 at quality 38
+    expect(s.character.equipment.weapon).toMatchObject({ id: 'stone_sword#6', quality: 53, rarity: 'uncommon' });
+    expect(s.inventory.items.find((i) => i.defId === 'stone_helm')).toMatchObject({ id: 'stone_helm#7', quality: 99, rarity: 'uncommon' });
+    expect(getDerivedStats(s).damage.breakdown[0]).toMatchObject({ source: 'weapon', min: 3, max: 5 }); // 4–6 at quality 53
     expect(qtyOf(s, 'stone_brick')).toBe(13);
-    expect([s.training.attributes.strength, qtyOf(s, 'stone')]).toEqual([{ level: 19, xp: 180, progressMs: 16_212 }, 480]); // 1.15.0: 620 Stone
+    // 1.15.0: 620 Stone; 1.16.0: 480; 1.17.0: 521.
+    expect([s.training.attributes.strength, qtyOf(s, 'stone')]).toEqual([{ level: 19, xp: 180, progressMs: 16_212 }, 521]);
     // 1.16.0 re-pin (1.15.0: gold 3,762; the 1.14.0 pin f6345886 in the v14 shape): the outcomes before it moved.
-    expect({ gold: s.character.gold, hash: hashState(s) }).toEqual({ gold: 4061, hash: 'aa5c4e76' });
+    // 1.17.0 re-pin (1.16.0: gold 4,061, hash aa5c4e76): the Steel Axe (2,500 g) is now the first gear listing.
+    expect({ gold: s.character.gold, hash: hashState(s) }).toEqual({ gold: 2162, hash: '8859fdcf' });
   });
 });
 
@@ -1294,17 +1327,17 @@ describe('golden 1.15.0: continuous material pipes', () => {
     const boundary = runScript(SCRIPT.slice(0, SCRIPT.findIndex((x) => x.at === J + 2 * MIN + 1500) + 1));
     expect(boundary.crafting.pipes.slice(0, 2).map((j) => j?.status)).toEqual(['running', 'running']);
     // 5 h away: both live off the logs as they are cut (each cut goes to pipe 1 first) and wait in between (1.16.0: the
-    // 5 h end inside a craft of each; 1.15.0 ended with both waiting, 827 and 642 crafted).
+    // 5 h end inside a craft of each; 1.15.0 ended with both waiting, 827 and 642 crafted; 1.16.0: 715 and 637).
     expect(s.crafting.pipes.slice(0, 2).map((j) => j && [j.status, j.done])).toEqual([
-      ['running', 715],
+      ['running', 736],
       ['running', 637],
     ]);
-    expect(qtyOf(s, 'oak_logs')).toBe(9); // a cut just landed; each craft takes its 2 logs when it starts
+    expect(qtyOf(s, 'oak_logs')).toBe(10); // a cut just landed; each craft takes its 2 logs when it starts
     expect(s.crafting.pipes[2]).toBeNull();
     expect(s.crafting.pipes[0]!.done).toBeGreaterThan(p0!.done);
     expect(s.crafting.pipes[0]!.done).toBeGreaterThan(s.crafting.pipes[1]!.done);
-    // 1.16.0 re-pin (1.15.0: gold 10,580, hash eaf63de1).
-    expect({ engineVersion: '1.16.0', gold: s.character.gold, hash: hashState(s) }).toEqual({ engineVersion: '1.16.0', gold: 9973, hash: '7950bd86' });
+    // 1.16.0 re-pin (1.15.0: gold 10,580, hash eaf63de1). 1.17.0 re-pin (1.16.0: gold 9,973, hash 7950bd86).
+    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(s) }).toEqual({ engineVersion: '1.17.0', gold: 8172, hash: 'a23649f6' });
   });
 });
 
@@ -1327,7 +1360,7 @@ const SCRIPT_116: Step[] = [
   { at: T0 + 25 * MIN },
   { at: T0 + 25 * MIN + 1 * SEC, cmd: { id: 'k8', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } }, // 110,004 ms cuts
   { at: T0 + 55 * MIN },
-  { at: T0 + 55 * MIN + 1 * SEC, cmd: { id: 'k9', type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'strength', amount: 50 } }, // normal: WS unchanged
+  { at: T0 + 55 * MIN + 1 * SEC, cmd: { id: 'k9', type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'strength', amount: 50 } }, // normal: WS +50 since 1.17.0
   { at: T0 + 55 * MIN + 2 * SEC, cmd: { id: 'k10', type: 'START_ACTIVITY', kind: 'training', attribute: 'strength' } },
   { at: T0 + 55 * MIN + 3 * SEC, cmd: { id: 'k11', type: 'DEBUG_ADD_TRAINING_XP', xp: 125 } }, // core STR 0 → 5: WS +5
   { at: T0 + 55 * MIN + 4 * SEC, cmd: { id: 'k12', type: 'START_ACTIVITY', kind: 'training', attribute: 'intelligence' } },
@@ -1341,42 +1374,83 @@ const SCRIPT_116: Step[] = [
 describe('golden 1.16.0: normal and core attributes', () => {
   const SEED = 0x116;
   const upTo = (id: string) => runScript(SCRIPT_116.slice(0, SCRIPT_116.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === id)), SEED);
-  it('a 0-stat new hero, level points, core DEX on a search and a cut, core vs normal STR on WS, core INT on a craft', () => {
+  it('a 0-stat new hero, level-up points, core DEX on a search and a cut, normal and core STR on WS, core INT on a craft', () => {
     const fresh = newGame(SEED, T0);
     expect(fresh.character.attributes).toEqual({ strength: 0, dexterity: 0, endurance: 0, intelligence: 0 });
     expect(effectiveAttributes(fresh)).toEqual({ strength: 0, dexterity: 0, endurance: 0, intelligence: 0 });
     // The first search is 2:00 (core DEX 0): one ms before it ends, still searching.
     const searching = runScript(SCRIPT_116.slice(0, 5), SEED);
     expect(dungeonRunView(searching)).toMatchObject({ phase: 'search', searchMs: 2 * MIN, remainingMs: 1 });
-    // Rat Cellar wins level the hero up: every attribute gets +5 normal points per level above 1.
+    // Rat Cellar wins level the hero up. 1.16.0 gave +5 on every attribute; since 1.17.0 the level gives 5 points to spend.
     const leveled = upTo('k5');
     expect(leveled.character.level).toBe(2);
-    expect(effectiveAttributes(leveled)).toEqual({ strength: 5, dexterity: 5, endurance: 5, intelligence: 5 });
-    expect(levelPoints(leveled.character.level)).toBe(5);
-    expect(getDerivedStats(leveled).damage).toMatchObject({ min: 17, max: 19 }); // 2–4 + 10 base + 5 STR
-    expect(getDerivedStats(leveled).defense.value).toBe(18); // 3 + 10 base + 5 END
-    // Core DEX 10 (normal DEX 10 did nothing): the next search and every Oak cut take 110,004 ms.
+    expect(effectiveAttributes(leveled)).toEqual({ strength: 0, dexterity: 0, endurance: 0, intelligence: 0 });
+    expect(leveled.character.unspentPoints).toBe(5);
+    expect(getDerivedStats(leveled).damage).toMatchObject({ min: 12, max: 14 }); // 2–4 + 10 base
+    expect(getDerivedStats(leveled).defense.value).toBe(13); // 3 + 10 base
+    // Core DEX 10: the next search and every Oak cut take 110,004 ms.
     const dex = upTo('k8');
     expect(dex.training.attributes.dexterity.level).toBe(10);
-    expect(effectiveAttributes(dex).dexterity).toBe(levelPoints(dex.character.level) + 10); // normal + 10 core
+    expect(effectiveAttributes(dex).dexterity).toBe(10); // 0 normal + 10 core
     expect(dungeonRunView(upTo('k7'))).toBeNull();
     const searchStart = runScript(SCRIPT_116.slice(0, SCRIPT_116.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'k7') + 1), SEED);
     expect(dungeonRunView(searchStart)).toMatchObject({ phase: 'search', searchMs: 110_004 });
     const cutting = runScript(SCRIPT_116.slice(0, SCRIPT_116.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'k8') + 1), SEED);
     expect(woodcutActivityView(cutting)).toMatchObject({ logMs: 110_004 });
-    // Normal STR (+50 debug) leaves WS alone; core STR 5 raises it by 5.
+    // 1.17.0: total STR counts for WS, normal (+50 debug) and core (5) alike. (1.16.0: only core.)
     const before = upTo('k9');
     const normal = upTo('k10');
     expect(effectiveAttributes(normal).strength - effectiveAttributes(before).strength).toBe(50);
-    expect(woodcuttingStrength(normal).value).toBe(woodcuttingStrength(before).value);
+    expect(woodcuttingStrength(normal).value).toBe(woodcuttingStrength(before).value + 50);
     const core = upTo('k12');
-    expect(woodcuttingStrength(core).breakdown).toMatchObject({ base: 10, strength: 5 });
-    expect(woodcuttingStrength(core).value).toBe(woodcuttingStrength(before).value + 5);
+    expect(woodcuttingStrength(core).breakdown).toMatchObject({ base: 10, strength: 55 });
+    expect(woodcuttingStrength(core).value).toBe(woodcuttingStrength(before).value + 55);
     // Core INT 10: an Oak Plank takes 4,584 ms (5 s × (1 − 8.33%)).
     const crafting = runScript(SCRIPT_116.slice(0, SCRIPT_116.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === 'k15') + 1), SEED);
     expect(crafting.crafting.pipes[0]).toMatchObject({ recipeId: 'oak_plank', craftMs: 4584 });
     const s = runScript(SCRIPT_116, SEED);
     expect(s.stats.totalActions).toBe(16 + 65); // ~30 min then 2 h 2 s of 110,004 ms cuts
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.16.0', hash: 'df33601f' });
+    // 1.17.0 re-pin (1.16.0: df33601f): points to spend instead of level points, WS from total STR (more logs), mana.
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.17.0', hash: '7674da4c' });
+  });
+});
+
+
+/**
+ * 1.17.0: spendable points, total STR → WS, mana. A new hero: Rat Cellar wins level him up (5 points per level, nothing
+ * else moves), a simulate boundary mid-fight with mana regenerating, the points spent (STR and INT), then Oak with the
+ * higher WS and 1 h away.
+ */
+const SCRIPT_117: Step[] = [
+  { at: T0, cmd: { id: 'z1', type: 'DEBUG_BUILD', buildingId: 'woodcutting' } },
+  { at: T0, patch: (s) => ({ ...s, character: { ...s.character, mana: 0 } }) }, // mana starts empty so its regen shows
+  { at: T0 + 1 * SEC, cmd: { id: 'z2', type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } },
+  { at: T0 + 1 * SEC + 2 * MIN + 1500 }, // mid-fight of the first run
+  { at: T0 + 40 * MIN }, // ~18 wins: Lv3
+  { at: T0 + 40 * MIN + 1 * SEC, cmd: { id: 'z3', type: 'SPEND_ATTRIBUTE_POINTS', points: { strength: 6, intelligence: 4 } } },
+  { at: T0 + 40 * MIN + 2 * SEC, cmd: { id: 'z4', type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' } },
+  { at: T0 + 1 * HOUR + 40 * MIN + 2 * SEC }, // 1 h of Oak
+];
+
+describe('golden 1.17.0: spendable points, total STR → WS, mana', () => {
+  const SEED = 0x117;
+  const upTo = (id: string) => runScript(SCRIPT_117.slice(0, SCRIPT_117.findIndex((x) => typeof x.cmd === 'object' && x.cmd.id === id)), SEED);
+  it('level-ups grant unspent points only, mana regenerates through search and fight, spent STR raises WS', () => {
+    const midFight = runScript(SCRIPT_117.slice(0, 4), SEED);
+    expect(midFight.activity).toMatchObject({ kind: 'dungeon', phase: 'fight' });
+    // 2:02.5 since T0 at 5 mana/min (INT 0): 612,500 units = 10 mana + 12,500 banked.
+    expect([midFight.character.mana, midFight.character.manaRegenProgress]).toEqual([10, 12_500]);
+    const leveled = upTo('z3');
+    expect(leveled.character.level).toBe(3);
+    expect(leveled.character.unspentPoints).toBe(10);
+    expect(effectiveAttributes(leveled)).toEqual({ strength: 0, dexterity: 0, endurance: 0, intelligence: 0 });
+    expect(manaView(leveled)).toMatchObject({ mana: 30, maxMana: 30, regenPerMin: 5 });
+    const spent = upTo('z4');
+    expect(spent.character).toMatchObject({ unspentPoints: 0, spentPoints: { strength: 6, dexterity: 0, endurance: 0, intelligence: 4 } });
+    expect(woodcuttingStrength(spent).value).toBe(10 + 10 + 6 + 1);
+    expect(manaView(spent).regenPerMin).toBe(9);
+    const s = runScript(SCRIPT_117, SEED);
+    expect(s.character.spentPoints.strength).toBe(6);
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.17.0', hash: '6a2959e0' });
   });
 });

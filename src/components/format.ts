@@ -107,3 +107,13 @@ export function formatPerMin(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '0';
   return n < 1 ? n.toFixed(2) : n.toFixed(1);
 }
+
+/**
+ * Progress through a level as "xx.yy%" (two decimals, rounded DOWN so it never shows 100.00% before the level-up):
+ * 1234 / 5000 → "24.68%", 0 → "0.00%". Display only.
+ */
+export function formatLevelPercent(xp: number, xpToNext: number): string {
+  if (!(xpToNext > 0) || !(xp > 0)) return '0.00%';
+  const hundredths = Math.min(9999, Math.floor((xp / xpToNext) * 10_000));
+  return `${(hundredths / 100).toFixed(2)}%`;
+}

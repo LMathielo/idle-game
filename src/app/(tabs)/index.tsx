@@ -1,13 +1,15 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGameState } from '../../client/GameProvider';
 import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
 import { BuildSheet } from '../../components/buildings/BuildSheet';
+import { HeroHud } from '../../components/hud/HeroHud';
+import { hudBottom } from '../../components/hud/hudLayout';
 import { type VillageAction, VillageScene } from '../../components/VillageScene';
-import { formatCountdown, formatNumber } from '../../components/format';
+import { formatCountdown } from '../../components/format';
 import type { AnchorRect } from '../../components/ui/InfoPopover';
 import { type ActivityKind, type BuildingId, constructionView, craftingSign, isBuilt } from '../../engine';
 import { colors, fonts } from '../../theme';
@@ -53,7 +55,7 @@ const TOAST_MS = 1600;
 
 export default function VillageScreen() {
   const state = useGameState();
-  const { character, activity } = state;
+  const { activity } = state;
   const [toast, setToast] = useState<string | null>(null);
   /** The locked building whose Build box is open, anchored on its sign. */
   const [building, setBuilding] = useState<{ id: BuildingId; anchor: AnchorRect } | null>(null);
@@ -85,12 +87,10 @@ export default function VillageScreen() {
     if (badgeKey && badgeText) out[badgeKey] = badgeText; // an upgrade wins over the crafting line
     return out;
   }, [badgeKey, badgeText, craftText]);
-  /** Bottom edge of the top HUD (safe area included); signs are kept below it. */
-  const [hudBottom, setHudBottom] = useState(0);
-  const onHudLayout = useCallback((e: LayoutChangeEvent) => {
-    const { y, height } = e.nativeEvent.layout;
-    setHudBottom(y + height);
-  }, []);
+  /** Bottom edge of the hero HUD (safe area included, fixed size: hudLayout.ts); the start view keeps the signs below it. */
+  const insets = useSafeAreaInsets();
+  const topReserve = hudBottom(insets.top);
+  const openHero = useCallback(() => router.navigate('/hero'), []);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((text: string) => {
@@ -138,19 +138,14 @@ export default function VillageScreen() {
         active={activity ? ACTIVITY_SIGN[activity.kind] : null}
         locked={locked}
         badges={badges}
-        topReserve={hudBottom}
+        topReserve={topReserve}
         bottomReserve={ACTIVITY_STRIP_HEIGHT}
       />
-      {/* Top HUD over the sky */}
-      <SafeAreaView edges={['top']} style={styles.hudWrap} pointerEvents="none">
-        <View style={styles.hud} onLayout={onHudLayout}>
-          <Text style={styles.hudName}>
-            {character.name} <Text style={styles.hudLevel}>Lv {character.level}</Text>
-          </Text>
-          <Text style={styles.hudGold}>🪙 {formatNumber(character.gold)}</Text>
-        </View>
+      {/* Hero HUD over the sky, top-left: tapping it opens the Hero tab. Only the HUD takes touches. */}
+      <SafeAreaView edges={['top']} style={styles.hudWrap} pointerEvents="box-none">
+        <HeroHud onPress={openHero} />
         {toast ? (
-          <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)} style={styles.toast}>
+          <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)} style={styles.toast} pointerEvents="none">
             <Text style={styles.toastText}>{toast}</Text>
           </Animated.View>
         ) : null}
@@ -163,21 +158,6 @@ export default function VillageScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.night },
   hudWrap: { position: 'absolute', left: 0, right: 0, top: 0 },
-  hud: {
-    marginHorizontal: 12,
-    marginTop: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(43, 29, 18, 0.85)',
-    borderWidth: 2,
-    borderColor: colors.wood,
-  },
-  hudName: { fontFamily: fonts.title, fontSize: 20, color: colors.parchment },
-  hudLevel: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold },
-  hudGold: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.gold },
   toast: {
     alignSelf: 'center',
     marginTop: 8,

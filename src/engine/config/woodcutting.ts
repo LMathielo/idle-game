@@ -7,8 +7,9 @@ const MIN_MS = 60 * SEC_MS;
 
 export const WOODCUTTING = {
   /**
-   * Woodcutting strength: WS = wsPerLevel × woodcutting level + wsBase + CORE STR + axe bonus (catalog). Normal STR does
-   * not count (1.16.0): trees stay gated by skill level, tools and training. wsBase = the old starting 10 STR.
+   * Woodcutting strength: WS = wsPerLevel × woodcutting level + wsBase + TOTAL STR (normal + core, 1:1) + axe bonus
+   * (catalog). 1.17.0 (owner-approved 2026-11-03): total STR, so spent points make a better woodcutter (core STR only in
+   * 1.16.0). wsBase = the old starting 10 STR. Workers get 25% of the hero's WS (config/workers.ts).
    */
   wsPerLevel: 10,
   wsBase: 10,

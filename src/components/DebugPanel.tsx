@@ -103,6 +103,11 @@ export function DebugPanel() {
             />
             <PixelButton label="+1,000 gold" repeat={run(() => client.debug.addGold(1000))} accessibilityHint="Debug: adds 1,000 gold" />
             <PixelButton label="Unlock next pipe" repeat={run(() => client.debug.unlockPipe())} accessibilityHint="Debug: opens the next crafting pipe" />
+            <PixelButton
+              label="+5 points to spend"
+              repeat={run(() => client.debug.addUnspentPoints(5))}
+              accessibilityHint="Debug: adds 5 unspent attribute points, like a level-up"
+            />
             {ATTRIBUTE_BUTTONS.map((a) => (
               <PixelButton key={a.key} label={a.label} repeat={run(() => client.debug.addAttribute(a.key))} accessibilityHint="Debug: adds one extra normal point (not core)" />
             ))}

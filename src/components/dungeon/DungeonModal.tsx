@@ -247,10 +247,13 @@ function DungeonDetail({
 }) {
   const d = DUNGEONS[id];
   const enemy = ENEMIES[d.enemyId];
-  const { level, attributes, equipment } = state.character;
+  const { level, attributes, spentPoints, equipment } = state.character;
   const { training } = state;
-  const stats = useMemo(() => getDerivedStats({ character: { level, attributes, equipment }, training }), [level, attributes, equipment, training]);
-  const danger = useMemo(() => dangerHint({ character: { level, attributes, equipment }, training }, id), [level, attributes, equipment, training, id]);
+  const stats = useMemo(() => getDerivedStats({ character: { level, attributes, spentPoints, equipment }, training }), [level, attributes, spentPoints, equipment, training]);
+  const danger = useMemo(
+    () => dangerHint({ character: { level, attributes, spentPoints, equipment }, training }, id),
+    [level, attributes, spentPoints, equipment, training, id],
+  );
   const searchMs = searchMsFor(id, state);
   const unlock = dungeonUnlockView(state, id);
   const totals = dungeonTotals(state, id);

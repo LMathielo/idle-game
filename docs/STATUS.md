@@ -4,24 +4,32 @@ The "where we are" page. Read it first when starting a new session. Owned by the
 
 Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.md), engine rules in [`ENGINE.md`](ENGINE.md), deferred review findings in [`TECH_DEBT.md`](TECH_DEBT.md), workflow in [`../AGENTS.md`](../AGENTS.md).
 
-## Current version (2026-11-01)
+## Current version (2026-11-03)
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.16.0** (core stats, once merged; 1.15.0 before) | 1.1.0 |
-| Save | **v16** (core stats, once merged; v15 before) | v2 |
-| Contents | Everything below, up to continuous pipes (#23), plus core stats once merged | M1 only (PRs #1–#2) |
+| Engine | **1.17.0** (stat points + HUD, once merged; 1.16.0 before) | 1.1.0 |
+| Save | **v17** (stat points + HUD, once merged; v16 before) | v2 |
+| Contents | Everything below, up to core stats (#24), plus stat points + HUD once merged | M1 only (PRs #1–#2) |
 
-- **Release pending:** `main` is 17 PRs behind `dev` (#3–#19). The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
-- **Open PRs:** core and normal stats, DEX time on the diminishing curve, heroes start at 0 (`feat/core-stats`).
+- **Release pending:** `main` is behind `dev` by PRs #3–#24. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
+- **Open PRs:** spendable level-up points, STR → WS / MS, mana pool, hero HUD (`feat/stat-points-hud`).
 - **Workflow:** product owner (orchestrator) → one `game-engineer` per feature → 1–3 reviewers by complexity (`.claude/skills/pr-review-council`) → owner merges.
 
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
 
+### Engine 1.17.0 · save v17
+- **Stat points, mana, hero HUD** (`feat/stat-points-hud`):
+  - **Points to spend:** every level-up gives 5 points (no more automatic +5 on each attribute). Hero tab → Status: + / − per attribute, Reset, Confirm ("Points can't be refunded"). A "+N" badge on the HUD portrait and the Hero tab while points wait.
+  - **STR → woodcutting / mining strength**, 1:1 on total STR (was core only); workers follow.
+  - **Mana** regenerates: 5 + total INT per minute, everywhere HP does. Nothing uses it yet.
+  - **HUD** top-left on Village and Hero: portrait + level, HP / mana / stamina / XP (xx.yy%) bars; tap on Village → Hero. Old Village top bar gone; gold moved to the Inventory header.
+  - Save v17: 5 × (level − 1) points to spend, mana full; extra points and training kept.
+
 ### Engine 1.16.0 · save v16
-- **Core and normal stats** (`feat/core-stats`):
+- **#24 Core and normal stats** (`feat/core-stats`):
   - **Two kinds of points:** each attribute = **normal** (+5 per hero level above 1 on every attribute, plus extra points: debug now, gear later) + **core** (the Training level; Training is the only source). The Hero tab shows the total ("DEX 120"); tapping it shows "110 DEX + 10 core DEX" and what each part does.
   - **A new hero starts at 0** everywhere; the old starting 10 moved into the hero's base numbers (damage +10, defense +10, HP regen 15/min, WS / MS +10), so a new hero fights and gathers like before.
   - **Totals** give STR +1 damage, END +1 defense and +1 HP/min. **Core points only:** DEX shortens dungeon searches, cuts and ores on the diminishing curve (core 10 → −8.3%, 50 → −25%, never 50%; replaces −1 s per DEX; a new hero's searches and cuts take 2:00), INT shortens crafting, STR adds to WS / MS. Workers unchanged.
@@ -102,7 +110,7 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 
 Decided and scoped; ready to brief to an engineer. Top = next.
 
-1. **Enemy rebalance for level stats:** +5 normal points per level make dungeons easy (Troll beatable at ~Lv10 untrained); rescale enemy HP/damage/defense so each tier needs about today's effort; revisit whether normal STR should count toward gathering power.
+1. **Enemy tier check after stat points:** since 1.17.0 a level gives 5 points to spend instead of +5 on every attribute (20 per level), so level growth drops a lot and the 1.16.0 "dungeons are easy" concern may be gone. Sim each tier with typical builds (all STR/END, mixed) and only retune enemy HP / damage / defense where a tier is now off its target effort. (Normal STR counting toward WS / MS was decided: yes, 1.17.0.)
 2. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
 3. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
 4. **Cleanup PR** working through [`TECH_DEBT.md`](TECH_DEBT.md) (review findings below the fix bar, from PRs #2–#19).
@@ -131,9 +139,13 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 **Combat and dungeons**
 - Multi-enemy runs and bosses (needs a save-shape change: `ActiveFight` holds one enemy).
 - Hit chance and crits from DEX; a combat use for INT and mana (INT already shortens crafting).
-- Core STR / END special mechanics (core STR only adds gathering power today; core END has none).
+- Core STR / END special mechanics (neither has a core-only effect since 1.17.0: STR's gathering power reads the total).
 - Attack-speed gear (the `attackIntervalModMs` hook exists, unused).
 - Unlock rules beyond wins (e.g. hero level).
+
+**Hero**
+- **Stat respec (refunds):** points are permanent since 1.17.0; a paid or limited respec needs owner rules (cost, cooldown).
+- **Mana consumers (skills/spells):** mana regenerates since 1.17.0 but nothing spends it.
 
 **Items**
 - Tool recipes (axes and pickaxes) in the Crafting house.

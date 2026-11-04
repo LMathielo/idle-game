@@ -1,6 +1,7 @@
 // The village map's pure geometry: signs and plots inside the world, the start camera centred on the core, and the
 // clamp that never shows an empty bar.
 import { describe, expect, it } from 'vitest';
+import { HUD_MARGIN_LEFT, HUD_WIDTH, hudBottom } from '../src/components/hud/hudLayout';
 import { CORE, clampCamera, mapLimits, PLOTS, SIGNS, WORLD } from '../src/components/village/villageMap';
 
 /** Signs on the core village (visible at start) and signs on a building plot outside it (reached by panning). */
@@ -66,6 +67,28 @@ describe('village map', () => {
         expect(y - 22).toBeGreaterThanOrEqual(top);
         expect(y + 22 + 22).toBeLessThanOrEqual(view.h - bottom);
       }
+    }
+  });
+
+  // 1.17.0: the hero HUD (top-left, fixed size) with each phone's real top inset: 375×667 (iPhone SE, 20), 390×844 (47),
+  // 430×932 (59). The map reserves the HUD's bottom edge, so every core sign starts fully below it (no overlap).
+  // The Village screen sits above the tab bar (49 + the bottom inset); the activity strip (44) floats over its bottom.
+  it.each([
+    { w: 375, h: 667, inset: 20, bottomInset: 0 },
+    { w: 390, h: 844, inset: 47, bottomInset: 34 },
+    { w: 430, h: 932, inset: 59, bottomInset: 34 },
+  ])('the hero HUD on $w×$h (top inset $inset) covers no core sign at the start view', ({ w, h, inset, bottomInset }) => {
+    expect(HUD_WIDTH).toBeGreaterThanOrEqual(170);
+    expect(HUD_WIDTH).toBeLessThanOrEqual(190);
+    expect(HUD_MARGIN_LEFT + HUD_WIDTH).toBeLessThan(w / 2 + 20); // top-left: about half a 375 pt screen
+    const view = { w, h: h - 49 - bottomInset };
+    const top = hudBottom(inset);
+    const bottom = 44;
+    const { camera } = mapLimits(view, top, bottom);
+    for (const s of CORE_SIGNS) {
+      const y = camera.ty + s.y * camera.zoom;
+      expect(y - 22).toBeGreaterThanOrEqual(top); // a sign's button is 44 high, centred on its anchor
+      expect(y + 22 + 22).toBeLessThanOrEqual(view.h - bottom);
     }
   });
 

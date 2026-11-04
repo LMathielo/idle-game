@@ -2,11 +2,11 @@
 // and read-only views. Mirrors woodcutting.ts rule for rule, but reads only config/mining.ts, so the two skills
 // can diverge later. See docs/ENGINE.md ("Mining").
 //
-//   MS            = msPerLevel × mining level + msBase + CORE STR + pickaxe bonus (item catalog)   (1.16.0)
+//   MS            = msPerLevel × mining level + msBase + TOTAL STR + pickaxe bonus (item catalog)   (1.17.0)
 //   time / ore    = max(minOreMs, ceil(rock base × (1 − core DEX reduction)))                   (1.16.0)
 //   unlocked      ⇔ mining level ≥ rock reqLevel AND MS ≥ rock reqMs
 //   skip cost     = ceil(remaining min) stamina, at least 1
-import { activityTimeMs, dexActivityReductionBp, type CoreInput, type TrainingLevels } from './attributes';
+import { activityTimeMs, dexActivityReductionBp, effectiveAttributes, type CoreInput, type TrainingLevels } from './attributes';
 import { cloneState } from './clone';
 import { gearStats } from './gear';
 import { MINING, ROCK_IDS, ROCKS } from './config/mining';
@@ -22,7 +22,7 @@ import type { Character, GameEvent, GameState, MiningActivity, RockId, Simulatio
 // ---------- mining strength ----------
 
 /** What mining strength reads. A GameState fits. */
-export type MsInput = { character: Pick<Character, 'equipment' | 'skills'>; training: TrainingLevels };
+export type MsInput = { character: Pick<Character, 'equipment' | 'skills' | 'attributes' | 'spentPoints'>; training: TrainingLevels };
 
 export type MiningStrength = {
   value: number;
@@ -32,7 +32,7 @@ export type MiningStrength = {
     level: number;
     /** The hero base (MINING.msBase: the old starting 10 STR). */
     base: number;
-    /** CORE STR (the training level). Normal STR does not count (1.16.0). */
+    /** TOTAL STR (normal + core), 1:1 (1.17.0; core STR only in 1.16.0). */
     strength: number;
     /** The equipped pickaxe's bonus from the catalog (0 with no pickaxe or an unknown one). */
     pickaxe: number;
@@ -52,7 +52,7 @@ export function pickaxeBonus(equipment: Character['equipment']): number {
 export function miningStrength(state: MsInput): MiningStrength {
   const level = MINING.msPerLevel * state.character.skills.mining.level;
   const base = MINING.msBase;
-  const strength = state.training.attributes.strength.level;
+  const strength = effectiveAttributes(state).strength;
   const pickaxe = pickaxeBonus(state.character.equipment);
   return { value: level + base + strength + pickaxe, breakdown: { level, base, strength, pickaxe, pickaxeDefId: state.character.equipment.pickaxe?.defId ?? null } };
 }

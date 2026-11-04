@@ -14,7 +14,7 @@ import { trainingXpPerMinute as buildingXpPerMinute } from './bonuses';
 import { cloneState } from './clone';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { TRAINING } from './config/training';
-import { hpRegenPerMinute, maxHpOf, regenHp } from './hp';
+import { regenHeroPools } from './hp';
 import {
   ATTRIBUTE_KEYS,
   type AttributeKey,
@@ -164,7 +164,7 @@ export function advanceTraining(
   let regenLeft = requestedMs;
   const regen = (ms: number) => {
     if (!(ms > 0)) return;
-    draft.character = regenHp(draft.character, maxHpOf(draft), hpRegenPerMinute(draft), ms);
+    regenHeroPools(draft, ms); // HP and mana (1.17.0)
     regenLeft -= ms;
   };
 
@@ -265,7 +265,7 @@ export function trainingBlock(state: Pick<GameState, 'training'>, attribute: Att
 
 export type AttributeTrainingView = {
   attribute: AttributeKey;
-  /** Normal points (level points + stored extra; 0 for a new hero, 1.16.0). */
+  /** Normal points (spent + stored extra; 0 for a new hero, 1.17.0). */
   normal: number;
   /** Core points = the training level (Training is the only source). */
   core: number;

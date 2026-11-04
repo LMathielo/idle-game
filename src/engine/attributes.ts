@@ -1,13 +1,13 @@
 // Attributes (pure, read-only): normal and core points, the total, and the core-only effects. See docs/ENGINE.md
-// ("Attributes & derived stats"). Owner-approved 2026-11-01, engine 1.16.0.
+// ("Attributes & derived stats"). Owner-approved 2026-11-01 (engine 1.16.0), spendable points 2026-11-03 (1.17.0).
 //
-//   total  = normal + core                      (linear effects: STR damage, END defense and HP regen)
-//   normal = level points + stored extra        (level points = 5 × (hero level − 1), derived; extra = character.attributes)
-//   core   = training level                     (Training is the only source; core effects read it alone)
+//   total  = normal + core           (linear effects: STR damage and WS / MS, END defense and HP regen, INT mana regen)
+//   normal = spent + stored extra    (spent = character.spentPoints, the player's choice on level-up; extra = character.attributes)
+//   core   = training level          (Training is the only source; core effects read it alone)
 //
-// Core effects: DEX → activity time (search, cut, mine), INT → craft time (both on the diminishing curve),
-// STR → gathering power (WS / MS). END has no core effect yet.
-import { ATTRIBUTE_POINTS, STAT_EFFECTS, STATS } from './config/stats';
+// Core effects: DEX → activity time (search, cut, mine), INT → craft time (both on the diminishing curve).
+// STR and END have no core-only effect. Level-ups grant UNSPENT points (character.unspentPoints), never attributes.
+import { STAT_EFFECTS, STATS } from './config/stats';
 import { diminishingBp } from './diminishing';
 import { ATTRIBUTE_KEYS, type AttributeKey, type AttributeTraining, type Attributes, type Character } from './types';
 
@@ -20,12 +20,7 @@ export type TrainingLevels = { attributes: Record<AttributeKey, Pick<AttributeTr
 export type CoreInput = { training: TrainingLevels };
 
 /** What totals read. A GameState fits; UIs can pass just these slices. */
-export type AttributeInput = { character: Pick<Character, 'attributes' | 'level'>; training: TrainingLevels };
-
-/** Normal points every attribute gets from the hero level: perLevel × (level − 1), 0 at Lv1 (or a broken level). */
-export function levelPoints(level: number): number {
-  return Number.isSafeInteger(level) && level > 1 ? ATTRIBUTE_POINTS.perLevel * (level - 1) : 0;
-}
+export type AttributeInput = { character: Pick<Character, 'attributes' | 'spentPoints'>; training: TrainingLevels };
 
 /** Core points = training levels. */
 export function coreAttributes(state: CoreInput): Attributes {
@@ -34,16 +29,16 @@ export function coreAttributes(state: CoreInput): Attributes {
   return out;
 }
 
-/** Normal points = level points + stored extra points (character.attributes). */
+/** Normal points = spent points + stored extra points (character.attributes). */
 export function normalAttributes(state: AttributeInput): Attributes {
-  const fromLevel = levelPoints(state.character.level);
+  const spent = state.character.spentPoints;
   const extra = state.character.attributes;
   const out = {} as Attributes;
-  for (const k of ATTRIBUTE_KEYS) out[k] = fromLevel + extra[k];
+  for (const k of ATTRIBUTE_KEYS) out[k] = spent[k] + extra[k];
   return out;
 }
 
-/** Total = normal + core, for every attribute. Linear effects (damage, defense, HP regen) read this. */
+/** Total = normal + core, for every attribute. Linear effects (damage, defense, HP regen, WS / MS, mana regen) read this. */
 export function effectiveAttributes(state: AttributeInput): Attributes {
   const normal = normalAttributes(state);
   const core = coreAttributes(state);
@@ -79,15 +74,15 @@ export function activityTimeMs(baseMs: number, floorMs: number, reductionBp: num
 
 /** One effect line of an attribute: flat points (`amount`), or a time reduction in basis points (`bp`). */
 export type AttributeEffect =
-  | { kind: 'damage' | 'defense' | 'hpRegen' | 'gatheringPower'; amount: number }
+  | { kind: 'damage' | 'defense' | 'hpRegen' | 'gatheringPower' | 'manaRegen'; amount: number }
   | { kind: 'activityTime' | 'craftTime'; bp: number };
 
 export type AttributeView = {
   attribute: AttributeKey;
   total: number;
   normal: number;
-  /** Normal points from the hero level. */
-  levelPoints: number;
+  /** Normal points the player spent (level-up points). */
+  spent: number;
   /** Stored extra normal points (debug now, gear later). */
   extra: number;
   /** Training level. */
@@ -100,20 +95,22 @@ export type AttributeView = {
 
 /** Read-only view for the Status panel: each attribute's split and effects. The screen formats, never computes. */
 export function attributeViews(state: AttributeInput): AttributeView[] {
-  const fromLevel = levelPoints(state.character.level);
   const total = effectiveAttributes(state);
   const core = coreAttributes(state);
   const linear: Record<AttributeKey, AttributeEffect[]> = {
-    strength: [{ kind: 'damage', amount: total.strength * STATS.damagePerStrength }],
+    strength: [
+      { kind: 'damage', amount: total.strength * STATS.damagePerStrength },
+      { kind: 'gatheringPower', amount: total.strength },
+    ],
     dexterity: [],
     endurance: [
       { kind: 'defense', amount: total.endurance * STATS.defensePerEndurance },
       { kind: 'hpRegen', amount: total.endurance * STATS.hpRegen.perEndurance },
     ],
-    intelligence: [],
+    intelligence: [{ kind: 'manaRegen', amount: total.intelligence * STATS.manaRegen.perIntelligence }],
   };
   const coreEffects: Record<AttributeKey, AttributeEffect[]> = {
-    strength: [{ kind: 'gatheringPower', amount: core.strength }],
+    strength: [],
     dexterity: [{ kind: 'activityTime', bp: dexActivityReductionBp(state) }],
     endurance: [],
     intelligence: [{ kind: 'craftTime', bp: intCraftReductionBp(state) }],
@@ -122,7 +119,7 @@ export function attributeViews(state: AttributeInput): AttributeView[] {
     attribute,
     total: total[attribute],
     normal: total[attribute] - core[attribute],
-    levelPoints: fromLevel,
+    spent: state.character.spentPoints[attribute],
     extra: state.character.attributes[attribute],
     core: core[attribute],
     linear: linear[attribute],

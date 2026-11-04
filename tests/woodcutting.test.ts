@@ -87,21 +87,24 @@ describe('config: tree table and formulas', () => {
   });
 });
 
-describe('woodcutting strength (WS = 10 × level + 10 base + core STR + axe, 1.16.0)', () => {
+describe('woodcutting strength (WS = 10 × level + 10 base + total STR + axe, 1.17.0)', () => {
   it('a new hero has WS 21 (10 + 10 base + 0 core STR + 1) with the Wooden Axe equipped', () => {
     const s = builtGame(1, T0);
     expect(s.character.equipment.axe).toMatchObject({ id: 'start-wooden_axe', defId: 'wooden_axe', slot: 'axe' });
     expect(woodcuttingStrength(s)).toEqual({ value: 21, breakdown: { level: 10, base: 10, strength: 0, axe: 1, axeDefId: 'wooden_axe' } });
   });
 
-  it('level 5 base hero = 61; core STR counts, normal STR (level points, extra) does not; no axe or an unknown axe gives 0', () => {
+  it('level 5 base hero = 61; total STR counts 1:1 (core, spent and extra); no axe or an unknown axe gives 0', () => {
     const s = withWc(builtGame(1, T0), 5);
     expect(woodcuttingStrength(s).value).toBe(61);
     const trained = withCore(s, { strength: 39 });
     expect(woodcuttingStrength(trained).breakdown).toMatchObject({ level: 50, base: 10, strength: 39, axe: 1 });
     expect(woodcuttingStrength(trained).value).toBe(100);
-    const normal = { ...s, character: { ...s.character, level: 20, attributes: { ...s.character.attributes, strength: 500 } } };
-    expect(woodcuttingStrength(normal).value).toBe(61);
+    // 1.17.0: normal STR counts too (spent 7 + extra 5); the hero level alone adds nothing.
+    const normal = { ...s, character: { ...s.character, level: 20, attributes: { ...s.character.attributes, strength: 5 }, spentPoints: { ...s.character.spentPoints, strength: 7 } } };
+    expect(woodcuttingStrength(normal).breakdown).toMatchObject({ strength: 12 });
+    expect(woodcuttingStrength(normal).value).toBe(73);
+    expect(woodcuttingStrength({ ...s, character: { ...s.character, level: 20 } } as GameState).value).toBe(61);
     const { axe: _a, ...noAxe } = s.character.equipment;
     expect(woodcuttingStrength({ ...s, character: { ...s.character, equipment: noAxe } }).breakdown).toMatchObject({ axe: 0, axeDefId: null });
     const odd = { ...s.character.equipment, axe: { ...s.character.equipment.axe!, defId: 'nope' } };
@@ -384,8 +387,10 @@ describe('frozen v6 save (tests/fixtures/save-v6.json) → v7', () => {
     expect(s.character.equipment.axe).toEqual({ id: 'start-wooden_axe', defId: 'wooden_axe', name: 'Wooden Axe', icon: '🪓', rarity: 'common', slot: 'axe' });
     const { equipment: { axe: _x, ...equipment }, ...character } = s.character;
     expect({ ...character, equipment }).toEqual(V6_SAVE.character);
-    // WS: 10 × 5 + STR (10 + 4 trained) + 1 = 65.
-    expect(woodcuttingStrength(s).value).toBe(65);
+    // WS at the time (1.6.0): 10 × 5 + STR (10 + 4 trained) + 1 = 65. Read with today's rules (the v16 / v17 steps: the
+    // old baseline 10 is the hero base, nothing spent): 10 × 5 + 10 base + total STR 4 (trained) + 1 = 65.
+    const zero = { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 };
+    expect(woodcuttingStrength({ ...s, character: { ...s.character, attributes: zero, spentPoints: zero } }).value).toBe(65);
     expect(hashState(migrateDoc(V6_SAVE, MIGRATIONS, 7))).toBe(hashState(s as never));
   });
 

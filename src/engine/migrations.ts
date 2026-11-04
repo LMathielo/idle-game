@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 16 as const;
+export const CURRENT_SAVE_VERSION = 17 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -26,6 +26,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   13: migrateV13toV14,
   14: migrateV14toV15,
   15: migrateV15toV16,
+  16: migrateV16toV17,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -614,6 +615,41 @@ function migrateV15toV16(doc: SaveDoc): SaveDoc {
     attributes[k] = typeof v === 'number' && Number.isSafeInteger(v) ? Math.max(0, v - V16_OLD_BASELINE) : 0;
   }
   return { ...doc, saveVersion: 16, character: { ...character, attributes } };
+}
+
+// ---- v16 → v17 (2026-11-03): spendable level-up points, current mana ----
+// A deliberate reset: 1.16.0 gave 20 points per level above 1 (+5 on each of the 4 attributes, derived, never stored);
+// 1.17.0 gives 5 CHOSEN points per level, so a hero gets 5 × (level − 1) unspent points to spend himself and ends up with
+// fewer total points than in 1.16.0 (owner decision 2026-11-03). Stored extra points (debug) and training levels
+// are kept as they are. Mana becomes a stored pool and starts full. Frozen literals: the points per level and the 1.16.0
+// max mana formula (20 + 5 per level above 1).
+
+const V17_UNSPENT_PER_LEVEL = 5;
+const V17_MAX_MANA_BASE = 20;
+const V17_MAX_MANA_PER_LEVEL = 5;
+const V17_ATTRIBUTE_KEYS = ['strength', 'dexterity', 'endurance', 'intelligence'] as const;
+
+/**
+ * character.unspentPoints = 5 × (level − 1), character.spentPoints = 0 everywhere, character.mana = max mana (full),
+ * character.manaRegenProgress = 0. A missing or broken level counts as 1. Everything else is kept.
+ */
+function migrateV16toV17(doc: SaveDoc): SaveDoc {
+  const character = isDoc(doc.character) ? doc.character : null;
+  if (!character) return { ...doc, saveVersion: 17 };
+  const level = typeof character.level === 'number' && Number.isSafeInteger(character.level) && character.level >= 1 ? character.level : 1;
+  const spentPoints: Doc = {};
+  for (const k of V17_ATTRIBUTE_KEYS) spentPoints[k] = 0;
+  return {
+    ...doc,
+    saveVersion: 17,
+    character: {
+      ...character,
+      spentPoints,
+      unspentPoints: V17_UNSPENT_PER_LEVEL * (level - 1),
+      mana: V17_MAX_MANA_BASE + V17_MAX_MANA_PER_LEVEL * (level - 1),
+      manaRegenProgress: 0,
+    },
+  };
 }
 
 export class SaveVersionError extends Error {}

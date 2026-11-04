@@ -26,6 +26,12 @@ export const STATS = {
    */
   hpRegen: { basePerMin: 15, perEndurance: 1 },
   /**
+   * Flat mana regen per minute = basePerMin + perIntelligence × TOTAL INT (1.17.0, owner-approved 2026-11-03). Runs
+   * wherever HP regen runs (idle, gathering, training, dungeon search and fight, beyond the offline cap, offline), with the
+   * same integer banking (src/engine/mana.ts). Nothing spends mana yet.
+   */
+  manaRegen: { basePerMin: 5, perIntelligence: 1 },
+  /**
    * Hero attack interval (ms between two strikes; the first lands this long after the fight starts) =
    * baseMs + Σ attackIntervalModMs of the equipped items, never below minMs. No item sets a modifier yet.
    */
@@ -33,15 +39,16 @@ export const STATS = {
 } as const;
 
 /**
- * Normal and core attribute points (1.16.0, owner-approved 2026-11-01).
+ * Normal and core attribute points (1.16.0; spendable points 1.17.0, owner-approved 2026-11-03).
  *   total  = normal + core
- *   normal = level points + stored extra points (character.attributes: debug now, gear affixes later)
+ *   normal = character.attributes: the points the player spent (permanent, no refund) + extra points (debug now, gear later)
  *   core   = the attribute's training level (Training is the only source)
- * Level points are derived from the hero level, never stored: perLevel × (level − 1) on every attribute.
+ * Each hero level-up grants `unspentPerLevel` UNSPENT points (character.unspentPoints); SPEND_ATTRIBUTE_POINTS moves them
+ * into character.attributes. Replaces the automatic +5 on every attribute per level (1.16.0).
  */
 export const ATTRIBUTE_POINTS = {
-  /** Normal points per hero level above 1, on every attribute (Lv1 = 0, Lv2 = 5, Lv10 = 45). */
-  perLevel: 5,
+  /** Unspent points per hero level gained (Lv2 = 5 to spend, Lv10 = 45 in all), wherever the level-up happens. */
+  unspentPerLevel: 5,
 } as const;
 
 /** Percent bonuses are integers in basis points: 100 = +1%, 1000 = +10%, −500 = −5%. */

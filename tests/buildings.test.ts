@@ -27,7 +27,7 @@ import {
   simulate,
 } from '../src/engine';
 import { makeItem } from '../src/engine/inventory';
-import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, v12Skills, withBuilt, withoutGearRolls, v16Attributes } from './helpers';
+import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, v12Skills, withBuilt, withoutGearRolls, v16Attributes, v17Added } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v9 save + its action log, written by the 1.8.0 engine before buildings (tests/fixtures). */
@@ -366,7 +366,7 @@ describe('frozen v9 save (tests/fixtures/save-v9.json) → v10', () => {
     expect(rest).toEqual(rawRest);
     const { pickaxe: _p, ...equipment } = character.equipment;
     // v11 → v12 (1.12.0) then recomputes each skill's level from its total XP on the new skill curve.
-    expect({ ...character, equipment }).toEqual({ ...rc, attributes: v16Attributes(rc.attributes), skills: v12Skills({ ...rc.skills, mining: { level: 1, xp: 0, xpToNext: 500 } }) });
+    expect({ ...character, equipment }).toEqual({ ...rc, ...v17Added(rc.level), attributes: v16Attributes(rc.attributes), skills: v12Skills({ ...rc.skills, mining: { level: 1, xp: 0, xpToNext: 500 } }) });
     expect({ ...merchant, stock: merchant.stock.map((x, i) => (i === 4 ? null : x)) }).toEqual(rm);
     expect(hashState(withoutGearRolls(loadSave(V9_SAVE)))).toBe(hashState(s));
   });
