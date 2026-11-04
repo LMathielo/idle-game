@@ -265,7 +265,7 @@ def mine(sc):
         sc.fill(sc.m_line([(ax, yy - 6), (ax + 2, yy - 11)]), '#865630')
         sc.fill(sc.m_line([(ax, yy - 12), (ax + 3, yy - 11), (ax + 5, yy - 9)]), '#a19d9f')
     sc.person(x - 14, y + 14, '#6a6f7e', hair='#2a1c16', legs='#3f2719', tool=pick, raise_arm=True, hat='#c9a858')
-    sc.anchors['mine'] = (x, y - 40)
+    sc.anchors['mine'] = (x - 12, y - 40)
 
 
 def woodcutter(sc):
@@ -476,7 +476,7 @@ def manor(sc):
             ball = sc.m_ellipse(tpx + 1.5, by - 3 - k * 4, rr_, rr_)
             sc.shade(ball, LEAF[1:], soft=1, outline=OUT)
     sc.cast(main | r | bay | br | tb | onion, y + 4, dx=4)
-    sc.anchors['town_hall'] = (x + 22, y - 76)
+    sc.anchors['town_hall'] = (x + 26, y - 106)
 
 
 def storehouse(sc):
@@ -656,7 +656,7 @@ def smithy(sc):
     sc.fill(coal, '#25232e'); sc.speckle(coal, ['#45424e'], .3, seed=2); sc.outline(coal, OUT)
     for k in range(3):
         sc.fill(sc.m_rect(x + w + 3 + k * 3, y + 7, x + w + 4 + k * 3, y + 7), '#c4bfb6'); sc.px(x + w + 3 + k * 3, y + 7, '#f2efe6')
-    sc.anchors['crafting'] = (x + 14, y - 46)
+    sc.anchors['crafting'] = (x + 20, y - 46)
 
 
 def cottage(sc, x, y, w, h, sd, roof, mat='plaster', frame=BEAM, flip_door=False, chimney=True, shutters='#3a6a40', laundry=False):

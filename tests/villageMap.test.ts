@@ -109,4 +109,35 @@ describe('village map', () => {
       }
     }
   });
+
+  // 2026-11-04: signs keep their size while the map zooms, so neighbours must clear each other at the start zoom (zooming
+  // in only separates them). A sign is 44 pt tall; its width is the label in Pixelify Sans Bold 18 (measured, rounded up)
+  // + 30 pt of PixelButton chrome, + 20 pt for the padlock while its building is not built.
+  const LABEL_W: Record<string, number> = { dungeon: 76, mine: 98, merchant: 91, woodcutting: 116, training: 72, town_hall: 80, crafting: 80, storage: 76 };
+  const LOCKABLE = new Set(['woodcutting', 'mine', 'town_hall', 'training', 'crafting']);
+  function overlapsAtStart(view: { w: number; h: number }, padlocks: boolean): string[] {
+    const width = (key: string) => LABEL_W[key] + 30 + (padlocks && LOCKABLE.has(key) ? 20 : 0);
+    const { start } = mapLimits(view, 100, 44);
+    const out: string[] = [];
+    for (let i = 0; i < SIGNS.length; i++) {
+      for (let j = i + 1; j < SIGNS.length; j++) {
+        const a = SIGNS[i];
+        const b = SIGNS[j];
+        const apartX = Math.abs(a.x - b.x) * start >= (width(a.key) + width(b.key)) / 2;
+        const apartY = Math.abs(a.y - b.y) * start >= 44;
+        if (!apartX && !apartY) out.push(`${a.key}/${b.key}`);
+      }
+    }
+    return out;
+  }
+
+  it.each(SCREENS)('no two built signs overlap at the start zoom on $w×$h', (view) => {
+    expect(overlapsAtStart(view, false)).toEqual([]);
+  });
+
+  // Known, open (2026-11-04): with padlocks (a new save) Training and Crafting still touch on narrow phones; Crafting sits
+  // on the east plot, mostly off-screen at start. Pinned so a layout change that adds or fixes an overlap shows here.
+  it.each(SCREENS)('with padlocks, only Training / Crafting may still touch at the start zoom on $w×$h', (view) => {
+    expect(overlapsAtStart(view, true).filter((p) => p !== 'training/crafting')).toEqual([]);
+  });
 });
