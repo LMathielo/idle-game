@@ -42,3 +42,6 @@ yarn-error.*
 
 # Python (tools/art)
 __pycache__/
+
+# Agent worktrees (desktop mode)
+/.worktrees/

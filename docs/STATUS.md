@@ -1,6 +1,6 @@
 # Status
 
-The "where we are" page. Read it first when starting a new session. Owned by the product owner. **Every feature PR updates it**: version, release notes and the roadmap item it closes.
+The "where we are" page. Read its top ("Current version") and the two "Roadmap" sections when starting a new session; the release notes only when needed. Owned by the product owner. **Every feature PR updates it**: version, release notes and the roadmap item it closes.
 
 Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.md), engine rules in [`ENGINE.md`](ENGINE.md), deferred review findings in [`TECH_DEBT.md`](TECH_DEBT.md), workflow in [`../AGENTS.md`](../AGENTS.md).
 
@@ -15,10 +15,14 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 - **Release pending:** `main` is behind `dev` by PRs #3–#25. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
 - **Open PRs:** pixel art replaces every emoji, village split into background + buildings (`feat/pixel-art-assets`).
 - **Workflow:** product owner (orchestrator) → one `game-engineer` per feature → 1–3 reviewers by complexity (`.claude/skills/pr-review-council`) → owner merges.
+- **Working modes:** desktop mode (owner at his PC: agents work in `.worktrees/` on his machine, the branch reaches GitHub via a bundle) or cloud mode (owner on his phone: the cloud clone). Same PR flow either way; see AGENTS.md.
 
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Docs only (engine 1.17.0) · agent context diet
+- **Agent context diet + desktop mode** (`chore/agent-context-diet`): `AGENTS.md` cut from ~20k to ~8k bytes and auto-loaded via the new `CLAUDE.md`; layout, selectors, navigation and village-map detail moved to the new [`CODEMAP.md`](CODEMAP.md). `ENGINE.md` and `PRODUCT.md` get Contents tables, and the agents read only the sections a task needs. New desktop working mode (agents work on the owner's PC); `.gitattributes` added.
 
 ### UI only (engine 1.17.0) · pixel art
 - **Pixel art replaces every emoji** (`feat/pixel-art-assets`):

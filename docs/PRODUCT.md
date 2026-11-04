@@ -2,6 +2,31 @@
 
 Living product doc. Owned by the product-owner orchestrator; updated whenever a decision changes. Overrides generic advice in the skills.
 
+## Contents
+
+Read only the sections your task needs: pick them here, then `grep -n '^## ' docs/PRODUCT.md` for their line ranges.
+
+| Section | What it covers |
+| --- | --- |
+| [Vision](#vision) | One paragraph: what the game is. |
+| [Pillars](#pillars) | The four design pillars. |
+| [Platform & constraints](#platform--constraints) | iOS + Android via Expo Go, no web, single player for now. |
+| [Current state (2026-11-03, engine 1.17.0)](#current-state-2026-11-03-engine-1170) | What the game has today, feature by feature. |
+| [UI rules (2026-10-31)](#ui-rules-2026-10-31) | Dialogs, InfoPopover, hold-to-repeat, village map, art and symbols, building bonus lines. |
+| [Buildings (2026-10-28)](#buildings-2026-10-28) | Table: each building's state on a new save, requirements, what it gives. |
+| [Building upgrades (2026-10-28, engine 1.10.0)](#building-upgrades-2026-10-28-engine-1100) | One builder, costs, timing, level limits. |
+| [Building bonuses (per level; bonuses add together)](#building-bonuses-per-level-bonuses-add-together) | Table of bonuses per building and level. |
+| [Crafting (2026-11-01, engine 1.13.0; continuous pipes 1.15.0)](#crafting-2026-11-01-engine-1130-continuous-pipes-1150) | Crafting rules table (pipes, recipes, stamina, refunds). |
+| [Gear quality and rarity (2026-11-01, engine 1.14.0)](#gear-quality-and-rarity-2026-11-01-engine-1140) | Quality and rarity rules table. |
+| [Gear crafting (2026-11-01, engine 1.14.0)](#gear-crafting-2026-11-01-engine-1140) | Gear recipe rules table. |
+| [Workers (2026-10-28, engine 1.10.0)](#workers-2026-10-28-engine-1100) | Workers rules table (hire, crews, upkeep). |
+| [Merchant stock (2026-10-28, engine 1.10.0)](#merchant-stock-2026-10-28-engine-1100) | Fixed slot, rolled pool, starter gear, sell share. |
+| [Mine Shaft rocks (2026-10-28; Stone needs 20 MS since 1.10.0)](#mine-shaft-rocks-2026-10-28-stone-needs-20-ms-since-1100) | Rocks table: level, MS, time, XP, ore. |
+| [Roadmap](#roadmap) | Pointer: moved to STATUS.md. |
+| [Decision log](#decision-log) | Dated owner and product decisions with reasons (long: grep it for your topic, don't read it whole). |
+| [Stamina projection (2026-10-27, search-only skip)](#stamina-projection-2026-10-27-search-only-skip) | Stamina math for a new hero's first sessions. |
+| [Backlog](#backlog) | Pointer: merged into STATUS.md's unrefined roadmap. |
+
 ## Vision
 
 A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, gear and attributes that matter, dungeons that fight themselves, and gathering skills that tick while you're away. Short sessions: open, collect, decide, close.
