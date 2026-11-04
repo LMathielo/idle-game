@@ -8,8 +8,9 @@ const MIN_MS = 60 * SEC_MS;
 
 export const MINING = {
   /**
-   * Mining strength: MS = msPerLevel × mining level + msBase + CORE STR + pickaxe bonus (catalog). Normal STR does not
-   * count (1.16.0): rocks stay gated by skill level, tools and training. msBase = the old starting 10 STR.
+   * Mining strength: MS = msPerLevel × mining level + msBase + TOTAL STR (normal + core, 1:1) + pickaxe bonus (catalog).
+   * 1.17.0 (owner-approved 2026-11-03): total STR, so spent points make a better miner (core STR only in 1.16.0).
+   * msBase = the old starting 10 STR. Workers get 25% of the hero's MS (config/workers.ts).
    */
   msPerLevel: 10,
   msBase: 10,

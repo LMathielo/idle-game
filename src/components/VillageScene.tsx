@@ -64,8 +64,9 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
     if (width > 0 && height > 0) setSize((cur) => (cur && cur.w === width && cur.h === height ? cur : { w: width, h: height }));
   }, []);
 
-  // Set up (or re-centre) the camera for this size and these overlays. The HUD's height arrives after the first
-  // layout, so this runs again then; once the player has moved the map, only the limits change and the view is clamped.
+  // Set up (or re-centre) the camera for this size and these overlays. The HUD reserve is fixed (hudLayout.ts) but the
+  // safe-area inset can arrive after the first layout, so this runs again then; once the player has moved the map, only
+  // the limits change and the view is clamped.
   useEffect(() => {
     if (!size) return;
     const lim = mapLimits(size, topReserve, bottomReserve);

@@ -1,11 +1,11 @@
 // Woodcutting (pure): woodcutting strength, tree requirements, cut time, cutting logs back-to-back inside
 // simulate(), and read-only views. See docs/ENGINE.md ("Woodcutting").
 //
-//   WS            = wsPerLevel × woodcutting level + wsBase + CORE STR + axe bonus (item catalog)   (1.16.0)
+//   WS            = wsPerLevel × woodcutting level + wsBase + TOTAL STR + axe bonus (item catalog)   (1.17.0)
 //   cut time/log  = max(minLogMs, ceil(tree base × (1 − core DEX reduction)))                     (1.16.0)
 //   unlocked      ⇔ woodcutting level ≥ tree reqLevel AND WS ≥ tree reqWs
 //   skip cost     = ceil(remaining min) stamina, at least 1
-import { activityTimeMs, dexActivityReductionBp, type CoreInput, type TrainingLevels } from './attributes';
+import { activityTimeMs, dexActivityReductionBp, effectiveAttributes, type CoreInput, type TrainingLevels } from './attributes';
 import { cloneState } from './clone';
 import { gearStats } from './gear';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
@@ -21,7 +21,7 @@ import type { Character, GameEvent, GameState, SimulationSummary, TreeId, Woodcu
 // ---------- woodcutting strength ----------
 
 /** What woodcutting strength reads. A GameState fits. */
-export type WsInput = { character: Pick<Character, 'equipment' | 'skills'>; training: TrainingLevels };
+export type WsInput = { character: Pick<Character, 'equipment' | 'skills' | 'attributes' | 'spentPoints'>; training: TrainingLevels };
 
 export type WoodcuttingStrength = {
   value: number;
@@ -31,7 +31,7 @@ export type WoodcuttingStrength = {
     level: number;
     /** The hero base (WOODCUTTING.wsBase: the old starting 10 STR). */
     base: number;
-    /** CORE STR (the training level). Normal STR does not count (1.16.0). */
+    /** TOTAL STR (normal + core), 1:1 (1.17.0; core STR only in 1.16.0). */
     strength: number;
     /** The equipped axe's bonus from the catalog (0 with no axe or an unknown one). */
     axe: number;
@@ -51,7 +51,7 @@ export function axeBonus(equipment: Character['equipment']): number {
 export function woodcuttingStrength(state: WsInput): WoodcuttingStrength {
   const level = WOODCUTTING.wsPerLevel * state.character.skills.woodcutting.level;
   const base = WOODCUTTING.wsBase;
-  const strength = state.training.attributes.strength.level;
+  const strength = effectiveAttributes(state).strength;
   const axe = axeBonus(state.character.equipment);
   return { value: level + base + strength + axe, breakdown: { level, base, strength, axe, axeDefId: state.character.equipment.axe?.defId ?? null } };
 }

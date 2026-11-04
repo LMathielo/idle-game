@@ -2,7 +2,7 @@
 // Same code path for live ticks (1s) and offline catch-up (up to the cap).
 import { advanceDungeon } from './dungeon';
 import { advanceMining } from './mining';
-import { hpRegenPerMinute, maxHpOf, regenHp } from './hp';
+import { regenHeroPools } from './hp';
 import { regenMerchantCharges } from './merchant';
 import { regenStamina } from './stamina';
 import { advanceTraining } from './training';
@@ -25,11 +25,11 @@ export type SimulationResult = { state: GameState; events: GameEvent[]; summary:
  *  e. non-finite now → no-op + ERROR event.
  *  f. highestSeenAt = max(highestSeenAt, now) whenever now is accepted.
  *
- * Stamina, HP and merchant refresh charges regenerate on the accepted elapsed time (rules b, c and e grant none), but NOT on the
+ * Stamina, HP, mana and merchant refresh charges regenerate on the accepted elapsed time (rules b, c and e grant none), but NOT on the
  * capped time: their max already bounds them, so a long absence can fill both (docs/ENGINE.md).
  *
  * Gathering (woodcutting, mining), dungeon runs and training share this path. Dungeon runs and training level-ups interleave with
- * HP regen in time order (advanceDungeon, advanceTraining); otherwise HP simply regenerates over the whole
+ * HP and mana regen in time order (advanceDungeon, advanceTraining); otherwise HP and mana simply regenerate over the whole
  * elapsed time. The builder (and the worker crews) run side by side with the hero's activity on the granted time,
  * in time order (advanceWorld, world.ts).
  */
@@ -83,8 +83,8 @@ export function simulate(state: GameState, now: number): SimulationResult {
   // Merchant refresh charges follow the same rule: uncapped, bounded by their max.
   draft.merchant = regenMerchantCharges(state.merchant, requestedMs);
 
-  // The hero's activity, one step of the world walk at a time. Dungeon runs and training interleave HP regen with
-  // their own events; gathering never touches HP, so its regen is done once at the end ("plain" regen).
+  // The hero's activity, one step of the world walk at a time. Dungeon runs and training interleave HP / mana regen with
+  // their own events; gathering never touches them, so its regen is done once at the end ("plain" regen).
   let plainRegenMs = 0;
   const heroStep = (ms: number) => {
     if (!(ms > 0)) return;
@@ -100,12 +100,12 @@ export function simulate(state: GameState, now: number): SimulationResult {
   // Granted (capped) time: the hero's activity and the village (builder) side by side, in time order.
   advanceWorld(draft, grantedMs, heroStep, summary, events, onUpgraded);
 
-  // Beyond the cap only a dungeon fight in progress finishes (and HP regenerates); see advanceDungeon.
+  // Beyond the cap only a dungeon fight in progress finishes (and HP and mana regenerate); see advanceDungeon.
   const beyondCapMs = requestedMs - grantedMs;
   if (draft.activity?.kind === 'dungeon') advanceDungeon(draft, draft.activity, 0, beyondCapMs, summary, events);
   else plainRegenMs += beyondCapMs;
-  // Same object when nothing changed (full HP).
-  if (plainRegenMs > 0) draft.character = regenHp(draft.character, maxHpOf(draft), hpRegenPerMinute(draft), plainRegenMs);
+  // HP and mana (1.17.0) together. Same object when nothing changed (both full).
+  regenHeroPools(draft, plainRegenMs);
 
   return { state: draft, events, summary };
 }

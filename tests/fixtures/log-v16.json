@@ -1,0 +1,182 @@
+[
+  {
+    "commandId": "v17fx-2",
+    "type": "NEW_GAME",
+    "payload": {
+      "seed": 3554416254
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.16.0",
+    "stateHash": "26422134",
+    "seq": 1,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-3",
+    "type": "DEBUG_ADD_GOLD",
+    "payload": {
+      "type": "DEBUG_ADD_GOLD",
+      "amount": 2000,
+      "id": "v17fx-3"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.16.0",
+    "stateHash": "3b96deff",
+    "seq": 2,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-4",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "training_grounds",
+      "id": "v17fx-4"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.16.0",
+    "stateHash": "4bf2b405",
+    "seq": 3,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-5",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "woodcutting",
+      "id": "v17fx-5"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.16.0",
+    "stateHash": "f95ed9e6",
+    "seq": 4,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-6",
+    "type": "DEBUG_GRANT_HERO_XP",
+    "payload": {
+      "type": "DEBUG_GRANT_HERO_XP",
+      "amount": 500,
+      "id": "v17fx-6"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.16.0",
+    "stateHash": "e310ec11",
+    "seq": 5,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-7",
+    "type": "DEBUG_ADD_ATTRIBUTE",
+    "payload": {
+      "type": "DEBUG_ADD_ATTRIBUTE",
+      "attribute": "strength",
+      "amount": 3,
+      "id": "v17fx-7"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.16.0",
+    "stateHash": "07ab537a",
+    "seq": 6,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-8",
+    "type": "DEBUG_ADD_ATTRIBUTE",
+    "payload": {
+      "type": "DEBUG_ADD_ATTRIBUTE",
+      "attribute": "endurance",
+      "amount": 2,
+      "id": "v17fx-8"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.16.0",
+    "stateHash": "f5836c04",
+    "seq": 7,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-9",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "training",
+      "attribute": "strength",
+      "id": "v17fx-9"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.16.0",
+    "stateHash": "1446fc42",
+    "seq": 8,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-10",
+    "type": "DEBUG_ADD_TRAINING_XP",
+    "payload": {
+      "type": "DEBUG_ADD_TRAINING_XP",
+      "xp": 130,
+      "id": "v17fx-10"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.16.0",
+    "stateHash": "6eaa689e",
+    "seq": 9,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-11",
+    "type": "DEBUG_SET_HERO_HP",
+    "payload": {
+      "type": "DEBUG_SET_HERO_HP",
+      "hp": 30,
+      "id": "v17fx-11"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.16.0",
+    "stateHash": "bd4e68c4",
+    "seq": 10,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-12",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "woodcutting",
+      "treeId": "oak",
+      "id": "v17fx-12"
+    },
+    "clientTime": 1793620800000,
+    "engineVersion": "1.16.0",
+    "stateHash": "4005d02d",
+    "seq": 11,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-13",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1793620830000,
+    "engineVersion": "1.16.0",
+    "stateHash": "7fe9ea3d",
+    "seq": 12,
+    "synced": false
+  },
+  {
+    "commandId": "v17fx-14",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1793620847000,
+    "engineVersion": "1.16.0",
+    "stateHash": "321f6fdc",
+    "seq": 13,
+    "synced": false
+  }
+]

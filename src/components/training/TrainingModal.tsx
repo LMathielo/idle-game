@@ -73,7 +73,7 @@ export function TrainingModal() {
         {clockPaused ? <Text style={styles.paused}>⏸ Paused: your device clock moved back. Training waits until it catches up.</Text> : null}
         <TierPanel view={view} onUnlock={onUnlock} />
         <Panel title="Core attributes">
-          <Text style={styles.note}>Each training level is +1 core point. Core points also drive the special effects (DEX: faster search and gathering, INT: faster crafting, STR: gathering strength).</Text>
+          <Text style={styles.note}>Each training level is +1 core point. Core points also drive the special effects (DEX: faster search and gathering, INT: faster crafting).</Text>
           {view.tier === 0 ? <Text style={styles.note}>Unlock Tier 1 to start training.</Text> : null}
           {view.attributes.map((a) => (
             <AttributeRow

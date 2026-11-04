@@ -7,6 +7,7 @@ import { STAMINA } from './config/stamina';
 import { DEFAULT_OFFLINE_CAP_MS, DEFAULT_OFFLINE_EFFICIENCY } from './config/time';
 import { HERO_XP_CURVE, SKILL_XP_CURVE } from './config/xpCurve';
 import { maxHpOf } from './hp';
+import { maxManaOf } from './mana';
 import { makeItem } from './inventory';
 import { newMerchantState } from './merchant';
 import { newProgress } from './progression';
@@ -35,7 +36,10 @@ export function newGame(seed: number, now: number): GameState {
   const attributes = { ...STARTING_HERO.attributes };
   const training = newTrainingState();
   const buildings = newBuildingsState();
-  const maxHp = maxHpOf({ character: { level: hero.level, attributes, equipment }, training });
+  const spentPoints = { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 };
+  const pools = { character: { level: hero.level, attributes, spentPoints, equipment }, training };
+  const maxHp = maxHpOf(pools);
+  const maxMana = maxManaOf(pools);
 
   return {
     saveVersion: CURRENT_SAVE_VERSION,
@@ -62,8 +66,12 @@ export function newGame(seed: number, now: number): GameState {
       xpToNext: hero.xpToNext,
       hp: maxHp,
       hpRegenProgress: 0,
+      mana: maxMana,
+      manaRegenProgress: 0,
       gold: STARTING_HERO.gold,
       attributes,
+      spentPoints,
+      unspentPoints: 0,
       equipment,
       skills,
     },

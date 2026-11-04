@@ -97,6 +97,8 @@ export interface GameClient {
     spendStamina(amount: number): Promise<DispatchResult>;
     refillStamina(): Promise<DispatchResult>;
     addAttribute(attribute: AttributeKey, amount?: number): Promise<DispatchResult>;
+    /** Adds unspent attribute points (default 5, as one level-up). Logged as DEBUG_ADD_UNSPENT_POINTS. */
+    addUnspentPoints(amount?: number): Promise<DispatchResult>;
     /** Sets current HP (0..max). Logged as DEBUG_SET_HERO_HP. */
     setHeroHp(hp: number): Promise<DispatchResult>;
     /** Resolves the current dungeon run's fight now, for free. Logged as DEBUG_FINISH_DUNGEON_RUN. */

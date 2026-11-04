@@ -116,7 +116,7 @@ export function WoodcuttingModal() {
             style={styles.ws}
             accessibilityLabel={`Woodcutting strength ${view.ws.value}: ${ws.level} from level, ${ws.base} base, ${ws.strength} from core strength, ${ws.axe} from axe`}
           >
-            💪 WS {formatNumber(view.ws.value)} <Text style={styles.wsParts}>= {formatNumber(ws.level)} level + {formatNumber(ws.base)} base + {formatNumber(ws.strength)} core STR + {formatNumber(ws.axe)} axe</Text>
+            💪 WS {formatNumber(view.ws.value)} <Text style={styles.wsParts}>= {formatNumber(ws.level)} level + {formatNumber(ws.base)} base + {formatNumber(ws.strength)} STR + {formatNumber(ws.axe)} axe</Text>
           </Text>
         </View>
       }

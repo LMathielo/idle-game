@@ -5,6 +5,7 @@ import { AppState, StyleSheet, Text, View } from 'react-native';
 import { PixelButton } from '../components/PixelButton';
 import { colors, fonts } from '../theme';
 import { createAppClient } from './createAppClient';
+import type { GameState } from '../engine';
 import type { GameClient, GameSnapshot } from './types';
 
 const TICK_MS = 1000;
@@ -99,6 +100,18 @@ export function useGameSnapshot(): GameSnapshot {
 
 export function useGameState() {
   return useGameSnapshot().state;
+}
+
+/**
+ * One value derived from the state (a number, a string, a boolean). The component re-renders only when that value
+ * changes, not on every tick, so a layout (e.g. the tab bar badge) can read the state cheaply. `select` must return a
+ * primitive (or a value that keeps its identity), never a new object.
+ */
+export function useGameSelector<T>(select: (state: GameState) => T): T {
+  const client = useGameClient();
+  const subscribe = useCallback((listener: () => void) => client.subscribe(listener), [client]);
+  const getValue = useCallback(() => select(client.getSnapshot().state), [client, select]);
+  return useSyncExternalStore(subscribe, getValue);
 }
 
 const styles = StyleSheet.create({

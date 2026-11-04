@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type GameState, getDerivedStats, hashState, levelPoints, newGame, newTrainingState } from '../src/engine';
+import { type GameState, getDerivedStats, hashState, newGame, newTrainingState } from '../src/engine';
 import { CURRENT_SAVE_VERSION, loadSave, migrateDoc, type Migration, MIGRATIONS, SaveVersionError } from '../src/engine/migrations';
 import { T0, withoutGearRolls, v16Attributes } from './helpers';
 
@@ -56,11 +56,12 @@ describe('save migrations', () => {
     });
     expect(v3.rng).toEqual(v2.rng);
     // Derived stats read the catalog through the new defIds: 2–4 + 21 STR, 1 armor + 17 END (no training in v3). Since 1.16.0
-    // the stored values are extra points (v16: −10), the 10 is the hero base, and level points add on top.
-    const v16 = { ...v3.character, attributes: v16Attributes(v3.character.attributes) };
+    // the stored values are extra points (v16: −10) and the 10 is the hero base; since 1.17.0 level-ups grant unspent
+    // points (v17), so nothing spent yet adds nothing.
+    const zero = { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 };
+    const v16 = { ...v3.character, attributes: v16Attributes(v3.character.attributes), spentPoints: zero };
     const d = getDerivedStats({ ...v3, character: v16, training: newTrainingState() });
-    const lp = levelPoints(v3.character.level);
-    expect([d.damage.min, d.damage.max, d.defense.value]).toEqual([23 + lp, 25 + lp, 18 + lp]);
+    expect([d.damage.min, d.damage.max, d.defense.value]).toEqual([23, 25, 18]);
   });
 
   it('v2 → v3 tolerates missing attributes (defaults to 10) and keeps an existing defId', () => {
@@ -206,10 +207,10 @@ describe('save migrations', () => {
     expect(bare.inventory.items).toEqual([]);
   });
 
-  it('newest save loads unchanged; a new game is already v16', () => {
+  it('newest save loads unchanged; a new game is already v17', () => {
     const s = newGame(77, T0);
-    expect(s.saveVersion).toBe(16);
-    expect(CURRENT_SAVE_VERSION).toBe(16);
+    expect(s.saveVersion).toBe(17);
+    expect(CURRENT_SAVE_VERSION).toBe(17);
     expect(loadSave(s)).toEqual(s);
   });
 

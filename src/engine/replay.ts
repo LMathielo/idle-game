@@ -59,6 +59,8 @@ export const LOG_TYPES = [
   'CANCEL_CRAFT',
   'COLLECT_CRAFT',
   'DEBUG_UNLOCK_PIPE',
+  'SPEND_ATTRIBUTE_POINTS',
+  'DEBUG_ADD_UNSPENT_POINTS',
   'MIGRATE',
   'RESUME',
   'SIMULATE',
@@ -196,7 +198,9 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'STOP_CRAFT':
     case 'CANCEL_CRAFT':
     case 'COLLECT_CRAFT':
-    case 'DEBUG_UNLOCK_PIPE': {
+    case 'DEBUG_UNLOCK_PIPE':
+    case 'SPEND_ATTRIBUTE_POINTS':
+    case 'DEBUG_ADD_UNSPENT_POINTS': {
       const res = applyCommand(state, payload as Command, clientTime, { allowDebug: true });
       if (!res.ok) throw new ReplayError(`${type} rejected on replay: ${res.error.code}`);
       return res.state;

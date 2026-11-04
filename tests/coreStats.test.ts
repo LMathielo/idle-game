@@ -1,7 +1,8 @@
 // Engine 1.16.0 / save v16: normal and core attribute points (owner-approved 2026-11-01).
-//   total = normal + core; normal = 5 × (level − 1) + stored extra; core = training level.
-//   Linear effects read the total (STR damage, END defense and regen); core DEX / INT shorten activity / craft time on the
-//   diminishing curve; core STR adds to WS / MS. A new hero has 0 everywhere and plays like the old 10-stat hero.
+//   total = normal + core; core = training level. Since 1.17.0 normal = spent + stored extra (no automatic level points;
+//   spending is tested in tests/statPoints.test.ts).
+//   Linear effects read the total (STR damage, END defense and regen; since 1.17.0 also STR → WS / MS); core DEX / INT shorten
+//   activity / craft time on the diminishing curve. A new hero has 0 everywhere and plays like the old 10-stat hero.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -24,7 +25,6 @@ import {
   hashState,
   hpRegenPerMinute,
   intCraftReductionBp,
-  levelPoints,
   loadSave,
   logMsFor,
   type MigratePayload,
@@ -40,45 +40,47 @@ import {
   STAT_EFFECTS,
   woodcuttingStrength,
 } from '../src/engine';
-import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, withCore } from './helpers';
+import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, v17Added, withCore } from './helpers';
 
-const withLevel = (s: GameState, level: number, extra: Partial<GameState['character']['attributes']> = {}): GameState => ({
+const withLevel = (s: GameState, level: number, extra: Partial<GameState['character']['attributes']> = {}, spent: Partial<GameState['character']['attributes']> = {}): GameState => ({
   ...s,
-  character: { ...s.character, level, attributes: { ...s.character.attributes, ...extra } },
+  character: { ...s.character, level, attributes: { ...s.character.attributes, ...extra }, spentPoints: { ...s.character.spentPoints, ...spent } },
 });
 
 describe('normal, core and total', () => {
-  it('level points: +5 per level above 1 on every attribute (Lv1 = 0, Lv2 = 5, Lv10 = 45), derived, never stored', () => {
-    expect([1, 2, 10].map(levelPoints)).toEqual([0, 5, 45]);
-    expect([0, -3, 1.5, Number.NaN].map(levelPoints)).toEqual([0, 0, 0, 0]);
+  it('1.17.0: the hero level alone gives no attribute points (no automatic level points)', () => {
     const s = withLevel(newGame(1, T0), 10);
     expect(s.character.attributes).toEqual({ strength: 0, dexterity: 0, endurance: 0, intelligence: 0 });
-    expect(normalAttributes(s)).toEqual({ strength: 45, dexterity: 45, endurance: 45, intelligence: 45 });
+    expect(normalAttributes(s)).toEqual({ strength: 0, dexterity: 0, endurance: 0, intelligence: 0 });
   });
 
-  it('total = level points + extra + core; core = training level only', () => {
-    const s = withCore(withLevel(newGame(1, T0), 3, { strength: 7 }), { strength: 4, dexterity: 10 });
+  it('total = spent + extra + core; core = training level only', () => {
+    const s = withCore(withLevel(newGame(1, T0), 3, { strength: 7 }, { strength: 10, dexterity: 3 }), { strength: 4, dexterity: 10 });
     expect(coreAttributes(s)).toEqual({ strength: 4, dexterity: 10, endurance: 0, intelligence: 0 });
-    expect(normalAttributes(s)).toEqual({ strength: 17, dexterity: 10, endurance: 10, intelligence: 10 });
-    expect(effectiveAttributes(s)).toEqual({ strength: 21, dexterity: 20, endurance: 10, intelligence: 10 });
+    expect(normalAttributes(s)).toEqual({ strength: 17, dexterity: 3, endurance: 0, intelligence: 0 });
+    expect(effectiveAttributes(s)).toEqual({ strength: 21, dexterity: 13, endurance: 0, intelligence: 0 });
   });
 
   it('attributeViews: the split and each part’s effects (the Status popover reads them, no math in the screen)', () => {
-    const s = withCore(withLevel(newGame(1, T0), 2, { strength: 3 }), { strength: 2, dexterity: 10, intelligence: 50 });
+    const s = withCore(withLevel(newGame(1, T0), 2, { strength: 3 }, { strength: 5, endurance: 5, intelligence: 5, dexterity: 5 }), { strength: 2, dexterity: 10, intelligence: 50 });
     const [str, dex, end, int] = attributeViews(s);
+    // 1.17.0: gathering power moved from STR's core effects to its linear ones (total STR → WS / MS); INT's total → mana regen.
     expect(str).toEqual({
       attribute: 'strength',
       total: 10,
       normal: 8,
-      levelPoints: 5,
+      spent: 5,
       extra: 3,
       core: 2,
-      linear: [{ kind: 'damage', amount: 10 }],
-      coreEffects: [{ kind: 'gatheringPower', amount: 2 }],
+      linear: [
+        { kind: 'damage', amount: 10 },
+        { kind: 'gatheringPower', amount: 10 },
+      ],
+      coreEffects: [],
     });
     expect(dex).toMatchObject({ total: 15, normal: 5, core: 10, linear: [], coreEffects: [{ kind: 'activityTime', bp: 833 }] });
     expect(end).toMatchObject({ total: 5, core: 0, linear: [{ kind: 'defense', amount: 5 }, { kind: 'hpRegen', amount: 5 }], coreEffects: [] });
-    expect(int).toMatchObject({ total: 55, core: 50, linear: [], coreEffects: [{ kind: 'craftTime', bp: 2500 }] });
+    expect(int).toMatchObject({ total: 55, core: 50, linear: [{ kind: 'manaRegen', amount: 55 }], coreEffects: [{ kind: 'craftTime', bp: 2500 }] });
   });
 });
 
@@ -125,8 +127,8 @@ describe('core DEX → activity time (diminishing, cap 50%, k 50)', () => {
     expect(activityTimeMs(120_000, 60_000, -5)).toBe(120_000);
   });
 
-  it('normal DEX (level points, extra) never counts', () => {
-    const s = withLevel(g, 50, { dexterity: 1000 });
+  it('normal DEX (spent, extra) never counts', () => {
+    const s = withLevel(g, 50, { dexterity: 1000 }, { dexterity: 245 });
     expect([searchMsFor('rat_cellar', s), logMsFor('oak', s), oreMsFor('stone', s)]).toEqual([120_000, 120_000, 120_000]);
   });
 });
@@ -135,16 +137,16 @@ describe('core INT → craft time, core STR → gathering power', () => {
   it('only core INT shortens crafting (house × INT multiply)', () => {
     const g = builtGame(1, T0);
     expect(craftMs(g, 'oak_plank')).toBe(5000);
-    expect(intCraftReductionBp(withLevel(g, 40, { intelligence: 500 }))).toBe(0);
+    expect(intCraftReductionBp(withLevel(g, 40, { intelligence: 500 }, { intelligence: 195 }))).toBe(0);
     expect(craftMs(withCore(g, { intelligence: 10 }), 'oak_plank')).toBe(4584);
     const lv3 = { ...withCore(g, { intelligence: 50 }), buildings: { ...g.buildings, town_hall: { state: 'built' as const, level: 5 }, crafting: { state: 'built' as const, level: 3 } } };
     expect(craftMs(lv3, 'oak_plank')).toBe(3038); // 5000 × 0.81 × 0.75
   });
 
-  it('WS / MS = 10 × level + 10 base + core STR + tool; normal STR adds damage but no power', () => {
+  it('WS / MS = 10 × level + 10 base + TOTAL STR + tool (1.17.0); normal STR adds damage and power alike', () => {
     const g = builtGame(1, T0);
-    const normal = withLevel(g, 30, { strength: 200 });
-    expect([woodcuttingStrength(normal).value, miningStrength(normal).value]).toEqual([21, 21]);
+    const normal = withLevel(g, 30, { strength: 200 }, { strength: 145 });
+    expect([woodcuttingStrength(normal).value, miningStrength(normal).value]).toEqual([21 + 345, 21 + 345]);
     expect(getDerivedStats(normal).damage.min).toBe(2 + 10 + 145 + 200);
     const core = withCore(g, { strength: 15 });
     expect([woodcuttingStrength(core).value, miningStrength(core).value]).toEqual([36, 36]);
@@ -152,8 +154,8 @@ describe('core INT → craft time, core STR → gathering power', () => {
   });
 });
 
-describe('split invariance with level points', () => {
-  it('a hero levelling up mid-walk (wins raise END and so the HP regen) gives the same state for 1 s ticks and one resume', () => {
+describe('split invariance across level-ups', () => {
+  it('a hero levelling up mid-walk (max HP / mana rise, unspent points granted) gives the same state for 1 s ticks and one resume', () => {
     const s = apply(apply(builtGame(9, T0), { type: 'DEBUG_SET_HERO_HP', hp: 20 }, T0), { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0);
     const end = T0 + 20 * MIN + 7 * SEC;
     const once = simulate(s, end).state;
@@ -189,7 +191,7 @@ describe('save v16 migration (v15 → v16)', () => {
     expect(MIGRATIONS[15]({ saveVersion: 15 })).toEqual({ saveVersion: 16 });
   });
 
-  it('the frozen v15 save: is what 1.15.0 wrote, migrates (training kept as core, level points at once), nothing else moves', () => {
+  it('the frozen v15 save: is what 1.15.0 wrote, migrates (training kept as core; v17: Lv3 → 10 points to spend), nothing else moves', () => {
     expect(V15_SAVE.saveVersion).toBe(15);
     expect(V15_SAVE.character).toMatchObject({ level: 3, attributes: { strength: 13, dexterity: 10, endurance: 10, intelligence: 10 } });
     expect(new Set(V15_LOG.map((r) => r.engineVersion))).toEqual(new Set(['1.15.0']));
@@ -199,16 +201,18 @@ describe('save v16 migration (v15 → v16)', () => {
     expect(s.character.attributes).toEqual({ strength: 3, dexterity: 0, endurance: 0, intelligence: 0 });
     expect(s.training).toEqual(V15_SAVE.training);
     expect(coreAttributes(s)).toEqual({ strength: 0, dexterity: 5, endurance: 0, intelligence: 2 });
-    expect(effectiveAttributes(s)).toEqual({ strength: 13, dexterity: 15, endurance: 10, intelligence: 12 }); // Lv3: +10 each
+    // 1.16.0 gave Lv3 +10 on each automatically; since 1.17.0 (v17) those are 10 unspent points to place.
+    expect(effectiveAttributes(s)).toEqual({ strength: 3, dexterity: 5, endurance: 0, intelligence: 2 });
+    expect(s.character.unspentPoints).toBe(10);
     const { character, saveVersion: _v, ...rest } = s;
     const { character: rc, saveVersion: _rv, ...raw } = V15_SAVE;
     expect(rest).toEqual(raw);
-    expect({ ...character, attributes: rc.attributes }).toEqual(rc);
+    expect({ ...character, attributes: rc.attributes }).toEqual({ ...rc, ...v17Added(3) });
     // The search in progress keeps its 47 s; it now ends at 114,552 ms (core DEX 5: −4.54%).
     expect(dungeonRunView(s)).toMatchObject({ phase: 'search', searchMs: 114_552, remainingMs: 114_552 - 47_000 });
   });
 
-  it('loading writes a MIGRATE anchor (save 15 → 16, engine 1.15.0 → 1.16.0); play goes on; the whole log replays', async () => {
+  it('loading writes a MIGRATE anchor (save 15 → current, engine 1.15.0 → current); play goes on; the whole log replays', async () => {
     const repo = new MemoryGameRepository();
     await repo.init();
     await repo.commit(V15_LOG.map(({ seq: _seq, synced: _synced, ...r }) => r), V15_SAVE as GameState, { [META_ENGINE_VERSION]: '1.15.0', device_id: 'phone' });
@@ -218,8 +222,7 @@ describe('save v16 migration (v15 → v16)', () => {
     const m = (await repo.getAllLog()).filter((r) => r.type === 'MIGRATE');
     expect(m).toHaveLength(1);
     const p = m[0].payload as MigratePayload;
-    expect({ ...p, snapshot: undefined }).toEqual({ fromSave: 15, toSave: 16, fromEngine: '1.15.0', toEngine: ENGINE_VERSION, fromHash: V15_LOG.at(-1)!.stateHash, snapshot: undefined });
-    expect(ENGINE_VERSION).toBe('1.16.0');
+    expect({ ...p, snapshot: undefined }).toEqual({ fromSave: 15, toSave: CURRENT_SAVE_VERSION, fromEngine: '1.15.0', toEngine: ENGINE_VERSION, fromHash: V15_LOG.at(-1)!.stateHash, snapshot: undefined });
     expect(p.snapshot).toEqual(loadSave(V15_SAVE));
     // Training DEX again raises the core points that shorten the search.
     expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'training', attribute: 'dexterity' })).ok).toBe(true);

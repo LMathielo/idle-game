@@ -15,6 +15,11 @@ export const colors = {
   xp: '#3f8fd1',
   skill: '#4f9a4a',
   stamina: '#d9822b',
+  // Hero HUD bars (top-left HUD on Village and Hero): HP red, mana blue, stamina orange, XP white.
+  hudHp: '#c0392b',
+  hudMana: '#3a7bd5',
+  hudStamina: '#d9822b',
+  hudXp: '#f5efe2',
   slot: '#3a2a1c',
   slotBorder: '#20150c',
   // Danger hint text on parchment: each passes 4.5:1 (WCAG AA) on #f1e4c3.

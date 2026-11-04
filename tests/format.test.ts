@@ -1,7 +1,7 @@
 // Display formatting used by the "While you were away" modal and the building modals.
 import { describe, expect, it } from 'vitest';
 import { currentBonusLine } from '../src/components/buildings/bonusText';
-import { formatAwayDuration, formatBonusBp, formatBp, formatCountdown, formatPercentBp, formatPerMin } from '../src/components/format';
+import { formatAwayDuration, formatBonusBp, formatBp, formatCountdown, formatLevelPercent, formatPercentBp, formatPerMin } from '../src/components/format';
 import { BUILDINGS } from '../src/engine';
 
 const MIN = 60_000;
@@ -57,5 +57,16 @@ describe('building bonus lines (UI rule 2026-11-01: current level under every bu
     expect(currentBonusLine(1, BUILDINGS.merchant.levels[0])).toBe('Lv1 · 5 stock slots');
     expect(currentBonusLine(1, BUILDINGS.town_hall.levels[0])).toBe('Lv1 · 5 worker slots');
     expect(currentBonusLine(1, BUILDINGS.training_grounds.levels[0])).toBe('Lv1 · 1 training XP per minute');
+  });
+});
+
+describe('formatLevelPercent (HUD XP bar, 1.17.0)', () => {
+  it('two decimals, rounded down, never 100.00% before the level-up', () => {
+    expect(formatLevelPercent(1234, 5000)).toBe('24.68%');
+    expect(formatLevelPercent(0, 100)).toBe('0.00%');
+    expect(formatLevelPercent(1, 3)).toBe('33.33%');
+    expect(formatLevelPercent(2, 3)).toBe('66.66%');
+    expect(formatLevelPercent(99_999, 100_000)).toBe('99.99%');
+    expect(formatLevelPercent(5, 0)).toBe('0.00%');
   });
 });

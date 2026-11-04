@@ -15,6 +15,8 @@ export { markDebugUsed } from './flags';
 export * from './stats';
 export * from './stamina';
 export * from './hp';
+export * from './mana';
+export { msUntilFull, REGEN_UNIT, regenAmount } from './regen';
 export { dealtDamage, newFight, nextFightEvent, resolveFight, strikeRange, type Combatant, type FightEvent, type FightResult } from './combat';
 export {
   dungeonRunView,

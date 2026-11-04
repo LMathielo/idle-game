@@ -114,6 +114,14 @@ export type Command =
   | { id: string; type: 'DEBUG_SPEND_STAMINA'; amount: number }
   | { id: string; type: 'DEBUG_REFILL_STAMINA' }
   | { id: string; type: 'DEBUG_ADD_ATTRIBUTE'; attribute: AttributeKey; amount: number }
+  /**
+   * Spends unspent attribute points (1.17.0): `points` maps attributes to how many points each gets. Atomic: every
+   * value a non-negative safe integer, known keys only, at least 1 point in all, the sum ≤ unspent points; otherwise
+   * nothing changes (INVALID_AMOUNT / UNKNOWN_ATTRIBUTE / NOT_ENOUGH_POINTS). Spent points are permanent (no refund).
+   */
+  | { id: string; type: 'SPEND_ATTRIBUTE_POINTS'; points: Partial<Record<AttributeKey, number>> }
+  /** Adds unspent attribute points (as a level-up would), to test spending on a phone. */
+  | { id: string; type: 'DEBUG_ADD_UNSPENT_POINTS'; amount: number }
   /** Adds training XP (= trained minutes at the base rate) to the attribute being trained. */
   | { id: string; type: 'DEBUG_ADD_TRAINING_XP'; xp: number }
   | { id: string; type: 'DEBUG_ADD_GOLD'; amount: number }
@@ -198,6 +206,7 @@ export type CommandErrorCode =
   | 'TIER_NOT_NEXT'
   | 'MAX_TIER'
   | 'NOT_ENOUGH_GOLD'
+  | 'NOT_ENOUGH_POINTS'
   | ItemErrorCode
   | CraftErrorCode
   | 'DEBUG_DISABLED';
@@ -214,6 +223,10 @@ export const MAX_DEBUG_XP_GRANT = 1_000_000_000_000;
 /** Debug attribute grants: per command, and the highest value an attribute may reach that way. */
 export const MAX_DEBUG_ATTRIBUTE_GRANT = 1000;
 export const MAX_DEBUG_ATTRIBUTE_VALUE = 1_000_000;
+
+/** Debug unspent-point grant per command, and the most unspent points a save may hold that way. */
+export const MAX_DEBUG_UNSPENT_GRANT = 1000;
+export const MAX_DEBUG_UNSPENT_VALUE = 1_000_000;
 
 /** Debug dungeon-win grant per command. */
 export const MAX_DEBUG_DUNGEON_WINS = 1000;
@@ -577,6 +590,23 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       draft.character.attributes[attribute] = next;
       break;
     }
+    case 'SPEND_ATTRIBUTE_POINTS': {
+      const e = spendAttributePoints(draft, cmd.points);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'DEBUG_ADD_UNSPENT_POINTS': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const { amount } = cmd;
+      if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0 || amount > MAX_DEBUG_UNSPENT_GRANT) {
+        return fail('INVALID_AMOUNT', `Invalid point amount ${String(amount)}`);
+      }
+      const next = draft.character.unspentPoints + amount;
+      if (next > MAX_DEBUG_UNSPENT_VALUE) return fail('INVALID_AMOUNT', `Unspent points would exceed ${MAX_DEBUG_UNSPENT_VALUE}`);
+      draft = markDebugUsed(draft);
+      draft.character.unspentPoints = next;
+      break;
+    }
     case 'DEBUG_ADD_TRAINING_XP': {
       if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
       const { xp } = cmd;
@@ -690,6 +720,31 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
   // as soon as their inputs are there (a buy, a collect, a refund, debug), in pipe order.
   settleCrafting(draft, events, null);
   return { ok: true, state: draft, events, summary: sim.summary };
+}
+
+/**
+ * SPEND_ATTRIBUTE_POINTS (1.17.0) on a full draft copy: validates everything first, then moves the points from
+ * character.unspentPoints into character.spentPoints. Atomic: on any error nothing changes. Raising STR only raises
+ * WS / MS, so no gathering activity has to stop.
+ */
+function spendAttributePoints(draft: GameState, points: unknown): CommandError | null {
+  if (!points || typeof points !== 'object' || Array.isArray(points)) return { code: 'INVALID_AMOUNT', message: 'Points must be an object of attribute → points' };
+  let sum = 0;
+  const entries: [AttributeKey, number][] = [];
+  for (const [key, value] of Object.entries(points as Record<string, unknown>)) {
+    if (!isAttributeKey(key)) return { code: 'UNKNOWN_ATTRIBUTE', message: `Unknown attribute ${key}` };
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+      return { code: 'INVALID_AMOUNT', message: `Points for ${key} must be a whole number ≥ 0` };
+    }
+    sum += value;
+    if (value > 0) entries.push([key, value]);
+  }
+  if (sum < 1) return { code: 'INVALID_AMOUNT', message: 'Spend at least 1 point' };
+  const c = draft.character;
+  if (sum > c.unspentPoints) return { code: 'NOT_ENOUGH_POINTS', message: `Only ${c.unspentPoints} points to spend (asked ${sum})` };
+  for (const [key, value] of entries) c.spentPoints[key] += value;
+  c.unspentPoints -= sum;
+  return null;
 }
 
 /**

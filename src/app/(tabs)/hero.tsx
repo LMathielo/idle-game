@@ -5,6 +5,7 @@ import { useGameClient, useGameState } from '../../client/GameProvider';
 import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
 import { DebugPanel } from '../../components/DebugPanel';
 import { formatNumber } from '../../components/format';
+import { HeroHud } from '../../components/hud/HeroHud';
 import { defOf, SLOT_LABELS } from '../../components/items/itemInfo';
 import { ItemSheet, type SheetAction } from '../../components/items/ItemSheet';
 import { ItemSlot } from '../../components/items/ItemSlot';
@@ -43,19 +44,25 @@ export default function HeroScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
+      {/* The hero HUD sits at the top of the screen, above the scroll content (not floating over it). */}
+      <HeroHud />
       <ScrollView contentContainerStyle={styles.content}>
-        <HeaderPanel character={character} />
+        <HeaderPanel name={character.name} title={character.title} xp={character.xp} xpToNext={character.xpToNext} />
         <StatusPanel
           level={character.level}
           attributes={character.attributes}
+          spentPoints={character.spentPoints}
+          unspentPoints={character.unspentPoints}
           equipment={character.equipment}
           hp={character.hp}
           hpRegenProgress={character.hpRegenProgress}
+          mana={character.mana}
+          manaRegenProgress={character.manaRegenProgress}
           stamina={stamina}
           training={training}
         />
         <EquipmentPanel equipment={character.equipment} onPress={openEquipment} />
-        <InventoryPanel inventory={inventory} onPress={openInventory} />
+        <InventoryPanel inventory={inventory} gold={character.gold} onPress={openInventory} />
         <SkillsPanel skills={character.skills} />
         {DEV_TOOLS_ENABLED ? <DebugPanel /> : null}
       </ScrollView>
@@ -64,34 +71,19 @@ export default function HeroScreen() {
   );
 }
 
-// Each panel is memoized on the slice it shows. simulate() keeps untouched slices by reference,
-// so a woodcutting action re-renders Header, Inventory and Skills, not Equipment. Status re-renders
-// only when level, attributes, equipment, HP, stamina or training change (HP and stamina tick while they
-// regenerate, training while an attribute trains).
+// Each panel is memoized on the slices it shows. simulate() keeps untouched slices by reference,
+// so a woodcutting action re-renders Inventory and Skills, not Equipment. Status re-renders
+// only when level, attributes, points, equipment, HP, mana, stamina or training change (HP, mana and stamina tick while
+// they regenerate, training while an attribute trains). The portrait, level and gold moved to the HUD / Inventory (1.17.0).
 
-const HeaderPanel = memo(function HeaderPanel({ character }: { character: Character }) {
+const HeaderPanel = memo(function HeaderPanel({ name, title, xp, xpToNext }: { name: string; title: string; xp: number; xpToNext: number }) {
   return (
     <Panel>
-      <View style={styles.headerRow}>
-        <View style={styles.portrait}>
-          <Text style={styles.portraitIcon}>🧔</Text>
-        </View>
-        <View style={styles.flex}>
-          <Text style={styles.name}>{character.name}</Text>
-          <Text style={styles.subtitle}>
-            Level {character.level} · {character.title}
-          </Text>
-          <Text style={styles.gold}>🪙 {formatNumber(character.gold)} gold</Text>
-        </View>
-      </View>
+      <Text style={styles.name}>{name}</Text>
+      <Text style={styles.subtitle}>{title}</Text>
       <View style={styles.bars}>
         <Text style={styles.barCaption}>Experience</Text>
-        <Bar
-          value={character.xp}
-          max={character.xpToNext}
-          color={colors.xp}
-          label={`${formatNumber(character.xp)} / ${formatNumber(character.xpToNext)}`}
-        />
+        <Bar value={xp} max={xpToNext} color={colors.xp} label={`${formatNumber(xp)} / ${formatNumber(xpToNext)} XP`} />
       </View>
     </Panel>
   );
@@ -122,10 +114,10 @@ const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress }: { eq
   );
 });
 
-const InventoryPanel = memo(function InventoryPanel({ inventory, onPress }: { inventory: Inventory; onPress: PressHandler }) {
+const InventoryPanel = memo(function InventoryPanel({ inventory, gold, onPress }: { inventory: Inventory; gold: number; onPress: PressHandler }) {
   const slots: (Item | undefined)[] = Array.from({ length: inventory.capacity }, (_, i) => inventory.items[i]);
   return (
-    <Panel title={`Inventory  ${inventory.items.length}/${inventory.capacity}`}>
+    <Panel title={`Inventory ${inventory.items.length}/${inventory.capacity} · 🪙 ${formatNumber(gold)}`}>
       <View style={styles.invGrid}>
         {slots.map((item, i) => (
           <View key={i} style={styles.invCell}>
@@ -228,24 +220,11 @@ function HeroItemSheet({ selection, onClose }: { selection: Selection | null; on
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.night },
-  flex: { flex: 1 },
-  // Room for the activity strip that floats above the tab bar.
-  content: { padding: 12, paddingBottom: 32 + ACTIVITY_STRIP_HEIGHT },
+  // Room for the activity strip that floats above the tab bar. The HUD above the scroll view keeps its own space.
+  content: { padding: 12, paddingTop: 8, paddingBottom: 32 + ACTIVITY_STRIP_HEIGHT },
 
-  headerRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  portrait: {
-    width: 64,
-    height: 64,
-    backgroundColor: colors.slot,
-    borderWidth: 3,
-    borderColor: colors.goldDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  portraitIcon: { fontSize: 36 },
   name: { fontFamily: fonts.title, fontSize: 26, color: colors.ink, lineHeight: 32 },
   subtitle: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
-  gold: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.goldDark, marginTop: 2 },
   bars: { marginTop: 12, gap: 4 },
   barCaption: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.inkSoft, marginTop: 4 },
 

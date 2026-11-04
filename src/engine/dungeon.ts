@@ -6,7 +6,7 @@ import { COMBAT, DUNGEON_IDS, DUNGEON_RUN, DUNGEONS, ENEMIES, type EnemyDef } fr
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { grantHeroXp } from './activities';
 import { type FightEvent, newFight, nextFightEvent, strike } from './combat';
-import { hpRegenPerMinute, maxHpOf, regenHp } from './hp';
+import { regenHeroPools } from './hp';
 import { addStackable } from './inventory';
 import { chance, nextInt } from './rng';
 import { activityTimeMs, type CoreInput, dexActivityReductionBp } from './attributes';
@@ -292,10 +292,10 @@ export function advanceDungeon(
   const searchMs = searchMsFor(activity.dungeonId, draft);
   const efficiency = draft.offline.efficiency;
   let regenLeft = requestedMs;
-  // The rate is read at each regen, not once: a win can level the hero up, and level points raise END (1.16.0).
+  // Rates and maxima are read at each regen, not once: a win can level the hero up (max HP and mana rise, 1.17.0).
   const regen = (ms: number) => {
     if (!(ms > 0)) return;
-    draft.character = regenHp(draft.character, maxHpOf(draft), hpRegenPerMinute(draft), ms);
+    regenHeroPools(draft, ms); // HP and mana (1.17.0)
     regenLeft -= ms;
   };
   let owned = false;

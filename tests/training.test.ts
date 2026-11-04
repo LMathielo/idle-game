@@ -14,7 +14,6 @@ import {
   CURRENT_SAVE_VERSION,
   dungeonRunView,
   effectiveAttributes,
-  levelPoints,
   ENGINE_VERSION,
   type GameEvent,
   type GameState,
@@ -523,10 +522,12 @@ describe('frozen v5 save (tests/fixtures/save-v5.json) → v6', () => {
     expect((await client.dispatch({ type: 'START_ACTIVITY', kind: 'training', attribute: 'endurance' })).ok).toBe(true);
     clock.advance(30 * MIN);
     await client.resume();
-    // Save v16: the stored END 13 keeps 3 extra points; level points and the 2 trained (core) levels add up.
+    // Save v16: the stored END 13 keeps 3 extra points; the 2 trained (core) levels add up. Save v17: level-ups give
+    // unspent points (nothing spent here).
     const now = client.getState();
     expect(now.training.attributes.endurance.level).toBe(2);
-    expect(effectiveAttributes(now).endurance).toBe(levelPoints(now.character.level) + 3 + 2);
+    expect(now.character.unspentPoints).toBe(5 * (now.character.level - 1));
+    expect(effectiveAttributes(now).endurance).toBe(3 + 2);
 
     const report = replayLogReport(entries(await repo.getAllLog()));
     expect(report).toMatchObject({ anchors: 1, skippedOldEngine: V5_LOG.length });
