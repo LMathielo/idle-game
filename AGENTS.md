@@ -27,7 +27,7 @@ Mobile idle/incremental RPG inspired by Gladiatus. POC scope: two tabs. **Villag
 - **Branches:** `feat/*`, `fix/*`, `chore/*`, `exp/*` (one task each, cut from `origin/dev`, never publish to Expo Go) → PR into `dev` (integration + test preview, the default branch) → release PR `dev` → `main` (stable, only what he tested; protected: PR + `CI` check, merge commit only).
 - The orchestrator is the **product owner** (`.claude/skills/product-owner/SKILL.md`): turns requests into task briefs, keeps `docs/PRODUCT.md` current, writes no game code.
 - The **`game-engineer`** agent (`.claude/agents/game-engineer.md`) codes each brief on its branch and opens a PR with **base `dev`**.
-- Every PR into `dev` gets the **review council** (`.claude/skills/pr-review-council/SKILL.md`): 1–3 reviewers by risk. The engineer and reviewers run on Sonnet, medium effort. Confirmed issues go back to the engineer until clean.
+- Every PR into `dev` gets the **review council** (`.claude/skills/pr-review-council/SKILL.md`): 1–3 reviewers by risk. Reviewers run on Sonnet at medium effort; the engineer on Sonnet at medium, or high for high-risk tasks (never below medium). Confirmed issues go back to the engineer until clean.
 - **Only the owner merges, into `dev` and into `main`.** Agents work in their own git worktree, push only to their branch with an explicit ref, and never merge, never push to `dev` or `main`, and never open the release PR unless the owner asks.
 - Every feature PR updates `docs/STATUS.md` (version, a release-notes line, the roadmap item it closes).
 - Skills (`.claude/skills/`): `idle-rpg-game-design`, `product-owner`, `pr-review-council`, plus vendored Expo skills (MIT, `EXPO-SKILLS-LICENSE`).

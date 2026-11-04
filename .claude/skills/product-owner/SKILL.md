@@ -11,7 +11,7 @@ The owner (Lucas) works from his phone. The orchestrator is the product owner an
 
 1. **Understand it in product terms.** `AGENTS.md` is already loaded (via `CLAUDE.md`). Read the top of `docs/STATUS.md` ("Current version") and its two "Roadmap" sections, not the release notes. Then read the **Contents** table of `docs/PRODUCT.md` (and `docs/ENGINE.md` for engine questions) and only the sections the request touches; grep the Decision log for the topic instead of reading it whole. Load the `idle-rpg-game-design` skill when the request touches game systems (combat, XP, items, economy, gathering, offline time). Where does this feature sit in the core loop? What's the smallest version that's testable on the phone?
 2. **Decide open questions** using the game-design skill. Only ask the owner when the choice changes the game's direction or is expensive to undo; otherwise decide, and record the decision in `docs/PRODUCT.md` (Decision log).
-3. **Write the task brief** (template below) and launch `game-engineer` with it (Sonnet, medium effort: owner decision 2026-11-04; pass `model: sonnet`, `effort: medium` in the Agent call). Branch: `feat/<slug>` (or `fix/`, `chore/`), cut from `origin/dev`; the PR targets **`dev`**. Pick the working mode as in AGENTS.md ("Working modes": desktop when `device_bash` reaches `$HOME/mnt/idle-game`, else cloud; the owner can override) and name it in the brief.
+3. **Write the task brief** (template below) and launch `game-engineer` with it (Sonnet; owner decision 2026-11-04). Effort is medium by default and **high** for high-risk tasks, i.e. the council's 3-reviewer tier (save shape/migrations, simulate/time rules, combat or economy formulas, replay/action log/anti-cheat, publish/CI workflows). Pass `model: sonnet` and `effort: medium|high` in the Agent call, never below medium. Branch: `feat/<slug>` (or `fix/`, `chore/`), cut from `origin/dev`; the PR targets **`dev`**. Pick the working mode as in AGENTS.md ("Working modes": desktop when `device_bash` reaches `$HOME/mnt/idle-game`, else cloud; the owner can override) and name it in the brief.
 4. When the agent reports the PR is open, run the **`pr-review-council`** skill. Loop fixes until clean.
 5. **Report to the owner** in a few phone-readable lines: what was built, the PR link, review rounds and what they caught, and how to test it. Merging into `dev` publishes the `dev` update to Expo Go; once he has tested it, he releases with a PR `dev` → `main` (publishes the `main` update). **Only the owner merges**, into `dev` and into `main` — no agent or orchestrator merges, pushes to `dev`/`main`, or opens the release PR unless he asks.
 6. Never switch branches in the shared checkout while an agent is working; use a separate worktree for any investigation. In desktop mode the checkout at `$HOME/mnt/idle-game` is the owner's own: never switch its branch at all.
@@ -27,6 +27,7 @@ Product decisions already made: <bullets, with numbers/tunables if any>
 Acceptance criteria: <checkable bullets, incl. tests for engine rules>
 Read: <PRODUCT.md / ENGINE.md sections the engineer needs, by Contents heading>
 Mode: <desktop | cloud>
+Effort: <medium | high>
 Constraints: AGENTS.md rules; Expo Go compatible; mobile only; branch feat/<slug> from origin/dev; open a PR with base dev and a short phone-readable description.
 ```
 
