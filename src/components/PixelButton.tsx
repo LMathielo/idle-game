@@ -1,11 +1,14 @@
 import type { Ref } from 'react';
 import { type HostInstance, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts } from '../theme';
+import { GameIcon } from './art/Sprites';
+import type { IconName } from './art/images';
 import { PRESS_IN_DELAY_MS, type RepeatAction, useHoldRepeat } from './ui/useHoldRepeat';
 
 type Props = {
   label: string;
-  icon?: string;
+  /** Pixel-art symbol left of the label (never an emoji in the label itself). */
+  icon?: IconName;
   onPress?: () => void;
   /** Highlighted (e.g. the running activity). */
   active?: boolean;
@@ -18,6 +21,8 @@ type Props = {
   accessibilityHint?: string;
   /** Smaller second line under the label (e.g. a cost). */
   sublabel?: string;
+  /** Pixel-art symbol left of the sublabel (e.g. stamina before a cost). */
+  sublabelIcon?: IconName;
   /** Takes an equal share of a row (flex: 1) with centered text, for button rows that must not wrap. */
   stretch?: boolean;
   /** Village sign: pixel title font. Other buttons use the readable body font. */
@@ -33,7 +38,7 @@ type Props = {
 };
 
 /** Wooden sign button with hard pixel bevels (no rounded corners). */
-export function PixelButton({ label, icon, onPress, active, disabled, muted, accessibilityLabel, accessibilityHint, sublabel, stretch, sign, repeat, ref }: Props) {
+export function PixelButton({ label, icon, onPress, active, disabled, muted, accessibilityLabel, accessibilityHint, sublabel, sublabelIcon, stretch, sign, repeat, ref }: Props) {
   const grey = disabled || muted;
   const hold = useHoldRepeat(repeat, !!repeat && !disabled);
   const pressProps = repeat
@@ -62,14 +67,25 @@ export function PixelButton({ label, icon, onPress, active, disabled, muted, acc
               grey && styles.innerDisabled,
             ]}
           >
-            {icon ? <Text style={styles.icon}>{icon}</Text> : null}
-            <Text style={[styles.label, sign && styles.labelSign, grey && styles.labelDisabled]} numberOfLines={1}>
-              {label}
-            </Text>
-            {sublabel ? (
-              <Text style={[styles.sublabel, grey && styles.labelDisabled]} numberOfLines={1}>
-                {sublabel}
+            {icon ? (
+              <View style={styles.iconRow}>
+                <GameIcon name={icon} />
+                <Text style={[styles.label, sign && styles.labelSign, grey && styles.labelDisabled]} numberOfLines={1}>
+                  {label}
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.label, sign && styles.labelSign, grey && styles.labelDisabled]} numberOfLines={1}>
+                {label}
               </Text>
+            )}
+            {sublabel ? (
+              <View style={styles.iconRow}>
+                {sublabelIcon ? <GameIcon name={sublabelIcon} size={13} /> : null}
+                <Text style={[styles.sublabel, grey && styles.labelDisabled]} numberOfLines={1}>
+                  {sublabel}
+                </Text>
+              </View>
             ) : null}
           </View>
         </View>
@@ -113,7 +129,7 @@ const styles = StyleSheet.create({
   innerPressed: { backgroundColor: colors.woodDark },
   outerDisabled: { shadowOpacity: 0, elevation: 0 },
   innerDisabled: { backgroundColor: colors.slot, borderTopColor: colors.slotBorder, borderLeftColor: colors.slotBorder },
-  icon: { fontSize: 14 },
+  iconRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, flexShrink: 1 },
   label: {
     fontFamily: fonts.bodyBold,
     fontSize: 16,

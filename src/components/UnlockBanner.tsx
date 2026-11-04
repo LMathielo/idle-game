@@ -8,6 +8,7 @@ import Animated, { FadeInDown, FadeOut, ReduceMotion } from 'react-native-reanim
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
 import { type DungeonId, DUNGEONS } from '../engine';
 import { colors, fonts } from '../theme';
+import { GameIcon } from './art/Sprites';
 
 const AUTO_HIDE_MS = 5000;
 
@@ -59,7 +60,7 @@ export function UnlockBanner({ position }: { position: StyleProp<ViewStyle> }) {
         accessibilityHint="Dismisses this message"
         style={styles.banner}
       >
-        <Text style={styles.icon}>🔓</Text>
+        <GameIcon name="unlocked" size={32} />
         <Text style={styles.text}>
           <Text style={styles.title}>{title}</Text>
           {'\n'}
@@ -83,7 +84,6 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.gold,
   },
-  icon: { fontSize: 26 },
   text: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.parchment },
   title: { fontFamily: fonts.bodyBold, color: colors.gold },
 });

@@ -7,6 +7,7 @@ import { useGameClient, useGameState } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
 import { baseSellPrice, DEV_TOOLS_ENABLED, freeSlots, type GameState, type Item, maxBuyable, merchantView, sellPriceOfItem, slotsNeeded } from '../../engine';
 import { colors, fonts } from '../../theme';
+import { IconText } from '../art/Sprites';
 import { formatHms, formatNumber } from '../format';
 import { defOf } from '../items/itemInfo';
 import { ItemSheet, SheetRow } from '../items/ItemSheet';
@@ -34,9 +35,9 @@ export function MerchantModal() {
       buildingId="merchant"
       closeLabel="Close merchant"
       headerRight={
-        <Text style={styles.gold} accessibilityLabel={`${formatNumber(gold)} gold`}>
-          🪙 {formatNumber(gold)}
-        </Text>
+        <IconText icon="gold" style={styles.gold} accessibilityLabel={`${formatNumber(gold)} gold`}>
+          {formatNumber(gold)}
+        </IconText>
       }
       headerBelow={
         <View style={styles.tabs} accessibilityRole="tablist">
@@ -88,7 +89,7 @@ function BuyTab({ state }: { state: GameState }) {
       view.stock.map((l): SlotItem | null => {
         if (!l) return null;
         const def = defOf(l.defId);
-        return { defId: l.defId, icon: def.icon, name: def.name, quantity: def.stackable ? l.quantity : undefined, stackable: def.stackable, rarity: l.rarity };
+        return { defId: l.defId, name: def.name, quantity: def.stackable ? l.quantity : undefined, stackable: def.stackable, rarity: l.rarity };
       }),
     [view.stock],
   );
@@ -172,10 +173,10 @@ function BuySheet({ state, slot, anchor, onClose }: { state: GameState; slot: nu
         },
       ]}
     >
-      <SheetRow label="Price" value={`🪙 ${formatNumber(listing.unitPrice)}${def.stackable ? ' each' : ''}`} />
+      <SheetRow icon="gold" label="Price" value={`${formatNumber(listing.unitPrice)}${def.stackable ? ' each' : ''}`} />
       <SheetRow label="In stock" value={formatNumber(listing.quantity)} />
       {def.stackable && max > 1 ? <QuantityStepper value={quantity} max={max} onChange={setQty} /> : null}
-      <SheetRow label="Total" value={`🪙 ${formatNumber(total)}`} strong />
+      <SheetRow icon="gold" label="Total" value={formatNumber(total)} strong />
     </ItemSheet>
   );
 }
@@ -239,8 +240,8 @@ function SellSheet({ item, anchor, unitPrice, onClose }: { item: Item; anchor: A
       ]}
     >
       {owned > 1 ? <QuantityStepper value={quantity} max={owned} onChange={setQty} /> : null}
-      {unitPrice !== baseSellPrice(item) ? <SheetRow label="Price" value={`🪙 ${formatNumber(unitPrice)} (Town Hall bonus)`} /> : null}
-      <SheetRow label="Total" value={`🪙 ${formatNumber(unitPrice * quantity)}`} strong />
+      {unitPrice !== baseSellPrice(item) ? <SheetRow icon="gold" label="Price" value={`${formatNumber(unitPrice)} (Town Hall bonus)`} /> : null}
+      <SheetRow icon="gold" label="Total" value={formatNumber(unitPrice * quantity)} strong />
     </ItemSheet>
   );
 }

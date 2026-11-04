@@ -25,7 +25,8 @@ import {
 } from '../../engine';
 import { colors, fonts, rarityColors } from '../../theme';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
-import { formatClock, formatNumber, formatPercentBp, itemIcon, itemName } from '../format';
+import { IconText, ItemIcon } from '../art/Sprites';
+import { formatClock, formatNumber, formatPercentBp, itemName } from '../format';
 import { RARITY_COLOR_NAMES } from '../items/itemInfo';
 import { ItemSheet } from '../items/ItemSheet';
 import { LiveBar } from '../LiveBar';
@@ -139,14 +140,14 @@ export function CraftingModal() {
       onClose={onClose}
       headerRight={
         <View style={styles.headerRight}>
-          <Text style={styles.stamina} accessibilityLabel={`Stamina ${state.stamina.current} of ${state.stamina.max}`}>
-            ⚡ {state.stamina.current}/{state.stamina.max}
-          </Text>
+          <IconText icon="stamina" style={styles.stamina} accessibilityLabel={`Stamina ${state.stamina.current} of ${state.stamina.max}`}>
+            {state.stamina.current}/{state.stamina.max}
+          </IconText>
           {sub.kind === 'pipes' ? <PixelButton label="Recipes" onPress={openRecipes} accessibilityHint="Every recipe; Start goes into the first free pipe" /> : null}
         </View>
       }
     >
-      {clockPaused ? <Text style={styles.paused}>⏸ Paused: your device clock moved back. Crafting waits until it catches up.</Text> : null}
+      {clockPaused ? <Text style={styles.paused}>Paused: your device clock moved back. Crafting waits until it catches up.</Text> : null}
       {sub.kind !== 'pipes' ? (
         <RecipePicker
           pipe={sub.kind === 'picker' ? sub.pipe : null}
@@ -231,7 +232,9 @@ const PipeRow = memo(function PipeRow({ pipe, paused, stamina, invFull, onPick, 
   if (pipe.slot !== 'open') {
     return (
       <View style={[styles.pipe, styles.pipeLocked]} accessible accessibilityLabel={`Pipe ${n}, locked, ${pipe.slot === 'later' ? 'unlocks later' : 'premium, coming soon'}`}>
-        <Text style={styles.pipeTitleMuted}>🔒 Pipe {n}</Text>
+        <IconText icon="locked" style={styles.pipeTitleMuted}>
+          Pipe {n}
+        </IconText>
         <Text style={styles.pipeMuted}>{pipe.slot === 'later' ? 'Unlocks later' : 'Premium — coming soon'}</Text>
       </View>
     );
@@ -287,18 +290,15 @@ function MaterialJobRow({ n, job, paused, stamina, onInsta, onX10, onStop }: Mat
   return (
     <View style={[styles.pipe, styles.pipeActive]}>
       <View style={styles.pipeHead}>
-        <Text style={styles.pipeTitle} numberOfLines={1}>
-          Pipe {n} · {itemIcon(job.outputDefId)} {job.recipeName}
-          {job.x10 ? ' ×10' : ''}
-        </Text>
+        <PipeTitle n={n} defId={job.outputDefId} name={`${job.recipeName}${job.x10 ? ' ×10' : ''}`} />
         <Text style={styles.count} accessibilityLabel={`${job.done} crafted since this job started`}>
           Crafted {formatNumber(job.done)}
         </Text>
       </View>
       {job.status === 'waiting' ? (
-        <Text style={styles.held}>⏳ Waiting for {waitingText}</Text>
+        <Text style={styles.held}>Waiting for {waitingText}</Text>
       ) : job.status === 'held' ? (
-        <Text style={styles.held}>📦 Inventory full — waiting for room (nothing is lost)</Text>
+        <Text style={styles.held}>Inventory full — waiting for room (nothing is lost)</Text>
       ) : (
         <CraftProgress job={job} paused={paused} />
       )}
@@ -307,14 +307,16 @@ function MaterialJobRow({ n, job, paused, stamina, onInsta, onX10, onStop }: Mat
         {running ? (
           <>
             <PixelButton
-              label={`⚡ Insta · ${job.instaCost}`}
+              label={`Insta · ${job.instaCost}`}
+              icon="stamina"
               repeat={onInsta}
               disabled={stamina < job.instaCost}
               stretch
               accessibilityLabel={`Finish this craft now for ${job.instaCost} stamina`}
             />
             <PixelButton
-              label={job.x10 ? '×10 on' : `×10 · ⚡ ${tap?.stamina ?? 0}`}
+              label={job.x10 ? '×10 on' : `×10 · ${tap?.stamina ?? 0}`}
+              icon={job.x10 ? undefined : 'stamina'}
               sublabel={job.x10 ? 'this craft' : (tap?.blocked ?? (tap ? `+${amounts(tap.items)}` : undefined))}
               onPress={onX10}
               disabled={!tap || tap.blocked !== null}
@@ -352,9 +354,7 @@ function GearJobRow({ n, job, paused, stamina, invFull, onInsta, onCancel, onDon
   return (
     <View ref={rowRef} style={[styles.pipe, styles.pipeActive, job.ready && styles.pipeReady]}>
       <View style={styles.pipeHead}>
-        <Text style={styles.pipeTitle} numberOfLines={1}>
-          Pipe {n} · {itemIcon(job.outputDefId)} {job.recipeName}
-        </Text>
+        <PipeTitle n={n} defId={job.outputDefId} name={job.recipeName} />
       </View>
       {job.ready ? (
         <>
@@ -379,7 +379,8 @@ function GearJobRow({ n, job, paused, stamina, invFull, onInsta, onCancel, onDon
           <CraftProgress job={job} paused={paused} />
           <View style={styles.buttons}>
             <PixelButton
-              label={`⚡ Insta · ${job.instaCost}`}
+              label={`Insta · ${job.instaCost}`}
+              icon="stamina"
               repeat={onInsta}
               disabled={stamina < job.instaCost}
               stretch
@@ -483,7 +484,7 @@ function RecipePicker({ pipe, view, buildings, stamina, onStart, onBack }: Picke
         <Text style={styles.intro}>{target.blocked ? 'All pipes are busy: stop one to start another recipe.' : `Start goes into ${target.label}, the first free pipe.`}</Text>
       ) : null}
       {recipe ? (
-        <Panel title={`${itemIcon(recipe.output.defId)} ${recipe.name}`}>
+        <Panel title={recipe.name} titleIcon={<ItemIcon defId={recipe.output.defId} size={24} />}>
           <Text style={styles.detail}>
             Each craft uses {recipe.inputs.map((i) => `${formatNumber(i.perCraft)} ${itemName(i.defId)} (you have ${formatNumber(i.have)})`).join(', ')}
           </Text>
@@ -571,7 +572,7 @@ const GearCard = memo(function GearCard({ recipe, buildings, selected, stamina, 
   const enough = recipe.enough;
   const floor = gearQualityFloor({ buildings }, invest);
   const odds = g.rarityOdds.map((o) => `${RARITY_COLOR_NAMES[o.rarity]} ${o.pct}%`).join(' · ');
-  const inputs = recipe.inputs.map((i) => `${itemIcon(i.defId)} ${formatNumber(i.have)} / ${i.perCraft} ${itemName(i.defId)}`);
+  const inputs = recipe.inputs.map((i) => `${formatNumber(i.have)} / ${i.perCraft} ${itemName(i.defId)}`);
   return (
     <View style={[styles.recipe, selected && styles.recipeSelected]}>
       <Pressable
@@ -580,16 +581,20 @@ const GearCard = memo(function GearCard({ recipe, buildings, selected, stamina, 
         accessibilityState={{ selected }}
         accessibilityLabel={`${recipe.name}: ${recipe.inputs.map((i) => `${i.perCraft} ${itemName(i.defId)}, you have ${i.have}`).join('; ')}; ${formatCraftTime(recipe.craftMs)}; at 100% quality ${statText(g.maxStats)}`}
       >
-        <Text style={styles.recipeName}>
-          {itemIcon(recipe.output.defId)} {recipe.name}
-        </Text>
+        <IconText image={<ItemIcon defId={recipe.output.defId} size={24} />} style={styles.recipeName} rowStyle={styles.recipeHead}>
+          {recipe.name}
+        </IconText>
         {inputs.map((line, k) => (
-          <Text key={k} style={[styles.recipeLine, recipe.inputs[k].have < recipe.inputs[k].perCraft && styles.recipeShort]}>
+          <IconText
+            key={k}
+            image={<ItemIcon defId={recipe.inputs[k].defId} size={16} />}
+            style={[styles.recipeLine, recipe.inputs[k].have < recipe.inputs[k].perCraft && styles.recipeShort]}
+          >
             {line}
-          </Text>
+          </IconText>
         ))}
         <Text style={styles.recipeLine}>
-          ⏱ {formatCraftTime(recipe.craftMs)} · at 100%: {statText(g.maxStats)}
+          Time {formatCraftTime(recipe.craftMs)} · at 100%: {statText(g.maxStats)}
         </Text>
       </Pressable>
       {selected ? (
@@ -603,7 +608,8 @@ const GearCard = memo(function GearCard({ recipe, buildings, selected, stamina, 
           {!enough ? <Text style={styles.missing}>Not enough materials</Text> : null}
           <View style={styles.buttons}>
             <PixelButton
-              label={`Start${invest > 0 ? ` · ⚡ ${invest}` : ''}`}
+              label={`Start${invest > 0 ? ` · ${invest}` : ''}`}
+              icon={invest > 0 ? 'stamina' : undefined}
               sublabel={target.blocked ?? (enough && invest > stamina ? 'Not enough stamina' : enough ? target.label : undefined)}
               onPress={() => onStart(target.pipe, recipe.recipeId, invest)}
               disabled={!enough || invest > stamina || target.blocked !== null}
@@ -639,12 +645,27 @@ function StaminaStepper({ value, max, onChange }: { value: number; max: number; 
       {STAMINA_STEPS.slice(0, 2).map((d, k) => (
         <PixelButton key={d} label={String(d).replace('-', '−')} repeat={actions[k]} disabled={value <= 0} accessibilityLabel={`${d} stamina`} />
       ))}
-      <Text style={styles.stepValue} accessibilityLiveRegion="polite" accessibilityLabel={`${value} stamina invested`}>
-        ⚡ {value}
-      </Text>
+      <View style={styles.stepValueBox} accessible accessibilityLiveRegion="polite" accessibilityLabel={`${value} stamina invested`}>
+        <IconText icon="stamina" size={20} style={styles.stepValue}>
+          {value}
+        </IconText>
+      </View>
       {STAMINA_STEPS.slice(2).map((d, k) => (
         <PixelButton key={d} label={`+${d}`} repeat={actions[k + 2]} disabled={value >= max} accessibilityLabel={`+${d} stamina`} />
       ))}
+    </View>
+  );
+}
+
+/** "Pipe 2 · [icon] Oak Planks" on one line (the name is cut, never wrapped). */
+function PipeTitle({ n, defId, name }: { n: number; defId: string; name: string }) {
+  return (
+    <View style={styles.pipeTitleRow}>
+      <Text style={[styles.pipeTitle, styles.pipeTitlePrefix]}>Pipe {n} ·</Text>
+      <ItemIcon defId={defId} size={16} />
+      <Text style={[styles.pipeTitle, styles.pipeTitleName]} numberOfLines={1}>
+        {name}
+      </Text>
     </View>
   );
 }
@@ -660,14 +681,14 @@ const RecipeRow = memo(function RecipeRow({ recipe, selected, onPress }: { recip
       accessibilityState={{ selected }}
       accessibilityLabel={`${recipe.name}: ${input.perCraft} ${itemName(input.defId)}, you have ${input.have}, ${formatCraftTime(recipe.craftMs)}`}
     >
-      <Text style={styles.recipeName}>
-        {itemIcon(recipe.output.defId)} {recipe.name}
-      </Text>
-      <Text style={[styles.recipeLine, !enough && styles.recipeShort]}>
-        {itemIcon(input.defId)} {formatNumber(input.have)} / {input.perCraft} {itemName(input.defId)}
-      </Text>
+      <IconText image={<ItemIcon defId={recipe.output.defId} size={24} />} style={styles.recipeName} rowStyle={styles.recipeHead}>
+        {recipe.name}
+      </IconText>
+      <IconText image={<ItemIcon defId={input.defId} size={16} />} style={[styles.recipeLine, !enough && styles.recipeShort]}>
+        {formatNumber(input.have)} / {input.perCraft} {itemName(input.defId)}
+      </IconText>
       <Text style={styles.recipeLine}>
-        ⏱ {formatCraftTime(recipe.craftMs)} → {recipe.output.perCraft} {itemName(recipe.output.defId)}
+        Time {formatCraftTime(recipe.craftMs)} → {recipe.output.perCraft} {itemName(recipe.output.defId)}
       </Text>
     </Pressable>
   );
@@ -687,7 +708,12 @@ const styles = StyleSheet.create({
   gearDetail: { marginTop: 8, gap: 2 },
   detailLabel: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink, marginBottom: 4 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  stepValue: { flex: 1, textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 20, color: colors.ink },
+  stepValueBox: { flex: 1, alignItems: 'center' },
+  stepValue: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.ink },
+  pipeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
+  recipeHead: { gap: 6 },
+  pipeTitlePrefix: { flexShrink: 0 },
+  pipeTitleName: { flexShrink: 1 },
   pipeLocked: { opacity: 0.6 },
   pipeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   pipeTitle: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 15, color: colors.parchment },

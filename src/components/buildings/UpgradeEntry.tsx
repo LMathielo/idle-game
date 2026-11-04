@@ -33,7 +33,8 @@ export const UpgradeEntry = memo(function UpgradeEntry({ buildingId }: { buildin
     <View style={styles.row}>
       <PixelButton
         ref={ref}
-        label={`🔨 Upgrade · Lv ${view.level}`}
+        label={`Upgrade · Lv ${view.level}`}
+        icon="upgrade"
         sublabel={sub}
         onPress={show}
         active={!!mine}

@@ -4,6 +4,8 @@
 import type { ReactNode } from 'react';
 import { baseSellPrice, rarityOf } from '../../engine';
 import { rarityColors } from '../../theme';
+import { GameIcon, ItemIcon } from '../art/Sprites';
+import type { IconName } from '../art/images';
 import { formatNumber } from '../format';
 import { PixelButton } from '../PixelButton';
 import { type AnchorRect, InfoPopover, PopoverActions, PopoverRow, PopoverText } from '../ui/InfoPopover';
@@ -40,7 +42,7 @@ export function ItemSheet({ item, anchor, quantity, equipped, children, actions,
       onClose={onClose}
       title={`${def.name}${qty}`}
       titleColor={color}
-      icon={def.icon}
+      icon={<ItemIcon defId={item.defId} />}
       iconBorder={color}
       subtitle={itemSubtitle(item, def)}
     >
@@ -61,7 +63,7 @@ export function ItemSheet({ item, anchor, quantity, equipped, children, actions,
           }
         />
       ))}
-      <PopoverRow label="Sell value" value={sell > 0 ? `🪙 ${formatNumber(sell)}${def.stackable ? ' each' : ''}` : '—'} />
+      <PopoverRow icon={<GameIcon name="gold" />} label="Sell value" value={sell > 0 ? `${formatNumber(sell)}${def.stackable ? ' each' : ''}` : '—'} />
       {children}
       {error ? <PopoverText tone="bad">{error}</PopoverText> : null}
       {actions.length ? (
@@ -75,7 +77,7 @@ export function ItemSheet({ item, anchor, quantity, equipped, children, actions,
   );
 }
 
-/** A label / value row in the box's style, for screens that add price lines. */
-export function SheetRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return <PopoverRow label={label} value={value} strong={strong} />;
+/** A label / value row in the box's style, for screens that add price lines (`icon`: e.g. gold before a price). */
+export function SheetRow({ label, value, strong, icon }: { label: string; value: string; strong?: boolean; icon?: IconName }) {
+  return <PopoverRow icon={icon ? <GameIcon name={icon} /> : undefined} label={label} value={value} strong={strong} />;
 }

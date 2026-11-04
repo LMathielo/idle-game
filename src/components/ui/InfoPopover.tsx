@@ -59,8 +59,8 @@ type Props = {
   anchor: AnchorRect | null;
   onClose: () => void;
   title: string;
-  /** Emoji or short text in a framed square left of the title. */
-  icon?: string;
+  /** Pixel-art image (GameIcon, ItemIcon…, up to 32 pt) in a framed square left of the title. */
+  icon?: ReactNode;
   /** Title color (e.g. item rarity). Default gold. */
   titleColor?: string;
   /** Frame color of the icon square. */
@@ -120,9 +120,7 @@ export function InfoPopover({ anchor, onClose, title, icon, titleColor, iconBord
           <View style={[overlayFrame.box, styles.inner]}>
             <View style={styles.head}>
               {icon ? (
-                <View style={[styles.icon, iconBorder ? { borderColor: iconBorder } : null]}>
-                  <Text style={styles.iconText}>{icon}</Text>
-                </View>
+                <View style={[styles.icon, iconBorder ? { borderColor: iconBorder } : null]}>{icon}</View>
               ) : null}
               <View style={styles.flex}>
                 <Text style={[styles.title, titleColor ? { color: titleColor } : null]} accessibilityRole="header">
@@ -154,11 +152,18 @@ export function InfoPopover({ anchor, onClose, title, icon, titleColor, iconBord
   );
 }
 
-/** A label / value row in the popover's style. */
-export function PopoverRow({ label, value, strong, valueColor }: { label: ReactNode; value: ReactNode; strong?: boolean; valueColor?: string }) {
+/** A label / value row in the popover's style; `icon` (a pixel image, 16 pt) sits before the label. */
+export function PopoverRow({ label, value, strong, valueColor, icon }: { label: ReactNode; value: ReactNode; strong?: boolean; valueColor?: string; icon?: ReactNode }) {
   return (
     <View style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
+      {icon ? (
+        <View style={styles.labelRow}>
+          {icon}
+          <Text style={[styles.label, styles.labelShrink]}>{label}</Text>
+        </View>
+      ) : (
+        <Text style={styles.label}>{label}</Text>
+      )}
       <Text style={[styles.value, strong && styles.strong, valueColor ? { color: valueColor } : null]}>{value}</Text>
     </View>
   );
@@ -191,7 +196,6 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   flex: { flex: 1 },
   icon: { width: 44, height: 44, borderWidth: 3, borderColor: colors.goldDark, backgroundColor: colors.night, alignItems: 'center', justifyContent: 'center' },
-  iconText: { fontSize: 22 },
   title: { fontFamily: fonts.title, fontSize: 20, color: colors.gold },
   subtitle: { fontFamily: fonts.body, fontSize: 13, color: colors.parchmentDark },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 },
@@ -200,6 +204,8 @@ const styles = StyleSheet.create({
   content: { gap: 6, paddingTop: 6 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 24, gap: 8 },
   label: { flexShrink: 1, fontFamily: fonts.body, fontSize: 14, color: colors.parchmentDark },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
+  labelShrink: { flexShrink: 1 },
   value: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.parchment, textAlign: 'right' },
   strong: { color: colors.gold, fontSize: 17 },
   text: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.parchment },

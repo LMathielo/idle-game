@@ -7,6 +7,7 @@ import { useGameSnapshot } from '../../client/GameProvider';
 import { type AttributeKey, type AttributeTrainingView, buildingLevel, TRAINING, type TrainingView, trainingView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { confirmCancelRun } from '../dungeon/confirmCancelRun';
+import { IconText } from '../art/Sprites';
 import { ATTRIBUTE_NAMES, formatNumber, formatTrainingLeft } from '../format';
 import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
@@ -64,13 +65,18 @@ export function TrainingModal() {
       buildingId="training_grounds"
       closeLabel="Close training"
       headerRight={
-        <Text style={styles.gold} accessibilityLabel={`${formatNumber(character.gold)} gold, stamina ${state.stamina.current} of ${state.stamina.max}`}>
-          🪙 {formatNumber(character.gold)} <Text style={styles.stamina}>⚡ {state.stamina.current}</Text>
-        </Text>
+        <View style={styles.headerRight} accessible accessibilityLabel={`${formatNumber(character.gold)} gold, stamina ${state.stamina.current} of ${state.stamina.max}`}>
+          <IconText icon="gold" style={styles.gold}>
+            {formatNumber(character.gold)}
+          </IconText>
+          <IconText icon="stamina" style={styles.stamina}>
+            {state.stamina.current}
+          </IconText>
+        </View>
       }
     >
       <ScrollView contentContainerStyle={styles.content}>
-        {clockPaused ? <Text style={styles.paused}>⏸ Paused: your device clock moved back. Training waits until it catches up.</Text> : null}
+        {clockPaused ? <Text style={styles.paused}>Paused: your device clock moved back. Training waits until it catches up.</Text> : null}
         <TierPanel view={view} onUnlock={onUnlock} />
         <Panel title="Core attributes">
           <Text style={styles.note}>Each training level is +1 core point. Core points also drive the special effects (DEX: faster search and gathering, INT: faster crafting).</Text>
@@ -225,7 +231,8 @@ function SpeedupButtons({ view, stamina, onSpeedup }: { view: AttributeTrainingV
         <PixelButton
           key={o.key}
           label={o.label}
-          sublabel={`${o.cost}⚡`}
+          sublabel={`${o.cost}`}
+          sublabelIcon="stamina"
           stretch
           repeat={({ repeat }) => onSpeedup(o.key, repeat)}
           disabled={o.minutes <= 0 || stamina < o.cost}
@@ -238,10 +245,11 @@ function SpeedupButtons({ view, stamina, onSpeedup }: { view: AttributeTrainingV
 }
 
 const styles = StyleSheet.create({
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   content: { padding: 12, paddingBottom: 32 },
   paused: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold, marginBottom: 10 },
   gold: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.gold },
-  stamina: { color: colors.stamina },
+  stamina: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.stamina },
   speedup: { flexDirection: 'row', flexWrap: 'nowrap', gap: 8, marginTop: 4 },
 
   tierBox: { alignItems: 'center', gap: 6, marginTop: 6 },

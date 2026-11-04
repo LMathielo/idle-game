@@ -8,7 +8,7 @@ import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
 import { BuildSheet } from '../../components/buildings/BuildSheet';
 import { HeroHud } from '../../components/hud/HeroHud';
 import { hudBottom } from '../../components/hud/hudLayout';
-import { type VillageAction, VillageScene } from '../../components/VillageScene';
+import { type SignBadge, type VillageAction, VillageScene } from '../../components/VillageScene';
 import { formatCountdown } from '../../components/format';
 import type { AnchorRect } from '../../components/ui/InfoPopover';
 import { type ActivityKind, type BuildingId, constructionView, craftingSign, isBuilt } from '../../engine';
@@ -67,26 +67,27 @@ export default function VillageScreen() {
     return out;
   }, [buildings]);
   const job = constructionView(state);
-  const badgeText = job ? `🔨 Upgrading ${formatCountdown(job.remainingMs)}` : null;
+  const badgeText = job ? `Upgrading ${formatCountdown(job.remainingMs)}` : null;
   const badgeKey = job ? BUILDING_SIGN[job.buildingId] : null;
   // The Crafting sign: "Iron Sword ready" (a finished gear piece waits for Done), "Inventory full", "Waiting for
   // materials" (every busy pipe waits), "2/2 crafting · 0:04" (busy pipes / open pipes, shortest craft left), or nothing.
   const pipes = craftingSign(state);
   const craftText = pipes
     ? pipes.readyName
-      ? `✅ ${pipes.readyName} ready`
+      ? `${pipes.readyName} ready`
       : pipes.held
-        ? '⚒️ Inventory full'
+        ? 'Inventory full'
         : pipes.waiting
-          ? '⚒️ Waiting for materials'
-          : `⚒️ ${pipes.busy}/${pipes.open} crafting · ${formatCountdown(pipes.nextCraftMs)}`
+          ? 'Waiting for materials'
+          : `${pipes.busy}/${pipes.open} crafting · ${formatCountdown(pipes.nextCraftMs)}`
     : null;
+  const craftReady = !!pipes?.readyName;
   const badges = useMemo(() => {
-    const out: Partial<Record<VillageAction, string>> = {};
-    if (craftText) out.crafting = craftText;
-    if (badgeKey && badgeText) out[badgeKey] = badgeText; // an upgrade wins over the crafting line
+    const out: Partial<Record<VillageAction, SignBadge>> = {};
+    if (craftText) out.crafting = { icon: craftReady ? 'ready' : 'crafting', text: craftText };
+    if (badgeKey && badgeText) out[badgeKey] = { icon: 'upgrade', text: badgeText }; // an upgrade wins over the crafting line
     return out;
-  }, [badgeKey, badgeText, craftText]);
+  }, [badgeKey, badgeText, craftText, craftReady]);
   /** Bottom edge of the hero HUD (safe area included, fixed size: hudLayout.ts); the start view keeps the signs below it. */
   const insets = useSafeAreaInsets();
   const topReserve = hudBottom(insets.top);

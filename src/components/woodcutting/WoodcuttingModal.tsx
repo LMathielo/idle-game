@@ -2,13 +2,14 @@
 // a horizontal paged carousel with one card per tree. Rules stay in the engine: this file reads
 // woodcuttingView() and dispatches START_ACTIVITY {kind:'woodcutting', treeId} / STOP_ACTIVITY / SKIP_WOODCUT.
 // Locked trees are refused by the engine too (TREE_LOCKED).
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, type HostInstance, ScrollView, type ListRenderItem, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useGameSnapshot } from '../../client/GameProvider';
 import { type CrewView, crewViews, woodcutActivityView, type TreeId, type TreeView, type WoodcutActivityView, woodcuttingView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { confirmCancelRun } from '../dungeon/confirmCancelRun';
-import { formatBp, formatClock, formatNumber, formatPerMin, itemIcon, itemName } from '../format';
+import { GameIcon, IconText, ItemIcon, NodeIcon } from '../art/Sprites';
+import { formatBp, formatClock, formatNumber, formatPerMin, itemName } from '../format';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
 import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
@@ -105,9 +106,9 @@ export function WoodcuttingModal() {
       buildingId="woodcutting"
       closeLabel="Close woodcutting"
       headerRight={
-        <Text style={styles.stamina} accessibilityLabel={`Stamina ${stamina} of ${state.stamina.max}`}>
-          ⚡ {stamina}/{state.stamina.max}
-        </Text>
+        <IconText icon="stamina" style={styles.stamina} accessibilityLabel={`Stamina ${stamina} of ${state.stamina.max}`}>
+          {stamina}/{state.stamina.max}
+        </IconText>
       }
       headerBelow={
         <View style={styles.headerBelow}>
@@ -116,12 +117,12 @@ export function WoodcuttingModal() {
             style={styles.ws}
             accessibilityLabel={`Woodcutting strength ${view.ws.value}: ${ws.level} from level, ${ws.base} base, ${ws.strength} from core strength, ${ws.axe} from axe`}
           >
-            💪 WS {formatNumber(view.ws.value)} <Text style={styles.wsParts}>= {formatNumber(ws.level)} level + {formatNumber(ws.base)} base + {formatNumber(ws.strength)} STR + {formatNumber(ws.axe)} axe</Text>
+            WS {formatNumber(view.ws.value)} <Text style={styles.wsParts}>= {formatNumber(ws.level)} level + {formatNumber(ws.base)} base + {formatNumber(ws.strength)} STR + {formatNumber(ws.axe)} axe</Text>
           </Text>
         </View>
       }
     >
-      {clockPaused ? <Text style={styles.paused}>⏸ Paused: your device clock moved back. Logs wait until it catches up.</Text> : null}
+      {clockPaused ? <Text style={styles.paused}>Paused: your device clock moved back. Logs wait until it catches up.</Text> : null}
       <ScrollView contentContainerStyle={styles.scroll}>
         <FlatList
           data={view.trees}
@@ -190,9 +191,7 @@ const TreeCard = memo(function TreeCard({ tree, crew, width, current, stamina, p
 
   return (
     <View style={cardStyle}>
-      <Text style={styles.treeIcon} accessibilityElementsHidden importantForAccessibility="no">
-        {tree.icon}
-      </Text>
+      <NodeIcon node={tree.treeId} size={64} style={styles.treeIcon} />
       <View style={styles.titleRow}>
         <Text style={styles.treeName} accessibilityRole="header">
           {tree.name}
@@ -213,15 +212,18 @@ const TreeCard = memo(function TreeCard({ tree, crew, width, current, stamina, p
         <Fact label="Time per cut" value={formatClock(tree.logMs)} />
         <Fact label="Logs per cut" value={`×${formatBp(tree.yieldBp)}`} />
         <Fact label="XP per cut" value={formatNumber(tree.xpPerLog)} />
-        <Fact label="Log" value={`${itemIcon(tree.logItemId)} ${itemName(tree.logItemId)}`} />
-        {nest ? <Fact label={`${itemIcon(nest.itemId)} ${itemName(nest.itemId)}`} value={`1 in ${formatNumber(Math.round(1 / nest.chance))}`} /> : null}
+        <Fact label="Log" value={itemName(tree.logItemId)} valueIcon={<ItemIcon defId={tree.logItemId} size={16} />} />
+        {nest ? <Fact label={itemName(nest.itemId)} labelIcon={<ItemIcon defId={nest.itemId} size={16} />} value={`1 in ${formatNumber(Math.round(1 / nest.chance))}`} /> : null}
       </View>
 
       {crew ? (
-        <Text style={[styles.crew, crew.status !== 'working' && styles.crewOff]} accessibilityLabel={`${crew.workers} workers here, ${crew.status === 'working' ? `about ${formatPerMin(crew.itemsPerMin)} per minute` : crew.status}`}>
-          👷 {crew.workers} {crew.workers === 1 ? 'worker' : 'workers'} ·{' '}
-          {crew.status === 'working' ? `${formatPerMin(crew.itemsPerMin)} ${itemName(crew.itemId)}/min` : crew.status === 'idle' ? 'idle (you can’t work it now)' : 'paused (upkeep)'}
-        </Text>
+        <View style={styles.crewRow}>
+          <GameIcon name="workers" />
+          <Text style={[styles.crew, crew.status !== 'working' && styles.crewOff]} accessibilityLabel={`${crew.workers} workers here, ${crew.status === 'working' ? `about ${formatPerMin(crew.itemsPerMin)} per minute` : crew.status}`}>
+            {crew.workers} {crew.workers === 1 ? 'worker' : 'workers'} ·{' '}
+            {crew.status === 'working' ? `${formatPerMin(crew.itemsPerMin)} ${itemName(crew.itemId)}/min` : crew.status === 'idle' ? 'idle (you can’t work it now)' : 'paused (upkeep)'}
+          </Text>
+        </View>
       ) : null}
 
       {current ? (
@@ -235,12 +237,15 @@ const TreeCard = memo(function TreeCard({ tree, crew, width, current, stamina, p
 
       <View style={styles.actions}>
         {!tree.unlocked ? (
-          <Text style={styles.locked}>🔒 Needs {missing.join(' and ')}</Text>
+          <IconText icon="locked" style={styles.locked}>
+            Needs {missing.join(' and ')}
+          </IconText>
         ) : current ? (
           <>
             <PixelButton label="Stop" onPress={onStop} active accessibilityLabel={`Stop cutting ${tree.name}`} accessibilityHint="Your logs are kept" />
             <PixelButton
-              label={`Skip (${current.skipCost}⚡)`}
+              label={`Skip (${current.skipCost})`}
+              icon="stamina"
               repeat={skip}
               disabled={!canSkip}
               accessibilityLabel={`Skip this log for ${current.skipCost} stamina`}
@@ -260,13 +265,13 @@ function TreeInfo({ tree, anchor, onClose }: { tree: TreeView | null; anchor: An
   if (!tree) return null;
   const drop = tree.rareDrops[0];
   return (
-    <InfoPopover anchor={anchor} onClose={onClose} title={tree.name} icon={tree.icon} subtitle={`Needs Lv ${tree.reqLevel} and ${formatNumber(tree.reqWs)} WS`}>
+    <InfoPopover anchor={anchor} onClose={onClose} title={tree.name} icon={<NodeIcon node={tree.treeId} />} subtitle={`Needs Lv ${tree.reqLevel} and ${formatNumber(tree.reqWs)} WS`}>
       <PopoverRow label="Time per cut" value={formatClock(tree.logMs)} />
       <PopoverRow label="Logs per cut" value={`×${formatBp(tree.yieldBp)}`} />
       <PopoverRow label="XP per cut" value={formatNumber(tree.xpPerLog)} />
-      {drop ? <PopoverRow label={`${itemIcon(drop.itemId)} ${itemName(drop.itemId)}`} value={`1 in ${formatNumber(Math.round(1 / drop.chance))}`} /> : null}
+      {drop ? <PopoverRow icon={<ItemIcon defId={drop.itemId} size={16} />} label={itemName(drop.itemId)} value={`1 in ${formatNumber(Math.round(1 / drop.chance))}`} /> : null}
       <PopoverText tone="note">Logs per cut = your WS ÷ the WS needed, times your building bonuses; the decimals are the chance of one more. XP and the rare find are one per cut.</PopoverText>
-      {!tree.unlocked ? <PopoverText tone="bad">🔒 Not open yet: raise your level or WS.</PopoverText> : null}
+      {!tree.unlocked ? <PopoverText tone="bad">Not open yet: raise your level or WS.</PopoverText> : null}
     </InfoPopover>
   );
 }
@@ -279,11 +284,24 @@ function Req({ ok, label, detail }: { ok: boolean; label: string; detail: string
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+/** A label / value line; `labelIcon` / `valueIcon` (pixel images) sit before the text. */
+function Fact({ label, value, labelIcon, valueIcon }: { label: string; value: string; labelIcon?: ReactNode; valueIcon?: ReactNode }) {
   return (
     <View style={styles.fact}>
-      <Text style={styles.factLabel}>{label}</Text>
-      <Text style={styles.factValue}>{value}</Text>
+      {labelIcon ? (
+        <IconText image={labelIcon} style={styles.factLabel} rowStyle={styles.factSide}>
+          {label}
+        </IconText>
+      ) : (
+        <Text style={styles.factLabel}>{label}</Text>
+      )}
+      {valueIcon ? (
+        <IconText image={valueIcon} style={styles.factValue} rowStyle={styles.factSide}>
+          {value}
+        </IconText>
+      ) : (
+        <Text style={styles.factValue}>{value}</Text>
+      )}
     </View>
   );
 }
@@ -291,7 +309,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: 24 },
   titleRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
-  crew: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerEasy, textAlign: 'center' },
+  crew: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerEasy, textAlign: 'center' },
   crewOff: { color: colors.dangerDeadly },
   stamina: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.stamina },
   headerBelow: { paddingHorizontal: 12, gap: 4 },
@@ -310,7 +328,7 @@ const styles = StyleSheet.create({
   },
   cardActive: { borderColor: colors.gold, backgroundColor: '#f7ecd0' },
   cardLocked: { opacity: 0.6 },
-  treeIcon: { fontSize: 56, textAlign: 'center' },
+  treeIcon: { alignSelf: 'center' },
   treeName: { fontFamily: fonts.title, fontSize: 26, color: colors.ink, textAlign: 'center' },
   reqs: { flexDirection: 'row', justifyContent: 'center', gap: 14, flexWrap: 'wrap' },
   req: { fontFamily: fonts.bodyBold, fontSize: 15 },
@@ -320,12 +338,14 @@ const styles = StyleSheet.create({
   facts: { gap: 4 },
   fact: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   factLabel: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft },
+  factSide: { flexShrink: 1 },
   factValue: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink, textAlign: 'right' },
   running: { gap: 6 },
   countdown: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.ink, textAlign: 'center' },
   bar: { height: 14 },
   actions: { flexDirection: 'row', justifyContent: 'center', gap: 10, minHeight: 48, alignItems: 'center' },
   locked: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerDeadly, textAlign: 'center' },
+  crewRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5 },
 
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 12 },
   dot: { width: 10, height: 10, backgroundColor: colors.woodDark, borderWidth: 2, borderColor: colors.goldDark },

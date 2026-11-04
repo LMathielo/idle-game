@@ -5,10 +5,11 @@ import { type HostInstance, Pressable, StyleSheet, Text, View } from 'react-nati
 import { type AnchorRect, measureAnchor } from '../ui/InfoPopover';
 import { type ItemRarity, rarityOf } from '../../engine';
 import { colors, fonts, rarityColors } from '../../theme';
+import { ItemIcon } from '../art/Sprites';
 import { formatQty } from '../format';
 
-/** Gear carries its own rarity (the frame colour); anything else takes the catalog's. */
-export type SlotItem = { defId: string; icon: string; name: string; quantity?: number; stackable?: boolean; rarity?: ItemRarity };
+/** Gear carries its own rarity (the frame colour); anything else takes the catalog's. The art comes from `defId`. */
+export type SlotItem = { defId: string; name: string; quantity?: number; stackable?: boolean; rarity?: ItemRarity };
 
 type Props = {
   item?: SlotItem | null;
@@ -33,7 +34,7 @@ export const ItemSlot = memo(function ItemSlot({ item, size, caption, pressKey, 
   const label = item ? `${item.name}${item.quantity ? ` x${item.quantity}` : ''}${hint ?? ''}` : 'Empty slot';
   const box = (
     <View style={[styles.slot, size === 58 ? styles.slot58 : styles.slot52, rarity ? { borderColor: rarityColors[rarity] } : null]}>
-      {item ? <Text style={size === 58 ? styles.icon58 : styles.icon52}>{item.icon}</Text> : null}
+      {item ? <ItemIcon defId={item.defId} size={size === 58 ? 40 : 36} /> : null}
       {item?.quantity ? <Text style={styles.qty}>{formatQty(item.quantity)}</Text> : null}
     </View>
   );
@@ -61,8 +62,6 @@ const styles = StyleSheet.create({
   cell: { alignItems: 'center' },
   slot58: { width: 58, height: 58 },
   slot52: { width: 52, height: 52 },
-  icon58: { fontSize: 29 },
-  icon52: { fontSize: 26 },
   slot: {
     backgroundColor: colors.slot,
     borderWidth: 3,

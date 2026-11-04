@@ -32,6 +32,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 
 ## Engine and data
 
+- [pixel art, note] `engine/config/*` (`ITEMS`, `GEAR_PIECES`, `ENEMIES`, `DUNGEONS`, `TREES`, `ROCKS`, `BUILDINGS`), the views that copy them (`treeView`, `rockView`, `buildingView`, `constructionView`, worker / crew / node views) and stored `Item.icon` — the emoji `icon` fields are unused by the UI since the pixel art (art comes from `src/components/art/images.ts` by id). Remove them; `Item.icon` is in saves, so drop it in the next save migration (leave `engine/migrations.ts`' legacy literals alone). `tests/noEmoji.test.ts` allows exactly these fields until then.
+
 - [#8, <80] `client/LocalGameClient.ts:316` — MIGRATE's `fromEngine` comes from the meta; read it from the last log row to cover a pre-1.4.0 install killed between update and first commit.
 - [#19, 30] `engine/config/dev.ts` — `DEV_TOOLS_ENABLED = true` is hardcoded, so the Debug panel ships in every build, and held Debug buttons (grants) write a `DEBUG_*` row per tick. Gate on `__DEV__` (or an EAS env var) before any public build.
 - [#9, note] Training's rate multiplier is integer-only. Revisit in the PR that gives INT an effect.
@@ -49,6 +51,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#22, 30] No test for a nonzero `minQuality` (hook, 0 today). Add one when the first mechanic sets it.
 - [#25, 40] `tests/dungeon.test.ts` (8 h cap test) — no longer asserts HP and mana are full after the 12 h beyond the cap. Assert both equal their max.
 - [#25, 25] `tests/statPoints.test.ts` — no tick-vs-resume case for a spend mid-woodcutting with a hired crew. Add one.
+- [#26, 60] `tests/villageMap.test.ts` — the sign overlap test uses hand-measured `LABEL_W` widths, so it won't notice a label or font change. Derive the widths from the real label metrics (or snapshot a measured layout) instead of constants.
 
 ## Docs and workflow
 

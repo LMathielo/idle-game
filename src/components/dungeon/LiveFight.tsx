@@ -4,8 +4,9 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
-import type { DungeonFightView } from '../../engine';
+import type { DungeonFightView, EnemyId } from '../../engine';
 import { colors, fonts } from '../../theme';
+import { EnemySprite } from '../art/Sprites';
 import { AnimatedHpBar, LogLine, strikeTime } from './FightReplay';
 
 /** Lines kept on screen; older strikes scroll out (the last fight's replay has them all). */
@@ -15,11 +16,11 @@ type Props = {
   fight: DungeonFightView;
   heroName: string;
   enemyName: string;
-  enemyIcon: string;
+  enemyId: EnemyId;
   paused: boolean;
 };
 
-export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, enemyIcon, paused }: Props) {
+export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, enemyId, paused }: Props) {
   const reducedMotion = useReducedMotion();
   const lines = fight.log.slice(-VISIBLE_LINES);
   const hidden = fight.log.length - lines.length;
@@ -31,10 +32,11 @@ export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, e
         accessible
         accessibilityLabel={`Fighting ${enemyName}. ${heroName} HP ${fight.heroHp} of ${fight.heroMaxHp}, ${enemyName} HP ${fight.enemyHp} of ${fight.enemyMaxHp}. ${clock}${paused ? ', paused' : ''}`}
       >
-        <Text style={styles.title}>
-          ⚔️ Fighting {enemyIcon} {enemyName}
-        </Text>
-        <Text style={styles.clock}>{paused ? `⏸ ${clock}` : clock}</Text>
+        <View style={styles.who}>
+          <EnemySprite enemyId={enemyId} />
+          <Text style={styles.title}>Fighting {enemyName}</Text>
+        </View>
+        <Text style={styles.clock}>{paused ? `Paused · ${clock}` : clock}</Text>
       </View>
       <View style={styles.bars}>
         <AnimatedHpBar label={heroName} value={fight.heroHp} max={fight.heroMaxHp} color={colors.skill} instant={reducedMotion} />
@@ -54,7 +56,8 @@ export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, e
 
 const styles = StyleSheet.create({
   root: { gap: 8 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  who: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   title: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink, flexShrink: 1 },
   clock: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.ink },
   bars: { flexDirection: 'row', gap: 10 },

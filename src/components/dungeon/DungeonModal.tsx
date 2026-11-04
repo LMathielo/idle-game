@@ -2,7 +2,7 @@
 // view (enemy, hero, danger hint, start / skip / stop, the live fight, last fight + replay). Rules stay in the engine: this
 // file only reads selectors (dungeonRunView, dungeonUnlockView, dangerHint, hpView, staminaView,
 // getDerivedStats) and dispatches commands. Locked dungeons can't be opened; the engine refuses them too.
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, type HostInstance, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameSnapshot } from '../../client/GameProvider';
 import {
@@ -15,6 +15,7 @@ import {
   DUNGEONS,
   dungeonRunView,
   type DungeonRunView,
+  type EnemyId,
   dungeonTotals,
   dungeonUnlockView,
   ENEMIES,
@@ -27,7 +28,8 @@ import {
   strikeRange,
 } from '../../engine';
 import { colors, fonts } from '../../theme';
-import { formatClock, formatNumber, itemIcon, itemName } from '../format';
+import { EnemySprite, GameIcon, HeroPortrait, IconText, ItemIcon } from '../art/Sprites';
+import { formatClock, formatNumber, itemName } from '../format';
 import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
 import { Bar, Panel } from '../Panel';
@@ -65,14 +67,14 @@ export function DungeonModal() {
       title="Dungeons"
       closeLabel="Close dungeons"
       headerRight={
-        <Text style={styles.stamina} accessibilityLabel={`Stamina ${stamina.current} of ${stamina.max}`}>
-          ⚡ {stamina.current}/{stamina.max}
-        </Text>
+        <IconText icon="stamina" style={styles.stamina} accessibilityLabel={`Stamina ${stamina.current} of ${stamina.max}`}>
+          {stamina.current}/{stamina.max}
+        </IconText>
       }
       headerBelow={<HpRow hp={hp.hp} maxHp={hp.maxHp} regenPerMin={hp.regenPerMin} />}
     >
       <ScrollView contentContainerStyle={styles.content}>
-        {clockPaused ? <Text style={styles.paused}>⏸ Paused: your device clock moved back. Runs and regen wait until it catches up.</Text> : null}
+        {clockPaused ? <Text style={styles.paused}>Paused: your device clock moved back. Runs and regen wait until it catches up.</Text> : null}
         {selected ? (
           <DungeonDetail id={selected} state={state} running={running === selected} paused={clockPaused} onBack={() => setSelected(null)} />
         ) : (
@@ -143,12 +145,12 @@ function LockedInfo({ id, anchor, requirement, onClose }: { id: DungeonId; ancho
   const d = DUNGEONS[id];
   const enemy = ENEMIES[d.enemyId];
   return (
-    <InfoPopover anchor={anchor} onClose={onClose} title={d.name} icon="🔒" subtitle={`Tier ${d.tier} · locked`}>
+    <InfoPopover anchor={anchor} onClose={onClose} title={d.name} icon={<GameIcon name="locked" size={32} />} subtitle={`Tier ${d.tier} · locked`}>
       <PopoverText tone="gold">{requirement}</PopoverText>
-      <PopoverRow label={`${enemy.icon} Enemy`} value={enemy.name} />
+      <PopoverRow label="Enemy" value={enemy.name} />
       <PopoverRow label="Enemy HP / damage" value={`${enemy.hp} / ${range(enemy.damage.min, enemy.damage.max)}`} />
-      <PopoverRow label="✨ Hero XP per win" value={`+${d.rewards.heroXp}`} />
-      <PopoverRow label="🪙 Gold per win" value={range(d.rewards.gold.min, d.rewards.gold.max)} />
+      <PopoverRow icon={<GameIcon name="hero_xp" />} label="Hero XP per win" value={`+${d.rewards.heroXp}`} />
+      <PopoverRow icon={<GameIcon name="gold" />} label="Gold per win" value={range(d.rewards.gold.min, d.rewards.gold.max)} />
       <PopoverText tone="note">Only wins count toward the unlock; it is permanent once reached.</PopoverText>
     </InfoPopover>
   );
@@ -179,7 +181,9 @@ const DungeonCard = memo(function DungeonCard({
     >
       {({ pressed }) => (
         <View style={[styles.card, pressed && styles.cardPressed, running && styles.cardRunning]}>
-          <Text style={styles.cardIcon}>{enemy.icon}</Text>
+          <View style={styles.cardIcon}>
+            <EnemySprite enemyId={d.enemyId} />
+          </View>
           <View style={styles.flex}>
             <Text style={styles.cardTitle}>{d.name}</Text>
             <Text style={styles.cardLine}>{line}</Text>
@@ -216,7 +220,9 @@ const LockedCard = memo(function LockedCard({
     >
       {({ pressed }) => (
         <View style={[styles.card, styles.cardLocked, pressed && styles.cardPressed]}>
-          <Text style={[styles.cardIcon, styles.dimmed]}>🔒</Text>
+          <View style={styles.cardIcon}>
+            <GameIcon name="locked" size={32} style={styles.iconDimmed} />
+          </View>
           <View style={styles.flex}>
             <Text style={[styles.cardTitle, styles.dimmed]}>{d.name}</Text>
             <Text style={styles.cardLine}>
@@ -308,9 +314,9 @@ function DungeonDetail({
             accessible
             accessibilityLabel={`${enemy.name}: HP ${enemy.hp}, damage ${range(enemy.damage.min, enemy.damage.max)}, defense ${enemy.defense}`}
           >
-            <Text style={styles.sideTitle}>
-              {enemy.icon} {enemy.name}
-            </Text>
+            <IconText image={<EnemySprite enemyId={d.enemyId} />} style={styles.sideTitle} rowStyle={styles.sideHead}>
+              {enemy.name}
+            </IconText>
             <StatLine label="HP" value={`${enemy.hp}`} />
             <StatLine label="Damage" value={range(enemy.damage.min, enemy.damage.max)} />
             <StatLine label="Defense" value={`${enemy.defense}`} />
@@ -321,7 +327,9 @@ function DungeonDetail({
             accessible
             accessibilityLabel={`${state.character.name}: HP ${hp.hp} of ${hp.maxHp}, damage ${range(stats.damage.min, stats.damage.max)}, defense ${stats.defense.value}`}
           >
-            <Text style={styles.sideTitle}>🧔 {state.character.name}</Text>
+            <IconText image={<HeroPortrait size={32} />} style={styles.sideTitle} rowStyle={styles.sideHead}>
+              {state.character.name}
+            </IconText>
             <StatLine label="HP" value={`${hp.hp}/${hp.maxHp}`} />
             <StatLine label="Damage" value={range(stats.damage.min, stats.damage.max)} />
             <StatLine label="Defense" value={`${stats.defense.value}`} />
@@ -346,10 +354,10 @@ function DungeonDetail({
             .map((x) => `${itemName(x.itemId)} ${percent(x.chance)} chance`)
             .join(', ')}`}
         >
-          <StatLine label="✨ Hero XP" value={`+${d.rewards.heroXp}`} />
-          <StatLine label="🪙 Gold" value={range(d.rewards.gold.min, d.rewards.gold.max)} />
+          <StatLine icon={<GameIcon name="hero_xp" />} label="Hero XP" value={`+${d.rewards.heroXp}`} />
+          <StatLine icon={<GameIcon name="gold" />} label="Gold" value={range(d.rewards.gold.min, d.rewards.gold.max)} />
           {d.rewards.drops.map((x) => (
-            <StatLine key={x.itemId} label={`${itemIcon(x.itemId)} ${itemName(x.itemId)}`} value={percent(x.chance)} />
+            <StatLine key={x.itemId} icon={<ItemIcon defId={x.itemId} size={20} />} label={itemName(x.itemId)} value={percent(x.chance)} />
           ))}
         </View>
       </Panel>
@@ -363,7 +371,7 @@ function DungeonDetail({
             hp={hp.hp}
             heroName={state.character.name}
             enemyName={enemy.name}
-            enemyIcon={enemy.icon}
+            enemyId={d.enemyId}
             hitMin={hits.min}
             hitMax={hits.max}
             onSkip={skip}
@@ -371,7 +379,9 @@ function DungeonDetail({
             onFlee={flee}
           />
         ) : !unlock.unlocked && unlock.requirement ? (
-          <Text style={styles.note}>🔒 Locked. {requirementText(unlock.requirement, unlock.progress)}.</Text>
+          <IconText icon="locked" style={styles.note} rowStyle={styles.centerRow}>
+            Locked. {requirementText(unlock.requirement, unlock.progress)}.
+          </IconText>
         ) : (
           <View style={styles.startBox}>
             <Text style={styles.note}>
@@ -380,7 +390,7 @@ function DungeonDetail({
             </Text>
             {otherActivity === 'woodcutting' ? <Text style={styles.note}>Starting stops woodcutting (your logs are kept).</Text> : null}
             {otherActivity === 'training' ? <Text style={styles.note}>Starting pauses training (your training XP is kept).</Text> : null}
-            <PixelButton label="Start" icon="⚔️" onPress={start} accessibilityLabel={`Start ${d.name} runs`} />
+            <PixelButton label="Start" icon="fight" onPress={start} accessibilityLabel={`Start ${d.name} runs`} />
           </View>
         )}
         <Text style={styles.totals}>
@@ -425,7 +435,7 @@ const RunControls = memo(function RunControls({
   hp,
   heroName,
   enemyName,
-  enemyIcon,
+  enemyId,
   hitMin,
   hitMax,
   onSkip,
@@ -438,7 +448,7 @@ const RunControls = memo(function RunControls({
   hp: number;
   heroName: string;
   enemyName: string;
-  enemyIcon: string;
+  enemyId: EnemyId;
   /** What one enemy strike deals to the hero after defense (engine strikeRange). */
   hitMin: number;
   hitMax: number;
@@ -452,7 +462,7 @@ const RunControls = memo(function RunControls({
     // Fight phase: plays live, no skip.
     return (
       <View style={styles.runBox}>
-        <LiveFight fight={run.fight} heroName={heroName} enemyName={enemyName} enemyIcon={enemyIcon} paused={paused} />
+        <LiveFight fight={run.fight} heroName={heroName} enemyName={enemyName} enemyId={enemyId} paused={paused} />
         <View style={styles.buttons}>
           <PixelButton label="Flee (counts as loss)" onPress={onFlee} accessibilityHint="Asks first: fleeing counts as a loss and drops your HP to 0" />
         </View>
@@ -471,7 +481,8 @@ const RunControls = memo(function RunControls({
       <LiveBar fraction={run.fraction} remainingMs={run.remainingMs} paused={paused} color={colors.hp} style={styles.runBar} />
       <View style={styles.buttons}>
         <PixelButton
-          label={`Skip (${cost} ⚡)`}
+          label={`Skip (${cost})`}
+          icon="stamina"
           repeat={({ repeat }) => onSkip(repeat)}
           disabled={!canSkip}
           accessibilityLabel={`Skip the search for ${cost} stamina${noHp ? '. Certain loss, 0 HP' : ''}`}
@@ -500,7 +511,7 @@ const LastFight = memo(function LastFight({ fight, onReplay }: { fight: FightRec
   const outcome = OUTCOME_LABELS[fight.endReason];
   const seconds = Math.floor(fight.durationMs / 1000);
   const rewardText = fight.won
-    ? [`+${r.heroXp} XP`, `+${r.gold} gold`, ...items.map(([id, n]) => `${itemIcon(id)} ${itemName(id)}${n > 1 ? ` ×${n}` : ''}`)].join(' · ')
+    ? [`+${r.heroXp} XP`, `+${r.gold} gold`, ...items.map(([id, n]) => `${itemName(id)}${n > 1 ? ` ×${n}` : ''}`)].join(' · ')
     : 'No rewards';
   return (
     <View style={styles.lastBox}>
@@ -519,15 +530,21 @@ const LastFight = memo(function LastFight({ fight, onReplay }: { fight: FightRec
           </Text>
         ))}
       </View>
-      <PixelButton label="Replay" icon="▶" onPress={onReplay} accessibilityLabel="Replay the last fight" />
+      <PixelButton label="Replay" onPress={onReplay} accessibilityLabel="Replay the last fight" />
     </View>
   );
 });
 
-function StatLine({ label, value }: { label: string; value: string }) {
+function StatLine({ label, value, icon }: { label: string; value: string; icon?: ReactNode }) {
   return (
     <View style={styles.statLine}>
-      <Text style={styles.statLabel}>{label}</Text>
+      {icon ? (
+        <IconText image={icon} style={styles.statLabel} rowStyle={styles.flexShrink}>
+          {label}
+        </IconText>
+      ) : (
+        <Text style={styles.statLabel}>{label}</Text>
+      )}
       <Text style={styles.statValue}>{value}</Text>
     </View>
   );
@@ -535,6 +552,8 @@ function StatLine({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  flexShrink: { flexShrink: 1 },
+  centerRow: { justifyContent: 'center' },
   content: { padding: 12, paddingBottom: 32 },
   paused: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold, marginBottom: 10 },
 
@@ -558,7 +577,9 @@ const styles = StyleSheet.create({
   cardLocked: { backgroundColor: colors.parchmentDark, borderColor: colors.inkSoft, opacity: 0.75 },
   dimmed: { color: colors.inkSoft },
   lockLine: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink },
-  cardIcon: { fontSize: 32 },
+  /** Fits the 48 pt troll; 32 pt enemies are centred, so every title lines up. */
+  cardIcon: { width: 48, alignItems: 'center', justifyContent: 'center' },
+  iconDimmed: { opacity: 0.6 },
   cardTitle: { fontFamily: fonts.title, fontSize: 20, color: colors.ink },
   cardLine: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft },
   badge: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.skill },
@@ -569,7 +590,8 @@ const styles = StyleSheet.create({
 
   versus: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   side: { flex: 1 },
-  sideTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.ink, marginBottom: 4 },
+  sideHead: { marginBottom: 4, gap: 6, minHeight: 32 },
+  sideTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.ink },
   vs: { fontFamily: fonts.title, fontSize: 18, color: colors.inkSoft, alignSelf: 'center' },
   subTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.inkSoft, marginTop: 12, marginBottom: 2 },
   statLine: {
