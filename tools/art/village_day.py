@@ -325,7 +325,7 @@ def woodcutter(sc):
     for sx_, sy_ in ((x - 20, y - 2), (x + 34, y - 4), (x - 8, y + 20), (x + 44, y + 16)):
         st = sc.m_rect(sx_, sy_ - 2, sx_ + 2, sy_); tp = sc.m_rect(sx_, sy_ - 3, sx_ + 2, sy_ - 3)
         sc.fill(st, '#603b23'); sc.fill(tp, '#e0b47a'); sc.outline(st | tp, OUT)
-    sc.anchors['woodcutting'] = (x + 18, y - 38)
+    sc.anchors['woodcutting'] = (x + 22, y - 38)
 
 
 def merchant(sc):
@@ -656,7 +656,7 @@ def smithy(sc):
     sc.fill(coal, '#25232e'); sc.speckle(coal, ['#45424e'], .3, seed=2); sc.outline(coal, OUT)
     for k in range(3):
         sc.fill(sc.m_rect(x + w + 3 + k * 3, y + 7, x + w + 4 + k * 3, y + 7), '#c4bfb6'); sc.px(x + w + 3 + k * 3, y + 7, '#f2efe6')
-    sc.anchors['crafting'] = (x + 20, y - 46)
+    sc.anchors['crafting'] = (x + 30, y - 46)
 
 
 def cottage(sc, x, y, w, h, sd, roof, mat='plaster', frame=BEAM, flip_door=False, chimney=True, shutters='#3a6a40', laundry=False):

@@ -135,9 +135,7 @@ describe('village map', () => {
     expect(overlapsAtStart(view, false)).toEqual([]);
   });
 
-  // Known, open (2026-11-04): with padlocks (a new save) Training and Crafting still touch on narrow phones; Crafting sits
-  // on the east plot, mostly off-screen at start. Pinned so a layout change that adds or fixes an overlap shows here.
-  it.each(SCREENS)('with padlocks, only Training / Crafting may still touch at the start zoom on $w×$h', (view) => {
-    expect(overlapsAtStart(view, true).filter((p) => p !== 'training/crafting')).toEqual([]);
+  it.each(SCREENS)('no two signs overlap at the start zoom with padlocks (a new save) on $w×$h', (view) => {
+    expect(overlapsAtStart(view, true)).toEqual([]);
   });
 });
