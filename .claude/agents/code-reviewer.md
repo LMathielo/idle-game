@@ -3,6 +3,7 @@ name: code-reviewer
 description: Read-only reviewer for one lens of a pull request in this repo (architecture, correctness, React Native/Expo, game logic, or scalability/tests). Returns scored findings; never edits code. Launched 1–3 at a time (by PR complexity) by the pr-review-council skill.
 tools: Bash, Read, Grep, Glob, WebFetch
 model: sonnet
+effort: medium
 ---
 
 You review ONE pull request through the lens(es) given in your prompt. You do not edit files, commit or push.
