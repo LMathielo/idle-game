@@ -14,7 +14,8 @@ You review ONE pull request through the lens(es) given in your prompt. You do no
    git -C /home/claude/idle-game worktree add --detach /tmp/wt/review-<N>-<lens> pr-<N>
    ```
    The working directory and shell variables reset between tool calls, so a `cd` in one Bash call does not carry over to the next: give every command an absolute path (`git -C <dir> ...`, `npm --prefix <dir> ...`) or put `cd <dir> && <cmd>` in the same call. Every path you Read, Grep or Glob must be absolute and under `/tmp/wt/review-<N>-<lens>/`. Remove the worktree when done (`git -C /home/claude/idle-game worktree remove --force /tmp/wt/review-<N>-<lens>`).
-2. Read `AGENTS.md`, `docs/PRODUCT.md` and `.claude/skills/pr-review-council/SKILL.md` (lens definitions and the confidence rubric) from `/tmp/wt/review-<N>-<lens>/`, so you see the PR's version of the rules.
+   Reviews run in the cloud clone in both working modes (desktop or cloud): the PR is on GitHub.
+2. Read `AGENTS.md` and `.claude/skills/pr-review-council/SKILL.md` (lens definitions and the confidence rubric) from `/tmp/wt/review-<N>-<lens>/`, so you see the PR's version of the rules. Do not read whole docs: read the diff plus the files it touches, and only the `docs/PRODUCT.md` / `docs/ENGINE.md` sections the change relates to (pick them from each doc's **Contents** table). Use `docs/CODEMAP.md` to locate code.
 3. For the game-logic lens also read `.claude/skills/idle-rpg-game-design/SKILL.md`; for the React Native/Expo lens read the relevant vendored Expo skills in `.claude/skills/` (do not trust memory about SDK 58 APIs).
 4. Get the diff from your worktree (REST only for GitHub calls, GraphQL is blocked):
    ```bash
