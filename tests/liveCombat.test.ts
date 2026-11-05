@@ -95,13 +95,13 @@ function walkEventByEvent(start: GameState, until: number): { state: GameState; 
 }
 
 describe('rebalance (config)', () => {
-  it('search times 2 / 3 / 5 / 8 / 12 min, core DEX on the curve (1.16.0), floor 1:00; every enemy strikes every 1 s', () => {
+  it('search times 2:00 on every tier (1.18.0; was 2 / 3 / 5 / 8 / 12 min), core DEX on the curve (1.16.0), floor 1:00; every enemy strikes every 1 s', () => {
     const base = Object.values(DUNGEONS).map((d) => d.search.baseMs / MIN);
-    expect(base).toEqual([2, 3, 5, 8, 12]);
+    expect(base).toEqual([2, 2, 2, 2, 2]);
     for (const d of Object.values(DUNGEONS)) expect(d.search).toEqual({ baseMs: d.search.baseMs, minMs: 60_000 });
     expect(Object.values(ENEMIES).map((e) => e.attackIntervalMs)).toEqual([1000, 1000, 1000, 1000, 1000]);
     const g = builtGame(1, T0);
-    expect(searchMsFor('troll_bridge', withCore(g, { dexterity: 10 }))).toBe(660_024);
+    expect(searchMsFor('troll_bridge', withCore(g, { dexterity: 10 }))).toBe(110_004);
     expect(searchMsFor('rat_cellar', withCore(g, { dexterity: 50 }))).toBe(90 * SEC);
     expect(COMBAT.maxFightMs).toBe(60_000);
   });
@@ -272,11 +272,11 @@ describe('determinism across simulate boundaries', () => {
    * A timeline where T0 + 8 h falls inside a fight with strikes already landed and at least one more second of fight to
    * go. `s` is the state at exactly 8 h (no cap: requested = 8 h). Wolf Den (1.16.0): a new hero loses there in a few
    * seconds, so it never levels up and every fight lasts several strikes (on the Rat Cellar, 8 h of wins give level
-   * points that make every fight a one-strike kill). The search progress at the start, 252,250 ms, was found once by
-   * scanning 0..5:00 in 250 ms steps (about 1,000 full 8 h simulates, too slow to repeat in every test); computed once per
+   * points that make every fight a one-strike kill). The search progress at the start, 47,500 ms (re-found in 1.18.0, when every search became 2:00; it was
+   * 252,250 ms of a 5:00 search), was found once by scanning 0..2:00 in 250 ms steps (about 1,000 full 8 h simulates, too slow to repeat in every test); computed once per
    * file and checked, so a rules change that moves the fights fails here loudly.
    */
-  const CAP_IN_FIGHT_PROGRESS_MS = 252_250;
+  const CAP_IN_FIGHT_PROGRESS_MS = 47_500;
   let capPick: { g: GameState; s: GameState } | null = null;
   function capInsideFight(): { g: GameState; s: GameState } {
     if (capPick) return capPick;
@@ -297,7 +297,7 @@ describe('determinism across simulate boundaries', () => {
   it('the 8 h cap lands mid-fight: that fight is finished past the cap, exactly as live play; nothing else progresses', () => {
     const pick = capInsideFight();
     const atCap = fightOf(pick.s)!;
-    // A player who never hit the cap: the same fight ends within maxFightMs of the cap, before the next 5:00 search ends.
+    // A player who never hit the cap: the same fight ends within maxFightMs of the cap, before the next 2:00 search ends.
     const live = simulate(pick.s, T0 + 8 * HOUR + COMBAT.maxFightMs).state;
     expect(fightOf(live)).toBeNull();
     expect(live.dungeon.totals.runs).toBe(pick.s.dungeon.totals.runs + 1);

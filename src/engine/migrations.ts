@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 17 as const;
+export const CURRENT_SAVE_VERSION = 18 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -27,6 +27,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   14: migrateV14toV15,
   15: migrateV15toV16,
   16: migrateV16toV17,
+  17: migrateV17toV18,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -650,6 +651,19 @@ function migrateV16toV17(doc: SaveDoc): SaveDoc {
       manaRegenProgress: 0,
     },
   };
+}
+
+// ---- v17 → v18 (2026-11-05): the locked start; Storage becomes a building ----
+// A new game now starts with every building unbuilt (the Merchant and Storage included), but nothing an existing hero has
+// is taken away: the Merchant stays built with its level, stock, charges and timers exactly as they are (grandfathered),
+// and Storage, which never had a function, is added unbuilt. Gold is not touched. Frozen literal: the unbuilt state.
+
+const V18_STORAGE_LOCKED = { state: 'locked', level: 0 } as const;
+
+/** buildings.storage = locked (level 0) unless the save somehow has one already. Everything else is kept as it is. */
+function migrateV17toV18(doc: SaveDoc): SaveDoc {
+  const buildings = isDoc(doc.buildings) ? doc.buildings : {};
+  return { ...doc, saveVersion: 18, buildings: { ...buildings, storage: isDoc(buildings.storage) ? buildings.storage : { ...V18_STORAGE_LOCKED } } };
 }
 
 export class SaveVersionError extends Error {}

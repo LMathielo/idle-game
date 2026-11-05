@@ -30,6 +30,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#25, 15] `StatusPanel.tsx` `confirm` — pending edits made while the send is in flight are wiped by `update(NO_PENDING)`. Clear only if pending still equals the sent payload.
 - [#30, 30] `woodcutting/WoodcuttingModal.tsx`, `mining/MineModal.tsx` — `wk` is a new object each tick so `renderItem` is recreated every tick (cards stay memoized; same as `crewOf`). Key the deps on primitive signatures.
 - [#30, 25] `workers/NodeWorkers.tsx` — a fast second tap on [+] is dropped by the `useCommand` in-flight guard (same as the #19 item); no test covers `nodeWorkersInfo`'s disabled combinations. Add one.
+- [#32, 25] `app/merchant.tsx` — the `/merchant` route has no unbuilt guard; a deep link or dev navigation opens the modal on an unbuilt Merchant (the engine refuses every command with `BUILDING_LOCKED`). Redirect, or show a "Build the Merchant first" state.
 
 ## Engine and data
 
@@ -55,6 +56,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#31, 30] `VillageScene.tsx` — the sign timer badge text is ~10 pt at the start zoom (below the 13 pt text rule; signs are 14 pt). Bigger badge font if it is hard to read on device.
 - [#31, 20] `village/SignButton.tsx` — duplicates PixelButton's sign styles at a scale. Give PixelButton a `scale` prop and drop this file.
 - [#26, 60] `tests/villageMap.test.ts` — the sign overlap test (now in world px, 2026-11-05) still uses hand-measured `LABEL_W` widths, so it won't notice a label or font change. Derive the widths from the real label metrics (or snapshot a measured layout) instead of constants.
+- [#32, 50] `tests/golden.test.ts` — the older golden scripts run from `v17Start` by mutating `DUNGEONS[*].search.baseMs` in place (restored in `finally`); no golden covers a real 1.18.0 start (500 gold, village built with BUILD commands). Add a golden from plain `newGame` and pass the search base as a parameter instead of mutating config.
 
 ## Docs and workflow
 
@@ -63,3 +65,4 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#19, 30] Stray double blank lines in `src/app/_layout.tsx` and `src/components/ui/GameDialog.tsx`.
 - [#4, 70] `.claude/agents/game-engineer.md:53`, `pr-review-council/SKILL.md:18` — `$(cat pr.md)` / `$(cat review.md)` use relative paths; use `-F body=@/abs/path` so a missing file fails loudly.
 - [#4, 45] `pr-review-council/SKILL.md:13-18` — `R=`/`$N` shell variables don't survive between agent tool calls; inline the repo and PR number.
+- [#32, 25] `config/dungeons.ts`, `docs/PRODUCT.md`, `docs/ENGINE.md` — the locked-start decision is dated 2026-11-05 in some places and 2026-11-04 in others (same owner message, 2026-11-04 local). Use one date.

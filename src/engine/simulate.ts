@@ -3,6 +3,7 @@
 import { advanceDungeon } from './dungeon';
 import { advanceMining } from './mining';
 import { regenHeroPools } from './hp';
+import { isBuilt } from './buildings';
 import { regenMerchantCharges } from './merchant';
 import { regenStamina } from './stamina';
 import { advanceTraining } from './training';
@@ -80,8 +81,8 @@ export function simulate(state: GameState, now: number): SimulationResult {
 
   // Uncapped on purpose: requestedMs, not grantedMs. Same object when nothing changed.
   draft.stamina = regenStamina(state.stamina, requestedMs);
-  // Merchant refresh charges follow the same rule: uncapped, bounded by their max.
-  draft.merchant = regenMerchantCharges(state.merchant, requestedMs);
+  // Merchant refresh charges follow the same rule: uncapped, bounded by their max. An unbuilt Merchant (1.18.0) banks nothing.
+  draft.merchant = isBuilt(state, 'merchant') ? regenMerchantCharges(state.merchant, requestedMs) : state.merchant;
 
   // The hero's activity, one step of the world walk at a time. Dungeon runs and training interleave HP / mana regen with
   // their own events; gathering never touches them, so its regen is done once at the end ("plain" regen).

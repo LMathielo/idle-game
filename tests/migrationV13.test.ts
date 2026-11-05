@@ -9,7 +9,7 @@ import { META_ENGINE_VERSION } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import type { LogRow } from '../src/client/types';
 import { CURRENT_SAVE_VERSION, ENGINE_VERSION, RELEASED_ENGINES, type GameState, hashState, loadSave, type MigratePayload, MIGRATIONS, newGame, replayLogReport, type ReplayEntry } from '../src/engine';
-import { HOUR, makeClient, MIN, qty, SEC, T0, V13_ADDED, withoutGearRolls, v16Attributes, v17Added } from './helpers';
+import { HOUR, makeClient, MIN, qty, SEC, T0, V13_ADDED, V18_ADDED, withoutGearRolls, v16Attributes, v17Added } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v12 save + log written by the 1.12.0 engine: Woodcutting and Mine Shaft built, 925 gold, 141 Oak, 133 Stone, Stone mid-ore. */
@@ -74,7 +74,7 @@ describe('frozen v12 save (tests/fixtures/save-v12.json), engine 1.12.0 → 1.13
     const { character, saveVersion: _v, buildings, crafting, ...rest } = s;
     const { character: rc, saveVersion: _rv, buildings: rb, ...rawRest } = V12_SAVE;
     expect(rest).toEqual(rawRest);
-    expect(buildings).toEqual({ ...rb, crafting: V13_ADDED.craftingBuilding });
+    expect(buildings).toEqual({ ...rb, crafting: V13_ADDED.craftingBuilding, storage: V18_ADDED.storageBuilding });
     expect(crafting).toEqual(V13_ADDED.crafting);
     const { smithing: _sm, ...skills } = rc.skills;
     expect(character).toEqual({ ...rc, ...v17Added(rc.level), attributes: v16Attributes(rc.attributes), skills });

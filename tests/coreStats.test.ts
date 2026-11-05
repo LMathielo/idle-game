@@ -40,7 +40,7 @@ import {
   STAT_EFFECTS,
   woodcuttingStrength,
 } from '../src/engine';
-import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, v17Added, withCore } from './helpers';
+import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, v17Added, V18_ADDED, withCore } from './helpers';
 
 const withLevel = (s: GameState, level: number, extra: Partial<GameState['character']['attributes']> = {}, spent: Partial<GameState['character']['attributes']> = {}): GameState => ({
   ...s,
@@ -114,10 +114,11 @@ describe('core DEX → activity time (diminishing, cap 50%, k 50)', () => {
 
   it('search, cut and ore: max(floor, ceil(base × (1 − reduction))) at core 0 / 10 / 50 / 210', () => {
     const times = (v: number) => [searchMsFor('rat_cellar', at(v)), logMsFor('oak', at(v)), oreMsFor('stone', at(v)), searchMsFor('troll_bridge', at(v))];
-    expect(times(0)).toEqual([120_000, 120_000, 120_000, 720_000]);
-    expect(times(10)).toEqual([110_004, 110_004, 110_004, 660_024]);
-    expect(times(50)).toEqual([90_000, 90_000, 90_000, 540_000]);
-    expect(times(210)).toEqual([71_544, 71_544, 71_544, 429_264]);
+    // 1.18.0: every search is 2:00 at core 0 (the Troll Bridge's was 12:00).
+    expect(times(0)).toEqual([120_000, 120_000, 120_000, 120_000]);
+    expect(times(10)).toEqual([110_004, 110_004, 110_004, 110_004]);
+    expect(times(50)).toEqual([90_000, 90_000, 90_000, 90_000]);
+    expect(times(210)).toEqual([71_544, 71_544, 71_544, 71_544]);
   });
 
   it('the floors hold: search 60 s, gathering 10 s', () => {
@@ -206,7 +207,7 @@ describe('save v16 migration (v15 → v16)', () => {
     expect(s.character.unspentPoints).toBe(10);
     const { character, saveVersion: _v, ...rest } = s;
     const { character: rc, saveVersion: _rv, ...raw } = V15_SAVE;
-    expect(rest).toEqual(raw);
+    expect(rest).toEqual({ ...raw, buildings: { ...raw.buildings, storage: V18_ADDED.storageBuilding } }); // v18: Storage, unbuilt
     expect({ ...character, attributes: rc.attributes }).toEqual({ ...rc, ...v17Added(3) });
     // The search in progress keeps its 47 s; it now ends at 114,552 ms (core DEX 5: −4.54%).
     expect(dungeonRunView(s)).toMatchObject({ phase: 'search', searchMs: 114_552, remainingMs: 114_552 - 47_000 });

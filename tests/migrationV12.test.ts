@@ -26,7 +26,7 @@ import {
   woodcuttingView,
 } from '../src/engine';
 import { cumulativeXp, xpToNext } from '../src/engine/progression';
-import { HOUR, makeClient, MIN, T0, V13_ADDED, woodcuttingGame, withoutGearRolls, v16Attributes, v17Added } from './helpers';
+import { HOUR, makeClient, MIN, T0, V13_ADDED, V18_ADDED, woodcuttingGame, withoutGearRolls, v16Attributes, v17Added } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v11 save + log written by the 1.11.0 engine: WC Lv4 (63 XP), Mining Lv3 (536 XP), Oak running mid-log. */
@@ -193,7 +193,7 @@ describe('frozen v11 save (tests/fixtures/save-v11-skills.json), engine 1.11.0 â
     const { character, saveVersion: _v, buildings, crafting, ...rest } = s;
     const { character: rc, saveVersion: _rv, buildings: rb, ...rawRest } = V11_SAVE;
     expect(rest).toEqual(rawRest);
-    expect(buildings).toEqual({ ...rb, crafting: V13_ADDED.craftingBuilding });
+    expect(buildings).toEqual({ ...rb, crafting: V13_ADDED.craftingBuilding, storage: V18_ADDED.storageBuilding });
     expect(crafting).toEqual(V13_ADDED.crafting);
     expect(character.skills).not.toHaveProperty('smithing'); // dropped in v13
     const { skills: _s, ...otherCharacter } = character;

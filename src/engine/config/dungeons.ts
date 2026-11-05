@@ -76,10 +76,10 @@ export type DungeonDef = {
   };
 };
 
-/** Every tier: core DEX shortens it on the diminishing curve, never under 1:00. Only the base time differs. */
+/** Every tier: 2:00 at core DEX 0 (owner decision 2026-11-05, engine 1.18.0); core DEX shortens it on the diminishing curve, never under 1:00. */
 const searchFrom = (baseMinutes: number): SearchTiming => ({ baseMs: baseMinutes * MIN_MS, minMs: 1 * MIN_MS });
 
-// Owner-approved tier table (2026-10-26; search times and Rat XP rebalanced 2026-10-27). Tiers 4–5 are out of reach until Training raises attributes.
+// Owner-approved tier table (2026-10-26; search times and Rat XP rebalanced 2026-10-27; every search 2:00 since 2026-11-05). Tiers 4–5 are out of reach until Training raises attributes.
 // Insertion order is the display order (DUNGEON_IDS).
 export const DUNGEONS: Record<DungeonId, DungeonDef> = {
   rat_cellar: {
@@ -98,7 +98,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     tier: 2,
     icon: '⛰️',
     enemyId: 'bat',
-    search: searchFrom(3), // core DEX 0 → 3:00
+    search: searchFrom(2), // core DEX 0 → 2:00
     unlock: { dungeonId: 'rat_cellar', wins: 10 },
     rewards: { heroXp: 60, gold: { min: 6, max: 12 }, drops: [{ itemId: 'bat_wing', chance: 0.4 }] },
   },
@@ -108,7 +108,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     tier: 3,
     icon: '🌲',
     enemyId: 'wolf',
-    search: searchFrom(5), // core DEX 0 → 5:00
+    search: searchFrom(2), // core DEX 0 → 2:00
     unlock: { dungeonId: 'bat_cave', wins: 15 },
     rewards: { heroXp: 140, gold: { min: 15, max: 30 }, drops: [{ itemId: 'wolf_pelt', chance: 0.3 }] },
   },
@@ -118,7 +118,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     tier: 4,
     icon: '⚰️',
     enemyId: 'skeleton',
-    search: searchFrom(8), // core DEX 0 → 8:00
+    search: searchFrom(2), // core DEX 0 → 2:00
     unlock: { dungeonId: 'wolf_den', wins: 25 },
     rewards: { heroXp: 300, gold: { min: 35, max: 60 }, drops: [{ itemId: 'old_bone', chance: 0.25 }] },
   },
@@ -128,7 +128,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     tier: 5,
     icon: '🌉',
     enemyId: 'troll',
-    search: searchFrom(12), // core DEX 0 → 12:00
+    search: searchFrom(2), // core DEX 0 → 2:00
     unlock: { dungeonId: 'forgotten_crypt', wins: 40 },
     rewards: { heroXp: 650, gold: { min: 80, max: 130 }, drops: [{ itemId: 'troll_hide', chance: 0.2 }] },
   },

@@ -4,13 +4,13 @@ The "where we are" page. Read its top ("Current version") and the two "Roadmap" 
 
 Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.md), engine rules in [`ENGINE.md`](ENGINE.md), deferred review findings in [`TECH_DEBT.md`](TECH_DEBT.md), workflow in [`../AGENTS.md`](../AGENTS.md).
 
-## Current version (2026-11-04)
+## Current version (2026-11-05)
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.17.0** (unchanged by the pixel art, a UI-only change) | 1.1.0 |
-| Save | **v17** | v2 |
-| Contents | Everything below, up to stat points + HUD (#25), plus the pixel art once merged | M1 only (PRs #1–#2) |
+| Engine | **1.18.0** | 1.1.0 |
+| Save | **v18** | v2 |
+| Contents | Everything below, up to the locked start (this PR), plus the pixel art once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is behind `dev` by PRs #3–#25. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
 - **Open PRs:** Expo Go previews by label plus per-branch saves (`feat/expo-test-previews`).
@@ -20,6 +20,14 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.18.0 · save v18
+- **Locked start** (`feat/locked-start`):
+  - **Build the village first:** a new game has **500 gold** (was 25) and **every building unbuilt**, the Merchant and Storage included. Only the Dungeon is open. Each locked sign is greyed with a padlock and opens its Build sheet.
+  - **Merchant and Storage need Town Hall Lv1 + 100 gold + 10 Oak Logs + 10 Stone.** Until the Merchant is built there is no buying, selling or refreshing (`BUILDING_LOCKED`) and its refresh charges don't tick; the starter stock waits and is what you find when you build it.
+  - **Storage is a building now** (sprite drawn once built, "Storage: coming soon" on tap) with no function and no upgrades.
+  - **Every dungeon search is 2:00** at core DEX 0 (was 2 / 3 / 5 / 8 / 12 min); core DEX still shortens it, floor 1:00.
+  - Save v18: existing saves keep their Merchant built (level, stock, timers) and their gold; Storage starts unbuilt.
 
 ### UI only (engine 1.17.0) · Hero tab without the HUD, signs scale with the map
 - **Hero tab no longer has the HUD** (`fix/village-hud-signs`): nothing covers the top of the Hero tab any more; the Header panel shows "Level N" and XP, Status the bars and the points to spend. The HUD stays on the Village tab.
@@ -153,7 +161,7 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 **Buildings and economy**
 - Future buildings go on the empty map plots (west of the barn, two south of the river; the east plot holds the Crafting house since 1.13.0).
 - Town Hall Lv3–5 passive bonuses (the data shape is ready).
-- Storage itself (capacity, a stash) is still "coming soon". Dungeon and Storage stay non-upgradable for now (owner decision 2026-10-28); revisit only if they get a bonus.
+- Storage is a buildable building since 1.18.0 but its function (capacity, a stash) is still "coming soon". Dungeon and Storage stay non-upgradable for now (owner decision 2026-10-28); revisit only if they get a bonus.
 - Cancelling an upgrade, and a second builder.
 - Offline cap upgrade (8h → more), and a stamina max upgrade.
 - Bulk selling of logs and ore.

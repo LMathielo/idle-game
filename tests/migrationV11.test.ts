@@ -19,7 +19,7 @@ import {
   type ReplayEntry,
   replayLogReport,
 } from '../src/engine';
-import { HOUR, makeClient, MIN, qty, V13_ADDED, v12Skills, withoutGearRolls, v16Attributes, v17Added } from './helpers';
+import { HOUR, makeClient, MIN, qty, V13_ADDED, V18_ADDED, v12Skills, withoutGearRolls, v16Attributes, v17Added } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v10 save + its action log, written by the 1.9.0 engine before workers (tests/fixtures). */
@@ -86,7 +86,7 @@ describe('frozen v10 save (tests/fixtures/save-v10.json) → v11', () => {
   it('migrates: levels, activity, items, gold and the 20-slot stock kept; Merchant building, idle builder, no workers', () => {
     expect(loadSave(V10_SAVE).saveVersion).toBe(CURRENT_SAVE_VERSION);
     const s = withoutGearRolls(loadSave(V10_SAVE)); // the v13 → v14 gear rolls: tests/migrationV14.test.ts
-    expect(s.buildings).toEqual({ ...V10_SAVE.buildings, merchant: { state: 'built', level: 1 }, crafting: V13_ADDED.craftingBuilding });
+    expect(s.buildings).toEqual({ ...V10_SAVE.buildings, merchant: { state: 'built', level: 1 }, crafting: V13_ADDED.craftingBuilding, storage: V18_ADDED.storageBuilding });
     expect(s.crafting).toEqual(V13_ADDED.crafting);
     expect(s.construction).toBeNull();
     expect(s.workers).toEqual(newWorkersState());

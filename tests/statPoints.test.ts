@@ -40,7 +40,7 @@ import {
   STATS,
   woodcuttingStrength,
 } from '../src/engine';
-import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, v17Added, withCore } from './helpers';
+import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, v17Added, V18_ADDED, withCore } from './helpers';
 
 const ZERO = { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 };
 
@@ -335,7 +335,7 @@ describe('save v17 migration (v16 → v17)', () => {
     expect(s.character.mana).toBe(30); // 20 + 5 × 2, full
     const { character: _c, saveVersion: _v, ...rest } = s;
     const { character: _rc, saveVersion: _rv, ...raw } = V16_SAVE;
-    expect(rest).toEqual(raw);
+    expect(rest).toEqual({ ...raw, buildings: { ...raw.buildings, storage: V18_ADDED.storageBuilding } }); // v18: Storage, unbuilt
     // 1.16.0 read STR as 10 level + 3 extra + 5 core = 18 and WS from core only (10 + 10 + 5 + 1 = 26). Now: 3 + 5 = 8 until
     // the 10 points are spent; WS = 10 + 10 + 8 + 1 = 29.
     expect(effectiveAttributes(s)).toEqual({ strength: 8, dexterity: 0, endurance: 2, intelligence: 0 });
@@ -353,8 +353,7 @@ describe('save v17 migration (v16 → v17)', () => {
     const m = (await repo.getAllLog()).filter((r) => r.type === 'MIGRATE');
     expect(m).toHaveLength(1);
     const p = m[0].payload as MigratePayload;
-    expect({ ...p, snapshot: undefined }).toEqual({ fromSave: 16, toSave: 17, fromEngine: '1.16.0', toEngine: '1.17.0', fromHash: V16_LOG.at(-1)!.stateHash, snapshot: undefined });
-    expect(ENGINE_VERSION).toBe('1.17.0');
+    expect({ ...p, snapshot: undefined }).toEqual({ fromSave: 16, toSave: CURRENT_SAVE_VERSION, fromEngine: '1.16.0', toEngine: ENGINE_VERSION, fromHash: V16_LOG.at(-1)!.stateHash, snapshot: undefined });
     expect(p.snapshot).toEqual(loadSave(V16_SAVE));
     expect((await client.dispatch({ type: 'SPEND_ATTRIBUTE_POINTS', points: { strength: 6, intelligence: 4 } })).ok).toBe(true);
     expect(client.getState().character).toMatchObject({ unspentPoints: 0, spentPoints: { strength: 6, intelligence: 4 } });

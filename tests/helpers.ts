@@ -52,6 +52,16 @@ export function withBuilt(state: GameState, ids: readonly BuildingId[] = BUILDIN
   return { ...state, buildings, training };
 }
 
+/**
+ * A new game as 1.17.0 started it (before the locked start of 1.18.0): 25 gold and the Merchant built (Lv1, the same
+ * starter stock and full charges). The golden scripts written before 1.18.0 begin here so their outcomes stay what they
+ * were; only their hashes moved (save v18 has the `storage` building). Storage stays unbuilt (a v17 save migrates so).
+ */
+export function v17Start(seed: number, now: number): GameState {
+  const s = newGame(seed, now);
+  return { ...s, character: { ...s.character, gold: 25 }, buildings: { ...s.buildings, merchant: { state: 'built', level: 1 } } };
+}
+
 /** newGame() with every building already built (see withBuilt): Training Tier 1 comes with the Training Grounds. */
 export function builtGame(seed: number, now: number): GameState {
   return withBuilt(newGame(seed, now));
@@ -101,6 +111,9 @@ export const V13_ADDED = {
   crafting: { pipesUnlocked: 2, pipes: [null, null, null, null, null, null, null, null], remainders: {}, nextJobSerial: 1 },
   craftingBuilding: { state: 'locked', level: 0 },
 } as const;
+
+/** What the v17 → v18 migration adds (1.18.0): Storage, unbuilt. Frozen literal. */
+export const V18_ADDED = { storageBuilding: { state: 'locked', level: 0 } } as const;
 
 /**
  * A state (or save document) without the v13 → v14 additions: no `quality` / `rarity` on any equipped item, inventory

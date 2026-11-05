@@ -5,7 +5,11 @@
 //   REFRESH_MERCHANT spends 1 charge and rolls a new stock (rollStock: Health Potion ×10, then the pool, seeded,
 //                    no duplicates; as many slots as the Merchant's level gives).
 //   BUY_ITEM / SELL_ITEM move gold and items; gold never goes negative, inventory never overflows.
+//   Unbuilt Merchant (1.18.0: a new save starts without it): REFRESH_MERCHANT, BUY_ITEM, SELL_ITEM and the debug charge
+//   are refused with BUILDING_LOCKED, and simulate() does not regenerate charges. A new save's fixed starter stock and
+//   full charges wait untouched until it is built.
 import { merchantStockSlots, sellPriceOfItem } from './bonuses';
+import { isBuilt } from './buildings';
 import { getItemDef } from './config/items';
 import { GEAR } from './config/gear';
 import { MERCHANT, type MerchantPoolEntry } from './config/merchant';
@@ -15,6 +19,7 @@ import { nextInt } from './rng';
 import type { GameState, GearRoll, MerchantListing, MerchantState, RngState } from './types';
 
 export type ItemErrorCode =
+  | 'BUILDING_LOCKED'
   | 'INVALID_AMOUNT'
   | 'INVALID_COMMAND'
   | 'UNKNOWN_SLOT'
@@ -37,6 +42,11 @@ export type ItemError = { code: ItemErrorCode; message: string } | null;
 
 const err = (code: ItemErrorCode, message: string): ItemError => ({ code, message });
 const isWhole = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n);
+
+/** Every Merchant command starts here: null when the Merchant is built, else the typed refusal. */
+function merchantLocked(state: Pick<GameState, 'buildings'>): ItemError {
+  return isBuilt(state, 'merchant') ? null : err('BUILDING_LOCKED', 'Build the Merchant first');
+}
 
 /**
  * A stock listing. Gear: one piece with its roll (default 25% / common: the starter stock) and the buy price scaled by
@@ -162,6 +172,8 @@ export function merchantView(state: Pick<GameState, 'merchant'>): MerchantView {
 
 /** Spends one charge and restocks (rollStock with the Merchant level's slot count). Mutates the draft. */
 export function refreshMerchant(draft: GameState): ItemError {
+  const locked = merchantLocked(draft);
+  if (locked) return locked;
   const m = draft.merchant;
   if (m.charges <= 0) return err('NO_REFRESH_CHARGES', 'No refresh charges left');
   const rolled = rollStock(draft.rng, merchantStockSlots(draft));
@@ -172,6 +184,8 @@ export function refreshMerchant(draft: GameState): ItemError {
 
 /** Debug: +1 charge (never above max). Mutates the draft. */
 export function addMerchantCharge(draft: GameState): ItemError {
+  const locked = merchantLocked(draft);
+  if (locked) return locked;
   const m = draft.merchant;
   if (m.charges >= MERCHANT.maxCharges) return err('CHARGES_FULL', `Refresh charges are already ${MERCHANT.maxCharges}/${MERCHANT.maxCharges}`);
   const charges = m.charges + 1;
@@ -203,6 +217,8 @@ export function maxBuyable(state: Pick<GameState, 'inventory' | 'merchant' | 'ch
  * slot (STOCK_CHANGED) and its unit price at most `maxUnitPrice` (PRICE_CHANGED). Mutates the draft.
  */
 export function buyItem(draft: GameState, slot: unknown, defId: unknown, quantity: unknown, maxUnitPrice: unknown): ItemError {
+  const locked = merchantLocked(draft);
+  if (locked) return locked;
   const stock = draft.merchant.stock;
   if (!isWhole(slot) || slot < 0 || slot >= stock.length) return err('UNKNOWN_SLOT', `Invalid stock slot ${String(slot)}`);
   if (!isWhole(maxUnitPrice) || maxUnitPrice < 0) return err('INVALID_AMOUNT', `Invalid maxUnitPrice ${String(maxUnitPrice)}`);
@@ -240,6 +256,8 @@ export function buyItem(draft: GameState, slot: unknown, defId: unknown, quantit
  * bonus). Equipped items are refused. Mutates the draft.
  */
 export function sellItem(draft: GameState, itemId: unknown, quantity: unknown): ItemError {
+  const locked = merchantLocked(draft);
+  if (locked) return locked;
   if (typeof itemId !== 'string') return err('INVALID_COMMAND', 'Missing itemId');
   const items = draft.inventory.items;
   const index = items.findIndex((i) => i.id === itemId);
