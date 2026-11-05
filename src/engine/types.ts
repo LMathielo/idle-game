@@ -295,11 +295,11 @@ export type Stamina = {
 // ---------- Buildings (save v10) ----------
 
 /**
- * Village buildings stored in the save. Woodcutting, Mine Shaft, Town Hall and Training Grounds have to be built
- * before use; the Merchant is always built (save v11, so it can be upgraded). Dungeon and Storage are always there
- * and are not stored. Requirements and upgrade costs are data (config/buildings.ts).
+ * Village buildings stored in the save. Every one starts unbuilt on a new save (1.18.0) and has to be built before
+ * use; saves from before 1.18.0 keep their Merchant built (save v18 only adds Storage, unbuilt). The Dungeon is
+ * always there and is not stored. Requirements and upgrade costs are data (config/buildings.ts).
  */
-export type BuildingId = 'woodcutting' | 'mine_shaft' | 'town_hall' | 'training_grounds' | 'merchant' | 'crafting';
+export type BuildingId = 'woodcutting' | 'mine_shaft' | 'town_hall' | 'training_grounds' | 'merchant' | 'crafting' | 'storage';
 
 export type BuildingStatus = 'locked' | 'built';
 
@@ -419,7 +419,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 17;
+  saveVersion: 18;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */

@@ -4,7 +4,7 @@ import type { Attributes, SkillKey } from '../types';
 export const STARTING_HERO = {
   name: 'Lucius',
   title: 'Novice Gladiator',
-  gold: 25,
+  gold: 500,
   /** Stored extra normal points (1.16.0: a new hero starts at 0 normal and 0 core; the old 10 is in the hero base numbers). */
   attributes: {
     strength: 0,

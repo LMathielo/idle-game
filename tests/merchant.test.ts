@@ -453,6 +453,7 @@ describe('debug: +1 merchant refresh', () => {
   it('merchant and debug rows replay to the same hashes', async () => {
     const { repo, clock, client } = makeClient({ prefix: 'mr' });
     await client.load();
+    await client.debug.build('merchant'); // 1.18.0: a new save starts without it
     await client.debug.addGold(2000);
     await client.dispatch({ type: 'BUY_ITEM', slot: 0, defId: 'health_potion_t1', quantity: 3, maxUnitPrice: 12 });
     await client.dispatch({ type: 'BUY_ITEM', slot: 1, defId: 'iron_axe', quantity: 1, maxUnitPrice: 600 });

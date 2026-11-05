@@ -295,7 +295,7 @@ describe('the pickaxe: equip, unequip and the stop rule', () => {
     const bought = apply(rich, { type: 'BUY_ITEM', slot: 2, defId: 'iron_pickaxe', quantity: 1, maxUnitPrice: 600 }, T0);
     const e = apply(bought, { type: 'EQUIP_ITEM', itemId: 'iron_pickaxe#1' }, T0);
     expect(e.character.equipment.pickaxe?.defId).toBe('iron_pickaxe');
-    expect(e.character.gold).toBe(1025 - 600);
+    expect(e.character.gold).toBe(1500 - 600);
   });
 });
 

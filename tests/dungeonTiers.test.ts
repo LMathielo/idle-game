@@ -94,10 +94,10 @@ describe('tier table (config)', () => {
     });
     expect(table).toEqual([
       [1, 'Rat Cellar', 'Rat 30 · 3–5 · 2', 2, '1000 ms', '—', '35 · 2–5', 'rat_skin 0.5'],
-      [2, 'Bat Cave', 'Bat 60 · 6–9 · 6', 3, '1000 ms', '10 in rat_cellar', '60 · 6–12', 'bat_wing 0.4'],
-      [3, 'Wolf Den', 'Wolf 110 · 10–14 · 12', 5, '1000 ms', '15 in bat_cave', '140 · 15–30', 'wolf_pelt 0.3'],
-      [4, 'Forgotten Crypt', 'Skeleton 180 · 15–20 · 20', 8, '1000 ms', '25 in wolf_den', '300 · 35–60', 'old_bone 0.25'],
-      [5, 'Troll Bridge', 'Troll 300 · 22–30 · 30', 12, '1000 ms', '40 in forgotten_crypt', '650 · 80–130', 'troll_hide 0.2'],
+      [2, 'Bat Cave', 'Bat 60 · 6–9 · 6', 2, '1000 ms', '10 in rat_cellar', '60 · 6–12', 'bat_wing 0.4'],
+      [3, 'Wolf Den', 'Wolf 110 · 10–14 · 12', 2, '1000 ms', '15 in bat_cave', '140 · 15–30', 'wolf_pelt 0.3'],
+      [4, 'Forgotten Crypt', 'Skeleton 180 · 15–20 · 20', 2, '1000 ms', '25 in wolf_den', '300 · 35–60', 'old_bone 0.25'],
+      [5, 'Troll Bridge', 'Troll 300 · 22–30 · 30', 2, '1000 ms', '40 in forgotten_crypt', '650 · 80–130', 'troll_hide 0.2'],
     ]);
   });
 
@@ -110,11 +110,11 @@ describe('tier table (config)', () => {
 });
 
 describe('search time per tier', () => {
-  it('core DEX 0: 2:00, 3:00, 5:00, 8:00, 12:00; core DEX 10 (833 bp): 1:51, 2:46, 4:36, 7:21, 11:01', () => {
+  it('every tier: core DEX 0 is 2:00 (1.18.0; it was 2 / 3 / 5 / 8 / 12 min); core DEX 10 (833 bp): 1:51', () => {
     const g = builtGame(1, T0);
-    expect(DUNGEON_IDS.map((id) => formatClock(searchMsFor(id, g)))).toEqual(['2:00', '3:00', '5:00', '8:00', '12:00']);
-    expect(DUNGEON_IDS.map((id) => searchMsFor(id, withCore(g, { dexterity: 10 })))).toEqual([110_004, 165_006, 275_010, 440_016, 660_024]);
-    expect(DUNGEON_IDS.map((id) => formatClock(searchMsFor(id, withCore(g, { dexterity: 10 }))))).toEqual(['1:51', '2:46', '4:36', '7:21', '11:01']);
+    expect(DUNGEON_IDS.map((id) => formatClock(searchMsFor(id, g)))).toEqual(['2:00', '2:00', '2:00', '2:00', '2:00']);
+    expect(DUNGEON_IDS.map((id) => searchMsFor(id, withCore(g, { dexterity: 10 })))).toEqual([110_004, 110_004, 110_004, 110_004, 110_004]);
+    expect(DUNGEON_IDS.map((id) => formatClock(searchMsFor(id, withCore(g, { dexterity: 10 }))))).toEqual(['1:51', '1:51', '1:51', '1:51', '1:51']);
   });
 
   it('the core DEX curve on every tier (1.16.0): 50 → −25%, never 50%, never under 1:00; normal DEX never counts', () => {
@@ -128,14 +128,14 @@ describe('search time per tier', () => {
     }
   });
 
-  it('a Bat Cave search ends at exactly 3:00 with core DEX 0, then the fight starts', () => {
+  it('a Bat Cave search ends at exactly 2:00 with core DEX 0, then the fight starts', () => {
     const r = startDungeon(withCounters({ rat_cellar: { runs: 10, wins: 10, losses: 0 } }), 'bat_cave');
     if (!r.ok) throw new Error(r.error.message);
-    expect(dungeonRunView(simulate(r.state, T0 + 180 * SEC - 1).state)).toMatchObject({ phase: 'search', remainingMs: 1 });
-    const fight = simulate(r.state, T0 + 180 * SEC).state;
-    expect(dungeonRunView(fight)).toMatchObject({ dungeonId: 'bat_cave', run: 11, searchMs: 180 * SEC, phase: 'fight' });
+    expect(dungeonRunView(simulate(r.state, T0 + 120 * SEC - 1).state)).toMatchObject({ phase: 'search', remainingMs: 1 });
+    const fight = simulate(r.state, T0 + 120 * SEC).state;
+    expect(dungeonRunView(fight)).toMatchObject({ dungeonId: 'bat_cave', run: 11, searchMs: 120 * SEC, phase: 'fight' });
     expect(dungeonRunView(fight)?.fight).toMatchObject({ enemyId: 'bat', enemyHp: 60, elapsedMs: 0 });
-    const done = simulate(r.state, T0 + 180 * SEC + COMBAT.maxFightMs).state;
+    const done = simulate(r.state, T0 + 120 * SEC + COMBAT.maxFightMs).state;
     expect(dungeonTotals(done, 'bat_cave').runs).toBe(1);
   });
 });

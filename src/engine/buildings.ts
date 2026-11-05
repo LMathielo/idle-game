@@ -12,10 +12,10 @@ import { getItemDef } from './config/items';
 import { itemQuantity } from './selectors';
 import type { ActivityKind, BuildingId, BuildingState, Construction, GameEvent, GameState, SimulationSummary } from './types';
 
-/** A new save: every building locked but the ones that start built (the Merchant, level 1). */
+/** A new save: every building locked (1.18.0: the Merchant and Storage too). */
 export function newBuildingsState(): Record<BuildingId, BuildingState> {
   const out = {} as Record<BuildingId, BuildingState>;
-  for (const id of BUILDING_IDS) out[id] = BUILDINGS[id].startsBuilt ? { state: 'built', level: 1 } : { state: 'locked', level: 0 };
+  for (const id of BUILDING_IDS) out[id] = { state: 'locked', level: 0 };
   return out;
 }
 

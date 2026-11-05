@@ -120,11 +120,12 @@ describe('UPGRADE_BUILDING', () => {
     }
   });
 
-  it('every building with bonus data reaches every level (Training Grounds since 1.11.0)', async () => {
+  it('every building with bonus data reaches every level (Training Grounds since 1.11.0); Storage has none (1.18.0)', async () => {
     const { hasLevelBonuses } = await import('../src/engine');
-    for (const id of BUILDING_IDS) {
+    for (const id of BUILDING_IDS.filter((b) => b !== 'storage')) {
       for (let l = 2; l <= BUILDING_MAX_LEVEL; l += 1) expect(hasLevelBonuses(id, l)).toBe(true);
     }
+    for (let l = 2; l <= BUILDING_MAX_LEVEL; l += 1) expect(hasLevelBonuses('storage', l)).toBe(false);
   });
 
   it('a building whose next level has no bonus data is still not upgradable: NOT_UPGRADABLE, nothing paid', async () => {
@@ -227,6 +228,7 @@ describe('UPGRADE_BUILDING', () => {
     await client.debug.build('woodcutting');
     await client.debug.build('mine_shaft');
     await client.debug.build('town_hall');
+    await client.debug.build('merchant'); // 1.18.0: a new save starts without it
     await client.debug.addGold(1000);
     expect(await client.dispatch({ type: 'UPGRADE_BUILDING', buildingId: 'town_hall', level: 2 })).toMatchObject({
       ok: false,

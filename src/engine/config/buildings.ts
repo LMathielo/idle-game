@@ -45,6 +45,15 @@ const gatheringLevels = (kind: GatheringKind): readonly LevelBonuses[] => [{}, {
 /** Merchant: stock slots = 5 + 2 × (level − 1). */
 const MERCHANT_LEVELS: readonly LevelBonuses[] = [{ stockSlots: 5 }, { stockSlots: 7 }, { stockSlots: 9 }, { stockSlots: 11 }, { stockSlots: 13 }];
 
+/** Storage: built, no function yet (owner decision 2026-11-04): no bonus at any level, so it can't be upgraded. */
+const STORAGE_LEVELS: readonly LevelBonuses[] = [{}, {}, {}, {}, {}];
+
+/** What Merchant and Storage cost besides gold (10 oak logs + 10 stone each; owner-approved 2026-11-04). */
+const TOWN_BUILDING_ITEMS = [
+  { defId: 'oak_logs', quantity: 10 },
+  { defId: 'stone', quantity: 10 },
+] as const;
+
 /** Training Grounds: +1 training XP per minute per level (Lv1 = 1 XP/min, Lv5 = 5; owner-approved 2026-10-28, 1.11.0). */
 const TRAINING_GROUNDS_LEVELS: readonly LevelBonuses[] = [
   { trainingXpPerMin: 1 },
@@ -115,8 +124,6 @@ export type BuildingDef = {
   requirements: BuildingRequirements;
   /** Built at once: the training tier is raised to at least this (Training Grounds: Tier 1 comes with the building). */
   grantsTrainingTier?: number;
-  /** Built (level 1) on every save from the start: BUILD never applies (the Merchant). */
-  startsBuilt?: boolean;
   /** upgrades[i] = the cost to reach level i + 2 (so its length is BUILDING_MAX_LEVEL − 1). */
   upgrades: readonly UpgradeCost[];
   /** Its level can never go above the Town Hall's (every building but the Town Hall itself). */
@@ -129,10 +136,10 @@ export type BuildingDef = {
 };
 
 /**
- * Every stored building, in the order the Build sheets and docs list them. Dungeon and Storage are not buildings
- * in the engine (always there, nothing to build or upgrade).
+ * Every stored building, in the order the Build sheets and docs list them. Every one starts unbuilt on a new save
+ * (1.18.0). The Dungeon is not a building in the engine (always there, nothing to build or upgrade).
  */
-export const BUILDING_IDS = ['woodcutting', 'mine_shaft', 'town_hall', 'training_grounds', 'merchant', 'crafting'] as const satisfies readonly BuildingId[];
+export const BUILDING_IDS = ['woodcutting', 'mine_shaft', 'town_hall', 'training_grounds', 'merchant', 'crafting', 'storage'] as const satisfies readonly BuildingId[];
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   woodcutting: {
@@ -196,8 +203,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     name: 'Merchant',
     icon: '💰',
     description: 'A trader\'s stall. Upgrades add stock slots.',
-    requirements: {},
-    startsBuilt: true,
+    requirements: { buildings: [{ buildingId: 'town_hall', level: 1 }], items: TOWN_BUILDING_ITEMS, gold: 100 },
     upgrades: BUILDING_UPGRADES,
     cappedByTownHall: true,
     levels: MERCHANT_LEVELS,
@@ -221,6 +227,17 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     upgrades: BUILDING_UPGRADES,
     cappedByTownHall: true,
     levels: CRAFTING_LEVELS,
+  },
+  storage: {
+    id: 'storage',
+    name: 'Storage',
+    icon: '📦',
+    description: 'A warehouse for your goods. Coming soon: it has no use yet.',
+    requirements: { buildings: [{ buildingId: 'town_hall', level: 1 }], items: TOWN_BUILDING_ITEMS, gold: 100 },
+    upgrades: BUILDING_UPGRADES,
+    cappedByTownHall: true,
+    // No bonuses at any level: the next level gives nothing, so it is never upgradable (NOT_UPGRADABLE, data-driven).
+    levels: STORAGE_LEVELS,
   },
 };
 

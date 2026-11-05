@@ -18,8 +18,10 @@ const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'mine' | 'town_
   storage: 'Storage',
 };
 
-/** Signs whose building has to be built first. Dungeon, Merchant and Storage are always built. */
+/** Signs whose building has to be built first (every sign but the Dungeon, which is always open). */
 const SIGN_BUILDING: Partial<Record<VillageAction, BuildingId>> = {
+  storage: 'storage',
+  merchant: 'merchant',
   woodcutting: 'woodcutting',
   mine: 'mine_shaft',
   town_hall: 'town_hall',
@@ -35,6 +37,7 @@ const BUILDING_SIGN: Record<BuildingId, VillageAction> = {
   training_grounds: 'training',
   merchant: 'merchant',
   crafting: 'crafting',
+  storage: 'storage',
 };
 
 /** The full-screen modal each built sign opens. */

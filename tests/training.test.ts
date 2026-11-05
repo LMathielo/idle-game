@@ -154,11 +154,11 @@ describe('UNLOCK_TRAINING_TIER', () => {
   });
 
   it('not enough gold → NOT_ENOUGH_GOLD with what is missing; gold and tier untouched', () => {
-    const s = builtGame(1, T0); // 25 gold, Tier 1 from the Training Grounds
+    const s = builtGame(1, T0); // 500 gold, Tier 1 from the Training Grounds
     const r = applyCommand(s, cmd({ type: 'UNLOCK_TRAINING_TIER', tier: 2 }), T0);
     expect(r).toMatchObject({ ok: false, error: { code: 'NOT_ENOUGH_GOLD' } });
-    expect(!r.ok && r.error.message).toContain('775 missing');
-    expect(s.character.gold).toBe(25);
+    expect(!r.ok && r.error.message).toContain('300 missing');
+    expect(s.character.gold).toBe(500);
     expect(s.training.tier).toBe(1);
   });
 
@@ -375,12 +375,12 @@ describe('trained (core) points feed every rule', () => {
 });
 
 describe('views', () => {
-  it('new hero: tier 0, nothing trainable; Training Grounds built: Tier 1, next Tier 2 for 800 g (775 missing)', () => {
+  it('new hero: tier 0, nothing trainable; Training Grounds built: Tier 1, next Tier 2 for 800 g (300 missing)', () => {
     const v = trainingView(newGame(1, T0));
-    expect(v).toMatchObject({ tier: 0, cap: 0, active: null, nextTier: { tier: 1, price: 100, cap: 20, affordable: false, missing: 75 } });
+    expect(v).toMatchObject({ tier: 0, cap: 0, active: null, nextTier: { tier: 1, price: 100, cap: 20, affordable: true, missing: 0 } });
     expect(v.attributes.map((a) => [a.attribute, a.total, a.normal, a.core, a.maxed])).toEqual(ATTRIBUTE_KEYS.map((k) => [k, 0, 0, 0, false]));
     const built = trainingView(builtGame(1, T0));
-    expect(built).toMatchObject({ tier: 1, cap: 20, active: null, nextTier: { tier: 2, price: 800, cap: 40, affordable: false, missing: 775 } });
+    expect(built).toMatchObject({ tier: 1, cap: 20, active: null, nextTier: { tier: 2, price: 800, cap: 40, affordable: false, missing: 300 } });
   });
 
   it('active attribute: fraction and minutes left; the strip view matches', () => {
@@ -417,7 +417,7 @@ describe('debug rows', () => {
 
   it('+1,000 gold; bounded', () => {
     const s = apply(builtGame(1, T0), { type: 'DEBUG_ADD_GOLD', amount: 1000 }, T0);
-    expect(s.character.gold).toBe(1025);
+    expect(s.character.gold).toBe(1500);
     expect(s.flags.debugUsed).toBe(true);
     expect(applyCommand(s, cmd({ type: 'DEBUG_ADD_GOLD', amount: -5 }), T0)).toMatchObject({ ok: false, error: { code: 'INVALID_AMOUNT' } });
   });

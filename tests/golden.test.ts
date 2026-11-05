@@ -77,10 +77,16 @@
 // WS / MS from total STR; current mana with regen). Fewer automatic stats make a few fights last longer, so the RNG stream
 // moves and every pin was re-pinned (runs, gold, logs; the script still wins every fight). The 1.10.0-era refresh is put
 // back to the 1.16.0 roll (`listingAt`) so the later buys stay the same. The script gained a 1.17.0 segment (SCRIPT_117).
+// 1.17.0 → 1.18.0 (2026-11-05): save v18 (the locked start: `storage` joins the buildings; a new game has 500 gold and nothing
+// built; every search 2:00). No outcome of any script above changed (same runs, gold, levels, loot: they run from the 1.17.0
+// start with the 1.17.0 search times, see runScript); the hashes of the pins taken at save v17 moved because the state gained
+// `storage` and the save version (the 1.12.0 pin seen in the v12 shape is unchanged). The new rules are pinned in
+// tests/lockedStart.test.ts.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  DUNGEONS,
   getItemDef,
   applyCommand,
   effectiveAttributes,
@@ -105,7 +111,7 @@ import {
   manaView,
   woodcuttingView,
 } from '../src/engine';
-import { HOUR, MIN, SEC, T0, v12Skills, v16Attributes, v17Added, withBuilt, withCore, withoutGearRolls } from './helpers';
+import { HOUR, MIN, SEC, T0, v12Skills, v17Start, v16Attributes, v17Added, withBuilt, withCore, withoutGearRolls } from './helpers';
 
 /** End of the 1.5.0 script; the 1.6.0 segment starts here. */
 const B = T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC;
@@ -177,7 +183,7 @@ const restoreStackAt = (defId: string, index: number) => (s: GameState): GameSta
  * hash must equal the 1.12.0 pin.
  */
 function asV12(s: GameState): unknown {
-  const { crafting: _c, buildings: { crafting: _b, ...buildings }, character, ...rest } = asV13(s);
+  const { crafting: _c, buildings: { crafting: _b, storage: _st, ...buildings }, character, ...rest } = asV13(s);
   return { ...rest, saveVersion: 12, buildings, character: { ...character, skills: { ...character.skills, smithing: { level: 1, xp: 0, xpToNext: 100 } } } };
 }
 
@@ -425,21 +431,36 @@ const SCRIPT: Step[] = [
   { at: J + 20 * MIN + 4 * SEC + 5 * HOUR }, // 5 h away: both Oak pipes live off the hero's and the crew's logs
 ];
 
+/**
+ * 1.18.0: every search became 2:00 (it was 2 / 3 / 5 / 8 / 12 min by tier) and a new game starts with 500 gold and nothing
+ * built. The scripts written before that are history, not the current rules: each one runs from the 1.17.0 start
+ * (`v17Start`: 25 gold, Merchant built) with the 1.17.0 search times, so every outcome they pin (runs, gold, levels, loot)
+ * is exactly what it was and only the hashes moved (save v18 stores `storage`). The 1.18.0 segment (tests/lockedStart.test.ts)
+ * pins the new rules.
+ */
+const V17_SEARCH_MIN = { rat_cellar: 2, bat_cave: 3, wolf_den: 5, forgotten_crypt: 8, troll_bridge: 12 } as const;
+
 function runScript(steps: Step[] = SCRIPT, seed = 0xc0ffee) {
-  let s = newGame(seed, T0);
-  for (const step of steps) {
-    if (step.patch) {
-      s = step.patch(s);
-    } else if (step.cmd) {
-      const c = typeof step.cmd === 'function' ? step.cmd(s) : step.cmd;
-      const r = applyCommand(s, c, step.at);
-      if (!r.ok) throw new Error(r.error.message);
-      s = r.state;
-    } else {
-      s = simulate(s, step.at).state;
+  const saved = Object.fromEntries(Object.entries(DUNGEONS).map(([id, d]) => [id, d.search]));
+  for (const [id, min] of Object.entries(V17_SEARCH_MIN)) DUNGEONS[id as keyof typeof V17_SEARCH_MIN].search = { ...DUNGEONS[id as keyof typeof V17_SEARCH_MIN].search, baseMs: min * MIN };
+  try {
+    let s = v17Start(seed, T0);
+    for (const step of steps) {
+      if (step.patch) {
+        s = step.patch(s);
+      } else if (step.cmd) {
+        const c = typeof step.cmd === 'function' ? step.cmd(s) : step.cmd;
+        const r = applyCommand(s, c, step.at);
+        if (!r.ok) throw new Error(r.error.message);
+        s = r.state;
+      } else {
+        s = simulate(s, step.at).state;
+      }
     }
+    return s;
+  } finally {
+    for (const [id, search] of Object.entries(saved)) DUNGEONS[id as keyof typeof V17_SEARCH_MIN].search = search;
   }
-  return s;
 }
 
 describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
@@ -480,6 +501,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.15.0', 15],
       ['1.16.0', 16],
       ['1.17.0', 17],
+      ['1.18.0', 18],
     ]);
   });
 });
@@ -1245,7 +1267,7 @@ describe('golden 1.13.0: the Crafting house', () => {
     // segment moved (2:00 cuts and searches at core DEX 0, level points in every fight, a shifted RNG stream).
     // 1.17.0 re-pin (1.16.0: ea51d10b): no automatic level points (a few fights last longer, a shifted RNG stream), the
     // new character fields (spent / unspent points, mana). Every crafting outcome above is unchanged.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.17.0', hash: 'd3f87116' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.18.0', hash: '2dbabf75' });
   });
 });
 
@@ -1292,7 +1314,7 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     expect([s.training.attributes.strength, qtyOf(s, 'stone')]).toEqual([{ level: 19, xp: 180, progressMs: 16_212 }, 521]);
     // 1.16.0 re-pin (1.15.0: gold 3,762; the 1.14.0 pin f6345886 in the v14 shape): the outcomes before it moved.
     // 1.17.0 re-pin (1.16.0: gold 4,061, hash aa5c4e76): the Steel Axe (2,500 g) is now the first gear listing.
-    expect({ gold: s.character.gold, hash: hashState(s) }).toEqual({ gold: 2162, hash: '8859fdcf' });
+    expect({ gold: s.character.gold, hash: hashState(s) }).toEqual({ gold: 2162, hash: 'd4a2e1d2' });
   });
 });
 
@@ -1337,7 +1359,7 @@ describe('golden 1.15.0: continuous material pipes', () => {
     expect(s.crafting.pipes[0]!.done).toBeGreaterThan(p0!.done);
     expect(s.crafting.pipes[0]!.done).toBeGreaterThan(s.crafting.pipes[1]!.done);
     // 1.16.0 re-pin (1.15.0: gold 10,580, hash eaf63de1). 1.17.0 re-pin (1.16.0: gold 9,973, hash 7950bd86).
-    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(s) }).toEqual({ engineVersion: '1.17.0', gold: 8172, hash: 'a23649f6' });
+    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(s) }).toEqual({ engineVersion: '1.18.0', gold: 8172, hash: '6df72287' });
   });
 });
 
@@ -1411,7 +1433,7 @@ describe('golden 1.16.0: normal and core attributes', () => {
     const s = runScript(SCRIPT_116, SEED);
     expect(s.stats.totalActions).toBe(16 + 65); // ~30 min then 2 h 2 s of 110,004 ms cuts
     // 1.17.0 re-pin (1.16.0: df33601f): points to spend instead of level points, WS from total STR (more logs), mana.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.17.0', hash: '7674da4c' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.18.0', hash: '2c3c4515' });
   });
 });
 
@@ -1451,6 +1473,6 @@ describe('golden 1.17.0: spendable points, total STR → WS, mana', () => {
     expect(manaView(spent).regenPerMin).toBe(9);
     const s = runScript(SCRIPT_117, SEED);
     expect(s.character.spentPoints.strength).toBe(6);
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.17.0', hash: '6a2959e0' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.18.0', hash: 'b27e380f' });
   });
 });
