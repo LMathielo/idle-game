@@ -55,6 +55,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 
 ## Docs and workflow
 
+- [#29, 40] `src/client/saveSlot.ts` `sanitizeSaveSlot` — lossy: `feat/a-b`, `feat/a_b` and `feat/a/b` share one save file, and a preview slot has no reset (a reused branch name keeps its old save). Fix: add a short hash of the raw branch name to the file name, or a Debug "reset this slot".
+- [#29, 30] `.github/workflows/expo-preview.yml` (names step) / `saveSlot.ts` — the slot rule is written twice (shell and TS) and only the TS one is tested. Fix: pass the raw ref and let the app sanitize it, or add a parity test.
 - [#19, 30] Stray double blank lines in `src/app/_layout.tsx` and `src/components/ui/GameDialog.tsx`.
 - [#4, 70] `.claude/agents/game-engineer.md:53`, `pr-review-council/SKILL.md:18` — `$(cat pr.md)` / `$(cat review.md)` use relative paths; use `-F body=@/abs/path` so a missing file fails loudly.
 - [#4, 45] `pr-review-council/SKILL.md:13-18` — `R=`/`$N` shell variables don't survive between agent tool calls; inline the repo and PR number.

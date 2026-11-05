@@ -107,7 +107,11 @@ A PR whose branch is `main` or `dev` (the release PR) is refused: those two publ
 
 **Each build has its own save**, so previews never touch your progress: `main` keeps `idle-game.db` (your existing progress), `dev` uses `idle-game-dev.db` (copied once from `idle-game.db` on its first launch), and a PR preview starts fresh in `idle-game-<branch>.db`. Hero tab → Debug shows which slot you are on. A local `npx expo start` behaves like `main`.
 
-**Token check.** Previews read `EXPO_TOKEN` as a **repo-level** secret, so it must stay there: Settings → Secrets and variables → Actions → **Repository secrets** → `EXPO_TOKEN`. (If you later move it only into the `expo-publish` environment, previews stop working with "EXPO_TOKEN secret is missing".)
+- The copy is one-way and one-time: **progress on `dev` never flows back to `main`**, and `main` stays as it was.
+- A preview's save **persists across pushes and across a reused branch name** (the same branch name is the same file, even after the preview was removed and re-added). There is no reset button yet; to start over, rename the branch or clear Expo Go's data.
+- Different branch names can map to the same file (`feat/a-b`, `feat/a_b`, `feat/a/b` all become `feat-a-b`).
+
+**Token check.** Previews read `EXPO_TOKEN` as a **repo-level** secret, so it must stay there: Settings → Secrets and variables → Actions → **Repository secrets** → `EXPO_TOKEN`. (If you later move it only into the `expo-publish` environment, previews stop working with "EXPO_TOKEN secret is missing".) During the publish step the token is **visible to the PR's own build code** (Metro, Babel, app config run while `eas update` bundles). Only you can start a preview (the workflow ignores the label when anyone else adds it), but the code it runs is whatever is on that branch: only label PRs you trust.
 
 ## Branching
 

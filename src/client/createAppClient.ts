@@ -5,29 +5,25 @@ import * as SQLite from 'expo-sqlite';
 import { SystemClock } from './clock';
 import { LocalGameClient } from './LocalGameClient';
 import { DEFAULT_DB_NAME, SAVE_DB_NAME, SAVE_SLOT, slotSeedsFromDefault } from './saveSlot';
-import { seedFromDefaultSave } from './seedSave';
+import { openSlotDatabase } from './seedSave';
 import { SQLiteGameRepository } from './sqliteRepository';
 
 /**
  * Opens this build's save file. The first time the `dev` slot opens (its file is still empty), it starts from a copy
- * of the default `idle-game.db`; if that copy fails, the half-written file is deleted and dev starts fresh.
+ * of the default `idle-game.db` (rules and failure handling: seedSave.ts).
  */
-async function openSaveDatabase(): Promise<SQLite.SQLiteDatabase> {
-  let db = await SQLite.openDatabaseAsync(SAVE_DB_NAME);
-  if (!slotSeedsFromDefault(SAVE_SLOT)) return db;
-  try {
-    await seedFromDefaultSave({
-      slot: db,
-      openDefault: () => SQLite.openDatabaseAsync(DEFAULT_DB_NAME),
+function openSaveDatabase(): Promise<SQLite.SQLiteDatabase> {
+  return openSlotDatabase({
+    slotName: SAVE_DB_NAME,
+    defaultName: DEFAULT_DB_NAME,
+    seed: slotSeedsFromDefault(SAVE_SLOT),
+    store: {
+      open: (name) => SQLite.openDatabaseAsync(name),
+      remove: (name) => SQLite.deleteDatabaseAsync(name),
       backup: (sourceDatabase, destDatabase) => SQLite.backupDatabaseAsync({ sourceDatabase, destDatabase }),
-    });
-  } catch (err) {
-    console.warn(`Could not seed ${SAVE_DB_NAME} from ${DEFAULT_DB_NAME}; starting fresh.`, err);
-    await db.closeAsync().catch(() => undefined);
-    await SQLite.deleteDatabaseAsync(SAVE_DB_NAME).catch(() => undefined);
-    db = await SQLite.openDatabaseAsync(SAVE_DB_NAME);
-  }
-  return db;
+    },
+    warn: (message, err) => console.warn(message, err),
+  });
 }
 
 export function createAppClient(): LocalGameClient {

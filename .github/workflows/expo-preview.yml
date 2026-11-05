@@ -1,6 +1,6 @@
 name: Expo test preview
 
-# Add the label `expo-test` to a pull request (into dev or main) to try it in Expo Go before merging.
+# The repo owner adds the label `expo-test` to a pull request (into dev or main) to try it in Expo Go before merging.
 #   - label added, or a push / reopen while the label is on -> `eas update` on an EAS branch named exactly like the
 #     PR's git branch (e.g. `feat/xyz`), with its own save slot (see src/client/saveSlot.ts).
 #     One PR comment (edited on every republish) has the link and QR code for Expo Go.
@@ -24,14 +24,17 @@ permissions:
 jobs:
   publish:
     name: Publish preview
-    # Open same-repo PRs that carry the label, on: the label being added, a new push, or a reopen.
+    # Open same-repo PRs that carry the label, on: the label being added BY THE REPO OWNER (nobody else can start a
+    # preview), a new push, or a reopen.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.state == 'open' &&
       contains(github.event.pull_request.labels.*.name, 'expo-test') &&
       (github.event.action == 'synchronize' ||
        github.event.action == 'reopened' ||
-       (github.event.action == 'labeled' && github.event.label.name == 'expo-test'))
+       (github.event.action == 'labeled' &&
+        github.event.label.name == 'expo-test' &&
+        github.event.sender.login == github.repository_owner))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Job level on purpose: an unrelated event (another label, say) is skipped by the `if` above before it reaches
@@ -223,7 +226,8 @@ jobs:
             exit 1
           fi
 
-      # A branch that was never published is not an error: eas-cli says "Could not find branch ...".
+      # A branch that was never published is not an error: eas-cli says "Could not find branch ..."; other wordings
+      # that name a branch that is not found / does not exist count too.
       - name: Delete the EAS branch
         id: delete
         env:
@@ -236,7 +240,7 @@ jobs:
           printf '%s\n' "$OUT"
           if [ "$CODE" -eq 0 ]; then
             echo "result=deleted" >> "$GITHUB_OUTPUT"
-          elif printf '%s' "$OUT" | grep -q 'Could not find branch'; then
+          elif printf '%s' "$OUT" | grep -qiE 'could not find branch|branch.*(not found|does not exist)|(not found|does not exist).*branch'; then
             echo "EAS branch '$HEAD_REF' does not exist: nothing to delete."
             echo "result=missing" >> "$GITHUB_OUTPUT"
           else
