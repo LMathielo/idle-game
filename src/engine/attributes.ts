@@ -41,7 +41,7 @@ export function normalAttributes(state: AttributeInput): Attributes {
   return out;
 }
 
-/** Total = normal + core, for every attribute. Linear effects (damage, defense, HP regen, WS / MS, mana regen) read this. */
+/** Total = normal + core, for every attribute. Linear effects (damage, armor, max HP, HP regen, WS / MS, mana regen, magic damage and resist, max mana) read this. */
 export function effectiveAttributes(state: AttributeInput): Attributes {
   const normal = normalAttributes(state);
   const core = coreAttributes(state);

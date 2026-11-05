@@ -6,7 +6,7 @@
 //   price      = floor(catalog price × rarity multiplier ÷ 100); quality does not change prices; the sell bonus after it
 //   rarity     = the instance's own, else the catalog's
 //
-// Every reader of a gear stat or price goes through here: derived damage / defense, WS, MS (and so crews, tree and rock
+// Every reader of a gear stat or price goes through here: derived damage / armor, WS, MS (and so crews, tree and rock
 // access), sell prices, popovers and equip deltas.
 import { GEAR, type RarityWeight } from './config/gear';
 import { getItemDef, type ItemDef } from './config/items';
