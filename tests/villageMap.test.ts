@@ -12,12 +12,13 @@ import {
   SIGN_BUTTON_H,
   SIGN_GAP,
   SIGN_HIT_SLOP,
-  SIGN_LAYOUT_SCALE,
   SIGN_LABEL_PT,
   SIGN_NUDGE,
   SIGN_TOUCH_H,
   SIGN_SCALE,
   SIGNS,
+  signFontPt,
+  signScreenBox,
   signWorldBox,
   WORLD,
 } from '../src/components/village/villageMap';
@@ -193,15 +194,27 @@ describe('village map', () => {
     expect(overlaps(true)).toEqual([]);
   });
 
-  // iOS rasterises text at its layout size: the bitmap must only ever be scaled down (sign scale × zoom <= layout scale).
-  it.each(SCREENS)('on $w×$h a sign (and its badge) is laid out big enough to stay crisp at the maximum zoom', (view) => {
-    const { maxZoom } = mapLimits(view, 100, 44);
-    expect(SIGN_SCALE * maxZoom).toBeLessThanOrEqual(SIGN_LAYOUT_SCALE);
+  // Signs are laid out in screen space at natural × SIGN_SCALE × zoom: their screen box from (anchor, camera) is the world
+  // box scaled by the zoom, and the label is a whole number of points.
+  it('a sign screen box follows the camera: literal numbers for the Dungeon sign', () => {
+    const dungeon = SIGNS.find((s) => s.key === 'dungeon')!;
+    expect([dungeon.x, dungeon.y]).toEqual([206.5, 247]); // the Dungeon building box is x 176, y 181, 61 × 66
+    const b = signScreenBox(dungeon, 106, { zoom: 2, tx: -100, ty: -300 });
+    expect(b).toEqual({ x0: -100 + 206.5 * 2 - 53, y0: -300 + 247 * 2, x1: -100 + 206.5 * 2 + 53, y1: -300 + 247 * 2 + 44 });
+    for (const s of SIGNS) {
+      const w = signWorldBox(s, 100);
+      const sb = signScreenBox(s, 100, { zoom: 3, tx: 10, ty: 20 });
+      expect(sb.x0).toBeCloseTo(10 + w.x0 * 3);
+      expect(sb.y1).toBeCloseTo(20 + w.y1 * 3);
+    }
+    expect(signFontPt(1.512)).toBe(14);
+    expect(signFontPt(2)).toBe(18);
   });
 
   it.each(SCREENS)('at the start zoom on $w×$h a sign label is at least 13 pt and its tap area at least 44 pt', (view) => {
     const { start } = mapLimits(view, 100, 44);
     expect(SIGN_LABEL_PT * SIGN_SCALE * start).toBeGreaterThanOrEqual(13);
+    expect(signFontPt(start)).toBeGreaterThanOrEqual(13); // the rounded label the sign really uses
     expect(SIGN_TOUCH_H * SIGN_SCALE * start).toBeGreaterThanOrEqual(44); // the wrappers contain the slop, so this is the real tap height
   });
 });

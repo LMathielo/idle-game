@@ -46,9 +46,9 @@ const SIGN_LABELS: Record<VillageAction, string> = {
 const SIGN_PLOTS: Partial<Record<VillageAction, PlotId>> = { crafting: 'east' };
 
 /**
- * Signs scale with the map (2026-11-05): a sign is the normal-size PixelButton (44 tall, 18 pt Pixelify Sans Bold label)
- * drawn inside the map layer at this scale, so on screen it is SIGN_SCALE × zoom times its natural size, like the
- * buildings. At the start zoom on a 375 pt phone (375 / 248 = 1.512) the label is 18 × 0.5 × 1.512 = 13.6 pt.
+ * Signs scale with the map (2026-11-05): a sign is the normal-size PixelButton look (44 tall, 18 pt Pixelify Sans Bold
+ * label) laid out, in screen space, at SIGN_SCALE × zoom times its natural size, like the buildings (re-laid out when a
+ * pinch settles; never a GPU scale at rest, which would blur the pixel font). At the start zoom on a 375 pt phone (375 / 248 = 1.512) the label is 18 × 0.5 × 1.512 = 13.6 pt.
  */
 export const SIGN_SCALE = 0.5;
 /** Natural height of a sign button: 38 inner + 3 frame each side (PixelButton). */
@@ -56,18 +56,25 @@ export const SIGN_BUTTON_H = 44;
 /** Natural label size of a sign (PixelButton `sign`). */
 export const SIGN_LABEL_PT = 18;
 /**
- * Signs are LAID OUT this many times bigger than their natural size and shrunk by SIGN_SCALE / SIGN_LAYOUT_SCALE in the
- * map layer. iOS rasterises text at its layout size and scales the bitmap with the map, so a sign shown at SIGN_SCALE ×
- * zoom stays crisp as long as that is at most SIGN_LAYOUT_SCALE (0.5 × max zoom 4.3 on the widest phone = 2.2).
- */
-export const SIGN_LAYOUT_SCALE = 3;
-/**
  * Extra touch area around a sign, in natural px (scaled with it). The sign's wrappers are padded by this much, so the
  * slop lies inside their bounds (Android only hit-tests a hitSlop inside the parent).
  */
 export const SIGN_HIT_SLOP = 10;
 /** The real touch height, natural px: 44 + 2 × 10 = 64, so 64 × 0.5 × 1.512 = 48.4 pt at the start zoom on 375 pt. */
 export const SIGN_TOUCH_H = SIGN_BUTTON_H + 2 * SIGN_HIT_SLOP;
+
+/** The label size a sign is laid out with at this zoom: whole points keep the pixel font crisp (14 at the start on 375 pt). */
+export function signFontPt(zoom: number): number {
+  return Math.round(SIGN_LABEL_PT * SIGN_SCALE * zoom);
+}
+
+/** A sign's visible button on screen for a camera, from its world anchor (top centre) and its natural width. */
+export function signScreenBox(sign: { x: number; y: number }, naturalWidth: number, cam: { zoom: number; tx: number; ty: number }) {
+  const k = SIGN_SCALE * cam.zoom;
+  const x0 = cam.tx + sign.x * cam.zoom - (naturalWidth * k) / 2;
+  const y0 = cam.ty + sign.y * cam.zoom;
+  return { x0, y0, x1: x0 + naturalWidth * k, y1: y0 + SIGN_BUTTON_H * k };
+}
 /** A sign's top edge sits this far below its building box's bottom edge, world px (0 since 2026-11-05: on the edge). */
 export const SIGN_GAP = 0;
 
