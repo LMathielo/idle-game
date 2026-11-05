@@ -99,20 +99,20 @@ describe('art registry', () => {
 });
 
 describe('village layout', () => {
-  it('lists all 8 sign keys as buildings with a sign anchor inside the world', () => {
+  it('lists all 8 sign keys as buildings; each sign anchor (derived from the building box) is inside the world', () => {
     const keys = ['dungeon', 'mine', 'woodcutting', 'merchant', 'town_hall', 'storage', 'training', 'crafting'];
     for (const k of keys) {
       const p = LAYOUT.pieces[k];
       expect(p, k).toBeDefined();
       expect(p.kind).toBe('building');
-      expect(p.sign).toBeDefined();
-      expect(p.sign!.x).toBeGreaterThan(0);
-      expect(p.sign!.x).toBeLessThan(LAYOUT.world.w);
-      expect(p.sign!.y).toBeGreaterThan(0);
-      expect(p.sign!.y).toBeLessThan(LAYOUT.world.h);
     }
     expect(sorted(SIGNS.map((s) => s.key))).toEqual(sorted(keys));
-    for (const s of SIGNS) expect([s.x, s.y]).toEqual([LAYOUT.pieces[s.key].sign!.x, LAYOUT.pieces[s.key].sign!.y]);
+    for (const s of SIGNS) {
+      expect(s.x).toBeGreaterThan(0);
+      expect(s.x).toBeLessThan(LAYOUT.world.w);
+      expect(s.y).toBeGreaterThan(0);
+      expect(s.y).toBeLessThan(LAYOUT.world.h);
+    }
   });
 
   it('every piece (draw order) has its image, at 4x its world box; the background fills the world at 4x', () => {
