@@ -53,6 +53,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#25, 40] `tests/dungeon.test.ts` (8 h cap test) — no longer asserts HP and mana are full after the 12 h beyond the cap. Assert both equal their max.
 - [#25, 25] `tests/statPoints.test.ts` — no tick-vs-resume case for a spend mid-woodcutting with a hired crew. Add one.
 - [#26, 60] `tests/villageMap.test.ts` — the sign overlap test uses hand-measured `LABEL_W` widths, so it won't notice a label or font change. Derive the widths from the real label metrics (or snapshot a measured layout) instead of constants.
+- [#33, 40] `tests/statsRework.test.ts` — property tests stop at DEX ~600; nothing pins the crit-multiplier integer bound (exact up to ~6e9 DEX). Add one case with DEX 1e6 asserting a safe integer and the exact `dealt`.
 
 ## Docs and workflow
 
