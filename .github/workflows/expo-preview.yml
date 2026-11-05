@@ -226,8 +226,10 @@ jobs:
             exit 1
           fi
 
-      # A branch that was never published is not an error: eas-cli says "Could not find branch ..."; other wordings
-      # that name a branch that is not found / does not exist count too.
+      # A branch that was never published is not an error: eas-cli says "Could not find branch ...". Other wordings
+      # only count when they name THIS branch ("branch <name> not found" / "does not exist", optionally quoted), so
+      # "project not found" or "account does not exist" (auth, wrong project) still fail the job. Fixed strings
+      # (grep -F): the branch name comes from env and is never read as a regex.
       - name: Delete the EAS branch
         id: delete
         env:
@@ -237,10 +239,20 @@ jobs:
           OUT=$(eas branch:delete "$HEAD_REF" --non-interactive 2>&1)
           CODE=$?
           set -e
+          MISSING="$RUNNER_TEMP/missing-patterns.txt"
+          {
+            echo 'could not find branch'
+            echo 'could not find update branch'
+            for Q in '' '"' "'"; do
+              for W in 'not found' 'was not found' 'does not exist'; do
+                echo "branch ${Q}${HEAD_REF}${Q} ${W}"
+              done
+            done
+          } > "$MISSING"
           printf '%s\n' "$OUT"
           if [ "$CODE" -eq 0 ]; then
             echo "result=deleted" >> "$GITHUB_OUTPUT"
-          elif printf '%s' "$OUT" | grep -qiE 'could not find branch|branch.*(not found|does not exist)|(not found|does not exist).*branch'; then
+          elif printf '%s' "$OUT" | grep -qiFf "$MISSING"; then
             echo "EAS branch '$HEAD_REF' does not exist: nothing to delete."
             echo "result=missing" >> "$GITHUB_OUTPUT"
           else
