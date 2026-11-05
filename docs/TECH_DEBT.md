@@ -28,6 +28,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#25, 35] `StatusPanel.tsx` `useSpending.confirm` — a fast double tap on Confirm can queue two dialogs; confirming both spends twice (no refunds). Add an in-flight ref or disable Confirm while confirming.
 - [#25, 30] `app/(tabs)/index.tsx` — the Village tab stays mounted while the Hero tab is shown, so its HUD keeps recomputing each tick (the Hero tab has no HUD since 2026-11-05). Gate with `useIsFocused` or use `freezeOnBlur`.
 - [#25, 15] `StatusPanel.tsx` `confirm` — pending edits made while the send is in flight are wiped by `update(NO_PENDING)`. Clear only if pending still equals the sent payload.
+- [#30, 30] `woodcutting/WoodcuttingModal.tsx`, `mining/MineModal.tsx` — `wk` is a new object each tick so `renderItem` is recreated every tick (cards stay memoized; same as `crewOf`). Key the deps on primitive signatures.
+- [#30, 25] `workers/NodeWorkers.tsx` — a fast second tap on [+] is dropped by the `useCommand` in-flight guard (same as the #19 item); no test covers `nodeWorkersInfo`'s disabled combinations. Add one.
 
 ## Engine and data
 

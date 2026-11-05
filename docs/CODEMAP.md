@@ -34,6 +34,7 @@ src/components/woodcutting/ Woodcutting modal (header with level/XP/WS/stamina, 
 src/components/mining/ Mine Shaft modal (mirrors Woodcutting: level/XP/MS/stamina, paged rock carousel)
 src/components/buildings/ BuildSheet (a locked building's requirements + Build, as an InfoPopover), UpgradeSheet + UpgradeEntry (level, bonuses, cost, builder; InfoPopover),
                       TownHallModal (level, workers: hire / assign picker / unassign / dismiss, crews, upkeep), bonusText (bonus lines, currentBonusLine)
+src/components/workers/ NodeWorkers (the "Workers: X free / Y hired" line and the crew row with [−] / [+] on Woodcutting / Mine cards; selectors nodeChoices + workersView), pickWorker (pure: first free worker, last worker on a node)
 src/components/items/  ItemSlot (rarity-framed slot: the instance's colour, reports its anchor), ItemSheet (item InfoPopover + actions: rarity-coloured name,
                       "Green · Quality 73%", quality-scaled stats and equip deltas, rarity-scaled prices), QuantityStepper, itemInfo (labels, subtitle, stat lines)
 src/components/merchant/ Merchant modal (Buy | Sell tabs, stock grid, refresh charges, buy/sell sheets)
