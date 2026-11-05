@@ -29,7 +29,7 @@ import {
 } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { EnemySprite, GameIcon, HeroPortrait, IconText, ItemIcon } from '../art/Sprites';
-import { formatClock, formatNumber, itemName } from '../format';
+import { bpPercent, critMultText, formatClock, formatNumber, formatRate, itemName } from '../format';
 import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
 import { Bar, Panel } from '../Panel';
@@ -89,11 +89,11 @@ export function DungeonModal() {
 
 const HpRow = memo(function HpRow({ hp, maxHp, regenPerMin }: { hp: number; maxHp: number; regenPerMin: number }) {
   return (
-    <View style={styles.hpRow} accessible accessibilityLabel={`Hero HP ${hp} of ${maxHp}, regenerates ${regenPerMin} per minute`}>
+    <View style={styles.hpRow} accessible accessibilityLabel={`Hero HP ${hp} of ${maxHp}, regenerates ${formatRate(regenPerMin)} per minute`}>
       <View style={styles.flex}>
         <Bar value={hp} max={maxHp} color={colors.hp} label={`HP ${formatNumber(hp)} / ${formatNumber(maxHp)}`} />
       </View>
-      <Text style={styles.regen}>+{regenPerMin}/min</Text>
+      <Text style={styles.regen}>+{formatRate(regenPerMin)}/min</Text>
     </View>
   );
 });
@@ -290,7 +290,7 @@ function DungeonDetail({
     },
     [client, send],
   );
-  const hits = strikeRange(enemy.damage, stats.defense.value);
+  const hits = strikeRange(enemy.damage, stats.armor.value);
   const stop = useCallback(async () => {
     if (await confirmCancelRun(dialog, 'Stop')) await send({ type: 'STOP_ACTIVITY' });
   }, [dialog, send]);
@@ -312,27 +312,31 @@ function DungeonDetail({
           <View
             style={styles.side}
             accessible
-            accessibilityLabel={`${enemy.name}: HP ${enemy.hp}, damage ${range(enemy.damage.min, enemy.damage.max)}, defense ${enemy.defense}`}
+            accessibilityLabel={`${enemy.name}: HP ${enemy.hp}, damage ${range(enemy.damage.min, enemy.damage.max)}, armor ${enemy.armor}, magic resist ${enemy.magicResist}`}
           >
             <IconText image={<EnemySprite enemyId={d.enemyId} />} style={styles.sideTitle} rowStyle={styles.sideHead}>
               {enemy.name}
             </IconText>
             <StatLine label="HP" value={`${enemy.hp}`} />
             <StatLine label="Damage" value={range(enemy.damage.min, enemy.damage.max)} />
-            <StatLine label="Defense" value={`${enemy.defense}`} />
+            <StatLine label="Armor" value={`${enemy.armor}`} />
+            <StatLine label="Magic resist" value={`${enemy.magicResist}`} />
           </View>
           <Text style={styles.vs}>vs</Text>
           <View
             style={styles.side}
             accessible
-            accessibilityLabel={`${state.character.name}: HP ${hp.hp} of ${hp.maxHp}, damage ${range(stats.damage.min, stats.damage.max)}, defense ${stats.defense.value}`}
+            accessibilityLabel={`${state.character.name}: HP ${hp.hp} of ${hp.maxHp}, damage ${range(stats.damage.min, stats.damage.max)}, magic damage ${stats.magicDamage.value}, armor ${stats.armor.value}, magic resist ${stats.magicResist.value}, crit chance ${bpPercent(stats.critChanceBp.value)}`}
           >
             <IconText image={<HeroPortrait size={32} />} style={styles.sideTitle} rowStyle={styles.sideHead}>
               {state.character.name}
             </IconText>
             <StatLine label="HP" value={`${hp.hp}/${hp.maxHp}`} />
             <StatLine label="Damage" value={range(stats.damage.min, stats.damage.max)} />
-            <StatLine label="Defense" value={`${stats.defense.value}`} />
+            <StatLine label="Magic damage" value={`${stats.magicDamage.value}`} />
+            <StatLine label="Armor" value={`${stats.armor.value}`} />
+            <StatLine label="Magic resist" value={`${stats.magicResist.value}`} />
+            <StatLine label="Crit" value={`${bpPercent(stats.critChanceBp.value)} · ${critMultText(stats.critMultiplierBp.value)}`} />
           </View>
         </View>
 
@@ -344,6 +348,11 @@ function DungeonDetail({
           <Text style={[styles.dangerLabel, DANGER_STYLES[danger.level]]}>Danger: {DANGER_LABELS[danger.level]}</Text>
           <Text style={styles.note}>
             ~{formatNumber(danger.expectedHpLoss)} HP lost per fight ({danger.percent}% of max)
+          </Text>
+          <Text style={styles.note}>
+            Your average strike: {formatNumber(Math.round(danger.heroAvg * 10) / 10)}
+            {danger.heroMagicAvg > 0 ? ` (${formatNumber(danger.heroMagicAvg)} magic)` : ''}
+            {danger.critChanceBp > 0 ? `, crits ${bpPercent(danger.critChanceBp)} for ${critMultText(danger.critMultBp)}` : ''}
           </Text>
         </View>
 
@@ -449,7 +458,7 @@ const RunControls = memo(function RunControls({
   heroName: string;
   enemyName: string;
   enemyId: EnemyId;
-  /** What one enemy strike deals to the hero after defense (engine strikeRange). */
+  /** What one enemy strike deals to the hero after armor (engine strikeRange). */
   hitMin: number;
   hitMax: number;
   /** Hold-to-repeat search skip (reads the live run each tick). */

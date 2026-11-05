@@ -60,7 +60,7 @@ describe('debug: stamina and attributes', () => {
     expect((await client.debug.addAttribute('strength')).ok).toBe(true);
     expect((await client.debug.addAttribute('endurance')).ok).toBe(true);
     const d = getDerivedStats(client.getState());
-    expect([d.damage.min, d.damage.max, d.defense.value]).toEqual([13, 15, 14]);
+    expect([d.damage.min, d.damage.max, d.armor.value]).toEqual([13, 15, 14]);
 
     expect((await client.debug.spendStamina(10)).ok).toBe(true);
     expect(client.getState().stamina).toEqual({ current: 90, max: 100, progressMs: 0 });

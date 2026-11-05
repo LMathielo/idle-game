@@ -207,7 +207,7 @@ describe('every reader uses the instance-scaled stats', () => {
     expect(getDerivedStats(low).damage).toMatchObject({ min: 12 + strFlat, max: 17 + strFlat });
     expect(getDerivedStats(high).damage).toMatchObject({ min: 24 + strFlat, max: 34 + strFlat });
     const helm = equip(s, makeItem('gold_helm', 1, 'h', { quality: 73, rarity: 'epic' }));
-    expect(getDerivedStats(helm).defense.value - base.defense.value).toBe(scaleGearStat(15, 73)); // 13
+    expect(getDerivedStats(helm).armor.value - base.armor.value).toBe(scaleGearStat(15, 73)); // 13
   });
 
   it('WS / MS scale with the tool’s quality, and the tree / rock gate follows (the stop rule reads the same WS)', () => {

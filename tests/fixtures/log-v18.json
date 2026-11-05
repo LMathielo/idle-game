@@ -1,0 +1,268 @@
+[
+  {
+    "commandId": "v18-2",
+    "type": "NEW_GAME",
+    "payload": {
+      "seed": 3554416254
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.18.0",
+    "stateHash": "47ca9765",
+    "seq": 1,
+    "synced": false
+  },
+  {
+    "commandId": "v18-3",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "woodcutting",
+      "id": "v18-3"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.18.0",
+    "stateHash": "a9ffef37",
+    "seq": 2,
+    "synced": false
+  },
+  {
+    "commandId": "v18-4",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "mine_shaft",
+      "id": "v18-4"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.18.0",
+    "stateHash": "c65bd61c",
+    "seq": 3,
+    "synced": false
+  },
+  {
+    "commandId": "v18-5",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "town_hall",
+      "id": "v18-5"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.18.0",
+    "stateHash": "f5f8cc8b",
+    "seq": 4,
+    "synced": false
+  },
+  {
+    "commandId": "v18-6",
+    "type": "DEBUG_BUILD",
+    "payload": {
+      "type": "DEBUG_BUILD",
+      "buildingId": "training_grounds",
+      "id": "v18-6"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.18.0",
+    "stateHash": "4af50fab",
+    "seq": 5,
+    "synced": false
+  },
+  {
+    "commandId": "v18-7",
+    "type": "DEBUG_GRANT_HERO_XP",
+    "payload": {
+      "type": "DEBUG_GRANT_HERO_XP",
+      "amount": 700,
+      "id": "v18-7"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.18.0",
+    "stateHash": "5a122f75",
+    "seq": 6,
+    "synced": false
+  },
+  {
+    "commandId": "v18-8",
+    "type": "SPEND_ATTRIBUTE_POINTS",
+    "payload": {
+      "type": "SPEND_ATTRIBUTE_POINTS",
+      "points": {
+        "strength": 3,
+        "endurance": 4,
+        "intelligence": 3
+      },
+      "id": "v18-8"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.18.0",
+    "stateHash": "8ed18bd0",
+    "seq": 7,
+    "synced": false
+  },
+  {
+    "commandId": "v18-10",
+    "type": "DEBUG_ADD_DUNGEON_WINS",
+    "payload": {
+      "type": "DEBUG_ADD_DUNGEON_WINS",
+      "dungeonId": "rat_cellar",
+      "amount": 10,
+      "id": "v18-10"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.18.0",
+    "stateHash": "03179cfd",
+    "seq": 8,
+    "synced": false
+  },
+  {
+    "commandId": "v18-11",
+    "type": "START_ACTIVITY",
+    "payload": {
+      "type": "START_ACTIVITY",
+      "kind": "dungeon",
+      "dungeonId": "bat_cave",
+      "id": "v18-11"
+    },
+    "clientTime": 1792929600000,
+    "engineVersion": "1.18.0",
+    "stateHash": "3aa6efca",
+    "seq": 9,
+    "synced": false
+  },
+  {
+    "commandId": "v18-41",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1792929630000,
+    "engineVersion": "1.18.0",
+    "stateHash": "77b783ed",
+    "seq": 10,
+    "synced": false
+  },
+  {
+    "commandId": "v18-71",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1792929660000,
+    "engineVersion": "1.18.0",
+    "stateHash": "ddc5f708",
+    "seq": 11,
+    "synced": false
+  },
+  {
+    "commandId": "v18-101",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1792929690000,
+    "engineVersion": "1.18.0",
+    "stateHash": "466a710c",
+    "seq": 12,
+    "synced": false
+  },
+  {
+    "commandId": "v18-131",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1792929720000,
+    "engineVersion": "1.18.0",
+    "stateHash": "948023db",
+    "seq": 13,
+    "synced": false
+  },
+  {
+    "commandId": "v18-161",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1792929750000,
+    "engineVersion": "1.18.0",
+    "stateHash": "9f006c6e",
+    "seq": 14,
+    "synced": false
+  },
+  {
+    "commandId": "v18-191",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1792929780000,
+    "engineVersion": "1.18.0",
+    "stateHash": "ed773720",
+    "seq": 15,
+    "synced": false
+  },
+  {
+    "commandId": "v18-221",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1792929810000,
+    "engineVersion": "1.18.0",
+    "stateHash": "260e1964",
+    "seq": 16,
+    "synced": false
+  },
+  {
+    "commandId": "v18-245",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1792929833000,
+    "engineVersion": "1.18.0",
+    "stateHash": "71182d22",
+    "seq": 17,
+    "synced": false
+  },
+  {
+    "commandId": "v18-244",
+    "type": "DEBUG_GRANT_HERO_XP",
+    "payload": {
+      "type": "DEBUG_GRANT_HERO_XP",
+      "amount": 1200,
+      "id": "v18-244"
+    },
+    "clientTime": 1792929833000,
+    "engineVersion": "1.18.0",
+    "stateHash": "261ccd7e",
+    "seq": 18,
+    "synced": false
+  },
+  {
+    "commandId": "v18-259",
+    "type": "SIMULATE",
+    "payload": {
+      "checkpoint": true
+    },
+    "clientTime": 1792929846000,
+    "engineVersion": "1.18.0",
+    "stateHash": "70b37cef",
+    "seq": 19,
+    "synced": false
+  },
+  {
+    "commandId": "v18-258",
+    "type": "DEBUG_ADD_GOLD",
+    "payload": {
+      "type": "DEBUG_ADD_GOLD",
+      "amount": 7,
+      "id": "v18-258"
+    },
+    "clientTime": 1792929846000,
+    "engineVersion": "1.18.0",
+    "stateHash": "50c2f572",
+    "seq": 20,
+    "synced": false
+  }
+]

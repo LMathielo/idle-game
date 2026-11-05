@@ -1147,7 +1147,7 @@ describe('golden', () => {
     // Stats come from the catalog through the new defIds: 2–4 + 10 base, 3 armor + 10 base, level 4 pools. Since 1.17.0
     // (v17) the Lv4 hero has 15 points to spend instead of +15 on every attribute, and full mana.
     const d = getDerivedStats(s);
-    expect([d.damage.min, d.damage.max, d.defense.value, d.maxHp.value, d.maxMana.value]).toEqual([12, 14, 13, 80, 35]);
+    expect([d.damage.min, d.damage.max, d.armor.value, d.maxHp.value, d.maxMana.value]).toEqual([12, 14, 13, 80, 35]);
     expect([s.character.unspentPoints, s.character.mana]).toEqual([15, 35]);
 
     // Plays on: with Woodcutting built again, Oak logs every 2:00 at core DEX 0.
@@ -1409,7 +1409,7 @@ describe('golden 1.16.0: normal and core attributes', () => {
     expect(effectiveAttributes(leveled)).toEqual({ strength: 0, dexterity: 0, endurance: 0, intelligence: 0 });
     expect(leveled.character.unspentPoints).toBe(5);
     expect(getDerivedStats(leveled).damage).toMatchObject({ min: 12, max: 14 }); // 2–4 + 10 base
-    expect(getDerivedStats(leveled).defense.value).toBe(13); // 3 + 10 base
+    expect(getDerivedStats(leveled).armor.value).toBe(13); // 3 + 10 base
     // Core DEX 10: the next search and every Oak cut take 110,004 ms.
     const dex = upTo('k8');
     expect(dex.training.attributes.dexterity.level).toBe(10);

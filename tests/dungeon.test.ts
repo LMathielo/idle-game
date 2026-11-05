@@ -17,12 +17,11 @@ import {
   simulate,
   skipCost,
 } from '../src/engine';
-import { apply, HOUR, MIN, SEC, T0, progressMs, builtGame, withCore } from './helpers';
+import { apply, fightSide, HOUR, MIN, SEC, T0, progressMs, builtGame, withCore } from './helpers';
 
 const RAT_CELLAR = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' } as const;
 const SEARCH_MS = 120 * SEC; // Rat Cellar at core DEX 0 (1.16.0)
 const FIGHT_MS = COMBAT.maxFightMs;
-const ONE_SECOND = { attackIntervalMs: 1000 };
 
 function withCharacter(s: GameState, patch: Partial<GameState['character']>): GameState {
   return { ...s, character: { ...s.character, ...patch } };
@@ -208,7 +207,7 @@ describe('skip (search only)', () => {
 
 describe('combat', () => {
   it('dealt = max(1, round(roll × 50 / (defense + 50))), half-up, integer math', () => {
-    expect(COMBAT).toMatchObject({ defenseK: 50, maxFightMs: 60_000, minDamage: 1 });
+    expect(COMBAT).toMatchObject({ armorK: 50, maxFightMs: 60_000, minDamage: 1 });
     expect(dealtDamage(100, 13)).toBe(79); // 13 defense blocks ~21%
     expect(dealtDamage(12, 2)).toBe(12); // 11.54
     expect(dealtDamage(14, 2)).toBe(13); // 13.46
@@ -221,8 +220,8 @@ describe('combat', () => {
   });
 
   it('fixed seed → fixed fight log; with equal 1 s intervals the rolls are exactly the old alternating fight', () => {
-    const hero = { hp: 50, damage: { min: 12, max: 14 }, defense: 13, ...ONE_SECOND };
-    const rat = { hp: 30, damage: { min: 3, max: 5 }, defense: 2, ...ONE_SECOND };
+    const hero = { hp: 50, ...fightSide({ damage: { min: 12, max: 14 }, armor: 13 }) };
+    const rat = { hp: 30, ...fightSide({ damage: { min: 3, max: 5 }, armor: 2, magicResist: 2 }) };
     const a = resolveFight(hero, rat, createRng(123));
     expect(resolveFight(hero, rat, createRng(123))).toEqual(a);
     // Same rolls, dealt, HP and final seed as the 1.7.0 turn-based fight (pinned there as rounds 1–3).
@@ -234,11 +233,11 @@ describe('combat', () => {
       [3000, 'hero', 3, 13, 13, 0],
     ]);
     expect(a).toMatchObject({ won: true, endReason: 'enemy_defeated', durationMs: 3000, heroHp: 46, enemyHp: 0, rng: { seed: 567894596 } });
-    for (const e of a.log) expect(e.dealt).toBe(dealtDamage(e.roll, e.actor === 'hero' ? rat.defense : hero.defense));
+    for (const e of a.log) expect(e.dealt).toBe(dealtDamage(e.roll, e.actor === 'hero' ? rat.armor : hero.armor));
   });
 
   it('time limit: a stalemate is a loss at 60 s that leaves the hero at 0 HP; strikes due at exactly 60 s still land', () => {
-    const tank = { hp: 1000, damage: { min: 1, max: 1 }, defense: 1_000_000, ...ONE_SECOND };
+    const tank = { hp: 1000, ...fightSide({ armor: 1_000_000, magicResist: 1_000_000 }) };
     const r = resolveFight(tank, tank, createRng(1));
     expect(r.log).toHaveLength(120);
     expect(r).toMatchObject({ won: false, endReason: 'time_limit', durationMs: 60_000, heroHp: 0, enemyHp: 940 });
@@ -247,7 +246,7 @@ describe('combat', () => {
 
   it('starting at 0 HP is an immediate loss with no rolls', () => {
     const rng = createRng(9);
-    const r = resolveFight({ hp: 0, damage: { min: 12, max: 14 }, defense: 13, ...ONE_SECOND }, { hp: 30, damage: { min: 3, max: 5 }, defense: 2, ...ONE_SECOND }, rng);
+    const r = resolveFight({ hp: 0, ...fightSide({ damage: { min: 12, max: 14 }, armor: 13 }) }, { hp: 30, ...fightSide({ damage: { min: 3, max: 5 }, armor: 2 }) }, rng);
     expect(r).toEqual({ won: false, endReason: 'no_hp', durationMs: 0, heroHp: 0, enemyHp: 30, log: [], rng });
   });
 });

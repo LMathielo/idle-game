@@ -113,3 +113,18 @@ export function formatLevelPercent(xp: number, xpToNext: number): string {
   const hundredths = Math.min(9999, Math.floor((xp / xpToNext) * 10_000));
   return `${(hundredths / 100).toFixed(2)}%`;
 }
+
+/** Basis points as a percent with at most one decimal: 833 → "8.3%", 4000 → "40%", 0 → "0%". Display only. */
+export function bpPercent(bp: number): string {
+  return `${Number((bp / 100).toFixed(1))}%`;
+}
+
+/** A crit multiplier in basis points: 15 000 → "1.5x", 15 100 → "1.51x". Display only. */
+export function critMultText(bp: number): string {
+  return `${Number((bp / 10_000).toFixed(2))}x`;
+}
+
+/** A per-minute rate: whole numbers as they are (15), fractions with one decimal (15.2, 0.6). Display only. */
+export function formatRate(n: number): string {
+  return Number.isInteger(n) ? formatNumber(n) : n.toFixed(1);
+}

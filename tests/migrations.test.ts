@@ -61,7 +61,7 @@ describe('save migrations', () => {
     const zero = { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 };
     const v16 = { ...v3.character, attributes: v16Attributes(v3.character.attributes), spentPoints: zero };
     const d = getDerivedStats({ ...v3, character: v16, training: newTrainingState() });
-    expect([d.damage.min, d.damage.max, d.defense.value]).toEqual([23, 25, 18]);
+    expect([d.damage.min, d.damage.max, d.armor.value]).toEqual([23, 25, 18]);
   });
 
   it('v2 → v3 tolerates missing attributes (defaults to 10) and keeps an existing defId', () => {

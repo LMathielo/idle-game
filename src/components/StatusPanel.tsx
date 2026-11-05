@@ -21,53 +21,65 @@ import {
   manaView,
   type RangePart,
   type Stamina,
+  STAT_EFFECTS,
   STATS,
   staminaView,
   type TrainingState,
   type ValuePart,
 } from '../engine';
 import { colors, fonts } from '../theme';
-import { ATTRIBUTE_NAMES, formatClock, formatHoursMinutes, formatNumber, itemName } from './format';
+import { ATTRIBUTE_NAMES, bpPercent, critMultText, formatClock, formatHoursMinutes, formatNumber, formatRate, itemName } from './format';
 import { Bar, Panel } from './Panel';
 import { PixelButton } from './PixelButton';
 import { type AnchorRect, InfoPopover, measureAnchor, PopoverRow, PopoverText } from './ui/InfoPopover';
 import { useCommand } from './ui/useCommand';
-
-/** 833 bp → "8.3%". */
-const pct = (bp: number) => `${Number((bp / 100).toFixed(1))}%`;
 
 /** One effect line, worded from the engine's numbers. `short` for the half-width attribute cell. */
 function effectText(e: AttributeEffect, short = false): string {
   switch (e.kind) {
     case 'damage':
       return `+${formatNumber(e.amount)} damage`;
-    case 'defense':
-      return `+${formatNumber(e.amount)} defense`;
+    case 'armor':
+      return `+${formatNumber(e.amount)} armor`;
+    case 'maxHp':
+      return `+${formatNumber(e.amount)} HP`;
     case 'hpRegen':
-      return `+${formatNumber(e.amount)} HP/min`;
+      return `+${formatRate(e.amount)} HP/min`;
+    case 'magicDamage':
+      return `+${formatNumber(e.amount)} magic damage`;
+    case 'magicResist':
+      return short ? `+${formatNumber(e.amount)} resist` : `+${formatNumber(e.amount)} magic resist`;
+    case 'maxMana':
+      return `+${formatNumber(e.amount)} mana`;
     case 'manaRegen':
-      return `+${formatNumber(e.amount)} mana/min`;
+      return `+${formatRate(e.amount)} mana/min`;
     case 'gatheringPower':
       return short ? `+${formatNumber(e.amount)} WS & MS` : `+${formatNumber(e.amount)} woodcutting & mining strength`;
+    case 'critMultiplier':
+      return `${critMultText(e.bp)} crit damage`;
+    case 'damageMult':
+      return `+${bpPercent(e.bp)} damage`;
+    case 'critChance':
+      return `+${bpPercent(e.bp)} crit chance`;
+    case 'armorMult':
+      return `+${bpPercent(e.bp)} armor and magic resist`;
+    case 'magicDamageMult':
+      return `+${bpPercent(e.bp)} magic damage`;
     case 'activityTime':
-      return `−${pct(e.bp)} search, cut & mining time`;
+      return short ? `−${bpPercent(e.bp)} search, cut & mine time` : `−${bpPercent(e.bp)} search, cut & mining time`;
     case 'craftTime':
-      return `−${pct(e.bp)} crafting time`;
+      return `−${bpPercent(e.bp)} crafting time`;
   }
 }
 
-const effectsText = (effects: AttributeEffect[], short = false) => effects.map((e) => effectText(e, short)).join(', ');
+const effectsText = (effects: AttributeEffect[], short = false) => effects.map((e) => effectText(e, short)).join(' · ');
 
-/** The cell's one-line summary: the linear effects, else the core ones (a hint while there is no core point yet). */
-function summaryOf(v: AttributeView): { text: string; active: boolean } {
-  if (v.linear.length > 0) return { text: effectsText(v.linear, true), active: true };
-  if (v.coreEffects.length === 0) return { text: 'no effect yet', active: false };
-  if (v.core === 0) return { text: 'train core for its effect', active: false };
-  return { text: effectsText(v.coreEffects), active: true };
+/** The cell's lines: the plain effects (always), and the core ones once there is a core point to show. */
+function summaryOf(v: AttributeView): { plain: string; core: string | null } {
+  return { plain: effectsText(v.linear, true), core: v.core > 0 && v.coreEffects.length > 0 ? `Core: ${effectsText(v.coreEffects, true)}` : null };
 }
 
-
-type StatKey = 'damage' | 'defense' | 'attackIntervalMs' | 'maxHp' | 'maxMana';
+type StatKey = 'damage' | 'magicDamage' | 'armor' | 'magicResist' | 'critChance' | 'critMultiplier' | 'attackIntervalMs' | 'maxHp' | 'maxMana';
 
 type Pending = Record<AttributeKey, number>;
 const NO_PENDING: Pending = { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 };
@@ -95,8 +107,14 @@ function partLabel(p: RangePart | ValuePart): string {
     }
     case 'strength':
       return 'STR';
+    case 'dexterity':
+      return 'DEX';
     case 'endurance':
       return 'END';
+    case 'intelligence':
+      return 'INT';
+    case 'core':
+      return p.attribute ? `core ${ATTRIBUTE_NAMES[p.attribute].short}` : 'core';
     case 'base':
       return 'base';
     case 'level':
@@ -160,9 +178,38 @@ export const StatusPanel = memo(function StatusPanel({
   const attrInfo = info ? attrs.find((a) => a.attribute === info.key) : undefined;
   const attrNames = attrInfo ? ATTRIBUTE_NAMES[attrInfo.attribute] : undefined;
 
+  const cores = attrs.reduce((m, a) => ({ ...m, [a.attribute]: a.core }), {} as Record<AttributeKey, number>);
   const rows: { key: StatKey; label: string; value: string; note?: string; detail: string }[] = [
-    { key: 'damage', label: 'Damage', value: range(stats.damage.min, stats.damage.max), detail: `Damage ${range(stats.damage.min, stats.damage.max)} = ${describeRange(stats.damage.breakdown)}` },
-    { key: 'defense', label: 'Defense', value: formatNumber(stats.defense.value), detail: `Defense ${formatNumber(stats.defense.value)} = ${describeValue(stats.defense.breakdown)}` },
+    { key: 'damage', label: 'Damage', value: range(stats.damage.min, stats.damage.max), detail: `Physical damage ${range(stats.damage.min, stats.damage.max)} = ${describeRange(stats.damage.breakdown)}` },
+    {
+      key: 'magicDamage',
+      label: 'Magic damage',
+      value: formatNumber(stats.magicDamage.value),
+      detail: `Magic damage ${formatNumber(stats.magicDamage.value)} = ${describeValue(stats.magicDamage.breakdown)}. Added to every strike, reduced by the enemy's magic resist, never rolled or critical.`,
+    },
+    { key: 'armor', label: 'Armor', value: formatNumber(stats.armor.value), detail: `Armor ${formatNumber(stats.armor.value)} = ${describeValue(stats.armor.breakdown)}` },
+    {
+      key: 'magicResist',
+      label: 'Magic resist',
+      value: formatNumber(stats.magicResist.value),
+      detail: `Magic resist ${formatNumber(stats.magicResist.value)} = ${describeValue(stats.magicResist.breakdown)}. No enemy deals magic damage yet, so it has no effect in fights for now.`,
+    },
+    {
+      key: 'critChance',
+      label: 'Crit chance',
+      value: bpPercent(stats.critChanceBp.value),
+      detail:
+        `Crit chance ${bpPercent(stats.critChanceBp.value)} from core DEX ${formatNumber(cores.dexterity)} on a curve that never passes ` +
+        `${bpPercent(STAT_EFFECTS.dexterity.critChance.capBp)}. A crit multiplies the physical part of a strike.`,
+    },
+    {
+      key: 'critMultiplier',
+      label: 'Crit damage',
+      value: critMultText(stats.critMultiplierBp.value),
+      detail:
+        `Crit damage ${critMultText(stats.critMultiplierBp.value)} = ${critMultText(STATS.crit.multiplierBaseBp)} base + ` +
+        `+${critMultText(STATS.crit.multiplierPerDexterityBp)} per total DEX (no limit).`,
+    },
     {
       key: 'attackIntervalMs',
       label: 'Attacks',
@@ -173,17 +220,19 @@ export const StatusPanel = memo(function StatusPanel({
       key: 'maxHp',
       label: 'HP',
       value: `${formatNumber(hpNow.hp)} / ${formatNumber(stats.maxHp.value)}`,
-      note: `+${hpNow.regenPerMin}/min${hpNow.full ? '' : ` · full in ${formatHoursMinutes(hpNow.fullInMs)}`}`,
-      detail: `Max HP ${formatNumber(stats.maxHp.value)} = ${describeValue(stats.maxHp.breakdown)}. Regen ${hpNow.regenPerMin}/min = ${STATS.hpRegen.basePerMin} base + ${STATS.hpRegen.perEndurance} × total END.`,
+      note: `+${formatRate(hpNow.regenPerMin)}/min${hpNow.full ? '' : ` · full in ${formatHoursMinutes(hpNow.fullInMs)}`}`,
+      detail:
+        `Max HP ${formatNumber(stats.maxHp.value)} = ${describeValue(stats.maxHp.breakdown)}. ` +
+        `Regen ${formatRate(hpNow.regenPerMin)}/min = ${STATS.hpRegen.basePerMin} base + ${STATS.hpRegen.perEndurance} × total END.`,
     },
     {
       key: 'maxMana',
       label: 'Mana',
       value: `${formatNumber(manaNow.mana)} / ${formatNumber(stats.maxMana.value)}`,
-      note: `+${manaNow.regenPerMin}/min${manaNow.full ? '' : ` · full in ${formatHoursMinutes(manaNow.fullInMs)}`}`,
+      note: `+${formatRate(manaNow.regenPerMin)}/min${manaNow.full ? '' : ` · full in ${formatHoursMinutes(manaNow.fullInMs)}`}`,
       detail:
         `Max mana ${formatNumber(stats.maxMana.value)} = ${describeValue(stats.maxMana.breakdown)}. ` +
-        `Regen ${manaNow.regenPerMin}/min = ${STATS.manaRegen.basePerMin} base + ${STATS.manaRegen.perIntelligence} × total INT. Nothing uses mana yet.`,
+        `Regen ${formatRate(manaNow.regenPerMin)}/min = ${STATS.manaRegen.basePerMin} base + ${STATS.manaRegen.perIntelligence} × total INT. Nothing uses mana yet.`,
     },
   ];
   const statInfo = info && !attrInfo ? rows.find((r) => r.key === info.key) : undefined;
@@ -202,8 +251,8 @@ export const StatusPanel = memo(function StatusPanel({
               pending={spend.pending[a.attribute]}
               spending={spend.spending}
               canAdd={spend.left > 0}
-              summary={sum.text}
-              active={sum.active}
+              summary={sum.plain}
+              coreSummary={sum.core}
               onInfo={openInfo}
               onAdd={spend.add}
               onRemove={spend.remove}
@@ -230,10 +279,10 @@ export const StatusPanel = memo(function StatusPanel({
           {attrInfo.extra !== 0 ? <PopoverRow label="Extra" value={formatNumber(attrInfo.extra)} /> : null}
           <PopoverRow label="Core (training)" value={formatNumber(attrInfo.core)} />
           <PopoverText>
-            {`Total ${attrNames.short} (linear): ${attrInfo.linear.length > 0 ? effectsText(attrInfo.linear) : 'no effect yet'}`}
+            {`All ${attrNames.short} points (flat): ${effectsText(attrInfo.linear)}`}
           </PopoverText>
           <PopoverText>
-            {`Core ${attrNames.short} (special): ${attrInfo.coreEffects.length > 0 ? effectsText(attrInfo.coreEffects) : 'no special effect yet'}`}
+            {`Core ${attrNames.short} (a capped multiplier): ${effectsText(attrInfo.coreEffects)}`}
           </PopoverText>
           <PopoverText tone="note">
             Every hero level gives {ATTRIBUTE_POINTS.unspentPerLevel} points to spend (no refunds). Core points come only from the Training Grounds.
@@ -326,7 +375,7 @@ const AttributeCell = memo(function AttributeCell({
   spending,
   canAdd,
   summary,
-  active,
+  coreSummary,
   onInfo,
   onAdd,
   onRemove,
@@ -339,7 +388,8 @@ const AttributeCell = memo(function AttributeCell({
   spending: boolean;
   canAdd: boolean;
   summary: string;
-  active: boolean;
+  /** The core effects line, once the attribute has a core point. */
+  coreSummary: string | null;
   onInfo: (k: AttributeKey, node: HostInstance | null) => void;
   onAdd: (k: AttributeKey) => boolean;
   onRemove: (k: AttributeKey) => boolean;
@@ -356,7 +406,7 @@ const AttributeCell = memo(function AttributeCell({
         onPress={onPress}
         style={styles.attrInfo}
         accessibilityRole="button"
-        accessibilityLabel={`${names.label} ${total}${pending > 0 ? `, plus ${pending} pending` : ''}, ${summary}`}
+        accessibilityLabel={`${names.label} ${total}${pending > 0 ? `, plus ${pending} pending` : ''}, ${summary}${coreSummary ? `, ${coreSummary}` : ''}`}
         accessibilityHint="Shows normal and core points and what each does"
       >
         <View style={styles.attrTop}>
@@ -366,7 +416,8 @@ const AttributeCell = memo(function AttributeCell({
             {pending > 0 ? <Text style={styles.attrPending}> (+{pending})</Text> : null}
           </Text>
         </View>
-        <Text style={active ? styles.attrEffect : styles.attrEffectNone}>{summary}</Text>
+        <Text style={styles.attrEffect}>{summary}</Text>
+        {coreSummary ? <Text style={styles.attrCore}>{coreSummary}</Text> : null}
       </Pressable>
       {spending ? (
         <View style={styles.attrButtons}>
@@ -454,7 +505,7 @@ const styles = StyleSheet.create({
   spendText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
   spendButtons: { flexDirection: 'row', gap: 10 },
   attrEffect: { fontFamily: fonts.body, fontSize: 13, color: colors.skill },
-  attrEffectNone: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
+  attrCore: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
 
   statList: { marginTop: 10 },
   statRow: {

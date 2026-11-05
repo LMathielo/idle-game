@@ -1,5 +1,5 @@
 /** Engine rules version, stored on every action_log row. Bump when rules change outcomes. */
-export const ENGINE_VERSION = '1.18.0';
+export const ENGINE_VERSION = '1.19.0';
 
 /**
  * Every engine version that ever shipped, oldest first, with the save version it wrote. Append a row on
@@ -27,6 +27,7 @@ export const RELEASED_ENGINES: readonly { engine: string; save: number }[] = [
   { engine: '1.16.0', save: 16 }, // normal + core attributes, +5 per level, new hero at 0; core DEX time curve, core STR power
   { engine: '1.17.0', save: 17 }, // spendable level-up points (5 per level), total STR → WS / MS, current mana + regen
   { engine: '1.18.0', save: 18 }, // locked start: Merchant + Storage unbuilt on a new save (Storage is a building), 500 starting gold, every search 2:00
+  { engine: '1.19.0', save: 19 }, // stats rework: STR damage, DEX crits, END toughness, INT magic; core multipliers; 0.2 regen per point (exact), defense renamed armor
 ];
 
 /** Position of a released engine version in RELEASED_ENGINES, or -1 when it never shipped. */

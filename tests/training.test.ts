@@ -363,7 +363,7 @@ describe('trained (core) points feed every rule', () => {
   it('END: defense and HP regen (total); DEX: dungeon search time (core, on the curve)', () => {
     const base = heroAtTier(2);
     const trained = { ...base, training: { ...base.training, attributes: { ...base.training.attributes, endurance: { level: 7, xp: 0, progressMs: 0 }, dexterity: { level: 25, xp: 0, progressMs: 0 } } } };
-    expect(getDerivedStats(trained).defense.value - getDerivedStats(base).defense.value).toBe(7);
+    expect(getDerivedStats(trained).armor.value - getDerivedStats(base).armor.value).toBe(7);
     expect(hpRegenPerMinute(trained)).toBe(15 + 7);
     const search = (s: GameState) => dungeonRunView(apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0))!.searchMs;
     expect(search(base)).toBe(120 * SEC);

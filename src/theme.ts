@@ -26,6 +26,8 @@ export const colors = {
   dangerEasy: '#2f6b2b',
   dangerTough: '#7a5c12',
   dangerDeadly: '#a3281c',
+  // A critical hit in the fight log (damage number and "Crit!"): dark gold, passes 4.5:1 on parchment (tests/theme.test.ts).
+  crit: '#7d5e00',
   // Item sheets and the merchant grid sit on this dark panel; every rarity color below passes 4.5:1 on it
   // (tests/theme.test.ts).
   sheet: '#3a2a1c',

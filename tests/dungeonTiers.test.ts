@@ -84,7 +84,7 @@ describe('tier table (config)', () => {
       return [
         d.tier,
         d.name,
-        `${e.name} ${e.hp} · ${e.damage.min}–${e.damage.max} · ${e.defense}`,
+        `${e.name} ${e.hp} · ${e.damage.min}–${e.damage.max} · ${e.armor}`,
         d.search.baseMs / MIN,
         `${e.attackIntervalMs} ms`,
         d.unlock ? `${d.unlock.wins} in ${d.unlock.dungeonId}` : '—',
@@ -407,6 +407,6 @@ describe('danger hint', () => {
 
   it('uses derived stats (gear + attributes)', () => {
     const d = getDerivedStats(fresh);
-    expect([d.damage.min, d.damage.max, d.defense.value]).toEqual([12, 14, 13]);
+    expect([d.damage.min, d.damage.max, d.armor.value]).toEqual([12, 14, 13]);
   });
 });

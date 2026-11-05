@@ -100,7 +100,7 @@ describe('SPEND_ATTRIBUTE_POINTS', () => {
     expect(normalAttributes(r.state)).toEqual({ strength: 3, dexterity: 0, endurance: 4, intelligence: 2 });
     const d = getDerivedStats(r.state);
     expect([d.damage.min, d.damage.max]).toEqual([12 + 3, 14 + 3]); // STR → damage
-    expect(d.defense.value).toBe(13 + 4); // END → defense
+    expect(d.armor.value).toBe(13 + 4); // END → defense
     expect(hpRegenPerMinute(r.state)).toBe(15 + 4); // END → HP regen
     expect(manaRegenPerMinute(r.state)).toBe(5 + 2); // INT → mana regen
     expect([woodcuttingStrength(r.state).value, miningStrength(r.state).value]).toEqual([21 + 3, 21 + 3]); // STR → WS / MS

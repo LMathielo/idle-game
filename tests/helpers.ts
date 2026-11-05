@@ -2,7 +2,7 @@ import { FakeClock } from '../src/client/clock';
 import { LocalGameClient } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import type { CommandInput } from '../src/client/types';
-import { applyCommand, type AttributeKey, BUILDING_IDS, BUILDINGS, type BuildingId, type Command, ENGINE_VERSION, type GameState, newGame, type ReplayEntry, v12SkillProgress } from '../src/engine';
+import { applyCommand, type AttributeKey, BUILDING_IDS, BUILDINGS, type BuildingId, type Command, type CombatSide, ENGINE_VERSION, type GameState, newGame, type ReplayEntry, v12SkillProgress } from '../src/engine';
 
 export const T0 = Date.UTC(2026, 9, 25, 12, 0, 0); // fixed epoch for deterministic tests
 export const SEC = 1000;
@@ -160,4 +160,17 @@ export function v17Added(level: number) {
 /** What the v15 → v16 migration does to stored attributes: they become extra normal points, max(0, old − 10). */
 export function v16Attributes<T extends Record<string, number>>(attributes: T): T {
   return Object.fromEntries(Object.entries(attributes).map(([k, v]) => [k, Math.max(0, v - 10)])) as T;
+}
+
+/** A combat side with the 1.19.0 fields neutral (no magic, no crits): override what a test is about. */
+export function fightSide(s: Partial<CombatSide> = {}): CombatSide {
+  return { damage: { min: 1, max: 1 }, armor: 0, magicDamage: 0, magicResist: 0, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000, ...s };
+}
+
+/**
+ * What the v18 → v19 migration does to a raw older character: the banked HP / mana regen moves to the finer unit (×100).
+ * Tests that compare a migrated old fixture with its raw document wrap the raw character in this.
+ */
+export function v19Regen<C extends { hpRegenProgress?: number; manaRegenProgress?: number }>(character: C): C {
+  return { ...character, hpRegenProgress: (character.hpRegenProgress ?? 0) * 100, manaRegenProgress: (character.manaRegenProgress ?? 0) * 100 };
 }
