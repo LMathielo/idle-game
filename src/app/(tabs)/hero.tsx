@@ -6,7 +6,6 @@ import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
 import { DebugPanel } from '../../components/DebugPanel';
 import { formatNumber } from '../../components/format';
 import { IconText, SkillIcon } from '../../components/art/Sprites';
-import { HeroHud } from '../../components/hud/HeroHud';
 import { defOf, SLOT_LABELS } from '../../components/items/itemInfo';
 import { ItemSheet, type SheetAction } from '../../components/items/ItemSheet';
 import { ItemSlot } from '../../components/items/ItemSlot';
@@ -45,10 +44,8 @@ export default function HeroScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
-      {/* The hero HUD sits at the top of the screen, above the scroll content (not floating over it). */}
-      <HeroHud />
       <ScrollView contentContainerStyle={styles.content}>
-        <HeaderPanel name={character.name} title={character.title} xp={character.xp} xpToNext={character.xpToNext} />
+        <HeaderPanel name={character.name} title={character.title} level={character.level} xp={character.xp} xpToNext={character.xpToNext} />
         <StatusPanel
           level={character.level}
           attributes={character.attributes}
@@ -75,13 +72,14 @@ export default function HeroScreen() {
 // Each panel is memoized on the slices it shows. simulate() keeps untouched slices by reference,
 // so a woodcutting action re-renders Inventory and Skills, not Equipment. Status re-renders
 // only when level, attributes, points, equipment, HP, mana, stamina or training change (HP, mana and stamina tick while
-// they regenerate, training while an attribute trains). The portrait, level and gold moved to the HUD / Inventory (1.17.0).
+// they regenerate, training while an attribute trains). The Hero tab has no HUD: its Header panel shows the level and
+// XP, Status the bars and the points to spend; gold is in the Inventory header.
 
-const HeaderPanel = memo(function HeaderPanel({ name, title, xp, xpToNext }: { name: string; title: string; xp: number; xpToNext: number }) {
+const HeaderPanel = memo(function HeaderPanel({ name, title, level, xp, xpToNext }: { name: string; title: string; level: number; xp: number; xpToNext: number }) {
   return (
     <Panel>
       <Text style={styles.name}>{name}</Text>
-      <Text style={styles.subtitle}>{title}</Text>
+      <Text style={styles.subtitle}>{`Level ${level} · ${title}`}</Text>
       <View style={styles.bars}>
         <Text style={styles.barCaption}>Experience</Text>
         <Bar value={xp} max={xpToNext} color={colors.xp} label={`${formatNumber(xp)} / ${formatNumber(xpToNext)} XP`} />

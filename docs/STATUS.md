@@ -21,6 +21,11 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
 
+### UI only (engine 1.17.0) · Hero tab without the HUD, signs scale with the map
+- **Hero tab no longer has the HUD** (`fix/village-hud-signs`): nothing covers the top of the Hero tab any more; the Header panel shows "Level N" and XP, Status the bars and the points to spend. The HUD stays on the Village tab.
+- **Village signs scale with the map:** zooming out shrinks them with the buildings (drawn in screen space and re-laid out when a pinch ends, so the pixel font stays crisp) (label 14 pt at the start zoom on a 375 pt phone, tap area 48 pt). The timer badge under it scales too.
+- **Every sign sits under its building:** centred, its top edge on the building's bottom edge (one rule, `signAnchor`; Woodcutting and Town Hall nudged 8 px each way, Mine 2 px so they do not overlap). The start view is re-centred on buildings plus signs. `village_layout.json` `sign` fields are no longer read (left in the generator output).
+
 ### UI only (engine 1.17.0, save v17) · workers on the gathering cards
 - **Assign workers where they work** (`feat/workers-on-nodes`): each tree (Woodcutting) and rock (Mine Shaft) card has [−] / [+] next to its crew line: [+] puts one free worker on it, [−] takes one off (back to unassigned). A "Workers: X free / Y hired" line sits above the cards; with no free worker [+] is off and says "No free workers · hire at Town Hall"; a node you can't work yet shows no controls (its own "Needs …" line explains; with workers still on it, [−] stays). Hidden until the Town Hall is built and a worker hired. Hiring, dismissing and the Town Hall's own assign UI are unchanged; no engine or save change.
 
