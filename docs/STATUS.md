@@ -23,7 +23,7 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 
 ### UI only (engine 1.17.0) · Hero tab without the HUD, signs scale with the map
 - **Hero tab no longer has the HUD** (`fix/village-hud-signs`): nothing covers the top of the Hero tab any more; the Header panel shows "Level N" and XP, Status the bars and the points to spend. The HUD stays on the Village tab.
-- **Village signs scale with the map:** a sign is part of the map now, so zooming out shrinks it with the buildings (label 14 pt at the start zoom on a 375 pt phone, tap area at least 44 pt). The timer badge under it scales too.
+- **Village signs scale with the map:** a sign is part of the map now, so zooming out shrinks it with the buildings (label 13.6 pt at the start zoom on a 375 pt phone, tap area 48 pt). The timer badge under it scales too.
 - **Every sign sits under its building:** centred, its top edge 15 world px below the building's bottom (one rule, `signAnchor`; Woodcutting and Town Hall nudged 7 px apart so they do not overlap). The start view is re-centred on buildings plus signs. `village_layout.json` `sign` fields are no longer read (left in the generator output).
 
 ### Tooling only (engine 1.17.0, save v17) · Expo test previews

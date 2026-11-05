@@ -14,6 +14,7 @@ import {
   SIGN_HIT_SLOP,
   SIGN_LABEL_PT,
   SIGN_NUDGE,
+  SIGN_TOUCH_H,
   SIGN_SCALE,
   SIGNS,
   signWorldBox,
@@ -194,6 +195,6 @@ describe('village map', () => {
   it.each(SCREENS)('at the start zoom on $w×$h a sign label is at least 13 pt and its tap area at least 44 pt', (view) => {
     const { start } = mapLimits(view, 100, 44);
     expect(SIGN_LABEL_PT * SIGN_SCALE * start).toBeGreaterThanOrEqual(13);
-    expect((SIGN_BUTTON_H + 2 * SIGN_HIT_SLOP) * SIGN_SCALE * start).toBeGreaterThanOrEqual(44);
+    expect(SIGN_TOUCH_H * SIGN_SCALE * start).toBeGreaterThanOrEqual(44); // the wrappers contain the slop, so this is the real tap height
   });
 });

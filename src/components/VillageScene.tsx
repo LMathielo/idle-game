@@ -19,7 +19,7 @@ import { colors, fonts } from '../theme';
 import { GameIcon } from './art/Sprites';
 import { type IconName, VILLAGE_BACKGROUND, VILLAGE_PIECES, type VillagePieceId } from './art/images';
 import { PixelButton } from './PixelButton';
-import { clampCamera, mapLimits, PIECES, SIGN_BUTTON_H, SIGN_HIT_SLOP, SIGN_SCALE, SIGNS, type VillageAction, WORLD } from './village/villageMap';
+import { clampCamera, mapLimits, PIECES, SIGN_BUTTON_H, SIGN_HIT_SLOP, SIGN_SCALE, SIGN_TOUCH_H, SIGNS, type VillageAction, WORLD } from './village/villageMap';
 
 export type { VillageAction } from './village/villageMap';
 
@@ -33,7 +33,9 @@ const pieceStyles = StyleSheet.create(
 
 /**
  * Each sign's wrapper, in the map's world px: a box wider than any label (so the text never wraps) centred on the sign's
- * x, its top edge on the sign's y, scaled by SIGN_SCALE around its top centre. The button inside has its natural size.
+ * x, scaled by SIGN_SCALE around the button's top centre. It is SIGN_HIT_SLOP taller on each side than the button (the
+ * button sits SIGN_HIT_SLOP inside, so its top edge is on the sign's y): the slop must lie inside the parents' bounds or
+ * Android never hit-tests it.
  */
 const SIGN_BOX_W = 200;
 const signStyles = StyleSheet.create(
@@ -43,12 +45,12 @@ const signStyles = StyleSheet.create(
       {
         position: 'absolute',
         left: s.x - SIGN_BOX_W / 2,
-        top: s.y,
+        top: s.y - SIGN_HIT_SLOP,
         width: SIGN_BOX_W,
-        height: SIGN_BUTTON_H,
+        height: SIGN_TOUCH_H,
         alignItems: 'center',
         transform: [{ scale: SIGN_SCALE }],
-        transformOrigin: '50% 0%',
+        transformOrigin: `50% ${SIGN_HIT_SLOP}px`,
       },
     ] as const),
   ),
@@ -254,7 +256,8 @@ const Sign = memo(function Sign({ sign, locked, active, badge, onAction, anchorO
   /** The button's own natural size (layout, before any scale). */
   const button = useRef({ w: 0, h: SIGN_BUTTON_H });
   const onButtonLayout = useCallback((e: LayoutChangeEvent) => {
-    button.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height };
+    // The measured view is padded by the slop on every side: the visible button is what is left.
+    button.current = { w: e.nativeEvent.layout.width - 2 * SIGN_HIT_SLOP, h: SIGN_BUTTON_H };
   }, []);
   const press = useCallback(() => {
     onPressStart();
@@ -262,7 +265,7 @@ const Sign = memo(function Sign({ sign, locked, active, badge, onAction, anchorO
   }, [onAction, onPressStart, anchorOf, sign]);
   return (
     <View style={signStyles[sign.key]} pointerEvents="box-none">
-      <View onLayout={onButtonLayout}>
+      <View onLayout={onButtonLayout} style={styles.buttonBox}>
         <PixelButton
           sign
           label={sign.label}
@@ -291,11 +294,13 @@ const styles = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden', backgroundColor: colors.night },
   map: { position: 'absolute', left: 0, top: 0, width: WORLD.w, height: WORLD.h, transformOrigin: 'left top' },
   image: { width: '100%', height: '100%' },
+  // The button plus SIGN_HIT_SLOP of padding on every side (the real touch area lies inside this box).
+  buttonBox: { padding: SIGN_HIT_SLOP },
   // Pinned just under the button; it hangs below the sign's box and scales with it.
   badge: {
     position: 'absolute',
     alignSelf: 'center',
-    top: SIGN_BUTTON_H + BADGE_GAP,
+    top: SIGN_HIT_SLOP + SIGN_BUTTON_H + BADGE_GAP,
     height: BADGE_H,
     paddingHorizontal: 6,
     flexDirection: 'row',

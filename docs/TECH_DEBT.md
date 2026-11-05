@@ -50,6 +50,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#22, 30] No test for a nonzero `minQuality` (hook, 0 today). Add one when the first mechanic sets it.
 - [#25, 40] `tests/dungeon.test.ts` (8 h cap test) — no longer asserts HP and mana are full after the 12 h beyond the cap. Assert both equal their max.
 - [#25, 25] `tests/statPoints.test.ts` — no tick-vs-resume case for a spend mid-woodcutting with a hired crew. Add one.
+- [#31, 35] `VillageScene.tsx` — sign text inside the scaled map layer is rasterised then scaled on iOS (up to ~1.9x at max zoom) and may look soft; badge text is ~9.8 pt at the start zoom. Check on device; if soft, bigger font + smaller scale.
+- [#31, 25] `tests/villageMap.test.ts` — the "centred under its building" test re-implements the signAnchor formula. Add a literal expected position for one sign.
 - [#26, 60] `tests/villageMap.test.ts` — the sign overlap test (now in world px, 2026-11-05) still uses hand-measured `LABEL_W` widths, so it won't notice a label or font change. Derive the widths from the real label metrics (or snapshot a measured layout) instead of constants.
 
 ## Docs and workflow

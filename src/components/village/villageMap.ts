@@ -48,15 +48,20 @@ const SIGN_PLOTS: Partial<Record<VillageAction, PlotId>> = { crafting: 'east' };
 /**
  * Signs scale with the map (2026-11-05): a sign is the normal-size PixelButton (44 tall, 18 pt Pixelify Sans Bold label)
  * drawn inside the map layer at this scale, so on screen it is SIGN_SCALE × zoom times its natural size, like the
- * buildings. At the start zoom on a 375 pt phone (1.5625) the label is 18 × 0.5 × 1.5625 = 14 pt.
+ * buildings. At the start zoom on a 375 pt phone (375 / 248 = 1.512) the label is 18 × 0.5 × 1.512 = 13.6 pt.
  */
 export const SIGN_SCALE = 0.5;
 /** Natural height of a sign button: 38 inner + 3 frame each side (PixelButton). */
 export const SIGN_BUTTON_H = 44;
 /** Natural label size of a sign (PixelButton `sign`). */
 export const SIGN_LABEL_PT = 18;
-/** Extra touch area around a sign, in natural px (scaled with it): 44 + 2 × 10 = 64 natural = 50 pt at the start zoom on 375 pt. */
+/**
+ * Extra touch area around a sign, in natural px (scaled with it). The sign's wrappers are padded by this much, so the
+ * slop lies inside their bounds (Android only hit-tests a hitSlop inside the parent).
+ */
 export const SIGN_HIT_SLOP = 10;
+/** The real touch height, natural px: 44 + 2 × 10 = 64, so 64 × 0.5 × 1.512 = 48.4 pt at the start zoom on 375 pt. */
+export const SIGN_TOUCH_H = SIGN_BUTTON_H + 2 * SIGN_HIT_SLOP;
 /** A sign's top edge sits this far below its building box's bottom edge, world px. */
 export const SIGN_GAP = 15;
 
@@ -107,7 +112,7 @@ export const PLOTS: Record<PlotId, readonly [number, number, number, number]> = 
 export const MAX_ZOOM_FACTOR = 2.5;
 /**
  * Min zoom = the larger of "the map still covers the screen" and this × the starting zoom. Signs shrink with the map
- * now (so they never pile up); the limit keeps the labels readable (14 pt at start, about 10 pt at the farthest zoom out).
+ * now (so they never pile up); the limit keeps the labels readable (13.6 pt at start on 375 pt, about 9.5 pt at the farthest zoom out).
  */
 export const MIN_ZOOM_FACTOR = 0.7;
 
