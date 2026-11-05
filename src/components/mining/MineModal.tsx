@@ -5,11 +5,11 @@
 import { memo, type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, type HostInstance, ScrollView, type ListRenderItem, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useGameSnapshot } from '../../client/GameProvider';
-import { type CrewView, crewViews, mineActivityView, type MineActivityView, miningView, type RockId, type RockView } from '../../engine';
+import { type CrewView, crewViews, type WorkerNodeId, mineActivityView, type MineActivityView, miningView, type RockId, type RockView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { confirmCancelRun } from '../dungeon/confirmCancelRun';
-import { GameIcon, IconText, ItemIcon, NodeIcon } from '../art/Sprites';
-import { formatBp, formatClock, formatNumber, formatPerMin, itemName } from '../format';
+import { IconText, ItemIcon, NodeIcon } from '../art/Sprites';
+import { formatBp, formatClock, formatNumber, itemName } from '../format';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
 import { LiveBar } from '../LiveBar';
 import { ModalScreen } from '../ModalScreen';
@@ -17,6 +17,7 @@ import { Bar } from '../Panel';
 import { PixelButton } from '../PixelButton';
 import { type AnchorRect, InfoPopover, measureAnchor, PopoverRow, PopoverText } from '../ui/InfoPopover';
 import { useCommand } from '../ui/useCommand';
+import { crewStatusText, NodeCrewControl, nodeWorkersInfo, useWorkerActions, WorkersLine } from '../workers/NodeWorkers';
 
 /** Width of the next card that shows at the right edge (the "peek"), and the gap between cards. */
 const PEEK = 28;
@@ -71,6 +72,8 @@ export function MineModal() {
     [client, send],
   );
 
+  const { onAssign, onUnassign } = useWorkerActions(send, client);
+  const wk = useMemo(() => nodeWorkersInfo(state), [state]);
   const current = view.current;
   const crewOf = useMemo(() => new Map(crewViews(state, 'mining').map((c) => [c.node, c])), [state]);
   const stamina = state.stamina.current;
@@ -81,6 +84,11 @@ export function MineModal() {
       <RockCard
         rock={item}
         crew={crewOf.get(item.rockId) ?? null}
+        show={wk.show}
+        free={wk.free}
+        reason={wk.reasons.get(item.rockId) ?? null}
+        onAssign={onAssign}
+        onUnassign={onUnassign}
         width={cardWidth}
         current={item.active ? current : null}
         stamina={stamina}
@@ -93,7 +101,7 @@ export function MineModal() {
         onInfo={openInfo}
       />
     ),
-    [cardWidth, crewOf, current, stamina, clockPaused, view.level, view.ms.value, onStart, onStop, onSkip, openInfo],
+    [cardWidth, crewOf, wk, onAssign, onUnassign, current, stamina, clockPaused, view.level, view.ms.value, onStart, onStop, onSkip, openInfo],
   );
   const getItemLayout = useCallback((_: unknown, index: number) => ({ length: step, offset: step * index, index }), [step]);
   const separator = useCallback(() => <View style={styles.gap} />, []);
@@ -124,6 +132,7 @@ export function MineModal() {
     >
       {clockPaused ? <Text style={styles.paused}>Paused: your device clock moved back. Ores wait until it catches up.</Text> : null}
       <ScrollView contentContainerStyle={styles.scroll}>
+        <WorkersLine info={wk} />
         <FlatList
           data={view.rocks}
           keyExtractor={(r) => r.rockId}
@@ -163,6 +172,11 @@ type CardProps = {
   rock: RockView;
   /** The workers on this node, or null. */
   crew: CrewView | null;
+  show: boolean;
+  free: number;
+  reason: string | null;
+  onAssign: (node: WorkerNodeId) => void;
+  onUnassign: (node: WorkerNodeId) => void;
   width: number;
   /** The ore in progress when this rock is being mined. */
   current: MineActivityView | null;
@@ -176,7 +190,7 @@ type CardProps = {
   onInfo: (id: RockId, node: HostInstance | null) => void;
 };
 
-const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, paused, level, ms, onStart, onStop, onSkip, onInfo }: CardProps) {
+const RockCard = memo(function RockCard({ rock, crew, show, free, reason, onAssign, onUnassign, width, current, stamina, paused, level, ms, onStart, onStop, onSkip, onInfo }: CardProps) {
   const start = useCallback(() => onStart(rock.rockId, rock.name), [onStart, rock.rockId, rock.name]);
   const skip = useCallback(({ repeat }: { repeat: boolean }) => onSkip(repeat), [onSkip]);
   const infoRef = useRef<HostInstance>(null);
@@ -216,15 +230,18 @@ const RockCard = memo(function RockCard({ rock, crew, width, current, stamina, p
         {geode ? <Fact label={itemName(geode.itemId)} labelIcon={<ItemIcon defId={geode.itemId} size={16} />} value={`1 in ${formatNumber(Math.round(1 / geode.chance))}`} /> : null}
       </View>
 
-      {crew ? (
-        <View style={styles.crewRow}>
-          <GameIcon name="workers" />
-          <Text style={[styles.crew, crew.status !== 'working' && styles.crewOff]} accessibilityLabel={`${crew.workers} workers here, ${crew.status === 'working' ? `about ${formatPerMin(crew.itemsPerMin)} per minute` : crew.status}`}>
-            {crew.workers} {crew.workers === 1 ? 'worker' : 'workers'} ·{' '}
-            {crew.status === 'working' ? `${formatPerMin(crew.itemsPerMin)} ${itemName(crew.itemId)}/min` : crew.status === 'idle' ? 'idle (you can’t work it now)' : 'paused (upkeep)'}
-          </Text>
-        </View>
-      ) : null}
+      <NodeCrewControl
+        node={rock.rockId}
+        name={rock.name}
+        workers={crew?.workers ?? 0}
+        statusText={crew ? crewStatusText(crew) : null}
+        off={!!crew && crew.status !== 'working'}
+        show={show}
+        free={free}
+        reason={reason}
+        onAssign={onAssign}
+        onUnassign={onUnassign}
+      />
 
       {current ? (
         <View style={styles.running}>
@@ -309,8 +326,6 @@ function Fact({ label, value, labelIcon, valueIcon }: { label: string; value: st
 const styles = StyleSheet.create({
   scroll: { paddingBottom: 24 },
   titleRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
-  crew: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerEasy, textAlign: 'center' },
-  crewOff: { color: colors.dangerDeadly },
   stamina: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.stamina },
   headerBelow: { paddingHorizontal: 12, gap: 4 },
   ms: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.parchment },
@@ -345,7 +360,6 @@ const styles = StyleSheet.create({
   bar: { height: 14 },
   actions: { flexDirection: 'row', justifyContent: 'center', gap: 10, minHeight: 48, alignItems: 'center' },
   locked: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.dangerDeadly, textAlign: 'center' },
-  crewRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5 },
 
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 12 },
   dot: { width: 10, height: 10, backgroundColor: colors.woodDark, borderWidth: 2, borderColor: colors.goldDark },

@@ -21,6 +21,9 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
 
+### UI only (engine 1.17.0, save v17) · workers on the gathering cards
+- **Assign workers where they work** (`feat/workers-on-nodes`): each tree (Woodcutting) and rock (Mine Shaft) card has [−] / [+] next to its crew line: [+] puts one free worker on it, [−] takes one off (back to unassigned). A "Workers: X free / Y hired" line sits above the cards; with no free worker [+] is off and says "No free workers · hire at Town Hall"; a node you can't work yet shows the engine's reason. Hidden until the Town Hall is built and a worker hired. Hiring, dismissing and the Town Hall's own assign UI are unchanged; no engine or save change.
+
 ### Tooling only (engine 1.17.0, save v17) · Expo test previews
 - **Try a PR in Expo Go before merging** (`feat/expo-test-previews`): add the label `expo-test` to a PR and the workflow `expo-preview.yml` publishes it on an EAS branch named like the git branch, with one comment (link + QR code) edited on every push. Removing the label or closing / merging the PR deletes the preview. PRs from `main` / `dev` are refused.
 - **Per-branch saves:** `main` keeps `idle-game.db`; `dev` now uses `idle-game-dev.db`, copied once from `idle-game.db` on its first launch; each preview starts fresh in `idle-game-<branch>.db`. Hero tab → Debug shows the slot and the build label. Local `npx expo start` = `main`.
