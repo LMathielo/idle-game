@@ -55,6 +55,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#31, 30] `VillageScene.tsx` — the sign timer badge text is ~9.8 pt at the start zoom (below the 13 pt text rule; signs are 13.6 pt). Bigger badge font if it is hard to read on device.
 - [#31, 20] `village/SignButton.tsx` — duplicates PixelButton's sign styles at a scale. Give PixelButton a `scale` prop and drop this file.
 - [#31, 25] `tests/villageMap.test.ts` — the "centred under its building" test re-implements the signAnchor formula. Add a literal expected position for one sign.
+- [#31, 35] `village/villageMap.ts` `SIGN_LAYOUT_SCALE` — 3x layout means ~4-6x minification on iOS; text/icons may shimmer while pinching. If seen on device, drop to 2 (max needed 2.17 on 430 pt); tablets above ~595 pt would exceed 3.
 - [#26, 60] `tests/villageMap.test.ts` — the sign overlap test (now in world px, 2026-11-05) still uses hand-measured `LABEL_W` widths, so it won't notice a label or font change. Derive the widths from the real label metrics (or snapshot a measured layout) instead of constants.
 
 ## Docs and workflow

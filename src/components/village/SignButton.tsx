@@ -56,7 +56,7 @@ function makeStyles(k: number) {
       shadowOffset: { width: 3 * k, height: 3 * k },
       shadowOpacity: 0.6,
       shadowRadius: 0,
-      elevation: 4,
+      elevation: 4 * k,
     },
     outerActive: { backgroundColor: colors.gold },
     outerPressed: { transform: [{ translateY: 2 * k }], shadowOffset: { width: k, height: k } },
@@ -64,7 +64,7 @@ function makeStyles(k: number) {
     inner: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6 * k,
+      gap: 4 * k, // icon to label, like PixelButton's icon row
       minHeight: 38 * k,
       backgroundColor: colors.wood,
       paddingHorizontal: 10 * k,
