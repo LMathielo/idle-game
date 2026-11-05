@@ -2,6 +2,33 @@
 
 How the game rules, time, saves and the action log fit together. Read this before touching `src/engine` or `src/client`.
 
+## Contents
+
+Read only the sections your task needs: pick them here, then `grep -n '^## ' docs/ENGINE.md` for their line ranges.
+
+| Section | What it covers |
+| --- | --- |
+| [Layers](#layers) | Diagram: UI → GameClient → engine + SQLite repository → action log → future server. |
+| [Seeded randomness, in plain words](#seeded-randomness-in-plain-words) | Why rolls come from a seed stored in the save, and what that buys. |
+| [Time rules](#time-rules) | `simulate(state, now)`, accepted vs granted time, 8 h offline cap; exploits these rules close. |
+| [XP curves](#xp-curves) | Hero and skill `xpToNext` formulas and growth bands. |
+| [Attributes & derived stats](#attributes--derived-stats) | Normal / core / total attributes, derived stats, mana (1.17.0), item catalog. |
+| [Merchant & economy](#merchant--economy) | Rarity, gear quality and rarity, prices, merchant state, refresh charges, commands. |
+| [Stamina](#stamina) | Pool, regen (+1 / 5 min, ignores the offline cap), what spends it. |
+| [Dungeon & combat](#dungeon--combat) | Tiers, unlocks, danger hint, one activity at a time, runs, search skip, HP regen, event walk, fight, fight in progress, stored log. |
+| [Woodcutting](#woodcutting) | Woodcutting strength (WS), trees, rules. |
+| [Mining (Mine Shaft)](#mining-mine-shaft) | Mirrors woodcutting rule for rule, with its own numbers (MS, rocks, ores). |
+| [Gathering yield (1.10.0)](#gathering-yield-1100) | Shared power-based yield math for woodcutting, mining and crews. |
+| [Buildings](#buildings) | Locked / built, upgrades and the builder, per-level building bonuses. |
+| [The world walk (1.10.0)](#the-world-walk-1100) | How `simulate` runs the hero beside the builder, worker crews and crafting pipes. |
+| [Workers (1.10.0)](#workers-1100) | Hire, assign, crews, upkeep, cap per Town Hall level. |
+| [Crafting (1.13.0; gear 1.14.0; continuous pipes 1.15.0)](#crafting-1130-gear-1140-continuous-pipes-1150) | Continuous material pipes, INT time reduction, gear crafting. |
+| [Training](#training) | Model, commands, time / cap / events, UI selectors. |
+| [Storage: SQLite as a document store](#storage-sqlite-as-a-document-store) | Why SQLite as a document store, the repository, save versions and every migration. |
+| [Action log & sync](#action-log--sync) | Append-only action log, state hash, sync outbox, replay anchors (engine-version spans). |
+| ["While you were away"](#while-you-were-away) | When the away summary shows and what it lists. |
+| [Debug tools](#debug-tools) | `DEV_TOOLS_ENABLED`, `DEBUG_*` actions, the permanent `debugUsed` flag. |
+
 ## Layers
 
 ```
