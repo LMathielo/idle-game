@@ -47,8 +47,8 @@ describe('new items (owner-approved table)', () => {
     const gear = (defId: string) => ({ id: `${defId}#1`, defId, name: defId, icon: '?', slot: getItemDef(defId)!.slot });
     const equipment = { ...s.character.equipment, armor: gear('iron_chestplate'), shield: gear('iron_shield'), helmet: gear('iron_helm'), gloves: gear('iron_gloves'), boots: gear('iron_boots') };
     const d = getDerivedStats({ ...s, character: { ...s.character, equipment } });
-    expect(d.defense.value).toBe(6 + 5 + 4 + 2 + 2 + 10); // + END 10
-    expect(d.defense.breakdown.filter((p) => p.source === 'armor').map((p) => p.slot).sort()).toEqual(['armor', 'boots', 'gloves', 'helmet', 'shield']);
+    expect(d.armor.value).toBe(6 + 5 + 4 + 2 + 2 + 10); // + END 10
+    expect(d.armor.breakdown.filter((p) => p.source === 'armor').map((p) => p.slot).sort()).toEqual(['armor', 'boots', 'gloves', 'helmet', 'shield']);
   });
 });
 

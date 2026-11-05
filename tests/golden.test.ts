@@ -82,11 +82,21 @@
 // start with the 1.17.0 search times, see runScript); the hashes of the pins taken at save v17 moved because the state gained
 // `storage` and the save version (the 1.12.0 pin seen in the v12 shape is unchanged). The new rules are pinned in
 // tests/lockedStart.test.ts.
+// 1.18.0 → 1.19.0 (2026-11-05): save v19 (the stats rework: STR physical damage, DEX crits, END toughness, INT magic; core
+// multipliers; regen at 0.2 per point in hundredths of a point per minute; defense renamed armor). Every hero strike now
+// draws a crit check right after its damage roll (even at 0% chance), so every roll after a hero strike comes from a later
+// point in the RNG stream (the Rat's rolls, the yield and gold rolls, the merchant's refresh), and END gives +5 max HP per
+// point (the scripts' debug END). Runs, wins, levels and the crafting rules did not change, but gold, loot, HP, the
+// merchant's listings and every hash did, so every pin was re-pinned from the new engine (the diff of each pin is the RNG shift
+// above; the 2,000 g in the 1.14.0 segment is the first gear listing, now a 500 g Iron Sword instead of the 2,500 g Steel Axe).
+// The 1.3.0 – 1.17.0 scripts still run from the 1.17.0 start with the 1.17.0 search times, now on a second copy of the engine
+// built with those times as data (`loadEngineWithSearchMinutes`) instead of by editing DUNGEONS in place. The 1.19.0 script from a
+// plain `newGame` is in tests/golden119.test.ts.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
-  DUNGEONS,
+  type DungeonId,
   getItemDef,
   applyCommand,
   effectiveAttributes,
@@ -120,9 +130,33 @@ const C = B + 7 * SEC + 3 * HOUR + 30 * MIN;
 /** End of the 1.7.0 script; the 1.8.0 segment starts here. */
 const D = C + 15 * SEC + 6 * HOUR;
 
+/**
+ * A second copy of the engine whose dungeon searches take `minutes` (the search base passed as data; the live DUNGEONS table
+ * is never touched, so nothing leaks into other tests). The 1.3.0 – 1.17.0 scripts run on it: a search was 2 / 3 / 5 / 8 / 12
+ * minutes by tier before 1.18.0 made every one 2:00. States are plain data, so they move freely between the two copies.
+ */
+async function loadEngineWithSearchMinutes(minutes: Record<DungeonId, number>) {
+  vi.resetModules();
+  vi.doMock('../src/engine/config/dungeons', async () => {
+    const actual = await vi.importActual<typeof import('../src/engine/config/dungeons')>('../src/engine/config/dungeons');
+    const DUNGEONS = Object.fromEntries(
+      Object.entries(actual.DUNGEONS).map(([id, d]) => [id, { ...d, search: { ...d.search, baseMs: minutes[id as DungeonId] * 60_000 } }]),
+    ) as typeof actual.DUNGEONS;
+    return { ...actual, DUNGEONS };
+  });
+  const engine = await import('../src/engine');
+  vi.doUnmock('../src/engine/config/dungeons');
+  vi.resetModules();
+  return engine;
+}
+
+/** The 1.17.0 search times in minutes (before 1.18.0, see runScript). */
+const V17_SEARCH_MIN = { rat_cellar: 2, bat_cave: 3, wolf_den: 5, forgotten_crypt: 8, troll_bridge: 12 } as const;
+const legacyEngine = await loadEngineWithSearchMinutes(V17_SEARCH_MIN);
+
 /** The search skip the UI would send for the run on screen. */
 const skipShown = (id: string) => (s: GameState): Command => {
-  const v = dungeonRunView(s)!;
+  const v = legacyEngine.dungeonRunView(s)!; // the search on screen is a 1.17.0 one (see loadEngineWithSearchMinutes)
   return { id, type: 'SKIP_DUNGEON_RUN', run: v.run, maxCost: v.skipCost! };
 };
 
@@ -438,29 +472,21 @@ const SCRIPT: Step[] = [
  * is exactly what it was and only the hashes moved (save v18 stores `storage`). The 1.18.0 segment (tests/lockedStart.test.ts)
  * pins the new rules.
  */
-const V17_SEARCH_MIN = { rat_cellar: 2, bat_cave: 3, wolf_den: 5, forgotten_crypt: 8, troll_bridge: 12 } as const;
-
 function runScript(steps: Step[] = SCRIPT, seed = 0xc0ffee) {
-  const saved = Object.fromEntries(Object.entries(DUNGEONS).map(([id, d]) => [id, d.search]));
-  for (const [id, min] of Object.entries(V17_SEARCH_MIN)) DUNGEONS[id as keyof typeof V17_SEARCH_MIN].search = { ...DUNGEONS[id as keyof typeof V17_SEARCH_MIN].search, baseMs: min * MIN };
-  try {
-    let s = v17Start(seed, T0);
-    for (const step of steps) {
-      if (step.patch) {
-        s = step.patch(s);
-      } else if (step.cmd) {
-        const c = typeof step.cmd === 'function' ? step.cmd(s) : step.cmd;
-        const r = applyCommand(s, c, step.at);
-        if (!r.ok) throw new Error(r.error.message);
-        s = r.state;
-      } else {
-        s = simulate(s, step.at).state;
-      }
+  let s = v17Start(seed, T0);
+  for (const step of steps) {
+    if (step.patch) {
+      s = step.patch(s);
+    } else if (step.cmd) {
+      const c = typeof step.cmd === 'function' ? step.cmd(s) : step.cmd;
+      const r = legacyEngine.applyCommand(s, c, step.at);
+      if (!r.ok) throw new Error(r.error.message);
+      s = r.state;
+    } else {
+      s = legacyEngine.simulate(s, step.at).state;
     }
-    return s;
-  } finally {
-    for (const [id, search] of Object.entries(saved)) DUNGEONS[id as keyof typeof V17_SEARCH_MIN].search = search;
   }
+  return s;
 }
 
 describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
@@ -502,6 +528,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.16.0', 16],
       ['1.17.0', 17],
       ['1.18.0', 18],
+      ['1.19.0', 19],
     ]);
   });
 });
@@ -525,7 +552,7 @@ describe('golden', () => {
           "runs": 90,
           "wins": 90,
         },
-        "gold": 353,
+        "gold": 333,
         "heroLevel": 12,
         "hp": [
           160,
@@ -561,7 +588,7 @@ describe('golden', () => {
     }).toMatchInlineSnapshot(`
       {
         "actions": 420,
-        "batWings": 10,
+        "batWings": 17,
         "byDungeon": {
           "bat_cave": {
             "losses": 0,
@@ -574,7 +601,7 @@ describe('golden', () => {
             "wins": 90,
           },
         },
-        "gold": 683,
+        "gold": 682,
         "heroLevel": 12,
         "hp": [
           160,
@@ -633,30 +660,39 @@ describe('golden', () => {
             "enemyHpEnd": 0,
             "enemyId": "rat",
             "enemyMaxHp": 30,
-            "heroHpEnd": 169,
-            "heroHpStart": 170,
-            "heroMaxHp": 170,
+            "heroHpEnd": 368,
+            "heroHpStart": 370,
+            "heroMaxHp": 370,
             "log": [
               {
                 "actor": "hero",
                 "atMs": 1000,
-                "dealt": 16,
-                "roll": 17,
+                "crit": false,
+                "dealt": 18,
+                "magic": 0,
+                "physical": 18,
+                "roll": 19,
                 "strike": 1,
-                "targetHpAfter": 14,
+                "targetHpAfter": 12,
               },
               {
                 "actor": "enemy",
                 "atMs": 1000,
-                "dealt": 1,
-                "roll": 3,
+                "crit": false,
+                "dealt": 2,
+                "magic": 0,
+                "physical": 2,
+                "roll": 5,
                 "strike": 1,
-                "targetHpAfter": 169,
+                "targetHpAfter": 368,
               },
               {
                 "actor": "hero",
                 "atMs": 2000,
+                "crit": false,
                 "dealt": 18,
+                "magic": 0,
+                "physical": 18,
                 "roll": 19,
                 "strike": 2,
                 "targetHpAfter": 0,
@@ -676,18 +712,18 @@ describe('golden', () => {
             "wins": 167,
           },
         },
-        "gold": 974,
+        "gold": 981,
         "heroLevel": 13,
         "hp": [
-          170,
+          370,
           0,
         ],
         "logs": {
-          "birch_logs": 40,
-          "oak_logs": 1845,
+          "birch_logs": 38,
+          "oak_logs": 1842,
         },
         "rng": {
-          "seed": 2880596583,
+          "seed": 52031315,
         },
         "stamina": {
           "current": 91,
@@ -755,10 +791,10 @@ describe('golden', () => {
           "runs": 197,
           "wins": 197,
         },
-        "gold": 1297,
+        "gold": 1295,
         "heroLevel": 13,
         "hp": [
-          170,
+          370,
           0,
         ],
         "inventory": {
@@ -777,7 +813,7 @@ describe('golden', () => {
               "icon": "🪵",
               "id": "oak_logs",
               "name": "Oak Logs",
-              "quantity": 1745,
+              "quantity": 1742,
               "stackable": true,
             },
             {
@@ -785,7 +821,7 @@ describe('golden', () => {
               "icon": "🪺",
               "id": "bird_nest",
               "name": "Bird Nest",
-              "quantity": 3,
+              "quantity": 2,
               "stackable": true,
             },
             {
@@ -793,7 +829,7 @@ describe('golden', () => {
               "icon": "🐾",
               "id": "rat_skin",
               "name": "Rat Skin",
-              "quantity": 67,
+              "quantity": 64,
               "stackable": true,
             },
             {
@@ -801,7 +837,7 @@ describe('golden', () => {
               "icon": "🪽",
               "id": "bat_wing",
               "name": "Bat Wing",
-              "quantity": 10,
+              "quantity": 17,
               "stackable": true,
             },
             {
@@ -809,7 +845,7 @@ describe('golden', () => {
               "icon": "🪵",
               "id": "birch_logs",
               "name": "Birch Logs",
-              "quantity": 64,
+              "quantity": 62,
               "stackable": true,
             },
             {
@@ -823,12 +859,12 @@ describe('golden', () => {
           ],
         },
         "logs": {
-          "birch_logs": 64,
-          "oak_logs": 1745,
+          "birch_logs": 62,
+          "oak_logs": 1742,
         },
-        "nests": 3,
+        "nests": 2,
         "nextItemSerial": 3,
-        "seed": 4249421417,
+        "seed": 3940622529,
         "stamina": {
           "current": 100,
           "max": 100,
@@ -847,7 +883,8 @@ describe('golden', () => {
     // 1.13.0: unchanged outcomes; seen in the v12 shape (no Crafting house, smithing back) the hash is the 1.12.0 one.
     // 1.16.0: re-pinned (was d6b0bd86): 2:00 cuts, ores and searches at core DEX 0, level points in every fight.
     // 1.17.0: re-pinned (was 0aefeb9f): no automatic level points (fights a little longer), points to spend, mana.
-    expect(hashState(asV12(s))).toBe('19a041ff');
+    // 1.19.0: re-pinned (was 19a041ff): crit draws shift the fight rolls, END gives max HP, logged strikes carry crit / physical / magic.
+    expect(hashState(asV12(s))).toBe('305eb62d');
   });
 
   it('the 1.11.0 segment: Training Grounds Lv2 completes mid-training (1 → 2 XP/min at that instant), speed-up at 2 XP/min', () => {
@@ -914,7 +951,7 @@ describe('golden', () => {
         "actions": 810,
         "activity": "training",
         "axe": "iron_axe",
-        "batWings": 10,
+        "batWings": 17,
         "buildings": {
           "merchant": {
             "level": 1,
@@ -958,11 +995,11 @@ describe('golden', () => {
         "dungeonActivity": null,
         "engineVersion": "1.16.0",
         "gloves": "iron_gloves#2",
-        "gold": 1387,
-        "hash": "2f410208",
+        "gold": 1388,
+        "hash": "4dff3151",
         "heroLevel": 15,
         "hp": [
-          190,
+          390,
           0,
         ],
         "lastFight": {
@@ -971,8 +1008,8 @@ describe('golden', () => {
         },
         "lastFightMs": 2000,
         "logs": {
-          "birch_logs": 64,
-          "oak_logs": 6680,
+          "birch_logs": 62,
+          "oak_logs": 6733,
         },
         "merchant": {
           "chargeProgressMs": 0,
@@ -1002,11 +1039,11 @@ describe('golden', () => {
           "xp": 1820,
           "xpToNext": 1852,
         },
-        "nests": 4,
+        "nests": 2,
         "nextItemSerial": 4,
         "ores": {
-          "copper_ore": 16,
-          "stone": 373,
+          "copper_ore": 17,
+          "stone": 372,
         },
         "pickaxe": "start-wooden_pickaxe",
         "potions": 2,
@@ -1048,13 +1085,13 @@ describe('golden', () => {
           "crews": {
             "oak": {
               "idle": false,
-              "progressMs": 63000,
-              "workMs": 126000,
+              "progressMs": 3000,
+              "workMs": 6000,
             },
             "stone": {
               "idle": false,
-              "progressMs": 62000,
-              "workMs": 62000,
+              "progressMs": 2000,
+              "workMs": 2000,
             },
           },
           "list": [
@@ -1147,7 +1184,7 @@ describe('golden', () => {
     // Stats come from the catalog through the new defIds: 2–4 + 10 base, 3 armor + 10 base, level 4 pools. Since 1.17.0
     // (v17) the Lv4 hero has 15 points to spend instead of +15 on every attribute, and full mana.
     const d = getDerivedStats(s);
-    expect([d.damage.min, d.damage.max, d.defense.value, d.maxHp.value, d.maxMana.value]).toEqual([12, 14, 13, 80, 35]);
+    expect([d.damage.min, d.damage.max, d.armor.value, d.maxHp.value, d.maxMana.value]).toEqual([12, 14, 13, 80, 35]);
     expect([s.character.unspentPoints, s.character.mana]).toEqual([15, 35]);
 
     // Plays on: with Woodcutting built again, Oak logs every 2:00 at core DEX 0.
@@ -1224,7 +1261,7 @@ describe('golden', () => {
     expect(simulate(d.state, at + 120 * SEC).state.activity).toMatchObject({ phase: 'fight' });
     const run = simulate(d.state, at + 120 * SEC + 60 * SEC).state;
     expect(run.dungeon.totals.runs).toBe(1);
-    expect(run.dungeon.lastFight?.heroMaxHp).toBe(90);
+    expect(run.dungeon.lastFight?.heroMaxHp).toBe(100); // 1.19.0: 90 + 5 HP per END point (the save's 2 extra END = +10); the current HP stayed 90
   });
 });
 
@@ -1267,7 +1304,8 @@ describe('golden 1.13.0: the Crafting house', () => {
     // segment moved (2:00 cuts and searches at core DEX 0, level points in every fight, a shifted RNG stream).
     // 1.17.0 re-pin (1.16.0: ea51d10b): no automatic level points (a few fights last longer, a shifted RNG stream), the
     // new character fields (spent / unspent points, mana). Every crafting outcome above is unchanged.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.18.0', hash: '2dbabf75' });
+    // 1.19.0 re-pin (was 2dbabf75): crit draws shift every later roll; END gives max HP; logged strikes carry crit / physical / magic; save v19.
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.19.0', hash: '11f7779b' });
   });
 });
 
@@ -1278,23 +1316,23 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
   it('a rolled stock, a bought piece, gear jobs with invested stamina, a cancel, an insta, ready pipes, Done, equip', () => {
     // The refresh rolls each gear listing (quality 0–50, common / uncommon / rare) and fixes its price (buy × rarity).
     const q3 = at('q3');
-    // 1.16.0 and 1.17.0: re-pinned (the main RNG stream before the refresh moved, so the stock and the gear rolls differ).
+    // 1.16.0, 1.17.0 and 1.19.0: re-pinned (the main RNG stream before the refresh moved, so the stock and the gear rolls differ).
     expect(q3.merchant.stock).toEqual([
       { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
-      { defId: 'steel_axe', quantity: 1, unitPrice: 2500, quality: 4, rarity: 'common' },
-      { defId: 'iron_pickaxe', quantity: 1, unitPrice: 600, quality: 38, rarity: 'common' },
-      { defId: 'iron_axe', quantity: 1, unitPrice: 600, quality: 48, rarity: 'common' },
-      { defId: 'steel_pickaxe', quantity: 1, unitPrice: 2500, quality: 30, rarity: 'common' },
+      { defId: 'iron_sword', quantity: 1, unitPrice: 500, quality: 4, rarity: 'common' },
+      { defId: 'steel_sword', quantity: 1, unitPrice: 2000, quality: 26, rarity: 'common' },
+      { defId: 'iron_chestplate', quantity: 1, unitPrice: 700, quality: 16, rarity: 'common' },
+      { defId: 'iron_axe', quantity: 1, unitPrice: 1200, quality: 3, rarity: 'rare' },
     ]);
-    const q4 = at('q4'); // the first gear listing: the Steel Axe
-    expect(q4.inventory.items.find((i) => i.id === 'steel_axe#5')).toMatchObject({ quality: 4, rarity: 'common' });
-    expect(q3.character.gold - q4.character.gold).toBe(2500);
+    const q4 = at('q4'); // the first gear listing: the Iron Sword
+    expect(q4.inventory.items.find((i) => i.id === 'iron_sword#5')).toMatchObject({ quality: 4, rarity: 'common' });
+    expect(q3.character.gold - q4.character.gold).toBe(500);
     // Gear jobs: inputs and invested stamina paid at start; the roll is on the job (sword: floor 20).
     const q7 = at('q7');
     expect(q7.crafting.pipes.slice(0, 3).map((j) => j && { recipeId: j.recipeId, gear: j.gear, status: j.status })).toEqual([
-      { recipeId: 'stone_sword', gear: { staminaInvested: 20, quality: 53, rarity: 'uncommon' }, status: 'running' },
-      { recipeId: 'stone_helm', gear: { staminaInvested: 0, quality: 99, rarity: 'uncommon' }, status: 'running' },
-      { recipeId: 'stone_gloves', gear: { staminaInvested: 5, quality: 19, rarity: 'uncommon' }, status: 'running' },
+      { recipeId: 'stone_sword', gear: { staminaInvested: 20, quality: 28, rarity: 'rare' }, status: 'running' },
+      { recipeId: 'stone_helm', gear: { staminaInvested: 0, quality: 30, rarity: 'uncommon' }, status: 'running' },
+      { recipeId: 'stone_gloves', gear: { staminaInvested: 5, quality: 83, rarity: 'uncommon' }, status: 'running' },
     ]);
     // Cancel: the gloves' 2 bricks and 1 plank come back; the 5 stamina do not.
     const q8 = at('q8');
@@ -1306,15 +1344,17 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     expect(q8b.crafting.pipes.slice(0, 2).map((j) => j?.status)).toEqual(['ready', 'ready']);
     const s = at('u1'); // the whole 1.14.0 script
     expect(s.crafting.pipes.every((p) => p === null)).toBe(true);
-    expect(s.character.equipment.weapon).toMatchObject({ id: 'stone_sword#6', quality: 53, rarity: 'uncommon' });
-    expect(s.inventory.items.find((i) => i.defId === 'stone_helm')).toMatchObject({ id: 'stone_helm#7', quality: 99, rarity: 'uncommon' });
-    expect(getDerivedStats(s).damage.breakdown[0]).toMatchObject({ source: 'weapon', min: 3, max: 5 }); // 4–6 at quality 53
+    expect(s.character.equipment.weapon).toMatchObject({ id: 'stone_sword#6', quality: 28, rarity: 'rare' });
+    expect(s.inventory.items.find((i) => i.defId === 'stone_helm')).toMatchObject({ id: 'stone_helm#7', quality: 30, rarity: 'uncommon' });
+    expect(getDerivedStats(s).damage.breakdown[0]).toMatchObject({ source: 'weapon', min: 3, max: 4 }); // 3–4 at quality 28 (it was 4–6 at quality 53 before 1.19.0)
     expect(qtyOf(s, 'stone_brick')).toBe(13);
-    // 1.15.0: 620 Stone; 1.16.0: 480; 1.17.0: 521.
-    expect([s.training.attributes.strength, qtyOf(s, 'stone')]).toEqual([{ level: 19, xp: 180, progressMs: 16_212 }, 521]);
+    // 1.15.0: 620 Stone; 1.16.0: 480; 1.17.0: 521; 1.19.0: 522 (a shifted RNG stream rolls one more Stone).
+    expect([s.training.attributes.strength, qtyOf(s, 'stone')]).toEqual([{ level: 19, xp: 180, progressMs: 16_212 }, 522]);
     // 1.16.0 re-pin (1.15.0: gold 3,762; the 1.14.0 pin f6345886 in the v14 shape): the outcomes before it moved.
     // 1.17.0 re-pin (1.16.0: gold 4,061, hash aa5c4e76): the Steel Axe (2,500 g) is now the first gear listing.
-    expect({ gold: s.character.gold, hash: hashState(s) }).toEqual({ gold: 2162, hash: 'd4a2e1d2' });
+    // 1.19.0 re-pin (1.17.0: gold 2,162, hash d4a2e1d2): the refresh rolled new listings (the first gear listing is the 500 g Iron Sword,
+    // not the 2,500 g Steel Axe, so 2,000 g stay in the purse), the gear rolls differ, a shifted RNG stream everywhere.
+    expect({ gold: s.character.gold, hash: hashState(s) }).toEqual({ gold: 4160, hash: '09b4ec22' });
   });
 });
 
@@ -1351,15 +1391,16 @@ describe('golden 1.15.0: continuous material pipes', () => {
     // 5 h away: both live off the logs as they are cut (each cut goes to pipe 1 first) and wait in between (1.16.0: the
     // 5 h end inside a craft of each; 1.15.0 ended with both waiting, 827 and 642 crafted; 1.16.0: 715 and 637).
     expect(s.crafting.pipes.slice(0, 2).map((j) => j && [j.status, j.done])).toEqual([
-      ['running', 736],
+      ['running', 744],
       ['running', 637],
     ]);
-    expect(qtyOf(s, 'oak_logs')).toBe(10); // a cut just landed; each craft takes its 2 logs when it starts
+    expect(qtyOf(s, 'oak_logs')).toBe(8); // (1.19.0: 8, was 10: the yield rolls moved with the RNG stream) a cut just landed; each craft takes its 2 logs when it starts
     expect(s.crafting.pipes[2]).toBeNull();
     expect(s.crafting.pipes[0]!.done).toBeGreaterThan(p0!.done);
     expect(s.crafting.pipes[0]!.done).toBeGreaterThan(s.crafting.pipes[1]!.done);
     // 1.16.0 re-pin (1.15.0: gold 10,580, hash eaf63de1). 1.17.0 re-pin (1.16.0: gold 9,973, hash 7950bd86).
-    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(s) }).toEqual({ engineVersion: '1.18.0', gold: 8172, hash: '6df72287' });
+    // 1.19.0 re-pin (1.18.0: gold 8,172, hash 6df72287): the 2,000 g gear listing difference of the 1.14.0 segment (see there) and the shifted RNG stream.
+    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(s) }).toEqual({ engineVersion: '1.19.0', gold: 10218, hash: 'a4eba9d5' });
   });
 });
 
@@ -1409,7 +1450,7 @@ describe('golden 1.16.0: normal and core attributes', () => {
     expect(effectiveAttributes(leveled)).toEqual({ strength: 0, dexterity: 0, endurance: 0, intelligence: 0 });
     expect(leveled.character.unspentPoints).toBe(5);
     expect(getDerivedStats(leveled).damage).toMatchObject({ min: 12, max: 14 }); // 2–4 + 10 base
-    expect(getDerivedStats(leveled).defense.value).toBe(13); // 3 + 10 base
+    expect(getDerivedStats(leveled).armor.value).toBe(13); // 3 + 10 base
     // Core DEX 10: the next search and every Oak cut take 110,004 ms.
     const dex = upTo('k8');
     expect(dex.training.attributes.dexterity.level).toBe(10);
@@ -1433,7 +1474,7 @@ describe('golden 1.16.0: normal and core attributes', () => {
     const s = runScript(SCRIPT_116, SEED);
     expect(s.stats.totalActions).toBe(16 + 65); // ~30 min then 2 h 2 s of 110,004 ms cuts
     // 1.17.0 re-pin (1.16.0: df33601f): points to spend instead of level points, WS from total STR (more logs), mana.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.18.0', hash: '2c3c4515' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.19.0', hash: '233aa32a' });
   });
 });
 
@@ -1460,8 +1501,9 @@ describe('golden 1.17.0: spendable points, total STR → WS, mana', () => {
   it('level-ups grant unspent points only, mana regenerates through search and fight, spent STR raises WS', () => {
     const midFight = runScript(SCRIPT_117.slice(0, 4), SEED);
     expect(midFight.activity).toMatchObject({ kind: 'dungeon', phase: 'fight' });
-    // 2:02.5 since T0 at 5 mana/min (INT 0): 612,500 units = 10 mana + 12,500 banked.
-    expect([midFight.character.mana, midFight.character.manaRegenProgress]).toEqual([10, 12_500]);
+    // 2:02.5 since T0 at 5 mana/min (INT 0) = 500 rate units: 122,500 ms × 500 = 61,250,000 units = 10 mana + 1,250,000 banked
+    // (REGEN_UNIT is 6,000,000 per point since save v19; it was 60,000, giving 12,500 banked).
+    expect([midFight.character.mana, midFight.character.manaRegenProgress]).toEqual([10, 1_250_000]);
     const leveled = upTo('z3');
     expect(leveled.character.level).toBe(3);
     expect(leveled.character.unspentPoints).toBe(10);
@@ -1470,9 +1512,10 @@ describe('golden 1.17.0: spendable points, total STR → WS, mana', () => {
     const spent = upTo('z4');
     expect(spent.character).toMatchObject({ unspentPoints: 0, spentPoints: { strength: 6, dexterity: 0, endurance: 0, intelligence: 4 } });
     expect(woodcuttingStrength(spent).value).toBe(10 + 10 + 6 + 1);
-    expect(manaView(spent).regenPerMin).toBe(9);
+    expect(manaView(spent).regenPerMin).toBe(5.8); // 5 + 0.2 × 4 INT (it was 9 = 5 + 4 before 1.19.0)
     const s = runScript(SCRIPT_117, SEED);
     expect(s.character.spentPoints.strength).toBe(6);
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.18.0', hash: 'b27e380f' });
+    // 1.19.0 re-pin (was b27e380f): crit draws, END max HP, regen units, logged strikes with crit / physical / magic, save v19.
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.19.0', hash: '3be73d3c' });
   });
 });

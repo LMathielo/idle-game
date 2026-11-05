@@ -303,7 +303,7 @@ describe('EQUIP_ITEM / UNEQUIP_ITEM', () => {
     const e = apply(s, { type: 'EQUIP_ITEM', itemId: 'iron_helm#2' }, T0);
     expect(e.character.equipment.helmet?.id).toBe('iron_helm#2');
     expect(e.inventory.items).toHaveLength(s.inventory.items.length - 1);
-    expect(getDerivedStats(e).defense.value).toBe(getDerivedStats(s).defense.value + 4);
+    expect(getDerivedStats(e).armor.value).toBe(getDerivedStats(s).armor.value + 4);
   });
 
   it('a swap works with a full inventory and never loses or duplicates an item', () => {

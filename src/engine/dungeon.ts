@@ -3,6 +3,7 @@
 // ("Dungeon & combat").
 import { cloneState } from './clone';
 import { COMBAT, DUNGEON_IDS, DUNGEON_RUN, DUNGEONS, ENEMIES, type EnemyDef } from './config/dungeons';
+import { BASIS_POINTS } from './config/stats';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { grantHeroXp } from './activities';
 import { type FightEvent, newFight, nextFightEvent, strike } from './combat';
@@ -105,11 +106,28 @@ export function recordDungeonResults(
 
 /** The hero's side of a fight, from the derived stats at its start. */
 export function heroCombatSide(stats: DerivedStats): CombatSide {
-  return { damage: { min: stats.damage.min, max: stats.damage.max }, defense: stats.defense.value, attackIntervalMs: stats.attackIntervalMs.value };
+  return {
+    damage: { min: stats.damage.min, max: stats.damage.max },
+    armor: stats.armor.value,
+    magicDamage: stats.magicDamage.value,
+    magicResist: stats.magicResist.value,
+    critChanceBp: stats.critChanceBp.value,
+    critMultBp: stats.critMultiplierBp.value,
+    attackIntervalMs: stats.attackIntervalMs.value,
+  };
 }
 
+/** An enemy's side: physical only today (no magic damage, no crits); its magic resist works against the hero's magic. */
 export function enemyCombatSide(enemy: EnemyDef): CombatSide {
-  return { damage: { ...enemy.damage }, defense: enemy.defense, attackIntervalMs: enemy.attackIntervalMs };
+  return {
+    damage: { ...enemy.damage },
+    armor: enemy.armor,
+    magicDamage: 0,
+    magicResist: enemy.magicResist,
+    critChanceBp: 0,
+    critMultBp: BASIS_POINTS,
+    attackIntervalMs: enemy.attackIntervalMs,
+  };
 }
 
 type FightOutcome = {

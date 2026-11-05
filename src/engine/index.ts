@@ -16,8 +16,8 @@ export * from './stats';
 export * from './stamina';
 export * from './hp';
 export * from './mana';
-export { msUntilFull, REGEN_UNIT, regenAmount } from './regen';
-export { dealtDamage, newFight, nextFightEvent, resolveFight, strikeRange, type Combatant, type FightEvent, type FightResult } from './combat';
+export { msUntilFull, REGEN_RATE_SCALE, REGEN_UNIT, regenAmount, regenRateUnits } from './regen';
+export { critDamage, dealtDamage, newFight, nextFightEvent, reducedDamage, resolveFight, strikeRange, type Combatant, type FightEvent, type FightResult } from './combat';
 export {
   dungeonRunView,
   dungeonTotals,

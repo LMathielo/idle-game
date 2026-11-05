@@ -40,7 +40,7 @@ import {
   STAT_EFFECTS,
   woodcuttingStrength,
 } from '../src/engine';
-import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, v17Added, V18_ADDED, withCore } from './helpers';
+import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, v17Added, V18_ADDED, v19Regen, withCore } from './helpers';
 
 const withLevel = (s: GameState, level: number, extra: Partial<GameState['character']['attributes']> = {}, spent: Partial<GameState['character']['attributes']> = {}): GameState => ({
   ...s,
@@ -76,20 +76,37 @@ describe('normal, core and total', () => {
         { kind: 'damage', amount: 10 },
         { kind: 'gatheringPower', amount: 10 },
       ],
-      coreEffects: [],
+      coreEffects: [{ kind: 'damageMult', bp: 192 }], // 1.19.0: core STR 2 → floor(5000 × 2 / 52)
     });
-    expect(dex).toMatchObject({ total: 15, normal: 5, core: 10, linear: [], coreEffects: [{ kind: 'activityTime', bp: 833 }] });
-    expect(end).toMatchObject({ total: 5, core: 0, linear: [{ kind: 'defense', amount: 5 }, { kind: 'hpRegen', amount: 5 }], coreEffects: [] });
-    expect(int).toMatchObject({ total: 55, core: 50, linear: [{ kind: 'manaRegen', amount: 55 }], coreEffects: [{ kind: 'craftTime', bp: 2500 }] });
+    // 1.19.0: every attribute has plain (flat) effects and a core (multiplier) effect; regens are 0.2 per point.
+    expect(dex).toMatchObject({
+      total: 15,
+      normal: 5,
+      core: 10,
+      linear: [{ kind: 'critMultiplier', bp: 16_500 }],
+      coreEffects: [{ kind: 'critChance', bp: 666 }, { kind: 'activityTime', bp: 833 }],
+    });
+    expect(end).toMatchObject({
+      total: 5,
+      core: 0,
+      linear: [{ kind: 'maxHp', amount: 25 }, { kind: 'hpRegen', amount: 1 }, { kind: 'armor', amount: 5 }],
+      coreEffects: [{ kind: 'armorMult', bp: 0 }],
+    });
+    expect(int).toMatchObject({
+      total: 55,
+      core: 50,
+      linear: [{ kind: 'magicDamage', amount: 55 }, { kind: 'magicResist', amount: 55 }, { kind: 'maxMana', amount: 275 }, { kind: 'manaRegen', amount: 11 }],
+      coreEffects: [{ kind: 'magicDamageMult', bp: 2500 }, { kind: 'craftTime', bp: 2500 }],
+    });
   });
 });
 
 describe('a 0-stat new hero plays exactly like the old 10-stat new hero (the 10 moved into the base numbers)', () => {
-  it('damage 12–14, defense 13, HP regen 15/min, WS 21, MS 21 (the values before 1.16.0)', () => {
+  it('damage 12–14, armor 13, HP regen 15/min, WS 21, MS 21 (the values before 1.16.0)', () => {
     const s = builtGame(1, T0);
     expect(effectiveAttributes(s)).toEqual({ strength: 0, dexterity: 0, endurance: 0, intelligence: 0 });
     const d = getDerivedStats(s);
-    expect([d.damage.min, d.damage.max, d.defense.value]).toEqual([12, 14, 13]);
+    expect([d.damage.min, d.damage.max, d.armor.value]).toEqual([12, 14, 13]);
     expect(hpRegenPerMinute(s)).toBe(15);
     expect(woodcuttingStrength(s).value).toBe(21);
     expect(miningStrength(s).value).toBe(21);
@@ -98,8 +115,8 @@ describe('a 0-stat new hero plays exactly like the old 10-stat new hero (the 10 
   it('every extra point still counts like an old point above 10 (linear effects)', () => {
     const s = withLevel(builtGame(1, T0), 1, { strength: 7, endurance: 4 });
     const d = getDerivedStats(s);
-    expect([d.damage.min, d.damage.max, d.defense.value]).toEqual([19, 21, 17]); // old STR 17, END 14
-    expect(hpRegenPerMinute(s)).toBe(19);
+    expect([d.damage.min, d.damage.max, d.armor.value]).toEqual([19, 21, 17]); // old STR 17, END 14
+    expect(hpRegenPerMinute(s)).toBe(15.8); // 15 + 0.2 × 4 END (1.19.0; it was 1 per END point)
   });
 });
 
@@ -208,7 +225,7 @@ describe('save v16 migration (v15 → v16)', () => {
     const { character, saveVersion: _v, ...rest } = s;
     const { character: rc, saveVersion: _rv, ...raw } = V15_SAVE;
     expect(rest).toEqual({ ...raw, buildings: { ...raw.buildings, storage: V18_ADDED.storageBuilding } }); // v18: Storage, unbuilt
-    expect({ ...character, attributes: rc.attributes }).toEqual({ ...rc, ...v17Added(3) });
+    expect({ ...character, attributes: rc.attributes }).toEqual({ ...v19Regen(rc), ...v17Added(3) }); // v19: banked HP regen ×100
     // The search in progress keeps its 47 s; it now ends at 114,552 ms (core DEX 5: −4.54%).
     expect(dungeonRunView(s)).toMatchObject({ phase: 'search', searchMs: 114_552, remainingMs: 114_552 - 47_000 });
   });

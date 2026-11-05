@@ -23,3 +23,9 @@ describe('rarity colors', () => {
     }
   });
 });
+
+describe('crit color', () => {
+  it('passes 4.5:1 on parchment, where the fight log sits', () => {
+    expect(contrast(colors.crit, colors.parchment)).toBeGreaterThanOrEqual(4.5);
+  });
+});

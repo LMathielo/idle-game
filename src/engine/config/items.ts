@@ -25,7 +25,7 @@ export type ItemDef = {
   slot?: EquipmentSlot;
   /** Weapons: damage range at 100% quality, before percent bonuses and attributes. Integers, min <= max. */
   damage?: { min: number; max: number };
-  /** Armor added to base defense while equipped, at 100% quality. Integer. */
+  /** Armor added to the hero base armor while equipped, at 100% quality. Integer. */
   armor?: number;
   /** Axes: woodcutting strength added while equipped, at 100% quality. Integer. */
   woodcuttingStrength?: number;

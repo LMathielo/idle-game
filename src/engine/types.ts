@@ -67,22 +67,22 @@ export type Character = {
   xpToNext: number;
   /**
    * Current HP, 0..maxHp. Max HP is derived (getDerivedStats), never stored. Regenerates in simulate()
-   * at 15 + total END HP per minute (config/stats.ts); fights spend it. A level-up raises max, not current.
+   * at 15 + 0.2 × total END HP per minute (config/stats.ts); fights spend it. A level-up raises max, not current.
    */
   hp: number;
   /**
-   * Regen banked towards the next HP, in "HP·ms per minute" units: each ms adds the regen rate
-   * (HP/min) and every 60 000 units is 1 HP. Kept across resumes like stamina's progressMs, and
+   * Regen banked towards the next HP, in "rate-unit·ms" units: each ms adds the regen rate in hundredths of an HP per minute
+   * and every 6 000 000 units (REGEN_UNIT; 60 000 before save v19) is 1 HP. Kept across resumes like stamina's progressMs, and
    * exact even when the rate changes. Always 0 while hp >= maxHp.
    */
   hpRegenProgress: number;
   /**
    * Current mana, 0..maxMana (save v17). Max mana is derived (getDerivedStats); regenerates in simulate() at
-   * 5 + total INT per minute wherever HP regenerates (src/engine/mana.ts). Nothing spends it yet. A level-up raises max,
+   * 5 + 0.2 × total INT per minute wherever HP regenerates (src/engine/mana.ts). Nothing spends it yet. A level-up raises max,
    * not current (as HP).
    */
   mana: number;
-  /** Regen banked towards the next mana point, in "mana·ms per minute" units (as hpRegenProgress). 0 while full. */
+  /** Regen banked towards the next mana point, in the same units as hpRegenProgress (6 000 000 per point). 0 while full. */
   manaRegenProgress: number;
   gold: number;
   /** Stored EXTRA normal points (debug now, gear later). Not the spent points. */
@@ -144,10 +144,21 @@ export type GatheringActivity = WoodcuttingActivity | MiningActivity;
 /** A run is a search for an opponent, then a live fight. */
 export type DungeonPhase = 'search' | 'fight';
 
-/** One side's combat numbers, frozen when the fight starts (gear changed mid-fight counts from the next fight). */
+/**
+ * One side's combat numbers, frozen when the fight starts (gear changed mid-fight counts from the next fight).
+ * Save v19 renamed `defense` to `armor` and added the magic and crit numbers.
+ */
 export type CombatSide = {
+  /** Physical damage range per strike. For the hero it is final (includes the core STR multiplier). */
   damage: { min: number; max: number };
-  defense: number;
+  armor: number;
+  /** Magic damage per strike (a fixed number, no roll; 0 = none). Today only the hero has any. */
+  magicDamage: number;
+  magicResist: number;
+  /** Crit chance in basis points, 0..10 000. Only a hero strike can crit; enemies have 0. */
+  critChanceBp: number;
+  /** Crit damage multiplier in basis points (15 000 = 1.5x). */
+  critMultBp: number;
   /** ms between two strikes; the first strike lands this long after the fight starts. */
   attackIntervalMs: number;
 };
@@ -216,9 +227,15 @@ export type FightLogEntry = {
   actor: 'hero' | 'enemy';
   /** 1-based: this side's n-th strike. */
   strike: number;
-  /** Raw damage roll, a whole number in [min, max]. */
+  /** Raw physical damage roll, a whole number in [min, max] (before a crit and the target's armor). */
   roll: number;
-  /** Damage after the target's defense (at least 1). */
+  /** The strike was a critical hit (hero only; the physical part was multiplied). Save v19. */
+  crit: boolean;
+  /** Physical damage after a crit and the target's armor (0 or more). Save v19. */
+  physical: number;
+  /** Magic damage after the target's magic resist (0 or more; 0 when the attacker has none). Save v19. */
+  magic: number;
+  /** Total damage dealt: max(COMBAT.minDamage, physical + magic). */
   dealt: number;
   targetHpAfter: number;
 };
@@ -419,7 +436,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 18;
+  saveVersion: 19;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */

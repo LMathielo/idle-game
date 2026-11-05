@@ -92,10 +92,18 @@ export const LogLine = memo(function LogLine({ entry, heroName, enemyName }: { e
   const hero = entry.actor === 'hero';
   const attacker = hero ? heroName : enemyName;
   const target = hero ? enemyName : heroName;
-  const text = `${strikeTime(entry.atMs)} · ${attacker} hits ${target} for ${entry.dealt}${entry.dealt !== entry.roll ? ` (rolled ${entry.roll})` : ''} → ${entry.targetHpAfter} HP`;
+  // The number is the total; a magic part and the raw roll are shown only when they explain it. A crit says so in words and
+  // in gold (the colour never carries the meaning alone).
+  const parts = [entry.magic > 0 ? `${entry.magic} magic` : '', entry.dealt !== entry.roll || entry.crit ? `rolled ${entry.roll}` : ''].filter(Boolean);
+  const prefix = `${strikeTime(entry.atMs)} · ${attacker} hits ${target} for `;
+  const suffix = `${parts.length > 0 ? ` (${parts.join(', ')})` : ''} → ${entry.targetHpAfter} HP`;
+  const label = `${prefix}${entry.dealt}${entry.crit ? ', critical hit' : ''}${suffix}`;
   return (
-    <Text style={[styles.line, hero ? styles.heroLine : styles.enemyLine]} accessibilityLabel={text}>
-      {text}
+    <Text style={[styles.line, hero ? styles.heroLine : styles.enemyLine]} accessibilityLabel={label}>
+      {prefix}
+      <Text style={entry.crit ? styles.critDamage : undefined}>{entry.dealt}</Text>
+      {entry.crit ? <Text style={styles.critTag}> Crit!</Text> : null}
+      {suffix}
     </Text>
   );
 });
@@ -161,6 +169,8 @@ const styles = StyleSheet.create({
   line: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.ink },
   heroLine: { color: colors.ink },
   enemyLine: { color: colors.hp },
+  critDamage: { fontFamily: fonts.bodyBold, color: colors.crit },
+  critTag: { fontFamily: fonts.bodyBold, color: colors.crit },
   result: { fontFamily: fonts.title, fontSize: 20, marginTop: 4 },
   win: { color: colors.skill },
   loss: { color: colors.hp },

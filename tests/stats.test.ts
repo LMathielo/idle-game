@@ -9,7 +9,7 @@ function withCharacter(s: GameState, patch: Partial<GameState['character']>): Ga
 }
 
 describe('derived stats', () => {
-  it('new hero: STR/DEX/END/INT 0 (1.16.0), damage 12–14, defense 13, HP 50, mana 20, with breakdowns', () => {
+  it('new hero: STR/DEX/END/INT 0 (1.16.0), damage 12–14, armor 13, HP 50, mana 20, with breakdowns', () => {
     const s = fresh();
     expect(s.character.attributes).toEqual({ strength: 0, dexterity: 0, endurance: 0, intelligence: 0 });
     const d = getDerivedStats(s);
@@ -22,7 +22,7 @@ describe('derived stats', () => {
         { source: 'strength', min: 0, max: 0 },
       ],
     });
-    expect(d.defense).toEqual({
+    expect(d.armor).toEqual({
       value: 13,
       breakdown: [
         { source: 'armor', value: 2, defId: 'linen_tunic', slot: 'armor' },
@@ -33,36 +33,41 @@ describe('derived stats', () => {
     });
     expect(d.maxHp.value).toBe(50);
     expect(d.maxMana.value).toBe(20);
+    // 1.19.0: no magic, no resist, no crit chance, a 1.5x crit multiplier at 0 DEX.
+    expect([d.magicDamage.value, d.magicResist.value, d.critChanceBp.value, d.critMultiplierBp.value]).toEqual([0, 0, 0, 15_000]);
   });
 
   it('breakdown parts always add up to the final value', () => {
     const s = withCharacter(fresh(), { level: 9, attributes: { strength: 37, dexterity: 1, endurance: 23, intelligence: 4 } });
-    const bonuses = { damage: [{ source: 't', bp: 1234 }], defense: [{ source: 't', bp: 777 }] };
+    const bonuses = { damage: [{ source: 't', bp: 1234 }], armor: [{ source: 't', bp: 777 }] };
     const d = getDerivedStats(s, bonuses);
     const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
     expect(sum(d.damage.breakdown.map((p) => p.min))).toBe(d.damage.min);
     expect(sum(d.damage.breakdown.map((p) => p.max))).toBe(d.damage.max);
-    expect(sum(d.defense.breakdown.map((p) => p.value))).toBe(d.defense.value);
+    expect(sum(d.armor.breakdown.map((p) => p.value))).toBe(d.armor.value);
     expect(sum(d.maxHp.breakdown.map((p) => p.value))).toBe(d.maxHp.value);
     expect(sum(d.maxMana.breakdown.map((p) => p.value))).toBe(d.maxMana.value);
   });
 
-  it('+1 STR → damage 13–15; +1 END → defense 14; DEX and INT change nothing', () => {
+  it('+1 STR → damage 13–15; +1 END → armor 14; DEX and INT leave physical damage and armor alone (they have their own stats)', () => {
     let s = fresh();
     s = apply(s, { type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'strength', amount: 1 }, T0);
     expect([getDerivedStats(s).damage.min, getDerivedStats(s).damage.max]).toEqual([13, 15]);
     s = apply(s, { type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'endurance', amount: 1 }, T0);
-    expect(getDerivedStats(s).defense.value).toBe(14);
+    expect(getDerivedStats(s).armor.value).toBe(14);
     const before = getDerivedStats(s);
     s = apply(s, { type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'dexterity', amount: 5 }, T0);
     s = apply(s, { type: 'DEBUG_ADD_ATTRIBUTE', attribute: 'intelligence', amount: 5 }, T0);
-    expect(getDerivedStats(s)).toEqual(before);
+    const after = getDerivedStats(s);
+    expect(after.damage).toEqual(before.damage);
+    expect(after.armor).toEqual(before.armor);
+    expect(after.attackIntervalMs).toEqual(before.attackIntervalMs);
   });
 
   it('a percent bonus scales only the gear part, never the hero base or the STR/END flat part', () => {
     const s = fresh();
     // +50%: weapon 2–4 → 3–6, then +10 base. Armor 3 → 4.5 → 5 (half-up), then +10 base.
-    const d = getDerivedStats(s, { damage: [{ source: 'test', bp: 5000 }], defense: [{ source: 'test', bp: 5000 }] });
+    const d = getDerivedStats(s, { damage: [{ source: 'test', bp: 5000 }], armor: [{ source: 'test', bp: 5000 }] });
     expect([d.damage.min, d.damage.max]).toEqual([13, 16]);
     expect(d.damage.breakdown).toEqual([
       { source: 'weapon', min: 2, max: 4, defId: 'rusty_gladius', slot: 'weapon' },
@@ -70,27 +75,27 @@ describe('derived stats', () => {
       { source: 'base', min: 10, max: 10 },
       { source: 'strength', min: 0, max: 0 },
     ]);
-    expect(d.defense.value).toBe(15);
-    expect(d.defense.breakdown.at(-3)).toEqual({ source: 'percent', value: 2, bonuses: [{ source: 'test', bp: 5000 }] });
-    expect(d.defense.breakdown.slice(-2)).toEqual([{ source: 'base', value: 10 }, { source: 'endurance', value: 0 }]);
+    expect(d.armor.value).toBe(15);
+    expect(d.armor.breakdown.at(-3)).toEqual({ source: 'percent', value: 2, bonuses: [{ source: 'test', bp: 5000 }] });
+    expect(d.armor.breakdown.slice(-2)).toEqual([{ source: 'base', value: 10 }, { source: 'endurance', value: 0 }]);
 
     // The flat part stays exactly the attribute value, however large the bonus.
     const strong = withCharacter(s, { attributes: { ...s.character.attributes, strength: 1000 } });
-    const big = getDerivedStats(strong, { damage: [{ source: 'test', bp: 90_000 }], defense: [] });
+    const big = getDerivedStats(strong, { damage: [{ source: 'test', bp: 90_000 }], armor: [] });
     expect(big.damage.min).toBe(2 * 10 + 10 + 1000);
     expect(big.damage.max).toBe(4 * 10 + 10 + 1000);
   });
 
   it('several bonuses add up before rounding; a huge negative bonus floors the base at 0', () => {
     const s = fresh();
-    const two = getDerivedStats(s, { damage: [{ source: 'a', bp: 2500 }, { source: 'b', bp: 2500 }], defense: [] });
+    const two = getDerivedStats(s, { damage: [{ source: 'a', bp: 2500 }, { source: 'b', bp: 2500 }], armor: [] });
     expect([two.damage.min, two.damage.max]).toEqual([13, 16]);
     // One rounded line, every source listed.
     expect(two.damage.breakdown.filter((p) => p.source === 'percent')).toEqual([
       { source: 'percent', min: 1, max: 2, bonuses: [{ source: 'a', bp: 2500 }, { source: 'b', bp: 2500 }] },
     ]);
-    const neg = getDerivedStats(s, { damage: [{ source: 'curse', bp: -20_000 }], defense: [{ source: 'curse', bp: -20_000 }] });
-    expect([neg.damage.min, neg.damage.max, neg.defense.value]).toEqual([10, 10, 10]);
+    const neg = getDerivedStats(s, { damage: [{ source: 'curse', bp: -20_000 }], armor: [{ source: 'curse', bp: -20_000 }] });
+    expect([neg.damage.min, neg.damage.max, neg.armor.value]).toEqual([10, 10, 10]);
   });
 
   it('applyPercent: integer half-up rounding, rejects non-integer bonuses', () => {
@@ -122,9 +127,9 @@ describe('derived stats', () => {
     expect([unknown.damage.min, unknown.damage.max]).toEqual([11, 12]);
   });
 
-  it('naked hero: defense is the hero base + END', () => {
+  it('naked hero: armor is the hero base + END', () => {
     const d = getDerivedStats(withCharacter(fresh(), { equipment: {} }));
-    expect(d.defense).toEqual({ value: 10, breakdown: [{ source: 'base', value: 10 }, { source: 'endurance', value: 0 }] });
+    expect(d.armor).toEqual({ value: 10, breakdown: [{ source: 'base', value: 10 }, { source: 'endurance', value: 0 }] });
   });
 
   it('item stats come from the catalog, not from the stored item', () => {
@@ -143,6 +148,7 @@ describe('derived stats', () => {
     expect(at(11).maxHp.breakdown).toEqual([
       { source: 'base', value: 50 },
       { source: 'level', value: 100 },
+      { source: 'endurance', value: 0 },
     ]);
   });
 
@@ -150,6 +156,7 @@ describe('derived stats', () => {
     const s = fresh();
     expect(s.character.hp).toBe(50);
     expect(s.character).not.toHaveProperty('maxHp');
-    expect(JSON.stringify(s)).not.toMatch(/"(damage|defense|maxMana|maxHp)"/);
+    expect(JSON.stringify(s)).not.toMatch(/"(damage|defense|magicDamage|magicResist|critChanceBp|critMultiplierBp|maxMana|maxHp)"/);
+    expect(JSON.stringify(s)).not.toMatch(/"armor":\d/); // the equipment slot is called armor, the derived stat is never stored
   });
 });

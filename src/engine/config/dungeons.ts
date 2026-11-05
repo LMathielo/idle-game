@@ -21,8 +21,11 @@ export const DUNGEON_RUN = {
 export type SearchTiming = { baseMs: number; minMs: number };
 
 export const COMBAT = {
-  /** dealt = max(minDamage, round(roll × K / (defense + K))). 13 defense blocks ~21%. */
-  defenseK: 50,
+  /**
+   * Armor and magic resist reduce damage the same way: reduced = round(raw × K / (resist + K)) (13 armor blocks ~21%).
+   * A strike deals max(minDamage, physical + magic).
+   */
+  armorK: 50,
   minDamage: 1,
   /**
    * Fight time limit (engine time from the fight's start). Strikes due at exactly this time still land;
@@ -37,17 +40,19 @@ export type EnemyDef = {
   icon: string;
   hp: number;
   damage: { min: number; max: number };
-  defense: number;
+  armor: number;
+  /** Reduces the hero's magic damage (1.19.0). Equal to the armor for now; no enemy deals magic damage yet. */
+  magicResist: number;
   /** Time between two of its strikes; the first lands this long after the fight starts. */
   attackIntervalMs: number;
 };
 
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
-  rat: { id: 'rat', name: 'Rat', icon: '🐀', hp: 30, damage: { min: 3, max: 5 }, defense: 2, attackIntervalMs: 1000 },
-  bat: { id: 'bat', name: 'Bat', icon: '🦇', hp: 60, damage: { min: 6, max: 9 }, defense: 6, attackIntervalMs: 1000 },
-  wolf: { id: 'wolf', name: 'Wolf', icon: '🐺', hp: 110, damage: { min: 10, max: 14 }, defense: 12, attackIntervalMs: 1000 },
-  skeleton: { id: 'skeleton', name: 'Skeleton', icon: '💀', hp: 180, damage: { min: 15, max: 20 }, defense: 20, attackIntervalMs: 1000 },
-  troll: { id: 'troll', name: 'Troll', icon: '👹', hp: 300, damage: { min: 22, max: 30 }, defense: 30, attackIntervalMs: 1000 },
+  rat: { id: 'rat', name: 'Rat', icon: '🐀', hp: 30, damage: { min: 3, max: 5 }, armor: 2, magicResist: 2, attackIntervalMs: 1000 },
+  bat: { id: 'bat', name: 'Bat', icon: '🦇', hp: 60, damage: { min: 6, max: 9 }, armor: 6, magicResist: 6, attackIntervalMs: 1000 },
+  wolf: { id: 'wolf', name: 'Wolf', icon: '🐺', hp: 110, damage: { min: 10, max: 14 }, armor: 12, magicResist: 12, attackIntervalMs: 1000 },
+  skeleton: { id: 'skeleton', name: 'Skeleton', icon: '💀', hp: 180, damage: { min: 15, max: 20 }, armor: 20, magicResist: 20, attackIntervalMs: 1000 },
+  troll: { id: 'troll', name: 'Troll', icon: '👹', hp: 300, damage: { min: 22, max: 30 }, armor: 30, magicResist: 30, attackIntervalMs: 1000 },
 };
 
 /**

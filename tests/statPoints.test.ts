@@ -40,7 +40,7 @@ import {
   STATS,
   woodcuttingStrength,
 } from '../src/engine';
-import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, v17Added, V18_ADDED, withCore } from './helpers';
+import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, v17Added, V18_ADDED, v19Regen, withCore } from './helpers';
 
 const ZERO = { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 };
 
@@ -100,9 +100,11 @@ describe('SPEND_ATTRIBUTE_POINTS', () => {
     expect(normalAttributes(r.state)).toEqual({ strength: 3, dexterity: 0, endurance: 4, intelligence: 2 });
     const d = getDerivedStats(r.state);
     expect([d.damage.min, d.damage.max]).toEqual([12 + 3, 14 + 3]); // STR → damage
-    expect(d.defense.value).toBe(13 + 4); // END → defense
-    expect(hpRegenPerMinute(r.state)).toBe(15 + 4); // END → HP regen
-    expect(manaRegenPerMinute(r.state)).toBe(5 + 2); // INT → mana regen
+    expect(d.armor.value).toBe(13 + 4); // END → armor
+    expect(hpRegenPerMinute(r.state)).toBe(15.8); // END → HP regen, 0.2 per point (1.19.0)
+    expect(manaRegenPerMinute(r.state)).toBe(5.4); // INT → mana regen, 0.2 per point
+    expect([d.maxHp.value, d.maxMana.value]).toEqual([50 + 5 * 4, 20 + 5 * 2]); // END → max HP, INT → max mana
+    expect([d.magicDamage.value, d.magicResist.value]).toEqual([2, 2]); // INT → magic damage and resist
     expect([woodcuttingStrength(r.state).value, miningStrength(r.state).value]).toEqual([21 + 3, 21 + 3]); // STR → WS / MS
   });
 
@@ -116,8 +118,14 @@ describe('SPEND_ATTRIBUTE_POINTS', () => {
   it('spent DEX / INT are normal points: they never shorten activities or crafts (core only)', () => {
     const s = apply(base, { type: 'SPEND_ATTRIBUTE_POINTS', points: { dexterity: 5, intelligence: 5 } }, T0);
     const [, dex, , int] = attributeViews(s);
-    expect(dex).toMatchObject({ total: 5, spent: 5, core: 0, coreEffects: [{ kind: 'activityTime', bp: 0 }] });
-    expect(int).toMatchObject({ total: 5, spent: 5, linear: [{ kind: 'manaRegen', amount: 5 }], coreEffects: [{ kind: 'craftTime', bp: 0 }] });
+    expect(dex).toMatchObject({ total: 5, spent: 5, core: 0, coreEffects: [{ kind: 'critChance', bp: 0 }, { kind: 'activityTime', bp: 0 }] });
+    expect(dex.linear).toEqual([{ kind: 'critMultiplier', bp: 15_500 }]); // the multiplier does read the total DEX
+    expect(int).toMatchObject({
+      total: 5,
+      spent: 5,
+      linear: [{ kind: 'magicDamage', amount: 5 }, { kind: 'magicResist', amount: 5 }, { kind: 'maxMana', amount: 25 }, { kind: 'manaRegen', amount: 1 }],
+      coreEffects: [{ kind: 'magicDamageMult', bp: 0 }, { kind: 'craftTime', bp: 0 }],
+    });
   });
 
   it.each([
@@ -209,18 +217,19 @@ describe('total STR → gathering power (1:1), workers follow', () => {
 describe('mana pool: 5 + total INT per minute, wherever HP regenerates', () => {
   const drained = (s: GameState, mana = 0) => withChar(s, { mana, manaRegenProgress: 0 });
 
-  it('config and view: max 20 + 5 per level, regen 5 + 1 × total INT; view shows current / max and time to full', () => {
-    expect(STATS.manaRegen).toEqual({ basePerMin: 5, perIntelligence: 1 });
+  it('config and view: max 20 + 5 per level + 5 per INT, regen 5 + 0.2 × total INT; view shows current / max and time to full', () => {
+    expect(STATS.manaRegen).toEqual({ basePerMin: 5, perIntelligence: 0.2 });
     const s = withCore(drained(builtGame(1, T0), 3), { intelligence: 5 });
-    expect(manaRegenPerMinute(s)).toBe(10);
-    expect(manaView(s)).toEqual({ mana: 3, maxMana: 20, regenPerMin: 10, full: false, fullInMs: Math.ceil((17 * REGEN_UNIT) / 10) });
+    expect(manaRegenPerMinute(s)).toBe(6); // 5 + 0.2 × 5
+    // 5 INT also adds 25 max mana: 45 in all, 42 to go at 600 rate units (6 per minute).
+    expect(manaView(s)).toEqual({ mana: 3, maxMana: 45, regenPerMin: 6, full: false, fullInMs: Math.ceil((42 * REGEN_UNIT) / 600) });
     expect(manaView(newGame(1, T0))).toMatchObject({ mana: 20, full: true, fullInMs: 0 });
   });
 
   it('idle: +5 per minute at INT 0, capped at max, remainder banked, nothing banked while full', () => {
     const s = drained(newGame(1, T0));
     expect(simulate(s, T0 + MIN).state.character).toMatchObject({ mana: 5, manaRegenProgress: 0 });
-    expect(simulate(s, T0 + 30 * SEC).state.character).toMatchObject({ mana: 2, manaRegenProgress: 30_000 }); // 2.5
+    expect(simulate(s, T0 + 30 * SEC).state.character).toMatchObject({ mana: 2, manaRegenProgress: REGEN_UNIT / 2 }); // 2.5
     expect(simulate(s, T0 + HOUR).state.character).toMatchObject({ mana: 20, manaRegenProgress: 0 });
     const full = newGame(1, T0);
     expect(simulate(full, T0 + MIN).state.character).toBe(full.character); // nothing to do: same object (HP full too)
@@ -241,7 +250,7 @@ describe('mana pool: 5 + total INT per minute, wherever HP regenerates', () => {
   });
 
   it.each(activities)('%s: exact across split simulate() calls (simulate(a) + simulate(b) == simulate(a + b))', (_n, start) => {
-    // Lv50 (max mana 265) so the pool never fills here; INT 7 → 12/min.
+    // Lv50 (max mana 245 + 35 from INT) so the pool never fills here; core INT 7 → 6.4/min (640 rate units).
     const s = start(withCore(withChar(drained(builtGame(4, T0)), { level: 50 }), { intelligence: 7 }));
     const end = T0 + 2 * MIN + 13_777;
     const once = simulate(s, end).state;
@@ -249,7 +258,7 @@ describe('mana pool: 5 + total INT per minute, wherever HP regenerates', () => {
     split = simulate(split, T0 + 77_500).state;
     split = simulate(split, end).state;
     expect(hashState(split)).toBe(hashState(once));
-    expect(once.character.mana * REGEN_UNIT + once.character.manaRegenProgress).toBe((2 * MIN + 13_777) * 12);
+    expect(once.character.mana * REGEN_UNIT + once.character.manaRegenProgress).toBe((2 * MIN + 13_777) * 640);
   });
 
   it('dungeon fight: mana regenerates during the fight too (split mid-fight is exact)', () => {
@@ -259,7 +268,7 @@ describe('mana pool: 5 + total INT per minute, wherever HP regenerates', () => {
     expect(s.activity).toMatchObject({ phase: 'fight' });
     const mid = simulate(s, T0 + 1500).state;
     expect(mid.activity).toMatchObject({ phase: 'fight' });
-    expect(mid.character.mana * REGEN_UNIT + mid.character.manaRegenProgress).toBe(1500 * 5);
+    expect(mid.character.mana * REGEN_UNIT + mid.character.manaRegenProgress).toBe(1500 * 500); // 5/min = 500 rate units
     const end = T0 + 3 * MIN;
     expect(hashState(simulate(mid, end).state)).toBe(hashState(simulate(s, end).state));
     expect(simulate(s, end).state.character.mana).toBe(15);
@@ -330,7 +339,7 @@ describe('save v17 migration (v16 → v17)', () => {
     expect(hashState(V16_SAVE)).toBe(V16_LOG.at(-1)!.stateHash);
     const s = loadSave(V16_SAVE);
     expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
-    expect(s.character).toEqual({ ...V16_SAVE.character, ...v17Added(3) });
+    expect(s.character).toEqual({ ...v19Regen(V16_SAVE.character), ...v17Added(3) }); // v19: the banked HP regen moves to the finer unit (x100)
     expect(s.character.unspentPoints).toBe(10);
     expect(s.character.mana).toBe(30); // 20 + 5 × 2, full
     const { character: _c, saveVersion: _v, ...rest } = s;

@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 18 as const;
+export const CURRENT_SAVE_VERSION = 19 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -28,6 +28,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   15: migrateV15toV16,
   16: migrateV16toV17,
   17: migrateV17toV18,
+  18: migrateV18toV19,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -664,6 +665,72 @@ const V18_STORAGE_LOCKED = { state: 'locked', level: 0 } as const;
 function migrateV17toV18(doc: SaveDoc): SaveDoc {
   const buildings = isDoc(doc.buildings) ? doc.buildings : {};
   return { ...doc, saveVersion: 18, buildings: { ...buildings, storage: isDoc(buildings.storage) ? buildings.storage : { ...V18_STORAGE_LOCKED } } };
+}
+
+// ---- v18 → v19 (2026-11-04): stats rework (armor, magic, crits, fractional regen) ----
+// 1. Regen is exact at 0.2 per point: the banked regen of HP and mana moves to the finer unit (hundredths of a point per
+//    minute), so every stored remainder is multiplied by 100 (6 000 000 units per point instead of 60 000): the same fraction of a point.
+// 2. A fight in progress keeps its frozen numbers, renamed and widened: `defense` becomes `armor`; the hero gets no magic
+//    (0 damage, 0 resist) and no crits (0 chance, 1.5x), the enemy its magic resist (equal to its armor, a frozen table).
+//    The next hero strikes follow the 1.19.0 rules (one crit draw per strike).
+// 3. Every logged strike (the fight in progress and the last fight) gets `crit: false`, `physical` = the damage dealt and
+//    `magic: 0`, which is exactly what a 1.18.0 strike was.
+// Frozen literals: the scale, the enemy table, the hero's neutral crit multiplier (base 15 000 bp) and the enemy's 10 000 bp.
+
+const V19_REGEN_SCALE = 100;
+const V19_HERO_CRIT_MULT_BP = 15_000;
+const V19_ENEMY_CRIT_MULT_BP = 10_000;
+const V19_ENEMY_MAGIC_RESIST: Readonly<Record<string, number>> = { rat: 2, bat: 6, wolf: 12, skeleton: 20, troll: 30 };
+
+const v19Number = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+
+function migrateV19Side(side: unknown, hero: boolean, enemyId: unknown): unknown {
+  if (!isDoc(side)) return side;
+  const { defense, ...rest } = side;
+  const armor = v19Number(defense);
+  const magicResist = hero ? 0 : typeof enemyId === 'string' && enemyId in V19_ENEMY_MAGIC_RESIST ? V19_ENEMY_MAGIC_RESIST[enemyId] : armor;
+  return {
+    ...rest,
+    armor,
+    magicDamage: 0,
+    magicResist,
+    critChanceBp: 0,
+    critMultBp: hero ? V19_HERO_CRIT_MULT_BP : V19_ENEMY_CRIT_MULT_BP,
+  };
+}
+
+function migrateV19Log(log: unknown): unknown {
+  if (!Array.isArray(log)) return log;
+  return log.map((e) => (isDoc(e) ? { ...e, crit: false, physical: v19Number(e.dealt), magic: 0 } : e));
+}
+
+function migrateV19Fight(fight: unknown): unknown {
+  if (!isDoc(fight)) return fight;
+  return {
+    ...fight,
+    hero: migrateV19Side(fight.hero, true, fight.enemyId),
+    enemy: migrateV19Side(fight.enemy, false, fight.enemyId),
+    log: migrateV19Log(fight.log),
+  };
+}
+
+/** Regen remainders ×100, the fight in progress and the last fight widened. Everything else is kept. Pure. */
+function migrateV18toV19(doc: SaveDoc): SaveDoc {
+  const out: SaveDoc = { ...doc, saveVersion: 19 };
+  if (isDoc(doc.character)) {
+    out.character = {
+      ...doc.character,
+      hpRegenProgress: v19Number(doc.character.hpRegenProgress) * V19_REGEN_SCALE,
+      manaRegenProgress: v19Number(doc.character.manaRegenProgress) * V19_REGEN_SCALE,
+    };
+  }
+  if (isDoc(doc.activity) && doc.activity.kind === 'dungeon' && doc.activity.fight) {
+    out.activity = { ...doc.activity, fight: migrateV19Fight(doc.activity.fight) };
+  }
+  if (isDoc(doc.dungeon) && isDoc(doc.dungeon.lastFight)) {
+    out.dungeon = { ...doc.dungeon, lastFight: { ...doc.dungeon.lastFight, log: migrateV19Log(doc.dungeon.lastFight.log) } };
+  }
+  return out;
 }
 
 export class SaveVersionError extends Error {}

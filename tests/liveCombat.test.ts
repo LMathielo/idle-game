@@ -41,7 +41,7 @@ import {
   SKILL_XP_CURVE,
   xpToNext,
 } from '../src/engine';
-import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, progressMs, withCore } from './helpers';
+import { apply, builtGame, fightSide, HOUR, makeClient, MIN, SEC, T0, progressMs, withCore } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v8 save + its action log, written by the 1.7.0 engine before live combat (tests/fixtures). */
@@ -54,7 +54,7 @@ const RAT_CELLAR = { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_ce
 const entries = (rows: LogRow[]): ReplayEntry[] =>
   rows.map((r) => ({ type: r.type, payload: r.payload, clientTime: r.clientTime, stateHash: r.stateHash, engineVersion: r.engineVersion }));
 
-const side = (attackIntervalMs: number, damage = { min: 1, max: 1 }, defense = 1_000_000) => ({ damage, defense, attackIntervalMs });
+const side = (attackIntervalMs: number, damage = { min: 1, max: 1 }, armor = 1_000_000) => fightSide({ damage, armor, attackIntervalMs });
 
 function fightOf(s: GameState): ActiveFight | null {
   return s.activity?.kind === 'dungeon' ? s.activity.fight : null;
@@ -173,7 +173,7 @@ describe('strike timing', () => {
   });
 
   it('a faster side can win before the other strikes at all', () => {
-    const r = resolveFight({ hp: 10, damage: { min: 50, max: 50 }, defense: 0, attackIntervalMs: 400 }, { hp: 60, damage: { min: 99, max: 99 }, defense: 0, attackIntervalMs: 1000 }, createRng(3));
+    const r = resolveFight({ hp: 10, ...fightSide({ damage: { min: 50, max: 50 }, attackIntervalMs: 400 }) }, { hp: 60, ...fightSide({ damage: { min: 99, max: 99 } }) }, createRng(3));
     expect(r).toMatchObject({ won: true, durationMs: 800, heroHp: 10 });
     expect(r.log.map((e) => e.actor)).toEqual(['hero', 'hero']);
   });
@@ -192,8 +192,16 @@ describe('strike timing', () => {
     const s = simulate(runningIn('rat_cellar'), T0 + SEARCH_MS).state;
     const f = fightOf(s)!;
     const d = getDerivedStats(s);
-    expect(f.hero).toEqual({ damage: { min: d.damage.min, max: d.damage.max }, defense: d.defense.value, attackIntervalMs: 1000 });
-    expect(f.enemy).toEqual({ damage: ENEMIES.rat.damage, defense: ENEMIES.rat.defense, attackIntervalMs: 1000 });
+    expect(f.hero).toEqual({
+      damage: { min: d.damage.min, max: d.damage.max },
+      armor: d.armor.value,
+      magicDamage: 0,
+      magicResist: 0,
+      critChanceBp: 0,
+      critMultBp: 15_000,
+      attackIntervalMs: 1000,
+    });
+    expect(f.enemy).toEqual({ damage: ENEMIES.rat.damage, armor: ENEMIES.rat.armor, magicDamage: 0, magicResist: ENEMIES.rat.magicResist, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000 });
     expect(f).toMatchObject({ elapsedMs: 0, heroHpStart: 50, heroMaxHp: 50, enemyHp: 30, enemyMaxHp: 30, log: [] });
   });
 });
@@ -272,11 +280,11 @@ describe('determinism across simulate boundaries', () => {
    * A timeline where T0 + 8 h falls inside a fight with strikes already landed and at least one more second of fight to
    * go. `s` is the state at exactly 8 h (no cap: requested = 8 h). Wolf Den (1.16.0): a new hero loses there in a few
    * seconds, so it never levels up and every fight lasts several strikes (on the Rat Cellar, 8 h of wins give level
-   * points that make every fight a one-strike kill). The search progress at the start, 47,500 ms (re-found in 1.18.0, when every search became 2:00; it was
+   * points that make every fight a one-strike kill). The search progress at the start, 36,250 ms (re-found in 1.19.0, when the crit draw moved the rolls, and in 1.18.0, when every search became 2:00; it was
    * 252,250 ms of a 5:00 search), was found once by scanning 0..2:00 in 250 ms steps (about 1,000 full 8 h simulates, too slow to repeat in every test); computed once per
    * file and checked, so a rules change that moves the fights fails here loudly.
    */
-  const CAP_IN_FIGHT_PROGRESS_MS = 47_500;
+  const CAP_IN_FIGHT_PROGRESS_MS = 36_250;
   let capPick: { g: GameState; s: GameState } | null = null;
   function capInsideFight(): { g: GameState; s: GameState } {
     if (capPick) return capPick;

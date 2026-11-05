@@ -84,7 +84,7 @@ describe('tier table (config)', () => {
       return [
         d.tier,
         d.name,
-        `${e.name} ${e.hp} · ${e.damage.min}–${e.damage.max} · ${e.defense}`,
+        `${e.name} ${e.hp} · ${e.damage.min}–${e.damage.max} · ${e.armor}`,
         d.search.baseMs / MIN,
         `${e.attackIntervalMs} ms`,
         d.unlock ? `${d.unlock.wins} in ${d.unlock.dungeonId}` : '—',
@@ -373,11 +373,25 @@ describe('danger hint', () => {
 
   it('fresh hero: Easy, Tough, Deadly, Deadly, Deadly', () => {
     expect(levels(fresh)).toEqual<DangerLevel[]>(['easy', 'tough', 'deadly', 'deadly', 'deadly']);
-    // Rat: 3 hits to kill (avg 11.7 vs 30 HP), at 3 s; the rat lands 2 strikes before that (1 s, 2 s; the one at 3 s
-    // comes after the hero's killing blow) for ~3 → 6 of 50 HP.
-    expect(dangerHint(fresh, 'rat_cellar')).toEqual({ level: 'easy', expectedHpLoss: 6, maxHp: 50, percent: 12, heroHits: 3, enemyHits: 2, fightMs: 3000 });
+    // Rat: 3 hits to kill (avg 12.67 vs 30 HP), at 3 s; the rat lands 2 strikes before that (1 s, 2 s; the one at 3 s
+    // comes after the hero's killing blow) for ~3 → 6 of 50 HP. A fresh hero has no magic and no crit chance (1.19.0).
+    const rat = dangerHint(fresh, 'rat_cellar');
+    expect(rat).toMatchObject({ level: 'easy', expectedHpLoss: 6, maxHp: 50, percent: 12, heroMagicAvg: 0, critChanceBp: 0, critMultBp: 15_000, heroHits: 3, enemyHits: 2, fightMs: 3000 });
+    expect(rat.heroAvg).toBeCloseTo(38 / 3, 10);
     // Bat: 5 hits (avg 12 vs 60 HP) at 5 s, 4 bat strikes of 6 → 24 of 50 HP.
-    expect(dangerHint(fresh, 'bat_cave')).toEqual({ level: 'tough', expectedHpLoss: 24, maxHp: 50, percent: 48, heroHits: 5, enemyHits: 4, fightMs: 5000 });
+    expect(dangerHint(fresh, 'bat_cave')).toMatchObject({ level: 'tough', expectedHpLoss: 24, maxHp: 50, percent: 48, heroHits: 5, enemyHits: 4, fightMs: 5000 });
+  });
+
+  it('counts the expected crit and the magic part (1.19.0), with average rolls', () => {
+    // 100 core DEX: 26.66% crit chance (2666 bp) and, as total DEX, a 2.5x multiplier. 30 INT spent: 30 magic damage, vs the rat's 2 resist.
+    const base = withCore(fresh, { dexterity: 100 });
+    const hero = { ...base, character: { ...base.character, spentPoints: { ...base.character.spentPoints, intelligence: 30 } } } as GameState;
+    const d = dangerHint(hero, 'rat_cellar');
+    expect(d).toMatchObject({ critChanceBp: 2666, critMultBp: 25_000 }); // 15 000 + 100 × 100
+    expect(d.heroMagicAvg).toBe(29); // round(30 × 50 / 52)
+    const noCrit = dangerHint(withCore(hero, { dexterity: 0 }), 'rat_cellar');
+    expect(d.heroAvg).toBeGreaterThan(noCrit.heroAvg);
+    expect(noCrit.heroAvg).toBeCloseTo(38 / 3 + 29, 10);
   });
 
   it('expected loss grows tier by tier for the same hero', () => {
@@ -407,6 +421,6 @@ describe('danger hint', () => {
 
   it('uses derived stats (gear + attributes)', () => {
     const d = getDerivedStats(fresh);
-    expect([d.damage.min, d.damage.max, d.defense.value]).toEqual([12, 14, 13]);
+    expect([d.damage.min, d.damage.max, d.armor.value]).toEqual([12, 14, 13]);
   });
 });

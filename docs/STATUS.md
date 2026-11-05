@@ -8,9 +8,9 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.18.0** | 1.1.0 |
-| Save | **v18** | v2 |
-| Contents | Everything below, up to the locked start (this PR), plus the pixel art once merged | M1 only (PRs #1–#2) |
+| Engine | **1.19.0** | 1.1.0 |
+| Save | **v19** | v2 |
+| Contents | Everything below, up to the stats rework (this PR; stacked on the locked start, #32), plus the pixel art once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is behind `dev` by PRs #3–#25. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
 - **Open PRs:** Expo Go previews by label plus per-branch saves (`feat/expo-test-previews`).
@@ -20,6 +20,17 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.19.0 · save v19
+- **Stats rework** (`feat/stats-rework`, stacked on the locked start):
+  - **Attribute roles:** STR physical damage, DEX crits, END toughness, INT magic. Plain (total) points give flat stats; core (training) points a capped percent multiplier on the final value (`diminishingBp`, k 50). Table in PRODUCT.md "Attributes".
+  - **STR:** +1 damage per point; core up to +50% physical damage. **DEX:** plain = crit damage (1.5x + 0.01x per point); core = crit chance up to 40% (and the activity-time cut, unchanged). **END:** per point +5 max HP, +0.2 HP/min, +1 armor; core = armor and magic resist up to +50%. **INT:** per point +1 magic damage, +1 magic resist, +5 max mana, +0.2 mana/min; core = magic damage up to +50% (and the craft-time cut, unchanged).
+  - **Combat:** every hero strike draws one crit check (even at 0%); a crit multiplies the physical roll, armor reduces it; the magic part is reduced by the enemy's magic resist and never crits; a strike deals at least 1. Enemies have magic resist equal to their armor and still hit physically only. "Defense" is now **Armor** (engine names too).
+  - **Regen:** exact fractional rates (0.2 per point); the stored remainders change units.
+  - **UI:** the Status panel lists plain and core effects with numbers and shows magic damage, armor, magic resist, crit chance and crit damage; the replay shows "Crit!" with a gold number; the dungeon danger hint counts the expected crit and the magic part.
+  - Save v19: regen remainders x100, the fight in progress and the last fight get the new fields (no crit, no magic). Nobody loses anything.
+  - Tests: unit tests for every formula, combat goldens re-pinned (the extra crit draw shifts the RNG stream of every fight), property tests, split invariance at 0.2 rates, a v18 fixture migration test, and a whole-game golden from a plain `newGame` (`tests/golden119.test.ts`). The old goldens no longer mutate `DUNGEONS` (TECH_DEBT item closed).
+  - Balance check (report only, no tuning): in the PR. Main findings: core in all four attributes is a big power jump; STR and INT are equivalent per point; DEX is dead in a fight until core is trained; END gives the most survivability.
 
 ### Engine 1.18.0 · save v18
 - **Locked start** (`feat/locked-start`):
@@ -142,7 +153,7 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 
 Decided and scoped; ready to brief to an engineer. Top = next.
 
-1. **Enemy tier check after stat points:** since 1.17.0 a level gives 5 points to spend instead of +5 on every attribute (20 per level), so level growth drops a lot and the 1.16.0 "dungeons are easy" concern may be gone. Sim each tier with typical builds (all STR/END, mixed) and only retune enemy HP / damage / defense where a tier is now off its target effort. (Normal STR counting toward WS / MS was decided: yes, 1.17.0.)
+1. **Enemy tier check after the stats rework:** the 1.19.0 balance sim (PR for `feat/stats-rework`) shows the Skeleton falls at core 10 from Lv1 and the Troll at core 20 even at Lv1/Lv5, where 1.18 needed Lv10-15. Decide the targets, then retune enemy HP / damage / armor (and the core curves) where a tier is off. Earlier note: since 1.17.0 a level gives 5 points to spend instead of +5 on every attribute (20 per level), so level growth drops a lot and the 1.16.0 "dungeons are easy" concern may be gone. Sim each tier with typical builds (all STR/END, mixed) and only retune enemy HP / damage / armor where a tier is now off its target effort. (Normal STR counting toward WS / MS was decided: yes, 1.17.0.)
 2. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
 3. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
 4. **Cleanup PR** working through [`TECH_DEBT.md`](TECH_DEBT.md) (review findings below the fix bar, from PRs #2–#19).
@@ -170,8 +181,8 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 
 **Combat and dungeons**
 - Multi-enemy runs and bosses (needs a save-shape change: `ActiveFight` holds one enemy).
-- Hit chance and crits from DEX; a combat use for INT and mana (INT already shortens crafting).
-- Core STR / END special mechanics (neither has a core-only effect since 1.17.0: STR's gathering power reads the total).
+- **Enemies with magic damage (gives magic resist a use).** Enemies have magic resist since 1.19.0 but only hit physically.
+- Hit chance (crits shipped in 1.19.0); a combat use for mana.
 - Attack-speed gear (the `attackIntervalModMs` hook exists, unused).
 - Unlock rules beyond wins (e.g. hero level).
 
