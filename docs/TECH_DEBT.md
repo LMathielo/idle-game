@@ -29,6 +29,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#25, 30] `app/(tabs)/index.tsx`, `hero.tsx` — both tabs stay mounted, so the hidden tab's HUD keeps recomputing each tick. Gate with `useIsFocused` or use `freezeOnBlur`.
 - [#25, 25] `hud/HeroHud.tsx` vs the Hero `ScrollView` — left inset 8 vs 12. Share one inset constant.
 - [#25, 15] `StatusPanel.tsx` `confirm` — pending edits made while the send is in flight are wiped by `update(NO_PENDING)`. Clear only if pending still equals the sent payload.
+- [#30, 30] `woodcutting/WoodcuttingModal.tsx`, `mining/MineModal.tsx` — `wk` is a new object each tick so `renderItem` is recreated every tick (cards stay memoized; same as `crewOf`). Key the deps on primitive signatures.
+- [#30, 25] `workers/NodeWorkers.tsx` — a fast second tap on [+] is dropped by the `useCommand` in-flight guard (same as the #19 item); no test covers `nodeWorkersInfo`'s disabled combinations. Add one.
 
 ## Engine and data
 
