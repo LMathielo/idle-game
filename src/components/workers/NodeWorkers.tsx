@@ -39,6 +39,11 @@ export function crewStatusText(crew: CrewView): string {
       : 'paused (upkeep)';
 }
 
+/** The crew's spoken form for screen readers. */
+export function crewSpoken(crew: CrewView): string {
+  return `${crew.workers} workers here, ${crew.status === 'working' ? `about ${formatPerMin(crew.itemsPerMin)} per minute` : crew.status}`;
+}
+
 /** Stable [+] / [−] handlers: they pick the worker from the live state, so they never go stale between ticks. */
 export function useWorkerActions(send: Send, client: { getState(): GameState }) {
   const onAssign = useCallback(
@@ -75,30 +80,31 @@ type RowProps = {
   workers: number;
   /** Crew status text, or null without a crew. */
   statusText: string | null;
+  /** Spoken form of the crew, or null without a crew. */
+  spoken: string | null;
   /** The crew is idle or paused (red text). */
   off: boolean;
   show: boolean;
   free: number;
-  /** The engine's reason workers can't work this node, or null. */
-  reason: string | null;
+  /** The hero can't work this node now (the card shows its own "Needs …" line, so this row adds no text). */
+  blocked: boolean;
   onAssign: (node: WorkerNodeId) => void;
   onUnassign: (node: WorkerNodeId) => void;
 };
 
 /** The crew row of a tree / rock card: icon, "N workers" and status, then [−] [+] and a hint. */
-export const NodeCrewControl = memo(function NodeCrewControl({ node, name, workers, statusText, off, show, free, reason, onAssign, onUnassign }: RowProps) {
+export const NodeCrewControl = memo(function NodeCrewControl({ node, name, workers, statusText, spoken, off, show, free, blocked, onAssign, onUnassign }: RowProps) {
   const plus = useCallback(() => onAssign(node), [onAssign, node]);
   const minus = useCallback(() => onUnassign(node), [onUnassign, node]);
-  if (!show && workers === 0) return null;
+  if (workers === 0 && (!show || blocked)) return null;
   const noun = workers === 1 ? 'worker' : 'workers';
-  const canAdd = free > 0 && !reason;
-  const hint = reason ?? (free === 0 ? 'No free workers · hire at Town Hall' : null);
-  const hintStyle = reason ? styles.hintBad : styles.hint;
+  const canAdd = free > 0 && !blocked;
+  const hint = !blocked && free === 0 ? 'No free workers · hire at Town Hall' : null;
   return (
     <View style={styles.block}>
       <View style={styles.textRow}>
         <GameIcon name="workers" />
-        <Text style={[styles.crew, off && styles.crewOff]} accessibilityLabel={`${workers} ${noun} here${statusText ? `, ${statusText}` : ''}`}>
+        <Text style={[styles.crew, off && styles.crewOff]} accessibilityLabel={spoken ?? `${workers} ${noun} here`}>
           {workers} {noun}
           {statusText ? ` · ${statusText}` : ''}
         </Text>
@@ -127,15 +133,7 @@ export const NodeCrewControl = memo(function NodeCrewControl({ node, name, worke
               />
             </View>
           </View>
-          {hint ? (
-            reason ? (
-              <IconText icon="locked" size={14} style={hintStyle} rowStyle={styles.hintRow}>
-                {hint}
-              </IconText>
-            ) : (
-              <Text style={hintStyle}>{hint}</Text>
-            )
-          ) : null}
+          {hint ? <Text style={styles.hint}>{hint}</Text> : null}
         </>
       ) : null}
     </View>
@@ -151,7 +149,5 @@ const styles = StyleSheet.create({
   crewOff: { color: colors.dangerDeadly },
   buttons: { flexDirection: 'row', justifyContent: 'center', gap: 14 },
   btn: { flexDirection: 'row', width: 64 },
-  hintRow: { justifyContent: 'center' },
   hint: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, textAlign: 'center' },
-  hintBad: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.dangerDeadly, textAlign: 'center' },
 });

@@ -17,7 +17,7 @@ import { Bar } from '../Panel';
 import { PixelButton } from '../PixelButton';
 import { type AnchorRect, InfoPopover, measureAnchor, PopoverRow, PopoverText } from '../ui/InfoPopover';
 import { useCommand } from '../ui/useCommand';
-import { crewStatusText, NodeCrewControl, nodeWorkersInfo, useWorkerActions, WorkersLine } from '../workers/NodeWorkers';
+import { crewSpoken, crewStatusText, NodeCrewControl, nodeWorkersInfo, useWorkerActions, WorkersLine } from '../workers/NodeWorkers';
 
 /** Width of the next card that shows at the right edge (the "peek"), and the gap between cards. */
 const PEEK = 28;
@@ -86,7 +86,7 @@ export function WoodcuttingModal() {
         crew={crewOf.get(item.treeId) ?? null}
         show={wk.show}
         free={wk.free}
-        reason={wk.reasons.get(item.treeId) ?? null}
+        blocked={wk.reasons.has(item.treeId)}
         onAssign={onAssign}
         onUnassign={onUnassign}
         width={cardWidth}
@@ -174,7 +174,7 @@ type CardProps = {
   crew: CrewView | null;
   show: boolean;
   free: number;
-  reason: string | null;
+  blocked: boolean;
   onAssign: (node: WorkerNodeId) => void;
   onUnassign: (node: WorkerNodeId) => void;
   width: number;
@@ -190,7 +190,7 @@ type CardProps = {
   onInfo: (id: TreeId, node: HostInstance | null) => void;
 };
 
-const TreeCard = memo(function TreeCard({ tree, crew, show, free, reason, onAssign, onUnassign, width, current, stamina, paused, level, ws, onStart, onStop, onSkip, onInfo }: CardProps) {
+const TreeCard = memo(function TreeCard({ tree, crew, show, free, blocked, onAssign, onUnassign, width, current, stamina, paused, level, ws, onStart, onStop, onSkip, onInfo }: CardProps) {
   const start = useCallback(() => onStart(tree.treeId, tree.name), [onStart, tree.treeId, tree.name]);
   const skip = useCallback(({ repeat }: { repeat: boolean }) => onSkip(repeat), [onSkip]);
   const infoRef = useRef<HostInstance>(null);
@@ -235,10 +235,11 @@ const TreeCard = memo(function TreeCard({ tree, crew, show, free, reason, onAssi
         name={tree.name}
         workers={crew?.workers ?? 0}
         statusText={crew ? crewStatusText(crew) : null}
+        spoken={crew ? crewSpoken(crew) : null}
         off={!!crew && crew.status !== 'working'}
         show={show}
         free={free}
-        reason={reason}
+        blocked={blocked}
         onAssign={onAssign}
         onUnassign={onUnassign}
       />
