@@ -2,6 +2,31 @@
 
 Living product doc. Owned by the product-owner orchestrator; updated whenever a decision changes. Overrides generic advice in the skills.
 
+## Contents
+
+Read only the sections your task needs: pick them here, then `grep -n '^## ' docs/PRODUCT.md` for their line ranges.
+
+| Section | What it covers |
+| --- | --- |
+| [Vision](#vision) | One paragraph: what the game is. |
+| [Pillars](#pillars) | The four design pillars. |
+| [Platform & constraints](#platform--constraints) | iOS + Android via Expo Go, no web, single player for now. |
+| [Current state (2026-11-03, engine 1.17.0)](#current-state-2026-11-03-engine-1170) | What the game has today, feature by feature. |
+| [UI rules (2026-10-31)](#ui-rules-2026-10-31) | Dialogs, InfoPopover, hold-to-repeat, village map, art and symbols, building bonus lines. |
+| [Buildings (2026-10-28)](#buildings-2026-10-28) | Table: each building's state on a new save, requirements, what it gives. |
+| [Building upgrades (2026-10-28, engine 1.10.0)](#building-upgrades-2026-10-28-engine-1100) | One builder, costs, timing, level limits. |
+| [Building bonuses (per level; bonuses add together)](#building-bonuses-per-level-bonuses-add-together) | Table of bonuses per building and level. |
+| [Crafting (2026-11-01, engine 1.13.0; continuous pipes 1.15.0)](#crafting-2026-11-01-engine-1130-continuous-pipes-1150) | Crafting rules table (pipes, recipes, stamina, refunds). |
+| [Gear quality and rarity (2026-11-01, engine 1.14.0)](#gear-quality-and-rarity-2026-11-01-engine-1140) | Quality and rarity rules table. |
+| [Gear crafting (2026-11-01, engine 1.14.0)](#gear-crafting-2026-11-01-engine-1140) | Gear recipe rules table. |
+| [Workers (2026-10-28, engine 1.10.0)](#workers-2026-10-28-engine-1100) | Workers rules table (hire, crews, upkeep). |
+| [Merchant stock (2026-10-28, engine 1.10.0)](#merchant-stock-2026-10-28-engine-1100) | Fixed slot, rolled pool, starter gear, sell share. |
+| [Mine Shaft rocks (2026-10-28; Stone needs 20 MS since 1.10.0)](#mine-shaft-rocks-2026-10-28-stone-needs-20-ms-since-1100) | Rocks table: level, MS, time, XP, ore. |
+| [Roadmap](#roadmap) | Pointer: moved to STATUS.md. |
+| [Decision log](#decision-log) | Dated owner and product decisions with reasons (long: grep it for your topic, don't read it whole). |
+| [Stamina projection (2026-10-27, search-only skip)](#stamina-projection-2026-10-27-search-only-skip) | Stamina math for a new hero's first sessions. |
+| [Backlog](#backlog) | Pointer: merged into STATUS.md's unrefined roadmap. |
+
 ## Vision
 
 A mobile idle RPG in the spirit of Gladiatus. One hero, a medieval village hub, gear and attributes that matter, dungeons that fight themselves, and gathering skills that tick while you're away. Short sessions: open, collect, decide, close.
@@ -320,6 +345,8 @@ Moved to [`STATUS.md`](STATUS.md) (refined and unrefined roadmap, current versio
 | 2026-11-04 | **Asset pipeline `tools/art`:** the Python generator (numpy, scipy, Pillow) is in the repo; `cd tools/art && python3 build_assets.py ../..` rebuilds every PNG (deterministic) plus `manifest.json` and `village_layout.json`, and the output is committed. The client reads them through one registry by game id (`src/components/art/images.ts`; unknown item → "unknown" icon); the engine stays image-free. Replaces `tools/generate-village.py` and `village.png` | Art rules enforced in code; a catalog entry without art fails CI |
 | 2026-11-04 | Engineering choices for the pixel art (engineer, flagged): (1) the Village **start framing** widens to fit the new sign anchors (x 91–244 world px; the map opens ~25% further out: 1.56 pt per world px on a 375 pt phone, was 2.08); (2) emoji with no approved image become words: ⏸ → "Paused", ⏳ / ⏱ dropped ("Builder time", "Time 1:00"), ▶ dropped from Replay; dungeon "searching" strip and runs use the fight icon, dungeon list entries stay text; (3) stamina costs on buttons show the stamina icon before the label ("[stamina] Skip (5)", "[stamina] Insta · 3"); (4) the Node test shim maps a PNG `require()` to its path so the real registry is tested | Signs must fit on screen; no new art without approval |
 | 2026-11-04 | **Sign anchors (final)** (owner fix on PR #26; art unchanged, only `village_layout.json`): dungeon (206,172) · mine (124,198) · merchant (244,240) · woodcutting (104,266) · training (238,292) · town_hall (160,236), above its turret · crafting (320,316), on the east plot over the smithy · storage (91,348). At the start zoom no two signs overlap, padlocked or built, on 375 / 390 / 430 pt phones (`tests/villageMap.test.ts`) | Signs keep their size while the map zooms, so neighbours must clear at the start zoom |
+| 2026-11-04 | **Coding and review agents run on Sonnet, medium reasoning** (`game-engineer` and `code-reviewer` set `model: sonnet`, `effort: medium`; the orchestrator passes both when launching) | Owner decision: cheaper and fast enough; Opus stays with the orchestrator |
+| 2026-11-04 | **Engineer effort set by task risk:** medium by default, **high** for the 3-reviewer risk tier (save shape/migrations, simulate/time rules, combat or economy formulas, replay/action log/anti-cheat, publish/CI workflows), never below medium | Owner decision: medium minimum; high where a subtle bug costs a 3-reviewer round |
 | 2026-11-04 | **Previews by label, per-branch saves:** a PR with the label `expo-test` publishes to Expo Go on an EAS branch named exactly like its git branch (`.github/workflows/expo-preview.yml`; one edited comment; unlabel / close deletes it; `main` / `dev` heads refused). Each build keeps its own SQLite file: `main` keeps `idle-game.db`, `dev` = `idle-game-dev.db` (copied once from `idle-game.db`), previews `idle-game-<branch>.db` (fresh). The token stays a repo-level secret. | The owner can reject or iterate on a change before merging it, and trying a preview never overwrites his progress on `dev` or `main`. |
 
 ## Stamina projection (2026-10-27, search-only skip)

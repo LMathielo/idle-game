@@ -1,0 +1,15 @@
+# Normalize text files to LF in the repo. No eol= on purpose: the owner works
+# on Windows (core.autocrlf true), so his checkout keeps CRLF.
+* text=auto
+
+# Binary assets: never convert or diff as text
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.wav binary
+*.mp3 binary
