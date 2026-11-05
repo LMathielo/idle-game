@@ -24,7 +24,7 @@ Mobile idle/incremental RPG inspired by Gladiatus. POC scope: two tabs. **Villag
 
 ## Workflow and branching
 
-- **Branches:** `feat/*`, `fix/*`, `chore/*`, `exp/*` (one task each, cut from `origin/dev`, never publish to Expo Go) → PR into `dev` (integration + test preview, the default branch) → release PR `dev` → `main` (stable, only what he tested; protected: PR + `CI` check, merge commit only).
+- **Branches:** `feat/*`, `fix/*`, `chore/*`, `exp/*` (one task each, cut from `origin/dev`; they publish to Expo Go only while their PR has the label `expo-test`, which only the owner adds: EAS branch = git branch, own save slot, `expo-preview.yml`) → PR into `dev` (integration + test preview, the default branch) → release PR `dev` → `main` (stable, only what he tested; protected: PR + `CI` check, merge commit only).
 - The orchestrator is the **product owner** (`.claude/skills/product-owner/SKILL.md`): turns requests into task briefs, keeps `docs/PRODUCT.md` current, writes no game code.
 - The **`game-engineer`** agent (`.claude/agents/game-engineer.md`) codes each brief on its branch and opens a PR with **base `dev`**.
 - Every PR into `dev` gets the **review council** (`.claude/skills/pr-review-council/SKILL.md`): 1–3 reviewers by risk. Reviewers run on Sonnet at medium effort; the engineer on Sonnet at medium, or high for high-risk tasks (never below medium). Confirmed issues go back to the engineer until clean.

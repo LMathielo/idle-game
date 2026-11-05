@@ -110,5 +110,8 @@ jobs:
               if [ -n "$PR_TITLE" ]; then TITLE="$PR_TITLE ($PR_NUM)"; fi
               ;;
           esac
+          # Save slot (src/client/saveSlot.ts): dev gets its own save file; main passes none and keeps idle-game.db.
+          # Build label (app.config.ts, src/client/buildLabel.ts): dev is named "Idle Game · dev" in Expo Go.
+          if [ "$EAS_BRANCH" = "dev" ]; then export EXPO_PUBLIC_SAVE_SLOT=dev EXPO_PUBLIC_BUILD_LABEL=dev; fi
           echo "EAS branch: $EAS_BRANCH, message: $TITLE"
           eas update --branch "$EAS_BRANCH" --platform all --message="$TITLE" --non-interactive

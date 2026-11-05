@@ -92,10 +92,42 @@ npx expo start --tunnel   # scan the QR code with Expo Go
    - **Deployment branches and tags → Selected branches and tags → Add rule** `main`, and again for `dev`.
    - **Environment secrets → Add secret** `EXPO_TOKEN` with the same token.
    - Then delete the repo-level secret (**Settings → Secrets and variables → Actions → `EXPO_TOKEN` → Remove**). From then on only runs on `main`/`dev` can read the token, even if someone edits the workflow on another branch.
+   - **Not compatible with PR previews** (owner decision 2026-11-04: previews use the repo-level secret). Keep the repo-level secret while you want the `expo-test` label to work; the trade-off is that a branch pushed to this repo can read the token.
+
+## Previewing a PR before merging
+
+Add the label **`expo-test`** to a pull request (into `dev` or `main`) to try it in Expo Go before merging it. The workflow `expo-preview.yml` then:
+
+- runs install, typecheck and tests, and publishes an EAS Update on an **EAS branch named exactly like the PR's git branch** (`feat/xyz` shows up as `feat/xyz` on expo.dev → project → Updates);
+- posts **one comment** on the PR (edited on every republish, never a second one) with the EAS branch, commit, save slot, the `exp://` link in a code block, a QR code and an expo.dev link;
+- republishes on every push while the label is on;
+- **removes the preview** (deletes the EAS branch and edits the comment) when you take the label off or the PR is closed or merged.
+
+A PR whose branch is `main` or `dev` (the release PR) is refused: those two publish through `eas-update.yml` only.
+
+**Opening a preview on the phone.** GitHub does not open `exp://` links when you tap them, so:
+
+1. In the PR comment, long-press the link in the code block and tap **Copy**.
+2. Paste it into Safari's address bar.
+3. Tap **Open in Expo Go**.
+
+(Or scan the QR code from another screen, or find the update on expo.dev → project → Updates.) Every push publishes a new link, so copy it again from the updated comment.
+
+**Telling builds apart.** Each build has its own app name, so Expo Go's **Recently opened** lists them separately: **Idle Game** is `main`, **Idle Game · dev** is `dev`, and **Idle Game · feat/xyz** is the preview of branch `feat/xyz`. The Hero tab → Debug panel shows the same build label and the save slot. The name comes from `app.config.ts` (it only overrides `name` in `app.json`) and is baked at publish time.
+
+**Getting back to `dev` or `main`.** Tap its entry in **Recently opened** (Idle Game · dev, or Idle Game for main). Tapping the project under **Projects** opens the default build and has no branch picker, so do not use it to choose; to open a branch that is not in the list, use expo.dev → project → Updates → the branch → its QR code or link.
+
+**Each build has its own save**, so previews never touch your progress: `main` keeps `idle-game.db` (your existing progress), `dev` uses `idle-game-dev.db` (copied once from `idle-game.db` on its first launch), and a PR preview starts fresh in `idle-game-<branch>.db`. Hero tab → Debug shows which slot you are on. A local `npx expo start` behaves like `main`.
+
+- The copy is one-way and one-time: **progress on `dev` never flows back to `main`**, and `main` stays as it was.
+- A preview's save **persists across pushes and across a reused branch name** (the same branch name is the same file, even after the preview was removed and re-added). There is no reset button yet; to start over, rename the branch or clear Expo Go's data.
+- Different branch names can map to the same file (`feat/a-b`, `feat/a_b`, `feat/a/b` all become `feat-a-b`).
+
+**Token check.** Previews read `EXPO_TOKEN` as a **repo-level** secret, so it must stay there: Settings → Secrets and variables → Actions → **Repository secrets** → `EXPO_TOKEN`. (If you later move it only into the `expo-publish` environment, previews stop working with "EXPO_TOKEN secret is missing".) During the publish step the token is **visible to the PR's own build code** (Metro, Babel, app config run while `eas update` bundles). Only you can start a preview (the workflow ignores the label when anyone else adds it), but the code it runs is whatever is on that branch: only label PRs you trust.
 
 ## Branching
 
 - `main`: stable, only what you tested on `dev`. Publishes EAS branch `main`. Changed only by a release PR from `dev`.
 - `dev`: default branch and test preview. Publishes EAS branch `dev`. Every feature/fix PR targets it.
-- `feat/...`, `fix/...`, `chore/...`, `exp/...`: one task each, cut from `dev`, merged into `dev` via PR. Never published.
+- `feat/...`, `fix/...`, `chore/...`, `exp/...`: one task each, cut from `dev`, merged into `dev` via PR. Published to Expo Go only while the PR has the `expo-test` label (see above).
 - Only the owner merges, into `dev` and into `main`.

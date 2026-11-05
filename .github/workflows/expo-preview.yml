@@ -1,0 +1,306 @@
+name: Expo test preview
+
+# The repo owner adds the label `expo-test` to a pull request (into dev or main) to try it in Expo Go before merging.
+#   - label added, or a push / reopen while the label is on -> `eas update` on an EAS branch named exactly like the
+#     PR's git branch (e.g. `feat/xyz`), with its own save slot (see src/client/saveSlot.ts).
+#     One PR comment (edited on every republish) has the link and QR code for Expo Go.
+#   - label removed, or the PR closed / merged -> that EAS branch is deleted and the comment says so.
+#
+# This is separate from eas-update.yml, which keeps publishing only main and dev. A PR whose head branch is main or
+# dev (the release PR dev -> main) is refused here, so it can never overwrite those two EAS branches.
+#
+# `pull_request` (never `pull_request_target`): the PR's own code runs, with EXPO_TOKEN read from the repo-level
+# secret. Runs from forks get no secrets and are skipped. Anyone who can push a branch to this repo can read that
+# secret by editing this workflow in their PR, so keep write access to the owner and his agents.
+on:
+  pull_request:
+    branches: [dev, main]
+    types: [labeled, unlabeled, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  publish:
+    name: Publish preview
+    # Open same-repo PRs that carry the label, on: the label being added BY THE REPO OWNER (nobody else can start a
+    # preview), a new push, or a reopen.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.state == 'open' &&
+      contains(github.event.pull_request.labels.*.name, 'expo-test') &&
+      (github.event.action == 'synchronize' ||
+       github.event.action == 'reopened' ||
+       (github.event.action == 'labeled' &&
+        github.event.label.name == 'expo-test' &&
+        github.event.sender.login == github.repository_owner))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Job level on purpose: an unrelated event (another label, say) is skipped by the `if` above before it reaches
+    # this group, so it can never cancel a publish in progress. A new push, an unlabel or a close does.
+    concurrency:
+      group: expo-preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+      REPO: ${{ github.repository }}
+    steps:
+      # Must stay the first step. The EAS branch is the git branch, so main and dev are never allowed here.
+      - name: Refuse main and dev, derive the save slot
+        id: names
+        run: |
+          case "$HEAD_REF" in
+            main|dev)
+              echo "::error::Refusing to preview '$HEAD_REF': main and dev already publish through eas-update.yml, and a preview must never overwrite them. Remove the expo-test label from this PR."
+              exit 1
+              ;;
+          esac
+          # Same rule as sanitizeSaveSlot() in src/client/saveSlot.ts: [a-z0-9] runs, dashes between, none at the ends.
+          SLOT=$(printf '%s' "$HEAD_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+          if [ -z "$SLOT" ] || [ "$SLOT" = "main" ] || [ "$SLOT" = "dev" ]; then
+            echo "::error::Branch '$HEAD_REF' maps to save slot '$SLOT', which would share main's or dev's save. Rename the branch."
+            exit 1
+          fi
+          echo "slot=$SLOT" >> "$GITHUB_OUTPUT"
+          echo "EAS branch: $HEAD_REF, save slot: $SLOT"
+
+      # Default ref for pull_request: the PR merged into its base, so the preview shows what the base will look like.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # No caches in this job (npm here, EAS CLI below): it holds the Expo token, and setup-node recommends
+      # disabling caching for workflows with access to secrets (cache poisoning).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      # Install and test before the token is anywhere near the job: dependencies and the PR's code run here.
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      # Installs eas-cli. No `token:` input on purpose: it would export EXPO_TOKEN to every later step.
+      - uses: expo/expo-github-action@v9
+        with:
+          eas-version: latest
+          eas-cache: false
+
+      - name: Check EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN secret is missing (repo Settings → Secrets and variables → Actions → Repository secrets)."
+            exit 1
+          fi
+
+      # The slot and the build label are baked in here (Metro inlines EXPO_PUBLIC_* at export time; eas-cli reads the app
+      # config through `expo config` with this env), so only this step sets them.
+      # Update message: PR title + (#N) + short SHA. The title is untrusted text: it only ever goes through env vars.
+      - name: Publish update
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_SAVE_SLOT: ${{ steps.names.outputs.slot }}
+          # The RAW branch name: app.config.ts names the app "Idle Game · <branch>". Env only, never in the script.
+          EXPO_PUBLIC_BUILD_LABEL: ${{ github.event.pull_request.head.ref }}
+        run: |
+          MSG="${PR_TITLE:0:120} (#${PR_NUMBER}) ${HEAD_SHA:0:7}"
+          echo "EAS branch: $HEAD_REF, save slot: $EXPO_PUBLIC_SAVE_SLOT, message: $MSG"
+          eas update --branch "$HEAD_REF" --platform all --message="$MSG" --non-interactive --json > "$RUNNER_TEMP/update.json"
+          cat "$RUNNER_TEMP/update.json"
+
+      - name: Post or update the PR comment
+        env:
+          SLOT: ${{ steps.names.outputs.slot }}
+        run: |
+          GROUP=$(jq -r '[.[]?.group][0] // empty' "$RUNNER_TEMP/update.json")
+          if ! printf '%s' "$GROUP" | grep -Eq '^[0-9a-f-]{36}$'; then
+            echo "::error::Could not read the update group from eas update's JSON output."
+            exit 1
+          fi
+          PROJECT_ID=$(jq -r '.expo.extra.eas.projectId' app.json)
+          OWNER=$(jq -r '.expo.owner' app.json)
+          SLUG=$(jq -r '.expo.slug' app.json)
+          GO_URL="exp://u.expo.dev/${PROJECT_ID}/group/${GROUP}"
+          QR_URL="https://qr.expo.dev/eas-update?projectId=${PROJECT_ID}&groupId=${GROUP}"
+          DASH_URL="https://expo.dev/accounts/${OWNER}/projects/${SLUG}/updates/${GROUP}"
+          BT='`'
+          {
+            echo '<!-- expo-preview -->'
+            echo '### Expo Go preview'
+            echo
+            echo '| | |'
+            echo '| --- | --- |'
+            echo "| EAS branch | ${BT}${HEAD_REF}${BT} |"
+            echo "| Commit | ${BT}${HEAD_SHA:0:7}${BT} (PR merged into ${BT}${BASE_REF}${BT} at publish time) |"
+            echo "| Save slot | ${BT}${SLOT}${BT}: file ${BT}idle-game-${SLOT}.db${BT}, a fresh save that dev and main never touch |"
+            echo "| Published | $(date -u '+%Y-%m-%d %H:%M UTC') |"
+            echo
+            echo "**Open on the phone** (GitHub does not open ${BT}exp://${BT} links when tapped):"
+            echo
+            echo "1. Long-press the link below, then **Copy**."
+            echo "2. Paste it into Safari's address bar."
+            echo "3. Tap **Open in Expo Go**."
+            echo
+            echo '```'
+            echo "${GO_URL}"
+            echo '```'
+            echo
+            echo "From another screen, scan the QR code:"
+            echo
+            echo "![QR code for Expo Go](${QR_URL})"
+            echo
+            echo "Or open the [update on expo.dev](${DASH_URL})."
+            echo
+            echo "Every new push publishes a new link. In Expo Go's *Recently opened* this build is named ${BT}Idle Game · ${HEAD_REF}${BT}."
+            echo
+            echo "Republished on every push while the ${BT}expo-test${BT} label is on. Removing the label, closing or merging the PR deletes this preview."
+          } > "$RUNNER_TEMP/comment.md"
+          ID=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- expo-preview -->")))][0].id // empty' | head -n1)
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${ID}" -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+            echo "Updated comment $ID"
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/comments" -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+            echo "Posted a new comment"
+          fi
+
+  cleanup:
+    name: Remove preview
+    # Same-repo PRs: the label was removed, or a PR that still carried the label was closed / merged.
+    # (If the label was removed before closing, the unlabel run already cleaned up.)
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      ((github.event.action == 'unlabeled' && github.event.label.name == 'expo-test') ||
+       (github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'expo-test')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: expo-preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      EVENT_ACTION: ${{ github.event.action }}
+      PR_MERGED: ${{ github.event.pull_request.merged }}
+      REPO: ${{ github.repository }}
+    steps:
+      # Must stay the first step: deleting EAS branch `dev` or `main` would wipe the owner's preview / approved build.
+      - name: Refuse main and dev
+        run: |
+          case "$HEAD_REF" in
+            main|dev)
+              echo "::error::Refusing to delete EAS branch '$HEAD_REF': it is published by eas-update.yml, not by previews."
+              exit 1
+              ;;
+          esac
+          SLOT=$(printf '%s' "$HEAD_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+          if [ -z "$SLOT" ] || [ "$SLOT" = "main" ] || [ "$SLOT" = "dev" ]; then
+            echo "::error::Branch '$HEAD_REF' maps to save slot '$SLOT'; it was never previewed."
+            exit 1
+          fi
+          echo "SLOT=$SLOT" >> "$GITHUB_ENV"
+
+      # The base branch, not the PR: this job holds the token, so none of the PR's code runs here. Only app.json
+      # is needed (eas-cli reads the project id from it).
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - uses: expo/expo-github-action@v9
+        with:
+          eas-version: latest
+          eas-cache: false
+
+      - name: Check EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN secret is missing (repo Settings → Secrets and variables → Actions → Repository secrets)."
+            exit 1
+          fi
+
+      # A branch that was never published is not an error: eas-cli says "Could not find branch ...". Other wordings
+      # only count when they name THIS branch ("branch <name> not found" / "does not exist", optionally quoted), so
+      # "project not found" or "account does not exist" (auth, wrong project) still fail the job. Fixed strings
+      # (grep -F): the branch name comes from env and is never read as a regex.
+      - name: Delete the EAS branch
+        id: delete
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set +e
+          OUT=$(eas branch:delete "$HEAD_REF" --non-interactive 2>&1)
+          CODE=$?
+          set -e
+          MISSING="$RUNNER_TEMP/missing-patterns.txt"
+          {
+            echo 'could not find branch'
+            echo 'could not find update branch'
+            for Q in '' '"' "'"; do
+              for W in 'not found' 'was not found' 'does not exist'; do
+                echo "branch ${Q}${HEAD_REF}${Q} ${W}"
+              done
+            done
+          } > "$MISSING"
+          printf '%s\n' "$OUT"
+          if [ "$CODE" -eq 0 ]; then
+            echo "result=deleted" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$OUT" | grep -qiFf "$MISSING"; then
+            echo "EAS branch '$HEAD_REF' does not exist: nothing to delete."
+            echo "result=missing" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::eas branch:delete failed (exit $CODE)."
+            exit "$CODE"
+          fi
+
+      # Only edits an existing preview comment; never creates one for a PR that was not previewed.
+      - name: Update the PR comment
+        env:
+          RESULT: ${{ steps.delete.outputs.result }}
+        run: |
+          ID=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- expo-preview -->")))][0].id // empty' | head -n1)
+          if [ -z "$ID" ]; then
+            echo "No preview comment on this PR: nothing to update."
+            exit 0
+          fi
+          BT='`'
+          if [ "$EVENT_ACTION" = "unlabeled" ]; then WHY="the ${BT}expo-test${BT} label was removed"
+          elif [ "$PR_MERGED" = "true" ]; then WHY="the PR was merged"
+          else WHY="the PR was closed"; fi
+          {
+            echo '<!-- expo-preview -->'
+            echo '### Expo Go preview removed'
+            echo
+            if [ "$RESULT" = "deleted" ]; then
+              echo "EAS branch ${BT}${HEAD_REF}${BT} was deleted because ${WHY}."
+              echo
+              echo "Its save file ${BT}idle-game-${SLOT}.db${BT} stays inside Expo Go on the phone until you clear Expo Go's data; no other build uses it."
+            else
+              echo "EAS branch ${BT}${HEAD_REF}${BT} no longer exists (${WHY}); nothing was left to delete."
+            fi
+            echo
+            echo "Add the ${BT}expo-test${BT} label again to publish a new preview."
+          } > "$RUNNER_TEMP/comment.md"
+          gh api -X PATCH "repos/${REPO}/issues/comments/${ID}" -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          echo "Updated comment $ID"
