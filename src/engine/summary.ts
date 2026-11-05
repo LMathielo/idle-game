@@ -15,6 +15,7 @@ export function emptySummary(): SimulationSummary {
     heroLevelsGained: 0,
     goldGained: 0,
     dungeon: { runs: 0, wins: 0, losses: 0 },
+    boss: { fights: 0, wins: 0, losses: 0 },
     dungeonsUnlocked: [],
     trainingXpGained: {},
     trainingLevelsGained: {},
@@ -64,6 +65,11 @@ export function mergeSummaries(a: SimulationSummary, b: SimulationSummary): Simu
       wins: a.dungeon.wins + b.dungeon.wins,
       losses: a.dungeon.losses + b.dungeon.losses,
     },
+    boss: {
+      fights: (a.boss?.fights ?? 0) + (b.boss?.fights ?? 0),
+      wins: (a.boss?.wins ?? 0) + (b.boss?.wins ?? 0),
+      losses: (a.boss?.losses ?? 0) + (b.boss?.losses ?? 0),
+    },
     dungeonsUnlocked: [...a.dungeonsUnlocked, ...b.dungeonsUnlocked],
     trainingXpGained: addMaps(a.trainingXpGained, b.trainingXpGained),
     trainingLevelsGained: addMaps(a.trainingLevelsGained, b.trainingLevelsGained),
@@ -88,12 +94,12 @@ export function trainingXpTotal(s: Pick<SimulationSummary, 'trainingXpGained'>):
 
 /**
  * Worth showing in "While you were away": any clock anomaly, or at least AWAY_SUMMARY_MIN_MS of real time
- * away with at least one log cut, ore mined, dungeon run, training XP point, training cap reached, upgrade finished,
+ * away with at least one log cut, ore mined, dungeon run, boss fight, training XP point, training cap reached, upgrade finished,
  * worker action or craft finished. A quick
  * app switch never opens the modal.
  */
 export function isNoteworthy(s: SimulationSummary, minAwayMs: number = AWAY_SUMMARY_MIN_MS): boolean {
   const progressed =
-    s.actions > 0 || s.oresMined > 0 || s.dungeon.runs > 0 || trainingXpTotal(s) > 0 || s.trainingMaxed.length > 0 || s.buildingsUpgraded.length > 0 || s.workerActions > 0 || s.craftsCompleted > 0 || Object.keys(s.craftsReady).length > 0;
+    s.actions > 0 || s.oresMined > 0 || s.dungeon.runs > 0 || (s.boss?.fights ?? 0) > 0 || trainingXpTotal(s) > 0 || s.trainingMaxed.length > 0 || s.buildingsUpgraded.length > 0 || s.workerActions > 0 || s.craftsCompleted > 0 || Object.keys(s.craftsReady).length > 0;
   return s.anomalies.length > 0 || (s.requestedMs >= minAwayMs && progressed);
 }

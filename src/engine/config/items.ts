@@ -19,6 +19,11 @@ export type ItemDef = {
   description: string;
   /** Gold the merchant pays per unit. Integer ≥ 1; always below buyPrice. Gear: for a common piece (× the instance's rarity multiplier). */
   sellPrice: number;
+  /**
+   * false = the Merchant does not buy it (SELL_ITEM refuses with NOT_SELLABLE and the Sell list greys it with the reason).
+   * Missing = sellable. Used for the Chieftain's Tusk (1.20.0), kept for future crafting. Its sellPrice is then only a placeholder.
+   */
+  sellable?: boolean;
   /** Gold per unit when the merchant sells it. Only items the merchant can stock have one. Gear: for a common piece (× the listing's rarity multiplier). */
   buyPrice?: number;
   stackable: boolean;
@@ -129,6 +134,17 @@ export const ITEMS = {
   wolf_pelt: junk('wolf_pelt', 'Wolf Pelt', '🧥', 12, 'Thick fur from the Wolf Den.'),
   old_bone: junk('old_bone', 'Old Bone', '🦴', 25, 'Dug out of the Forgotten Crypt.'),
   troll_hide: junk('troll_hide', 'Troll Hide', '🟫', 60, 'Tough hide from under the Troll Bridge.'),
+  // Boss material (1.20.0): rare (blue), stackable, not sellable until crafting uses it. Placeholder art (the troll hide icon).
+  chieftains_tusk: {
+    id: 'chieftains_tusk',
+    name: "Chieftain's Tusk",
+    icon: '🦷',
+    rarity: 'rare',
+    description: 'A huge yellowed tusk from the Troll Chieftain. It will be used in future crafting, so keep it. The Merchant will not buy it.',
+    sellPrice: 1,
+    sellable: false,
+    stackable: true,
+  },
   health_potion_t1: {
     id: 'health_potion_t1',
     name: 'Health Potion (T1)',

@@ -14,6 +14,7 @@ import {
   type Command,
   CURRENT_SAVE_VERSION,
   type DungeonId,
+  type DungeonOrBossId,
   ENGINE_VERSION,
   type GameEvent,
   type GameState,
@@ -71,7 +72,7 @@ export class LocalGameClient implements GameClient {
   private paused = false;
   private awaySummary: SimulationSummary | null = null;
   /** Dungeons unlocked since the player last dismissed the banner (from DUNGEON_UNLOCKED events). */
-  private unlockedDungeons: readonly DungeonId[] = [];
+  private unlockedDungeons: readonly DungeonOrBossId[] = [];
   private snapshot: GameSnapshot | null = null;
   private listeners = new Set<() => void>();
   private queue: Promise<unknown> = Promise.resolve();

@@ -6,7 +6,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameSnapshot } from '../../client/GameProvider';
 import { type AttributeKey, type AttributeTrainingView, buildingLevel, TRAINING, type TrainingView, trainingView } from '../../engine';
 import { colors, fonts } from '../../theme';
-import { confirmCancelRun } from '../dungeon/confirmCancelRun';
+import { confirmLeaveRun } from '../dungeon/confirmCancelRun';
 import { IconText } from '../art/Sprites';
 import { ATTRIBUTE_NAMES, formatNumber, formatTrainingLeft } from '../format';
 import { LiveBar } from '../LiveBar';
@@ -25,9 +25,9 @@ export function TrainingModal() {
 
   const onTrain = useCallback(
     async (attribute: AttributeKey) => {
-      // One activity at a time: training would end the dungeon run in progress, so ask first.
+      // One activity at a time: training would end the dungeon run (or boss fight) in progress, so ask first.
       const a = client.getState().activity;
-      if (a?.kind === 'dungeon' && !(await confirmCancelRun(dialog, `Train ${ATTRIBUTE_NAMES[attribute].short}`, a.phase === 'fight'))) return;
+      if (!(await confirmLeaveRun(dialog, `Train ${ATTRIBUTE_NAMES[attribute].short}`, a))) return;
       await send({ type: 'START_ACTIVITY', kind: 'training', attribute });
     },
     [client, dialog, send],

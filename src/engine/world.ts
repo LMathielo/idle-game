@@ -48,7 +48,7 @@ export function heroNextEventMs(state: GameState): number {
   const a = state.activity;
   if (!a) return Number.POSITIVE_INFINITY;
   const ms =
-    a.kind === 'dungeon'
+    a.kind === 'dungeon' || a.kind === 'boss'
       ? dungeonNextEventMs(state)
       : a.kind === 'training'
         ? trainingNextEventMs(state)

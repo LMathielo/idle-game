@@ -28,7 +28,7 @@ src/components/art/   the art registry (images.ts: require() maps by game id, un
 src/components/hud/   HeroHud (top-left hero HUD on the Village tab only: portrait, level, HP / mana / stamina / XP bars, "+N" points badge; the Hero tab has no HUD and shows the level in its Header panel), hudLayout.ts (its fixed size; the Village map's top reserve)
 src/components/ui/    UI kit: GameDialog (provider + hosts + useDialog), InfoPopover (+ rows, actions, measureAnchor), useHoldRepeat, useCommand, insets
 src/components/village/ villageMap.ts: world size, start framing (CORE), building pieces + sign anchors (from village_layout.json), empty plots, camera limits / clamp (pure, tested)
-src/components/dungeon/  Dungeon modal (list + in-modal detail), LiveFight (the fight in progress), FightReplay, run-cancel confirmation
+src/components/dungeon/  Dungeon modal (the list by tier: stages then the boss row; in-modal detail for a stage and for a boss), LiveFight (the fight in progress, boss regen note and stun notice), FightReplay (+ LogLine, StunNotice), outcome (labels, per-fight time limit), run-cancel / flee confirmation (confirmCancelRun, confirmLeaveRun)
 src/components/training/ Training modal (tier panel + one row per attribute, stamina speed-up on the active row)
 src/components/woodcutting/ Woodcutting modal (header with level/XP/WS/stamina, paged tree carousel)
 src/components/mining/ Mine Shaft modal (mirrors Woodcutting: level/XP/MS/stamina, paged rock carousel)
@@ -36,14 +36,14 @@ src/components/buildings/ BuildSheet (a locked building's requirements + Build, 
                       TownHallModal (level, workers: hire / assign picker / unassign / dismiss, crews, upkeep), bonusText (bonus lines, currentBonusLine)
 src/components/workers/ NodeWorkers (the "Workers: X free / Y hired" line and the crew row with [−] / [+] on Woodcutting / Mine cards; selectors nodeChoices + workersView), pickWorker (pure: first free worker, last worker on a node)
 src/components/items/  ItemSlot (rarity-framed slot: the instance's colour, reports its anchor), ItemSheet (item InfoPopover + actions: rarity-coloured name,
-                      "Green · Quality 73%", quality-scaled stats and equip deltas, rarity-scaled prices), QuantityStepper, itemInfo (labels, subtitle, stat lines)
+                      "Green · Quality 73%", quality-scaled stats and equip deltas, rarity-scaled prices), QuantityStepper, RevealSheet (a won / collected gear piece's popover with Equip: Crafting's Done and a boss win), itemInfo (labels, subtitle, stat lines)
 src/components/merchant/ Merchant modal (Buy | Sell tabs, stock grid, refresh charges, buy/sell sheets)
 src/components/crafting/ Crafting modal (8 pipe rows: a continuous material pipe shows "Crafted N", the craft's progress with a live "xx.yy%",
                       Insta, ×10 and Stop, or why it waits; a gear pipe Insta / Cancel, "✓ Ready — Done" and the reveal popover; the header's
                       Recipes button and an idle pipe's "Craft…" open the recipe list sub-view: Materials tab, Equipment tab with gear cards
                       and the stamina stepper; Recipes starts go into the first free pipe)
 src/engine/           pure TS game rules: types, rng, progression, simulate, commands, stats (derived stats), stamina, hp (current HP + regen; regenHeroPools = HP + mana), mana (current mana + regen), regen (shared integer banking),
-                      dungeon (runs = search + live fight, skip, per-dungeon counters, unlocks), combat (strike timing, damage, log), danger (danger hint), hash, migrations,
+                      dungeon (runs = search + live fight, skip, per-dungeon counters, unlocks; also the shared fight loop a boss uses), combat (strike timing, damage, log, enemy regen, combat skills and the stun), boss (boss unlock, ENTER_BOSS check, rewards, views), danger (danger hint + bossDangerHint), hash, migrations,
                       replay (spans + MIGRATE anchors), training (tiers, timed training, views),
                       attributes (normal = spent + extra, core = training level, total; core DEX / INT time reductions, activityTimeMs, attributeViews; SPEND_ATTRIBUTE_POINTS in commands), woodcutting (WS, trees, logs, skip, views),
                       mining (MS, rocks, ores, skip, views), gathering (power-based yield math), buildings (locked/built, BUILD,
@@ -55,7 +55,7 @@ src/engine/           pure TS game rules: types, rng, progression, simulate, com
                       INSTA_CRAFT / X10_CRAFT / STOP_CRAFT, craft time, yield ledger; gear jobs: roll at start, CANCEL_CRAFT, ready,
                       COLLECT_CRAFT; views), gear (gear quality and rarity: scaled stats and prices, rolls),
                       diminishing (diminishingBp: the shared diminishing-returns curve)
-src/engine/config/    tunables as data: xpCurve, woodcutting (WS, trees, skip), mining (MS, rocks, skip; own numbers), buildings (requirements, upgrade costs, per-level bonuses), workers (hire, crew share, upkeep), dungeons (search time, skip, combat incl. fight time limit, enemies with attack intervals, dungeons), items (catalog: rarity, description, prices, damage/armor/WS/MS maxima at 100% quality, heal, crafted gear sets), merchant (charges, fixed slot, random pool, starter stock),
+src/engine/config/    tunables as data: xpCurve, woodcutting (WS, trees, skip), mining (MS, rocks, skip; own numbers), buildings (requirements, upgrade costs, per-level bonuses), workers (hire, crew share, upkeep), dungeons (search time, skip, combat incl. fight time limit, enemies with attack intervals / regen / skills, dungeons, BOSSES, DUNGEON_TIERS), skills (combat skills: Heavy Bash), items (catalog: rarity, description, prices, damage/armor/WS/MS maxima at 100% quality, heal, crafted gear sets), merchant (charges, fixed slot, random pool, starter stock),
                       crafting (pipes, material and gear recipes, ×10 tap and insta stamina), gear (quality/rarity formulas, Merchant and crafting rolls, gear sets and pieces), stats (incl. HP regen, STAT_EFFECTS), stamina, time, newGame, training (curve, tiers, prices), dev (DEV_TOOLS_ENABLED)
 src/client/           GameClient boundary: LocalGameClient, repositories (SQLite / in-memory), clock, React provider + hooks
                       saveSlot.ts (which SQLite file this build uses: slot from EXPO_PUBLIC_SAVE_SLOT, name rules), seedSave.ts (one-time dev seed from idle-game.db,

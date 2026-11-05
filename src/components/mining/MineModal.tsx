@@ -7,7 +7,7 @@ import { FlatList, type HostInstance, ScrollView, type ListRenderItem, type Nati
 import { useGameSnapshot } from '../../client/GameProvider';
 import { type CrewView, crewViews, type WorkerNodeId, mineActivityView, type MineActivityView, miningView, type RockId, type RockView } from '../../engine';
 import { colors, fonts } from '../../theme';
-import { confirmCancelRun } from '../dungeon/confirmCancelRun';
+import { confirmLeaveRun } from '../dungeon/confirmCancelRun';
 import { IconText, ItemIcon, NodeIcon } from '../art/Sprites';
 import { formatBp, formatClock, formatNumber, itemName } from '../format';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
@@ -51,9 +51,9 @@ export function MineModal() {
 
   const onStart = useCallback(
     async (rockId: RockId, name: string) => {
-      // One activity at a time: mining would end the dungeon run in progress, so ask first.
+      // One activity at a time: mining would end the dungeon run (or boss fight) in progress, so ask first.
       const a = client.getState().activity;
-      if (a?.kind === 'dungeon' && !(await confirmCancelRun(dialog, `Mine ${name}`, a.phase === 'fight'))) return;
+      if (!(await confirmLeaveRun(dialog, `Mine ${name}`, a))) return;
       await send({ type: 'START_ACTIVITY', kind: 'mining', rockId });
     },
     [client, dialog, send],

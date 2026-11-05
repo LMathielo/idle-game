@@ -3,7 +3,7 @@
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useGameSnapshot } from '../client/GameProvider';
-import { activityView, constructionView, DUNGEONS, ENEMIES, hpView, itemQuantity, ROCKS, TREES } from '../engine';
+import { activityView, BOSSES, constructionView, DUNGEONS, ENEMIES, hpView, itemQuantity, ROCKS, TREES } from '../engine';
 import { colors, fonts } from '../theme';
 import { GameIcon, ItemIcon, SkillIcon } from './art/Sprites';
 import { ATTRIBUTE_NAMES, formatClock, formatCountdown, formatNumber, formatTrainingLeft } from './format';
@@ -65,6 +65,27 @@ export function ActivityStrip() {
         fraction={view.fraction}
         remainingMs={view.remainingMs}
         paused={clockPaused}
+        color={colors.hp}
+      />
+    );
+  }
+
+  if (view.kind === 'boss') {
+    // The boss fight: the bar shows the boss's HP lost (it regenerates, so the bar can move back); a stun is spelled out.
+    const boss = BOSSES[view.bossId];
+    const hp = hpView(state);
+    const fight = view.fight;
+    const lost = fight.enemyMaxHp > 0 ? 1 - fight.enemyHp / fight.enemyMaxHp : 1;
+    const stunned = fight.heroStunStrikes > 0;
+    return (
+      <StripView
+        icon={<GameIcon name="fight" />}
+        title={`${boss.name} ${formatNumber(fight.enemyHp)}/${formatNumber(fight.enemyMaxHp)}${stunned ? ' · Stunned' : ''}`}
+        right={`HP ${formatNumber(hp.hp)}/${formatNumber(hp.maxHp)}`}
+        a11y={`Boss fight against ${boss.name}, its HP ${fight.enemyHp} of ${fight.enemyMaxHp}, your HP ${hp.hp} of ${hp.maxHp}${stunned ? `, you are stunned for ${fight.heroStunStrikes} more strikes` : ''}${clockPaused ? PAUSED_A11Y : ''}`}
+        fraction={lost}
+        remainingMs={0}
+        paused
         color={colors.hp}
       />
     );

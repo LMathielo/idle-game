@@ -32,7 +32,17 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#30, 25] `workers/NodeWorkers.tsx` — a fast second tap on [+] is dropped by the `useCommand` in-flight guard (same as the #19 item); no test covers `nodeWorkersInfo`'s disabled combinations. Add one.
 - [#32, 25] `app/merchant.tsx` — the `/merchant` route has no unbuilt guard; a deep link or dev navigation opens the modal on an unbuilt Merchant (the engine refuses every command with `BUILDING_LOCKED`). Redirect, or show a "Build the Merchant first" state.
 
+- [first boss, note] Boss art is a PLACEHOLDER: `enemies/variants/stone_troll.png` for the Troll Chieftain and `items/troll_hide.png` for the Chieftain's Tusk (`components/art/images.ts`, marked PLACEHOLDER; `tests/art.test.ts` lists them). **Real art pending owner approval** (art pipeline in `tools/art` untouched).
+- [PR #34, 55] `src/components/dungeon/DungeonModal.tsx:587`, `src/components/dungeon/LiveFight.tsx:29` — UI recomputes boss regen with hard-coded 10_000. Use `danger.regenPerSec` / `BASIS_POINTS` or an engine helper.
+- [PR #34, 45] `DungeonModal.tsx` BossDetail, `src/engine/danger.ts` bossDangerHint — hard-code `COMBAT_SKILLS.heavy_bash` instead of reading `ENEMIES[...].skills`. Resolve from the enemy's skills.
+- [PR #34, 40] `config/skills.ts` description, BossDetail reward text, `src/components/AwayModal.tsx` boss name — tunables repeated as prose. Build from config or test they match; derive the boss name from BOSS_IDS.
+- [PR #34, 30] Woodcutting / Mine / Training modals — inline "starting stops…" note missing for `boss` (confirm dialog still covers it). Add a boss line.
+- [PR #34, 25] BossDetail reveal effect — skipped when the replay panel is open (`lastBoxRef` null); View recovers. Clear replay on a new fight or fall back to the Fight panel anchor.
+- [first boss, 30] `AwayModal.tsx` — the boss line names the only boss (`BOSSES.troll_chieftain`) because `summary.boss` is one aggregate `{fights, wins, losses}`. With a second boss the summary needs counters per boss.
+
 ## Engine and data
+
+- [PR #34, 40] `src/engine/config/skills.ts:21` — no-stun-lock invariant compares caster strikes vs target strikes; only holds at equal attack intervals. Make stun time-based or check in time; add a slow-hero (3000 ms) 100% stun test.
 
 - [pixel art, note] `engine/config/*` (`ITEMS`, `GEAR_PIECES`, `ENEMIES`, `DUNGEONS`, `TREES`, `ROCKS`, `BUILDINGS`), the views that copy them (`treeView`, `rockView`, `buildingView`, `constructionView`, worker / crew / node views) and stored `Item.icon` — the emoji `icon` fields are unused by the UI since the pixel art (art comes from `src/components/art/images.ts` by id). Remove them; `Item.icon` is in saves, so drop it in the next save migration (leave `engine/migrations.ts`' legacy literals alone). `tests/noEmoji.test.ts` allows exactly these fields until then.
 
@@ -57,6 +67,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#31, 20] `village/SignButton.tsx` — duplicates PixelButton's sign styles at a scale. Give PixelButton a `scale` prop and drop this file.
 - [#26, 60] `tests/villageMap.test.ts` — the sign overlap test (now in world px, 2026-11-05) still uses hand-measured `LABEL_W` widths, so it won't notice a label or font change. Derive the widths from the real label metrics (or snapshot a measured layout) instead of constants.
 - [#33, 40] `tests/statsRework.test.ts` — property tests stop at DEX ~600; nothing pins the crit-multiplier integer bound (exact up to ~6e9 DEX). Add one case with DEX 1e6 asserting a safe integer and the exact `dealt`.
+
+- [PR #34, 50] `tests/golden119.test.ts:176` — 1.19 hash re-pinned (fff9656e → 2e1282a3) without proof. Hash `asV19(s)` against the old pin like the 1.13–1.17 pins (move the helper to tests/helpers.ts).
 
 ## Docs and workflow
 

@@ -9,5 +9,6 @@ export const STAMINA = {
   regenIntervalMs: 5 * MIN_MS,
 } as const;
 
-// Stamina is spent only to skip the rest of a dungeon run (config/dungeons.ts, DUNGEON_RUN.skip).
-// Waiting is always free.
+// Stamina buys time (skips: the rest of a dungeon search, a log, an ore, a craft, training minutes) and, since 1.20.0, access:
+// entering a boss fight costs stamina up front (config/dungeons.ts, BOSSES[...].entryStamina). Waiting is always free.
+// (The 2026-10-26 principle "stamina buys time, never access" was superseded on 2026-11-05: docs/PRODUCT.md.)

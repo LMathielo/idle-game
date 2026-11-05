@@ -87,7 +87,7 @@ export function gearStats(item: Pick<Item, 'defId' | 'quality'>): GearStats {
 export function baseSellPrice(item: Pick<Item, 'defId' | 'rarity'>): number {
   const def = getItemDef(item.defId);
   if (!def) return 0;
-  if (!isGearDef(def)) return def.sellPrice;
+  if (!isGearDef(def)) return def.sellable === false ? 0 : def.sellPrice; // sellable:false (the Tusk): the Merchant buys none
   return gearPrice(def.sellPrice, rarityOf(item));
 }
 

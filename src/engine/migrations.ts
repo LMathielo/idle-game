@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 19 as const;
+export const CURRENT_SAVE_VERSION = 20 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -29,6 +29,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   16: migrateV16toV17,
   17: migrateV17toV18,
   18: migrateV18toV19,
+  19: migrateV19toV20,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -729,6 +730,44 @@ function migrateV18toV19(doc: SaveDoc): SaveDoc {
   }
   if (isDoc(doc.dungeon) && isDoc(doc.dungeon.lastFight)) {
     out.dungeon = { ...doc.dungeon, lastFight: { ...doc.dungeon.lastFight, log: migrateV19Log(doc.dungeon.lastFight.log) } };
+  }
+  return out;
+}
+
+// ---- v19 → v20 (2026-11-05): the first boss ----
+// 1. dungeon.bosses (the boss kill counters) starts empty.
+// 2. A fight in progress is a stage dungeon fight (a boss fight cannot exist yet) and gets the new fields at their "nothing special"
+//    values: the 60 s limit it started under (frozen literal), no enemy regen, no skills on either side, no stun. Its next strikes
+//    draw exactly as before: a fight with no skills and no regen has the same RNG stream as in 1.19.0.
+// Logged strikes need nothing: the new log fields (skill, stun, stunned, enemyHpAfter) only exist when they apply.
+
+const V20_MAX_FIGHT_MS = 60_000;
+
+function migrateV20Side(side: unknown): unknown {
+  return isDoc(side) ? { ...side, skills: [] } : side;
+}
+
+function migrateV20Fight(fight: unknown): unknown {
+  if (!isDoc(fight)) return fight;
+  return {
+    ...fight,
+    hero: migrateV20Side(fight.hero),
+    enemy: migrateV20Side(fight.enemy),
+    maxFightMs: V20_MAX_FIGHT_MS,
+    enemyRegenBp: 0,
+    enemyRegenProgress: 0,
+    enemyRegenAtMs: v19Number(fight.elapsedMs),
+    enemySkillReady: {},
+    heroStunStrikes: 0,
+  };
+}
+
+/** Boss counters added, the fight in progress widened. Everything else is kept. Pure. */
+function migrateV19toV20(doc: SaveDoc): SaveDoc {
+  const out: SaveDoc = { ...doc, saveVersion: 20 };
+  if (isDoc(doc.dungeon)) out.dungeon = { ...doc.dungeon, bosses: isDoc(doc.dungeon.bosses) ? doc.dungeon.bosses : {} };
+  if (isDoc(doc.activity) && doc.activity.kind === 'dungeon' && doc.activity.fight) {
+    out.activity = { ...doc.activity, fight: migrateV20Fight(doc.activity.fight) };
   }
   return out;
 }

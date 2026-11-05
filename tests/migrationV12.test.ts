@@ -192,7 +192,7 @@ describe('frozen v11 save (tests/fixtures/save-v11-skills.json), engine 1.11.0 â
     // 1.13.0 (save v13) also adds the locked Crafting house and its idle pipes.
     const { character, saveVersion: _v, buildings, crafting, ...rest } = s;
     const { character: rc, saveVersion: _rv, buildings: rb, ...rawRest } = V11_SAVE;
-    expect(rest).toEqual(rawRest);
+    expect(rest).toEqual({ ...rawRest, dungeon: { ...rawRest.dungeon, bosses: {} } }); // v20: boss counters;
     expect(buildings).toEqual({ ...rb, crafting: V13_ADDED.craftingBuilding, storage: V18_ADDED.storageBuilding });
     expect(crafting).toEqual(V13_ADDED.crafting);
     expect(character.skills).not.toHaveProperty('smithing'); // dropped in v13

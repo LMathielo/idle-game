@@ -8,7 +8,7 @@ import { ATTRIBUTE_NAMES, formatAwayDuration, formatNumber, itemName } from './f
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
 import { colors, fonts } from '../theme';
-import { type AttributeKey, BUILDINGS, DUNGEONS, type SimulationSummary, type SkillKey, TRAINING, trainingXpTotal } from '../engine';
+import { type AttributeKey, BOSSES, BUILDINGS, dungeonOrBossName, type SimulationSummary, type SkillKey, TRAINING, trainingXpTotal } from '../engine';
 
 const SKILL_NAMES: Record<SkillKey, string> = {
   woodcutting: 'Woodcutting',
@@ -43,6 +43,12 @@ function awayTitle(requestedMs: number): string {
   return requestedMs > 0 ? `While you were away for ${formatAwayDuration(requestedMs)}` : 'While you were away';
 }
 
+/** "Won" / "Lost" for one fight, "2 fights (1 won, 1 lost)" for more (older summaries have no boss field). */
+function bossResultText(b: { fights: number; wins: number; losses: number }): string {
+  if (b.fights === 1) return b.wins === 1 ? 'Won' : 'Lost';
+  return `${formatNumber(b.fights)} fights (${formatNumber(b.wins)} won, ${formatNumber(b.losses)} lost)`;
+}
+
 function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; capHours: number; tier: number }) {
   const backward = summary.anomalies.some((a) => a.kind === 'backward');
   // Merged summaries add both fields, so this holds when any resume in the batch went over the cap.
@@ -74,8 +80,15 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
           value={`${formatNumber(summary.dungeon.runs)} (${formatNumber(summary.dungeon.wins)} won, ${formatNumber(summary.dungeon.losses)} lost)`}
         />
       ) : null}
+      {summary.boss && summary.boss.fights > 0 ? (
+        <Line
+          icon={<GameIcon name="fight" />}
+          label={BOSSES.troll_chieftain.name}
+          value={bossResultText(summary.boss)}
+        />
+      ) : null}
       {summary.dungeonsUnlocked.length > 0 ? (
-        <Line icon={<GameIcon name="unlocked" />} label="Unlocked" value={summary.dungeonsUnlocked.map((id) => DUNGEONS[id].name).join(', ')} />
+        <Line icon={<GameIcon name="unlocked" />} label="Unlocked" value={summary.dungeonsUnlocked.map(dungeonOrBossName).join(', ')} />
       ) : null}
       {summary.heroXpGained > 0 ? <Line icon={<GameIcon name="hero_xp" />} label="Hero XP" value={`+${formatNumber(summary.heroXpGained)}`} /> : null}
       {summary.goldGained > 0 ? <Line icon={<GameIcon name="gold" />} label="Gold" value={`+${formatNumber(summary.goldGained)}`} /> : null}

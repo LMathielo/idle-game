@@ -115,13 +115,25 @@ export type TreeId = 'oak' | 'birch' | 'maple' | 'yew' | 'ironwood';
 /** Mine Shaft rocks 1–5, in order. Data lives in config/mining.ts. */
 export type RockId = 'stone' | 'copper' | 'iron' | 'silver' | 'gold';
 
-/** Only one activity runs at a time: a gathering skill, auto-repeating dungeon runs, or training one attribute. */
-export type ActivityKind = GatheringKind | 'dungeon' | 'training';
+/**
+ * Only one activity runs at a time: a gathering skill, auto-repeating dungeon runs, training one attribute, or one boss
+ * fight (1.20.0; it ends by itself and leaves the hero idle).
+ */
+export type ActivityKind = GatheringKind | 'dungeon' | 'training' | 'boss';
 
-/** Dungeon tiers 1–5, in order. Data lives in config/dungeons.ts. */
+/** Dungeon Tier 1, stages 1–5, in order (they were "tiers" 1–5 before 1.20.0). Data lives in config/dungeons.ts. */
 export type DungeonId = 'rat_cellar' | 'bat_cave' | 'wolf_den' | 'forgotten_crypt' | 'troll_bridge';
 
-export type EnemyId = 'rat' | 'bat' | 'wolf' | 'skeleton' | 'troll';
+/** Bosses (1.20.0): one per dungeon tier, entered for stamina. Data lives in config/dungeons.ts. */
+export type BossId = 'troll_chieftain';
+
+/** A stage dungeon or a boss: what a fight record, an unlock event and a summary name. */
+export type DungeonOrBossId = DungeonId | BossId;
+
+export type EnemyId = 'rat' | 'bat' | 'wolf' | 'skeleton' | 'troll' | 'troll_chieftain';
+
+/** An enemy (later hero) combat skill, by id. Data lives in config/skills.ts. */
+export type CombatSkillId = 'heavy_bash';
 
 type ActivityBase = {
   /** Engine time (epoch ms) the activity started. Informational only. */
@@ -161,6 +173,8 @@ export type CombatSide = {
   critMultBp: number;
   /** ms between two strikes; the first strike lands this long after the fight starts. */
   attackIntervalMs: number;
+  /** Combat skills this side can cast (ids into COMBAT_SKILLS, in priority order; save v20). Enemies only today; none for the hero. */
+  skills: CombatSkillId[];
 };
 
 /**
@@ -179,12 +193,36 @@ export type ActiveFight = {
   enemyMaxHp: number;
   hero: CombatSide;
   enemy: CombatSide;
-  /** Strikes each side has made so far. The next one is due at (strikes + 1) × attackIntervalMs. */
+  /**
+   * Strikes each side has made so far (a stunned hero strike and a cast count). The next one is due at
+   * (strikes + 1) × attackIntervalMs.
+   */
   heroStrikes: number;
   enemyStrikes: number;
+  /** The fight's time limit, ms (frozen when it starts: 60 000 for a dungeon, the boss's own for a boss; save v20). */
+  maxFightMs: number;
+  /**
+   * Enemy HP regeneration while it fights (save v20): basis points of its max HP per second, 0 = none. Applied at each event
+   * with exact integer banking (src/engine/combat.ts regenEnemyTo); never above max, nothing once the enemy is at 0.
+   */
+  enemyRegenBp: number;
+  /** Regen banked towards the next enemy HP, in bp·max-HP·ms units (10 000 000 per HP). 0 while at max. */
+  enemyRegenProgress: number;
+  /** Fight time up to which the enemy's regen has been applied, ms. */
+  enemyRegenAtMs: number;
+  /** Per enemy skill: the enemy strike number at which it is ready again (starts at the skill's firstReadyStrike). */
+  enemySkillReady: Partial<Record<CombatSkillId, number>>;
+  /** The hero's next strikes that are lost to a stun (save v20). Counts down on each lost strike. */
+  heroStunStrikes: number;
   /** Strikes that have landed so far, in time order. */
   log: FightLogEntry[];
 };
+
+/**
+ * One boss fight (1.20.0): paid for at entry, no search, one fight, no repeat. It plays out like a dungeon fight (same events,
+ * same simulate path); when it ends the activity is cleared and the hero is idle. `progressMs` is always 0.
+ */
+export type BossActivity = ActivityBase & { kind: 'boss'; bossId: BossId; fight: ActiveFight };
 
 /**
  * Auto-repeat: runs follow each other back-to-back until stopped. Stopping loses the current run (in either
@@ -198,7 +236,7 @@ export type DungeonActivity = ActivityBase & { kind: 'dungeon'; dungeonId: Dunge
  */
 export type TrainingActivity = { kind: 'training'; attribute: AttributeKey; startedAt: number };
 
-export type Activity = GatheringActivity | DungeonActivity | TrainingActivity;
+export type Activity = GatheringActivity | DungeonActivity | TrainingActivity | BossActivity;
 
 // ---------- Training ----------
 
@@ -238,6 +276,17 @@ export type FightLogEntry = {
   /** Total damage dealt: max(COMBAT.minDamage, physical + magic). */
   dealt: number;
   targetHpAfter: number;
+  /**
+   * Combat skills (save v20; each field exists only when it applies, so a plain strike is unchanged):
+   * - `skill`: an enemy strike was this skill cast instead of a normal strike (`roll` is the raw roll before the skill's multiplier).
+   * - `stun`: on a cast with a stun effect, the strikes of stun it inflicted (0 = the stun check failed).
+   * - `stunned`: a hero strike lost to a stun (`dealt` 0, no roll, no RNG draws).
+   * - `enemyHpAfter`: the enemy's HP after this entry, regen included (fights where the enemy regenerates; else read targetHpAfter).
+   */
+  skill?: CombatSkillId;
+  stun?: number;
+  stunned?: true;
+  enemyHpAfter?: number;
 };
 
 export type FightRewards = {
@@ -247,6 +296,8 @@ export type FightRewards = {
   items: Record<string, number>;
   /** Items that dropped but did not fit (inventory full). */
   itemsLost: Record<string, number>;
+  /** Boss gear drop that went into the inventory (1.20.0): the new piece's instance id, so the result can reveal it. */
+  gear?: { itemId: string; defId: string; rarity: ItemRarity; quality: number };
 };
 
 /**
@@ -258,7 +309,8 @@ export type FightEndReason = 'enemy_defeated' | 'hero_defeated' | 'time_limit' |
 
 /** The last finished fight only (saves stay small). Earlier fights live on as counters. */
 export type FightRecord = {
-  dungeonId: DungeonId;
+  /** The stage dungeon, or (1.20.0) the boss, this fight was in. */
+  dungeonId: DungeonOrBossId;
   enemyId: EnemyId;
   won: boolean;
   endReason: FightEndReason;
@@ -288,6 +340,11 @@ export type DungeonState = {
    * entry means 0/0/0. Wins only ever go up, so an unlock based on them is permanent.
    */
   byDungeon: Partial<Record<DungeonId, DungeonTotals>>;
+  /**
+   * Lifetime boss fights / wins / losses (save v20), the kill counter. Separate from `byDungeon` and `totals`, which keep
+   * counting stage runs only. A missing entry means 0/0/0. Wins only go up, so an unlock based on them is permanent.
+   */
+  bosses: Partial<Record<BossId, DungeonTotals>>;
 };
 
 export type GameStats = {
@@ -436,7 +493,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 19;
+  saveVersion: 20;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -484,9 +541,9 @@ export type GameEvent =
   | { type: 'HERO_LEVEL_UP'; level: number }
   | { type: 'RARE_DROP'; itemId: string }
   | { type: 'DUNGEON_RUN_CANCELLED'; dungeonId: DungeonId }
-  | { type: 'FIGHT_RESOLVED'; dungeonId: DungeonId; won: boolean }
-  /** A dungeon's unlock requirement was just met (a win, or the debug win grant). */
-  | { type: 'DUNGEON_UNLOCKED'; dungeonId: DungeonId }
+  | { type: 'FIGHT_RESOLVED'; dungeonId: DungeonOrBossId; won: boolean }
+  /** A dungeon's (or boss's) unlock requirement was just met (a win, or the debug win grant). */
+  | { type: 'DUNGEON_UNLOCKED'; dungeonId: DungeonOrBossId }
   | { type: 'TRAINING_TIER_UNLOCKED'; tier: number }
   /** One per level gained, also when several levels come in one simulate() call. */
   | { type: 'TRAINING_LEVEL_UP'; attribute: AttributeKey; level: number }
@@ -546,8 +603,10 @@ export type SimulationSummary = {
   goldGained: number;
   /** Dungeon runs resolved (won + lost). */
   dungeon: { runs: number; wins: number; losses: number };
-  /** Dungeons unlocked during this period, in the order they unlocked. */
-  dungeonsUnlocked: DungeonId[];
+  /** Boss fights that ended during this period (1.20.0); their rewards are in the totals above. */
+  boss: { fights: number; wins: number; losses: number };
+  /** Dungeons (and bosses) unlocked during this period, in the order they unlocked. */
+  dungeonsUnlocked: DungeonOrBossId[];
   /** Training XP (whole points) earned per attribute. */
   trainingXpGained: Partial<Record<AttributeKey, number>>;
   /** Training levels gained per attribute. */

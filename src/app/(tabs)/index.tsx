@@ -52,7 +52,7 @@ const SIGN_ROUTE: Partial<Record<VillageAction, '/dungeon' | '/training' | '/woo
 };
 
 /** The sign highlighted while an activity runs. */
-const ACTIVITY_SIGN: Record<ActivityKind, VillageAction> = { woodcutting: 'woodcutting', mining: 'mine', dungeon: 'dungeon', training: 'training' };
+const ACTIVITY_SIGN: Record<ActivityKind, VillageAction> = { woodcutting: 'woodcutting', mining: 'mine', dungeon: 'dungeon', boss: 'dungeon', training: 'training' };
 
 const TOAST_MS = 1600;
 

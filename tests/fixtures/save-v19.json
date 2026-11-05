@@ -1,0 +1,381 @@
+{
+  "saveVersion": 19,
+  "rng": {
+    "seed": 3599190436
+  },
+  "time": {
+    "lastSimulatedAt": 1792929723000,
+    "highestSeenAt": 1792929723000
+  },
+  "offline": {
+    "capMs": 28800000,
+    "efficiency": 1
+  },
+  "activity": {
+    "kind": "dungeon",
+    "dungeonId": "wolf_den",
+    "startedAt": 1792929600000,
+    "phase": "fight",
+    "progressMs": 0,
+    "fight": {
+      "enemyId": "wolf",
+      "elapsedMs": 3000,
+      "heroHpStart": 180,
+      "heroMaxHp": 180,
+      "enemyHp": 55,
+      "enemyMaxHp": 110,
+      "hero": {
+        "damage": {
+          "min": 18,
+          "max": 20
+        },
+        "armor": 23,
+        "magicDamage": 4,
+        "magicResist": 4,
+        "critChanceBp": 0,
+        "critMultBp": 15600,
+        "attackIntervalMs": 1000
+      },
+      "enemy": {
+        "damage": {
+          "min": 10,
+          "max": 14
+        },
+        "armor": 12,
+        "magicDamage": 0,
+        "magicResist": 12,
+        "critChanceBp": 0,
+        "critMultBp": 10000,
+        "attackIntervalMs": 1000
+      },
+      "heroStrikes": 3,
+      "enemyStrikes": 3,
+      "log": [
+        {
+          "atMs": 1000,
+          "actor": "hero",
+          "strike": 1,
+          "roll": 18,
+          "crit": false,
+          "physical": 15,
+          "magic": 3,
+          "dealt": 18,
+          "targetHpAfter": 92
+        },
+        {
+          "atMs": 1000,
+          "actor": "enemy",
+          "strike": 1,
+          "roll": 14,
+          "crit": false,
+          "physical": 10,
+          "magic": 0,
+          "dealt": 10,
+          "targetHpAfter": 170
+        },
+        {
+          "atMs": 2000,
+          "actor": "hero",
+          "strike": 2,
+          "roll": 20,
+          "crit": false,
+          "physical": 16,
+          "magic": 3,
+          "dealt": 19,
+          "targetHpAfter": 73
+        },
+        {
+          "atMs": 2000,
+          "actor": "enemy",
+          "strike": 2,
+          "roll": 12,
+          "crit": false,
+          "physical": 8,
+          "magic": 0,
+          "dealt": 8,
+          "targetHpAfter": 162
+        },
+        {
+          "atMs": 3000,
+          "actor": "hero",
+          "strike": 3,
+          "roll": 19,
+          "crit": false,
+          "physical": 15,
+          "magic": 3,
+          "dealt": 18,
+          "targetHpAfter": 55
+        },
+        {
+          "atMs": 3000,
+          "actor": "enemy",
+          "strike": 3,
+          "roll": 12,
+          "crit": false,
+          "physical": 8,
+          "magic": 0,
+          "dealt": 8,
+          "targetHpAfter": 154
+        }
+      ]
+    }
+  },
+  "stamina": {
+    "current": 100,
+    "max": 100,
+    "progressMs": 0
+  },
+  "dungeon": {
+    "lastFight": null,
+    "totals": {
+      "runs": 62,
+      "wins": 61,
+      "losses": 1
+    },
+    "byDungeon": {
+      "rat_cellar": {
+        "runs": 30,
+        "wins": 29,
+        "losses": 1
+      },
+      "bat_cave": {
+        "runs": 20,
+        "wins": 20,
+        "losses": 0
+      },
+      "wolf_den": {
+        "runs": 12,
+        "wins": 12,
+        "losses": 0
+      }
+    }
+  },
+  "training": {
+    "tier": 1,
+    "attributes": {
+      "strength": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "dexterity": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "endurance": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "intelligence": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      }
+    }
+  },
+  "merchant": {
+    "charges": 5,
+    "chargeProgressMs": 0,
+    "stock": [
+      {
+        "defId": "health_potion_t1",
+        "quantity": 10,
+        "unitPrice": 12
+      },
+      {
+        "defId": "iron_axe",
+        "quantity": 1,
+        "unitPrice": 600,
+        "quality": 25,
+        "rarity": "common"
+      },
+      {
+        "defId": "iron_pickaxe",
+        "quantity": 1,
+        "unitPrice": 600,
+        "quality": 25,
+        "rarity": "common"
+      },
+      {
+        "defId": "iron_sword",
+        "quantity": 1,
+        "unitPrice": 500,
+        "quality": 25,
+        "rarity": "common"
+      },
+      {
+        "defId": "iron_helm",
+        "quantity": 1,
+        "unitPrice": 400,
+        "quality": 25,
+        "rarity": "common"
+      }
+    ]
+  },
+  "buildings": {
+    "woodcutting": {
+      "state": "built",
+      "level": 1
+    },
+    "mine_shaft": {
+      "state": "built",
+      "level": 1
+    },
+    "town_hall": {
+      "state": "built",
+      "level": 1
+    },
+    "training_grounds": {
+      "state": "built",
+      "level": 1
+    },
+    "merchant": {
+      "state": "built",
+      "level": 1
+    },
+    "crafting": {
+      "state": "built",
+      "level": 1
+    },
+    "storage": {
+      "state": "built",
+      "level": 1
+    }
+  },
+  "construction": null,
+  "workers": {
+    "list": [],
+    "nextSerial": 1,
+    "crews": {},
+    "paused": false,
+    "minuteLeftMs": 0,
+    "paidPerMin": 0
+  },
+  "crafting": {
+    "pipesUnlocked": 2,
+    "pipes": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "remainders": {},
+    "nextJobSerial": 1
+  },
+  "nextItemSerial": 1,
+  "stats": {
+    "totalActions": 0,
+    "itemsGathered": {}
+  },
+  "flags": {
+    "debugUsed": false
+  },
+  "character": {
+    "name": "Lucius",
+    "title": "Novice Gladiator",
+    "level": 9,
+    "xp": 0,
+    "xpToNext": 100,
+    "hp": 154,
+    "hpRegenProgress": 3400000,
+    "mana": 31,
+    "manaRegenProgress": 5340000,
+    "gold": 500,
+    "attributes": {
+      "strength": 0,
+      "dexterity": 0,
+      "endurance": 0,
+      "intelligence": 0
+    },
+    "spentPoints": {
+      "strength": 6,
+      "dexterity": 6,
+      "endurance": 10,
+      "intelligence": 4
+    },
+    "unspentPoints": 0,
+    "equipment": {
+      "weapon": {
+        "id": "start-rusty_gladius",
+        "defId": "rusty_gladius",
+        "name": "Rusty Gladius",
+        "icon": "🗡️",
+        "slot": "weapon",
+        "rarity": "common",
+        "quality": 25
+      },
+      "armor": {
+        "id": "start-linen_tunic",
+        "defId": "linen_tunic",
+        "name": "Linen Tunic",
+        "icon": "🥋",
+        "slot": "armor",
+        "rarity": "common",
+        "quality": 25
+      },
+      "boots": {
+        "id": "start-worn_sandals",
+        "defId": "worn_sandals",
+        "name": "Worn Sandals",
+        "icon": "👢",
+        "slot": "boots",
+        "rarity": "common",
+        "quality": 25
+      },
+      "axe": {
+        "id": "start-wooden_axe",
+        "defId": "wooden_axe",
+        "name": "Wooden Axe",
+        "icon": "🪓",
+        "slot": "axe",
+        "rarity": "common",
+        "quality": 25
+      },
+      "pickaxe": {
+        "id": "start-wooden_pickaxe",
+        "defId": "wooden_pickaxe",
+        "name": "Wooden Pickaxe",
+        "icon": "⛏️",
+        "slot": "pickaxe",
+        "rarity": "common",
+        "quality": 25
+      }
+    },
+    "skills": {
+      "woodcutting": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      },
+      "mining": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      },
+      "fishing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      }
+    }
+  },
+  "inventory": {
+    "capacity": 20,
+    "items": [
+      {
+        "id": "bread",
+        "defId": "bread",
+        "name": "Bread",
+        "icon": "🍞",
+        "stackable": true,
+        "quantity": 3
+      }
+    ]
+  }
+}

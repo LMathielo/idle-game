@@ -2,31 +2,44 @@
 // A run = a search for an opponent, then a fight that plays out in engine time. See docs/ENGINE.md
 // ("Dungeon & combat").
 import { cloneState } from './clone';
-import { COMBAT, DUNGEON_IDS, DUNGEON_RUN, DUNGEONS, ENEMIES, type EnemyDef } from './config/dungeons';
-import { BASIS_POINTS } from './config/stats';
+import { BOSS_IDS, DUNGEON_IDS, DUNGEON_RUN, DUNGEONS, ENEMIES, isBossId } from './config/dungeons';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { grantHeroXp } from './activities';
-import { type FightEvent, newFight, nextFightEvent, strike } from './combat';
+import { finishBossFight, isBossUnlocked } from './boss';
+import {
+  type DungeonFightView,
+  enemyCombatSide,
+  enemyFightOptions,
+  type FightEvent,
+  type FightOutcome,
+  fightView,
+  heroCombatSide,
+  newFight,
+  nextFightEvent,
+  outcomeOf,
+  strike,
+} from './combat';
 import { regenHeroPools } from './hp';
 import { addStackable } from './inventory';
 import { chance, nextInt } from './rng';
 import { activityTimeMs, type CoreInput, dexActivityReductionBp } from './attributes';
-import { type DerivedStats, getDerivedStats } from './stats';
+import { getDerivedStats } from './stats';
 import type {
   ActiveFight,
-  CombatSide,
+  BossActivity,
   DungeonActivity,
   DungeonId,
+  DungeonOrBossId,
   DungeonPhase,
   DungeonTotals,
   EnemyId,
-  FightEndReason,
-  FightLogEntry,
   FightRewards,
   GameEvent,
   GameState,
   SimulationSummary,
 } from './types';
+
+export { enemyCombatSide, heroCombatSide, type DungeonFightView };
 
 /** searchMs = max(minMs, ceil(baseMs × (1 − core DEX reduction))), with the dungeon's own timing (1.16.0). */
 export function searchMsFor(dungeonId: DungeonId, state: CoreInput): number {
@@ -89,57 +102,21 @@ export function recordDungeonResults(
   summary: SimulationSummary | null,
   events: GameEvent[],
 ): void {
-  const lockedBefore = DUNGEON_IDS.filter((id) => !isDungeonUnlocked(draft, id));
+  // Stage dungeons and bosses (1.20.0: a boss opens on stage wins); a boss's own wins open nothing yet.
+  const lockedBefore: DungeonOrBossId[] = [...DUNGEON_IDS.filter((id) => !isDungeonUnlocked(draft, id)), ...BOSS_IDS.filter((id) => !isBossUnlocked(draft, id))];
   const before = dungeonTotals(draft, dungeonId);
   const after = { runs: before.runs + wins + losses, wins: before.wins + wins, losses: before.losses + losses };
   draft.dungeon.byDungeon = { ...draft.dungeon.byDungeon, [dungeonId]: after };
   const totals = draft.dungeon.totals;
   draft.dungeon.totals = { runs: totals.runs + wins + losses, wins: totals.wins + wins, losses: totals.losses + losses };
   for (const id of lockedBefore) {
-    if (!isDungeonUnlocked(draft, id)) continue;
+    if (isBossId(id) ? !isBossUnlocked(draft, id) : !isDungeonUnlocked(draft, id)) continue;
     events.push({ type: 'DUNGEON_UNLOCKED', dungeonId: id });
     summary?.dungeonsUnlocked.push(id);
   }
 }
 
 // ---------- the fight ----------
-
-/** The hero's side of a fight, from the derived stats at its start. */
-export function heroCombatSide(stats: DerivedStats): CombatSide {
-  return {
-    damage: { min: stats.damage.min, max: stats.damage.max },
-    armor: stats.armor.value,
-    magicDamage: stats.magicDamage.value,
-    magicResist: stats.magicResist.value,
-    critChanceBp: stats.critChanceBp.value,
-    critMultBp: stats.critMultiplierBp.value,
-    attackIntervalMs: stats.attackIntervalMs.value,
-  };
-}
-
-/** An enemy's side: physical only today (no magic damage, no crits); its magic resist works against the hero's magic. */
-export function enemyCombatSide(enemy: EnemyDef): CombatSide {
-  return {
-    damage: { ...enemy.damage },
-    armor: enemy.armor,
-    magicDamage: 0,
-    magicResist: enemy.magicResist,
-    critChanceBp: 0,
-    critMultBp: BASIS_POINTS,
-    attackIntervalMs: enemy.attackIntervalMs,
-  };
-}
-
-type FightOutcome = {
-  endReason: FightEndReason;
-  durationMs: number;
-  enemyId: EnemyId;
-  heroHpStart: number;
-  heroMaxHp: number;
-  enemyMaxHp: number;
-  enemyHpEnd: number;
-  log: FightLogEntry[];
-};
 
 /**
  * Ends the fight of the current run and applies its outcome, then starts the next search at once.
@@ -205,19 +182,6 @@ function finishFight(draft: GameState, activity: DungeonActivity, outcome: Fight
   activity.fight = null;
 }
 
-function outcomeOf(fight: ActiveFight, endReason: FightEndReason, durationMs: number): FightOutcome {
-  return {
-    endReason,
-    durationMs,
-    enemyId: fight.enemyId,
-    heroHpStart: fight.heroHpStart,
-    heroMaxHp: fight.heroMaxHp,
-    enemyMaxHp: fight.enemyMaxHp,
-    enemyHpEnd: fight.enemyHp,
-    log: fight.log,
-  };
-}
-
 /**
  * The search is over: the fight starts now, with the hero's current HP and stats (frozen for this fight).
  * A hero at 0 HP loses at once with no rolls (`no_hp`) and the next search starts. Mutates `draft` and
@@ -244,17 +208,23 @@ export function beginFight(draft: GameState, activity: DungeonActivity, summary:
     return;
   }
   activity.phase = 'fight';
-  activity.fight = newFight(enemy.id, heroCombatSide(stats), enemyCombatSide(enemy), hp, heroMaxHp, enemy.hp);
+  activity.fight = newFight(enemy.id, heroCombatSide(stats), enemyCombatSide(enemy), hp, heroMaxHp, enemy.hp, enemyFightOptions(enemy));
 }
 
 /**
  * The player leaves during the fight (STOP_ACTIVITY, or starting another activity): the fight ends now as a loss
- * (`forfeit`) with the normal loss rules (0 HP, no rewards, a loss on the counters, `lastFight` recorded).
+ * (`forfeit`) with the normal loss rules (0 HP, no rewards, a loss on the counters, `lastFight` recorded). A boss fight is
+ * forfeited the same way (the activity is cleared; nothing is refunded).
  * Returns false (and changes nothing) when the run is still in its search: the caller then cancels it as before.
  * Mutates `draft` (a full copy owned by the caller).
  */
 export function forfeitFight(draft: GameState, events: GameEvent[]): boolean {
   const a = draft.activity;
+  if (a?.kind === 'boss') {
+    // Leaving a boss fight is a loss too; the entry stamina stays spent. finishBossFight clears the activity.
+    finishBossFight(draft, a, outcomeOf(a.fight, 'forfeit', a.fight.elapsedMs), null, events);
+    return true;
+  }
   if (a?.kind !== 'dungeon' || a.phase !== 'fight' || !a.fight) return false;
   finishFight(draft, a, outcomeOf(a.fight, 'forfeit', a.fight.elapsedMs), null, events);
   return true;
@@ -263,21 +233,31 @@ export function forfeitFight(draft: GameState, events: GameEvent[]): boolean {
 /**
  * Applies one fight event at its time: a strike, or the time limit. Ends the fight when a side reaches 0 HP or
  * time is up. A hero whose HP dropped to 0 outside the fight's strikes (debug) loses at the next event.
+ * A boss fight ends the activity (the hero is idle); a dungeon fight starts the next search.
  */
-function stepFight(draft: GameState, activity: DungeonActivity, fight: ActiveFight, ev: FightEvent, summary: SimulationSummary, events: GameEvent[]): void {
+function stepFight(draft: GameState, activity: DungeonActivity | BossActivity, fight: ActiveFight, ev: FightEvent, summary: SimulationSummary, events: GameEvent[]): void {
+  const end = (reason: 'enemy_defeated' | 'hero_defeated' | 'time_limit', atMs: number) => {
+    const outcome = outcomeOf(fight, reason, atMs);
+    if (activity.kind === 'boss') {
+      finishBossFight(draft, activity, outcome, summary, events);
+      events.push({ type: 'ACTIVITY_STOPPED', kind: 'boss' });
+    } else {
+      finishFight(draft, activity, outcome, summary, events);
+    }
+  };
   if (ev.type === 'time_limit') {
-    finishFight(draft, activity, outcomeOf(fight, 'time_limit', ev.atMs), summary, events);
+    end('time_limit', ev.atMs);
     return;
   }
   if (draft.character.hp <= 0) {
-    finishFight(draft, activity, outcomeOf(fight, 'hero_defeated', ev.atMs), summary, events);
+    end('hero_defeated', ev.atMs);
     return;
   }
   const res = strike(fight, ev.actor, ev.atMs, draft.character.hp, draft.rng);
   draft.rng = res.rng;
   draft.character.hp = res.heroHp;
-  if (fight.enemyHp === 0) finishFight(draft, activity, outcomeOf(fight, 'enemy_defeated', ev.atMs), summary, events);
-  else if (res.heroHp === 0) finishFight(draft, activity, outcomeOf(fight, 'hero_defeated', ev.atMs), summary, events);
+  if (fight.enemyHp === 0) end('enemy_defeated', ev.atMs);
+  else if (res.heroHp === 0) end('hero_defeated', ev.atMs);
 }
 
 /**
@@ -301,13 +281,13 @@ function stepFight(draft: GameState, activity: DungeonActivity, fight: ActiveFig
  */
 export function advanceDungeon(
   draft: GameState,
-  activity: DungeonActivity,
+  activity: DungeonActivity | BossActivity,
   grantedMs: number,
   requestedMs: number,
   summary: SimulationSummary,
   events: GameEvent[],
 ): void {
-  const searchMs = searchMsFor(activity.dungeonId, draft);
+  const searchMs = activity.kind === 'dungeon' ? searchMsFor(activity.dungeonId, draft) : 0;
   const efficiency = draft.offline.efficiency;
   let regenLeft = requestedMs;
   // Rates and maxima are read at each regen, not once: a win can level the hero up (max HP and mana rise, 1.17.0).
@@ -335,9 +315,11 @@ export function advanceDungeon(
   const walk = (wallBudget: number, fightOnly: boolean): number => {
     let wallLeft = wallBudget;
     while (efficiency > 0 && guard < MAX_ACTIONS_PER_SIMULATION) {
-      const fight = activity.phase === 'fight' ? activity.fight : null;
+      // A boss fight ends the activity (the hero is idle): nothing more to walk, the rest of the time is plain regen.
+      if (activity.kind === 'boss' && draft.activity !== activity) break;
+      const fight = activity.kind === 'boss' ? activity.fight : activity.phase === 'fight' ? activity.fight : null;
       if (fightOnly && !fight) break;
-      const ev = fight ? nextFightEvent(fight, COMBAT.maxFightMs) : null;
+      const ev = fight ? nextFightEvent(fight) : null;
       const need = fight && ev ? Math.max(0, ev.atMs - fight.elapsedMs) : Math.max(0, searchMs - activity.progressMs);
       const wallNeed = Math.ceil(need / efficiency);
       if (wallNeed > wallLeft) {
@@ -352,8 +334,10 @@ export function advanceDungeon(
       if (fight && ev) {
         fight.elapsedMs = ev.atMs;
         stepFight(draft, activity, fight, ev, summary, events);
-      } else {
+      } else if (activity.kind === 'dungeon') {
         beginFight(draft, activity, summary, events);
+      } else {
+        break; // a boss activity always holds its fight; nothing to begin
       }
       guard += 1;
     }
@@ -363,7 +347,7 @@ export function advanceDungeon(
   walk(grantedMs, false);
   // The cap fell inside a fight: finish it with the time beyond the cap (bounded by the time that really passed).
   const beyondCap = requestedMs - grantedMs;
-  if (beyondCap > 0 && activity.phase === 'fight') walk(beyondCap, true);
+  if (beyondCap > 0 && (activity.kind === 'boss' ? draft.activity === activity : activity.phase === 'fight')) walk(beyondCap, true);
   regen(regenLeft);
 }
 
@@ -374,29 +358,17 @@ export function advanceDungeon(
 export function dungeonNextEventMs(state: GameState): number {
   const a = state.activity;
   const efficiency = state.offline.efficiency;
-  if (a?.kind !== 'dungeon' || !(efficiency > 0)) return Number.POSITIVE_INFINITY;
-  const fight = a.phase === 'fight' ? a.fight : null;
+  if ((a?.kind !== 'dungeon' && a?.kind !== 'boss') || !(efficiency > 0)) return Number.POSITIVE_INFINITY;
+  const fight = a.kind === 'boss' ? a.fight : a.phase === 'fight' ? a.fight : null;
   const need = fight
-    ? Math.max(0, nextFightEvent(fight, COMBAT.maxFightMs).atMs - fight.elapsedMs)
-    : Math.max(0, searchMsFor(a.dungeonId, state) - a.progressMs);
+    ? Math.max(0, nextFightEvent(fight).atMs - fight.elapsedMs)
+    : a.kind === 'dungeon'
+      ? Math.max(0, searchMsFor(a.dungeonId, state) - a.progressMs)
+      : 0;
   return Math.ceil(need / efficiency);
 }
 
 // ---------- views ----------
-
-/** The fight on screen, as it stands at the state's engine time. */
-export type DungeonFightView = {
-  enemyId: EnemyId;
-  elapsedMs: number;
-  maxFightMs: number;
-  /** The hero's current HP (character.hp), which regenerates during the fight too. */
-  heroHp: number;
-  heroMaxHp: number;
-  enemyHp: number;
-  enemyMaxHp: number;
-  /** Strikes that have landed so far, in time order. */
-  log: readonly FightLogEntry[];
-};
 
 export type DungeonRunView = {
   kind: 'dungeon';
@@ -421,17 +393,7 @@ export function dungeonRunView(state: GameState): DungeonRunView | null {
   const base = { kind: 'dungeon' as const, dungeonId: a.dungeonId, run: state.dungeon.totals.runs + 1, searchMs };
   const f = a.phase === 'fight' ? a.fight : null;
   if (f) {
-    const fight: DungeonFightView = {
-      enemyId: f.enemyId,
-      elapsedMs: f.elapsedMs,
-      maxFightMs: COMBAT.maxFightMs,
-      heroHp: Math.max(0, Math.min(state.character.hp, f.heroMaxHp)),
-      heroMaxHp: f.heroMaxHp,
-      enemyHp: f.enemyHp,
-      enemyMaxHp: f.enemyMaxHp,
-      log: f.log,
-    };
-    return { ...base, phase: 'fight', fraction: 1, remainingMs: 0, skipCost: null, fight };
+    return { ...base, phase: 'fight', fraction: 1, remainingMs: 0, skipCost: null, fight: fightView(state.character.hp, f) };
   }
   const progress = Math.min(a.progressMs, searchMs);
   const remainingMs = Math.max(0, searchMs - progress);

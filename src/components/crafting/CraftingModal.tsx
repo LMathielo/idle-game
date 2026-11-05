@@ -28,7 +28,7 @@ import { UpgradeEntry } from '../buildings/UpgradeEntry';
 import { IconText, ItemIcon } from '../art/Sprites';
 import { formatClock, formatNumber, formatPercentBp, itemName } from '../format';
 import { RARITY_COLOR_NAMES } from '../items/itemInfo';
-import { ItemSheet } from '../items/ItemSheet';
+import { RevealSheet } from '../items/RevealSheet';
 import { LiveBar } from '../LiveBar';
 import { closeVillageModal, ModalScreen } from '../ModalScreen';
 import { Panel } from '../Panel';
@@ -391,30 +391,6 @@ function GearJobRow({ n, job, paused, stamina, invFull, onInsta, onCancel, onDon
         </>
       )}
     </View>
-  );
-}
-
-/** The reveal: the collected piece's popover (rarity colour, quality, scaled stats) with Equip. Follows the live item. */
-function RevealSheet({ itemId, anchor, onClose }: { itemId: string; anchor: AnchorRect; onClose: () => void }) {
-  const { state } = useGameSnapshot();
-  const { send } = useCommand();
-  const item = state.inventory.items.find((i) => i.id === itemId) ?? null;
-  if (!item?.slot) return null;
-  const equipped = state.character.equipment[item.slot] ?? null;
-  return (
-    <ItemSheet
-      item={item}
-      anchor={anchor}
-      equipped={equipped}
-      onClose={onClose}
-      actions={[
-        {
-          label: 'Equip',
-          sublabel: equipped ? `swaps ${equipped.name}` : undefined,
-          onPress: () => void send({ type: 'EQUIP_ITEM', itemId: item.id }).then((ok) => ok && onClose()),
-        },
-      ]}
-    />
   );
 }
 

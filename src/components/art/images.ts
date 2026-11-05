@@ -98,6 +98,8 @@ export const ITEM_IMAGES: Record<ItemId, ImageSourcePropType> = {
   stone_shield: require('../../../assets/images/items/stone_shield.png'),
   stone_sword: require('../../../assets/images/items/stone_sword.png'),
   troll_hide: require('../../../assets/images/items/troll_hide.png'),
+  // PLACEHOLDER (1.20.0): the Chieftain's Tusk reuses the troll hide icon until real art is approved (docs/TECH_DEBT.md).
+  chieftains_tusk: require('../../../assets/images/items/troll_hide.png'),
   wolf_pelt: require('../../../assets/images/items/wolf_pelt.png'),
   wooden_axe: require('../../../assets/images/items/wooden_axe.png'),
   wooden_pickaxe: require('../../../assets/images/items/wooden_pickaxe.png'),
@@ -116,6 +118,9 @@ export const ENEMY_SPRITES: Record<EnemyId, Sprite> = {
   wolf: { source: require('../../../assets/images/enemies/wolf.png'), w: 32, h: 32 },
   skeleton: { source: require('../../../assets/images/enemies/skeleton.png'), w: 32, h: 32 },
   troll: { source: require('../../../assets/images/enemies/troll.png'), w: 48, h: 48 },
+  // PLACEHOLDER (1.20.0): the Troll Chieftain shows the unused "stone troll" variant (48x48, same pixel scale) until real boss art
+  // is approved (docs/TECH_DEBT.md). tools/art is not touched.
+  troll_chieftain: { source: require('../../../assets/images/enemies/variants/stone_troll.png'), w: 48, h: 48 },
 };
 
 /** Woodcutting trees (32x32 art). */

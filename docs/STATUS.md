@@ -8,9 +8,9 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.19.0** | 1.1.0 |
-| Save | **v19** | v2 |
-| Contents | Everything below, up to the stats rework (this PR; stacked on the locked start, #32), plus the pixel art once merged | M1 only (PRs #1–#2) |
+| Engine | **1.20.0** | 1.1.0 |
+| Save | **v20** | v2 |
+| Contents | Everything below, up to the first boss (this PR), on top of the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is behind `dev` by PRs #3–#25. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
 - **Open PRs:** Expo Go previews by label plus per-branch saves (`feat/expo-test-previews`).
@@ -20,6 +20,17 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.20.0 · save v20
+- **First boss: the Troll Chieftain** (`feat/first-boss`):
+  - **Tier 1 and the boss row:** the five dungeons are Tier 1, stages 1-5 (ids unchanged); the list shows a "Tier 1" header, "Stage n · name" rows, then "Boss · Troll Chieftain". It opens permanently at **50 Troll Bridge wins** (locked row "Troll Bridge wins 12/50"; the engine refuses it with `BOSS_LOCKED`). Lifetime boss fights, wins and losses are counted.
+  - **Entry:** `ENTER_BOSS` costs **10 stamina up front, never refunded** (bound to the cost shown, `COST_CHANGED`), for one live fight: no search, no repeat, the hero is idle after it. Typed errors for not enough stamina, 0 HP, a locked boss and a fight already on; a confirmation says "10 stamina, not refunded if you lose or flee" and warns below half HP. Entering stops gathering / training or cancels a search; fleeing is a forfeit loss. Supersedes the 2026-10-26 "stamina buys time, never access" principle.
+  - **The fight** (same live and offline path as a stage fight): the Chieftain (HP 1,000, damage 26-36, armor 40, magic resist 40) **regenerates 0.5% of max HP a second**, casts **Heavy Bash** (1.4x damage, 35% to stun you for 3 strikes; on his strikes 3, 10, 17...) and the fight lasts up to **120 s**. A stun makes you lose your next 3 strikes (logged as stunned, no RNG); cooldown 7 > stun 3 so it can never lock you. The skill and regen are generic data (`config/skills.ts`, `EnemyDef.regenBpPerSec / maxFightMs / skills`).
+  - **Rewards (win):** 2,000 hero XP, 300-450 gold, 35% one Iron-set piece (green 75 / blue 25, quality 0-70), 50% **Chieftain's Tusk** (blue, stackable, not sellable, for later crafting). A full inventory loses the drop ("Lost: ... (inventory full)"). A gear drop opens a reveal popover with Equip.
+  - **UI:** boss detail (stats, abilities, regen, 120 s limit, danger hint that counts Bash, regen and the limit, rewards and odds, kill counter, "Enter · 10" greyed with the reason); live fight and replay show the boss HP with its regen, "Heavy Bash!" lines, a stunned notice with the strikes left and the stunned strikes in the log; the activity strip and the away summary have a boss line; the unlock banner names the boss. **Art is a placeholder** (stone troll variant, troll hide icon): real art pending owner approval.
+  - **Save v20:** `dungeon.bosses`; the fight in progress gets the regen / skill / stun fields. A v19 fight plays on unchanged (frozen v19 fixture test).
+  - **Tests:** `tests/firstBoss.test.ts` (entry rules, Bash timing, 1.4x, stun and no stun-lock, regen, limits, rewards, full inventory, golden Bash + stun fight, offline = live, split invariance, properties, migration, replay). Stage fights draw the RNG exactly as before: every older golden keeps its outcome pins (only whole-state hashes moved, shown in the v19 shape by `asV19`).
+  - **Balance (owner decision 2026-11-05: keep as is):** unlock stays 50 Troll Bridge wins only, no level requirement, stats unchanged. The boss is a wall the player grows into: roughly 0% around level 17; the STR+END hero at level 20 in an Iron set wins 42% at quality 25 and 73% at quality 50; heroes with all points in one attribute can not win at levels 17-23. The danger hint is expected to show Deadly until roughly level 20. Table: ENGINE.md "Bosses and combat skills".
 
 ### Engine 1.19.0 · save v19
 - **Stats rework** (`feat/stats-rework`, stacked on the locked start):
@@ -153,6 +164,7 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 
 Decided and scoped; ready to brief to an engineer. Top = next.
 
+0. **Boss tuning: decided 2026-11-05, keep as is** (see PRODUCT.md decision log). Still open: real art for the Chieftain and the Tusk.
 1. **Enemy tier check after the stats rework:** the 1.19.0 balance sim (PR for `feat/stats-rework`) shows the Skeleton falls at core 10 from Lv1 and the Troll at core 20 even at Lv1/Lv5, where 1.18 needed Lv10-15. Decide the targets, then retune enemy HP / damage / armor (and the core curves) where a tier is off. Earlier note: since 1.17.0 a level gives 5 points to spend instead of +5 on every attribute (20 per level), so level growth drops a lot and the 1.16.0 "dungeons are easy" concern may be gone. Sim each tier with typical builds (all STR/END, mixed) and only retune enemy HP / damage / armor where a tier is now off its target effort. (Normal STR counting toward WS / MS was decided: yes, 1.17.0.)
 2. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
 3. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
@@ -180,7 +192,7 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 - Crafting pipes 5–8: a premium purchase.
 
 **Combat and dungeons**
-- Multi-enemy runs and bosses (needs a save-shape change: `ActiveFight` holds one enemy).
+- Multi-enemy runs (needs a save-shape change: `ActiveFight` holds one enemy). The first boss shipped in 1.20.0; Tier 2 and its boss, boss recipes for the Chieftain's Tusk, bad-luck protection and auto-repeat for bosses are not built.
 - **Enemies with magic damage (gives magic resist a use).** Enemies have magic resist since 1.19.0 but only hit physically.
 - Hit chance (crits shipped in 1.19.0); a combat use for mana.
 - Attack-speed gear (the `attackIntervalModMs` hook exists, unused).
@@ -192,7 +204,7 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 
 **Items**
 - Tool recipes (axes and pickaxes) in the Crafting house.
-- Mob gear drops (quality 0–70; the config constant exists, unused).
+- Gear drops from normal mobs (quality 0–70; the first boss uses the constant since 1.20.0).
 - Stat jumps between rarity tiers (today rarity is colour only; quality alone scales stats).
 - Minimum-quality mechanics (the `minQuality` hook is 0: upgrades, skills or consumables could raise it).
 - Random affixes stored on item instances.

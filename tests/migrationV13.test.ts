@@ -73,7 +73,7 @@ describe('frozen v12 save (tests/fixtures/save-v12.json), engine 1.12.0 → 1.13
     const s = withoutGearRolls(loadSave(V12_SAVE)); // the v13 → v14 gear rolls: tests/migrationV14.test.ts
     const { character, saveVersion: _v, buildings, crafting, ...rest } = s;
     const { character: rc, saveVersion: _rv, buildings: rb, ...rawRest } = V12_SAVE;
-    expect(rest).toEqual(rawRest);
+    expect(rest).toEqual({ ...rawRest, dungeon: { ...rawRest.dungeon, bosses: {} } }); // v20: boss counters;
     expect(buildings).toEqual({ ...rb, crafting: V13_ADDED.craftingBuilding, storage: V18_ADDED.storageBuilding });
     expect(crafting).toEqual(V13_ADDED.crafting);
     const { smithing: _sm, ...skills } = rc.skills;
