@@ -61,7 +61,7 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   skeleton: { id: 'skeleton', name: 'Skeleton', icon: '💀', hp: 180, damage: { min: 15, max: 20 }, armor: 20, magicResist: 20, attackIntervalMs: 1000 },
   troll: { id: 'troll', name: 'Troll', icon: '👹', hp: 300, damage: { min: 22, max: 30 }, armor: 30, magicResist: 30, attackIntervalMs: 1000 },
   // The Tier 1 boss (1.20.0, owner-approved 2026-11-05). The starting numbers are unchanged after the balance sim
-  // (tests/balanceSimBoss.test.ts; results and the open tuning question in docs/ENGINE.md "Bosses and combat skills").
+  // (tests/balanceSimBoss.test.ts; results and the keep-as-is decision in docs/ENGINE.md "Bosses and combat skills").
   troll_chieftain: {
     id: 'troll_chieftain',
     name: 'Troll Chieftain',
