@@ -77,6 +77,12 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   /** The zoom the signs are laid out for: set at the camera init and when a pinch ends (never during gestures). */
   const [settledZoom, setSettledZoom] = useState(1);
+  /**
+   * The same value for the UI thread: written in the same worklet that asks React to re-lay the signs out, so a sign's
+   * residual scale (zoom / this) never mixes a new layout with an old scale. Its layout offsets (centring, origin) are in
+   * the React style, so they change in the same commit as the size.
+   */
+  const settledZoomSV = useSharedValue(1);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -97,8 +103,9 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
     zoom.set(c.zoom);
     tx.set(c.tx);
     ty.set(c.ty);
+    settledZoomSV.set(c.zoom);
     setSettledZoom(c.zoom);
-  }, [size, topReserve, bottomReserve, viewW, viewH, minZoom, maxZoom, moved, zoom, tx, ty]);
+  }, [size, topReserve, bottomReserve, viewW, viewH, minZoom, maxZoom, moved, zoom, tx, ty, settledZoomSV]);
   const ready = !!size;
   /** The scene root's window position (it is never transformed, so measuring it is reliable). */
   const rootRef = useRef<HostInstance>(null);
@@ -160,8 +167,14 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
       tx.set(c.tx);
       ty.set(c.ty);
     },
-    // The only JS hop: re-lay the signs out at the true size (their transform scale then returns to 1).
+    // The only JS hop: re-lay the signs out at the true size (their transform scale then returns to 1). onFinalize covers a
+    // pinch that ends cancelled or failed without onDeactivate; settling twice is harmless.
     onDeactivate: () => {
+      settledZoomSV.set(zoom.get());
+      scheduleOnRN(setSettledZoom, zoom.get());
+    },
+    onFinalize: () => {
+      settledZoomSV.set(zoom.get());
       scheduleOnRN(setSettledZoom, zoom.get());
     },
   });
@@ -198,6 +211,7 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
                 tx={tx}
                 ty={ty}
                 settledZoom={settledZoom}
+                settledZoomSV={settledZoomSV}
                 locked={!!locked?.has(s.key)}
                 active={active === s.key}
                 badge={badges?.[s.key]}
@@ -241,6 +255,8 @@ type SignProps = {
   ty: SharedValue<number>;
   /** The zoom this sign is laid out for (its real size is natural × SIGN_SCALE × this). */
   settledZoom: number;
+  /** The same zoom as a shared value (the residual scale reads it on the UI thread). */
+  settledZoomSV: SharedValue<number>;
   locked: boolean;
   active: boolean;
   badge?: SignBadge;
@@ -254,10 +270,10 @@ type SignProps = {
  * One sign, in screen space: laid out at natural × k (k = SIGN_SCALE × settledZoom) so its text is rasterised at the size
  * it is shown; its box follows the map with a translate, plus a transform scale of zoom / settledZoom while a pinch runs.
  */
-const Sign = memo(function Sign({ sign, zoom, tx, ty, settledZoom, locked, active, badge, onAction, anchorOf, onPressStart }: SignProps) {
+const Sign = memo(function Sign({ sign, zoom, tx, ty, settledZoom, settledZoomSV, locked, active, badge, onAction, anchorOf, onPressStart }: SignProps) {
   const k = SIGN_SCALE * settledZoom;
-  const slop = SIGN_HIT_SLOP * k;
-  const boxW = SIGN_BOX_W * k;
+  const slop = snap(SIGN_HIT_SLOP * k);
+  const boxW = snap(SIGN_BOX_W * k);
   /** The button's natural size and the scale it was measured at. */
   const button = useRef({ w: 0, h: SIGN_BUTTON_H });
   const kRef = useRef(k);
@@ -270,17 +286,20 @@ const Sign = memo(function Sign({ sign, zoom, tx, ty, settledZoom, locked, activ
     onPressStart();
     onAction?.(sign.key, anchorOf(sign, button.current));
   }, [onAction, onPressStart, anchorOf, sign]);
-  // The origin is the button's top centre: world anchor -> screen (tx + x × zoom, ty + y × zoom).
+  // The box's own offsets (marginLeft / marginTop, transformOrigin) are in its React style, so the transform only moves the
+  // button's top centre to the world anchor on screen (tx + x × zoom, ty + y × zoom). The translate is snapped to device
+  // pixels so the text never rests on a sub-pixel offset (iOS would resample it); a pan then moves signs in whole pixels.
+  const pr = PixelRatio.get();
   const style = useAnimatedStyle(() => ({
     transform: [
-      { translateX: tx.get() + sign.x * zoom.get() - boxW / 2 },
-      { translateY: ty.get() + sign.y * zoom.get() - slop },
-      { scale: zoom.get() / settledZoom },
+      { translateX: Math.round((tx.get() + sign.x * zoom.get()) * pr) / pr },
+      { translateY: Math.round((ty.get() + sign.y * zoom.get()) * pr) / pr },
+      { scale: zoom.get() / settledZoomSV.get() },
     ],
   }));
   const badgeStyle = useMemo(() => makeBadgeStyles(k), [k]);
   return (
-    <Animated.View style={[styles.sign, { width: boxW, height: SIGN_TOUCH_H * k, transformOrigin: [boxW / 2, slop, 0] }, style]} pointerEvents="box-none">
+    <Animated.View style={[styles.sign, { width: boxW, height: snap(SIGN_TOUCH_H * k), marginLeft: -boxW / 2, marginTop: -slop, transformOrigin: [boxW / 2, slop, 0] }, style]} pointerEvents="box-none">
       <View onLayout={onButtonLayout} style={{ padding: slop }}>
         <SignButton
           scale={k}

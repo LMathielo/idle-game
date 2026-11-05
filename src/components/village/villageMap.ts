@@ -80,10 +80,11 @@ export const SIGN_GAP = 0;
 
 /**
  * The only exceptions to the rule, world px, listed in the PR: Woodcutting's sign (padlocked, the widest) would overlap
- * the Town Hall's by 12 px, so Woodcutting's moves 7 px left and the Town Hall's 7 px right (both still under their
- * building's box, 2 px clear of each other).
+ * the Town Hall's by 12 px (more with the font rounded to whole points, see the 4% margin in the tests), so
+ * Woodcutting's moves 8 px left and the Town Hall's 8 px right; the padlocked Mine sign touches the Dungeon's, so it moves 2 px
+ * left (all still under their building's box).
  */
-export const SIGN_NUDGE: Partial<Record<VillageAction, { x: number }>> = { woodcutting: { x: -7 }, town_hall: { x: 7 } };
+export const SIGN_NUDGE: Partial<Record<VillageAction, { x: number }>> = { woodcutting: { x: -8 }, town_hall: { x: 8 }, mine: { x: -2 } };
 
 /** A sign's anchor, world px: `x` = the horizontal centre (the building box's centre), `y` = the TOP edge. */
 export function signAnchor(key: VillageAction, piece: { x: number; y: number; w: number; h: number }): { x: number; y: number } {

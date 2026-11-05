@@ -37,7 +37,10 @@ const SCREENS = [
 // the padlock while its building is not built. The widths are hand-measured (TECH_DEBT); sizes and gaps are not.
 const LABEL_W: Record<string, number> = { dungeon: 76, mine: 98, merchant: 91, woodcutting: 116, training: 72, town_hall: 80, crafting: 80, storage: 76 };
 const LOCKABLE = new Set(['woodcutting', 'mine', 'town_hall', 'training', 'crafting']);
-const naturalWidth = (key: string, padlock: boolean) => LABEL_W[key] + 30 + (padlock && LOCKABLE.has(key) ? 20 : 0);
+// The label font is rounded to whole points (up to about 5% off at the smallest zoom, 4% of a sign's width), so every width the
+// tests assume gets this margin.
+const WIDTH_MARGIN = 1.04;
+const naturalWidth = (key: string, padlock: boolean) => (LABEL_W[key] + 30 + (padlock && LOCKABLE.has(key) ? 20 : 0)) * WIDTH_MARGIN;
 /** The timer pill under a sign (20 high + 2 gap, natural px) hangs below the sign. */
 const BADGE_BELOW = 22;
 const boxOf = (s: (typeof SIGNS)[number], padlock = true) => signWorldBox(s, naturalWidth(s.key, padlock));
@@ -79,7 +82,7 @@ describe('village map', () => {
     for (const s of SIGNS) {
       const p = PIECES.find((q) => q.id === s.key)!;
       expect(s.x, s.key).toBe(p.x + p.w / 2 + (SIGN_NUDGE[s.key]?.x ?? 0));
-      expect(Math.abs(s.x - (p.x + p.w / 2)), s.key).toBeLessThanOrEqual(7); // a nudge stays under the building's box
+      expect(Math.abs(s.x - (p.x + p.w / 2)), s.key).toBeLessThanOrEqual(8); // a nudge stays under the building's box
       expect(s.y, s.key).toBe(p.y + p.h + SIGN_GAP);
       for (const padlock of [false, true]) {
         const b = boxOf(s, padlock);
