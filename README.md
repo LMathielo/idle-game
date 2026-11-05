@@ -99,11 +99,23 @@ npx expo start --tunnel   # scan the QR code with Expo Go
 Add the label **`expo-test`** to a pull request (into `dev` or `main`) to try it in Expo Go before merging it. The workflow `expo-preview.yml` then:
 
 - runs install, typecheck and tests, and publishes an EAS Update on an **EAS branch named exactly like the PR's git branch** (`feat/xyz` shows up as `feat/xyz` on expo.dev → project → Updates);
-- posts **one comment** on the PR (edited on every republish, never a second one) with the EAS branch, commit, save slot, an **Open in Expo Go** link and a QR code;
+- posts **one comment** on the PR (edited on every republish, never a second one) with the EAS branch, commit, save slot, the `exp://` link in a code block, a QR code and an expo.dev link;
 - republishes on every push while the label is on;
 - **removes the preview** (deletes the EAS branch and edits the comment) when you take the label off or the PR is closed or merged.
 
 A PR whose branch is `main` or `dev` (the release PR) is refused: those two publish through `eas-update.yml` only.
+
+**Opening a preview on the phone.** GitHub does not open `exp://` links when you tap them, so:
+
+1. In the PR comment, long-press the link in the code block and tap **Copy**.
+2. Paste it into Safari's address bar.
+3. Tap **Open in Expo Go**.
+
+(Or scan the QR code from another screen, or find the update on expo.dev → project → Updates.) Every push publishes a new link, so copy it again from the updated comment.
+
+**Telling builds apart.** Each build has its own app name, so Expo Go's **Recently opened** lists them separately: **Idle Game** is `main`, **Idle Game · dev** is `dev`, and **Idle Game · feat/xyz** is the preview of branch `feat/xyz`. The Hero tab → Debug panel shows the same build label and the save slot. The name comes from `app.config.ts` (it only overrides `name` in `app.json`) and is baked at publish time.
+
+**Getting back to `dev` or `main`.** Tap its entry in **Recently opened** (Idle Game · dev, or Idle Game for main). Tapping the project under **Projects** opens the default build and has no branch picker, so do not use it to choose; to open a branch that is not in the list, use expo.dev → project → Updates → the branch → its QR code or link.
 
 **Each build has its own save**, so previews never touch your progress: `main` keeps `idle-game.db` (your existing progress), `dev` uses `idle-game-dev.db` (copied once from `idle-game.db` on its first launch), and a PR preview starts fresh in `idle-game-<branch>.db`. Hero tab → Debug shows which slot you are on. A local `npx expo start` behaves like `main`.
 

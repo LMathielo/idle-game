@@ -104,12 +104,15 @@ jobs:
             exit 1
           fi
 
-      # The slot is baked into the bundle here (Metro inlines EXPO_PUBLIC_* at export time), so only this step sets it.
+      # The slot and the build label are baked in here (Metro inlines EXPO_PUBLIC_* at export time; eas-cli reads the app
+      # config through `expo config` with this env), so only this step sets them.
       # Update message: PR title + (#N) + short SHA. The title is untrusted text: it only ever goes through env vars.
       - name: Publish update
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EXPO_PUBLIC_SAVE_SLOT: ${{ steps.names.outputs.slot }}
+          # The RAW branch name: app.config.ts names the app "Idle Game · <branch>". Env only, never in the script.
+          EXPO_PUBLIC_BUILD_LABEL: ${{ github.event.pull_request.head.ref }}
         run: |
           MSG="${PR_TITLE:0:120} (#${PR_NUMBER}) ${HEAD_SHA:0:7}"
           echo "EAS branch: $HEAD_REF, save slot: $EXPO_PUBLIC_SAVE_SLOT, message: $MSG"
@@ -143,13 +146,23 @@ jobs:
             echo "| Save slot | ${BT}${SLOT}${BT}: file ${BT}idle-game-${SLOT}.db${BT}, a fresh save that dev and main never touch |"
             echo "| Published | $(date -u '+%Y-%m-%d %H:%M UTC') |"
             echo
-            echo "**[Open in Expo Go](${GO_URL})** (on the phone) or open the [update on expo.dev](${DASH_URL})."
+            echo "**Open on the phone** (GitHub does not open ${BT}exp://${BT} links when tapped):"
             echo
-            echo "If the link does not open: in Expo Go use *Enter URL manually* and paste ${BT}${GO_URL}${BT}."
+            echo "1. Long-press the link below, then **Copy**."
+            echo "2. Paste it into Safari's address bar."
+            echo "3. Tap **Open in Expo Go**."
             echo
-            echo "Scan from another screen:"
+            echo '```'
+            echo "${GO_URL}"
+            echo '```'
+            echo
+            echo "From another screen, scan the QR code:"
             echo
             echo "![QR code for Expo Go](${QR_URL})"
+            echo
+            echo "Or open the [update on expo.dev](${DASH_URL})."
+            echo
+            echo "Every new push publishes a new link. In Expo Go's *Recently opened* this build is named ${BT}Idle Game · ${HEAD_REF}${BT}."
             echo
             echo "Republished on every push while the ${BT}expo-test${BT} label is on. Removing the label, closing or merging the PR deletes this preview."
           } > "$RUNNER_TEMP/comment.md"

@@ -23,7 +23,8 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 
 ### Tooling only (engine 1.17.0, save v17) · Expo test previews
 - **Try a PR in Expo Go before merging** (`feat/expo-test-previews`): add the label `expo-test` to a PR and the workflow `expo-preview.yml` publishes it on an EAS branch named like the git branch, with one comment (link + QR code) edited on every push. Removing the label or closing / merging the PR deletes the preview. PRs from `main` / `dev` are refused.
-- **Per-branch saves:** `main` keeps `idle-game.db`; `dev` now uses `idle-game-dev.db`, copied once from `idle-game.db` on its first launch; each preview starts fresh in `idle-game-<branch>.db`. Hero tab → Debug shows the slot. Local `npx expo start` = `main`.
+- **Per-branch saves:** `main` keeps `idle-game.db`; `dev` now uses `idle-game-dev.db`, copied once from `idle-game.db` on its first launch; each preview starts fresh in `idle-game-<branch>.db`. Hero tab → Debug shows the slot and the build label. Local `npx expo start` = `main`.
+- **Per-build app name:** Expo Go's "Recently opened" shows "Idle Game" (main), "Idle Game · dev" and "Idle Game · <branch>" (previews), from a new `app.config.ts` that only overrides `name`. The preview comment now gives the steps for phones (copy the `exp://` link, paste into Safari, Open in Expo Go) because GitHub does not open it on tap.
 
 ### Docs only (engine 1.17.0) · agent context diet
 - **Agent context diet + desktop mode** (`chore/agent-context-diet`): `AGENTS.md` cut from ~20k to ~8k bytes and auto-loaded via the new `CLAUDE.md`; layout, selectors, navigation and village-map detail moved to the new [`CODEMAP.md`](CODEMAP.md). `ENGINE.md` and `PRODUCT.md` get Contents tables, and the agents read only the sections a task needs. New desktop working mode (agents work on the owner's PC); `.gitattributes` added.

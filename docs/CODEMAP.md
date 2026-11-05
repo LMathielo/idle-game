@@ -58,7 +58,8 @@ src/engine/config/    tunables as data: xpCurve, woodcutting (WS, trees, skip), 
                       crafting (pipes, material and gear recipes, ×10 tap and insta stamina), gear (quality/rarity formulas, Merchant and crafting rolls, gear sets and pieces), stats (incl. HP regen, STAT_EFFECTS), stamina, time, newGame, training (curve, tiers, prices), dev (DEV_TOOLS_ENABLED)
 src/client/           GameClient boundary: LocalGameClient, repositories (SQLite / in-memory), clock, React provider + hooks
                       saveSlot.ts (which SQLite file this build uses: slot from EXPO_PUBLIC_SAVE_SLOT, name rules), seedSave.ts (one-time dev seed from idle-game.db,
-                      openSlotDatabase and its failure rules), createAppClient.ts (wires them to expo-sqlite)
+                      openSlotDatabase and its failure rules), createAppClient.ts (wires them to expo-sqlite), buildLabel.ts (build label for the Debug panel)
+app.config.ts         dynamic Expo config over app.json: only `name` changes per build ("Idle Game" / "Idle Game · dev" / "Idle Game · <branch>"), from EXPO_PUBLIC_BUILD_LABEL
 src/theme.ts          palette and fonts
 tests/                Vitest tests (engine rules, time rules, client, real SQL via node:sqlite, engine import guard, golden hash + frozen save fixtures)
 .github/workflows/  ci.yml (typecheck, tests, export on every PR), eas-update.yml (main and dev publish to Expo Go), expo-preview.yml (PR label `expo-test`: preview publish + cleanup)
