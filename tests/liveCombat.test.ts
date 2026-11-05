@@ -99,7 +99,7 @@ describe('rebalance (config)', () => {
     const base = Object.values(DUNGEONS).map((d) => d.search.baseMs / MIN);
     expect(base).toEqual([2, 2, 2, 2, 2]);
     for (const d of Object.values(DUNGEONS)) expect(d.search).toEqual({ baseMs: d.search.baseMs, minMs: 60_000 });
-    expect(Object.values(ENEMIES).map((e) => e.attackIntervalMs)).toEqual([1000, 1000, 1000, 1000, 1000]);
+    expect(Object.values(ENEMIES).map((e) => e.attackIntervalMs)).toEqual([1000, 1000, 1000, 1000, 1000, 1000]); // incl. the Troll Chieftain (1.20.0)
     const g = builtGame(1, T0);
     expect(searchMsFor('troll_bridge', withCore(g, { dexterity: 10 }))).toBe(110_004);
     expect(searchMsFor('rat_cellar', withCore(g, { dexterity: 50 }))).toBe(90 * SEC);
@@ -200,9 +200,12 @@ describe('strike timing', () => {
       critChanceBp: 0,
       critMultBp: 15_000,
       attackIntervalMs: 1000,
+      skills: [],
     });
-    expect(f.enemy).toEqual({ damage: ENEMIES.rat.damage, armor: ENEMIES.rat.armor, magicDamage: 0, magicResist: ENEMIES.rat.magicResist, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000 });
+    expect(f.enemy).toEqual({ damage: ENEMIES.rat.damage, armor: ENEMIES.rat.armor, magicDamage: 0, magicResist: ENEMIES.rat.magicResist, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000, skills: [] });
     expect(f).toMatchObject({ elapsedMs: 0, heroHpStart: 50, heroMaxHp: 50, enemyHp: 30, enemyMaxHp: 30, log: [] });
+    // 1.20.0: a dungeon fight has the plain 60 s limit, no regen, no skills, no stun
+    expect(f).toMatchObject({ maxFightMs: 60_000, enemyRegenBp: 0, enemyRegenProgress: 0, enemySkillReady: {}, heroStunStrikes: 0 });
   });
 });
 

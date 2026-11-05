@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 import { AccessibilityInfo, Pressable, type StyleProp, StyleSheet, Text, type ViewStyle } from 'react-native';
 import Animated, { FadeInDown, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
-import { type DungeonId, DUNGEONS } from '../engine';
+import { type DungeonOrBossId, dungeonOrBossName, isBossId } from '../engine';
 import { colors, fonts } from '../theme';
 import { GameIcon } from './art/Sprites';
 
@@ -17,11 +17,11 @@ const AUTO_HIDE_MS = 5000;
  * comparing identity makes exactly one of them announce it (an `alert` role is ignored on iOS and a live
  * region rarely fires on first mount, hence the explicit announcement).
  */
-let lastAnnounced: readonly DungeonId[] | null = null;
+let lastAnnounced: readonly DungeonOrBossId[] | null = null;
 
-function texts(ids: readonly DungeonId[]) {
-  const names = ids.map((id) => DUNGEONS[id].name).join(', ');
-  const title = ids.length === 1 ? 'New dungeon unlocked!' : 'New dungeons unlocked!';
+function texts(ids: readonly DungeonOrBossId[]) {
+  const names = ids.map(dungeonOrBossName).join(', ');
+  const title = ids.every(isBossId) ? (ids.length === 1 ? 'Boss unlocked!' : 'Bosses unlocked!') : ids.length === 1 ? 'New dungeon unlocked!' : 'New dungeons unlocked!';
   return { names, title };
 }
 

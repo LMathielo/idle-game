@@ -40,12 +40,17 @@ function pngSize(file: string): { w: number; h: number } {
 
 const sorted = (a: Iterable<string>) => [...a].sort();
 
+/** Placeholder art (1.20.0): ids that show another id's generated image until real art is approved (docs/TECH_DEBT.md). */
+const ITEM_PLACEHOLDERS: Record<string, string> = { chieftains_tusk: 'items/troll_hide.png' };
+const ENEMY_PLACEHOLDERS: Record<string, string> = { troll_chieftain: 'enemies/variants/stone_troll.png' };
+
 describe('art registry', () => {
   it('every catalog item has its own image (items/<itemId>.png), no extra entries', () => {
     expect(sorted(Object.keys(ITEM_IMAGES))).toEqual(sorted(Object.keys(ITEMS)));
     for (const [id, src] of Object.entries(ITEM_IMAGES)) {
-      expect(rel(src)).toBe(`items/${id}.png`);
-      expect(manifest[`items/${id}.png`]).toMatchObject({ w: 32, h: 32, scale: 8 });
+      const file = ITEM_PLACEHOLDERS[id] ?? `items/${id}.png`;
+      expect(rel(src)).toBe(file);
+      expect(manifest[file]).toMatchObject({ w: 32, h: 32, scale: 8 });
     }
   });
 
@@ -59,7 +64,7 @@ describe('art registry', () => {
     expect(sorted(Object.keys(ENEMY_SPRITES))).toEqual(sorted(Object.keys(ENEMIES)));
     for (const [id, s] of Object.entries(ENEMY_SPRITES)) {
       const m = manifest[rel(s.source)];
-      expect(rel(s.source)).toBe(`enemies/${id}.png`);
+      expect(rel(s.source)).toBe(ENEMY_PLACEHOLDERS[id] ?? `enemies/${id}.png`);
       expect({ w: s.w, h: s.h }).toEqual({ w: m.w, h: m.h });
       expect(pngSize(s.source as unknown as string)).toEqual({ w: m.w * m.scale, h: m.h * m.scale });
     }

@@ -7,7 +7,7 @@ import { FlatList, type HostInstance, ScrollView, type ListRenderItem, type Nati
 import { useGameSnapshot } from '../../client/GameProvider';
 import { type CrewView, crewViews, type WorkerNodeId, woodcutActivityView, type TreeId, type TreeView, type WoodcutActivityView, woodcuttingView } from '../../engine';
 import { colors, fonts } from '../../theme';
-import { confirmCancelRun } from '../dungeon/confirmCancelRun';
+import { confirmLeaveRun } from '../dungeon/confirmCancelRun';
 import { IconText, ItemIcon, NodeIcon } from '../art/Sprites';
 import { formatBp, formatClock, formatNumber, itemName } from '../format';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
@@ -51,9 +51,9 @@ export function WoodcuttingModal() {
 
   const onStart = useCallback(
     async (treeId: TreeId, name: string) => {
-      // One activity at a time: woodcutting would end the dungeon run in progress, so ask first.
+      // One activity at a time: woodcutting would end the dungeon run (or boss fight) in progress, so ask first.
       const a = client.getState().activity;
-      if (a?.kind === 'dungeon' && !(await confirmCancelRun(dialog, `Cut ${name}`, a.phase === 'fight'))) return;
+      if (!(await confirmLeaveRun(dialog, `Cut ${name}`, a))) return;
       await send({ type: 'START_ACTIVITY', kind: 'woodcutting', treeId });
     },
     [client, dialog, send],

@@ -32,6 +32,9 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#30, 25] `workers/NodeWorkers.tsx` — a fast second tap on [+] is dropped by the `useCommand` in-flight guard (same as the #19 item); no test covers `nodeWorkersInfo`'s disabled combinations. Add one.
 - [#32, 25] `app/merchant.tsx` — the `/merchant` route has no unbuilt guard; a deep link or dev navigation opens the modal on an unbuilt Merchant (the engine refuses every command with `BUILDING_LOCKED`). Redirect, or show a "Build the Merchant first" state.
 
+- [first boss, note] Boss art is a PLACEHOLDER: `enemies/variants/stone_troll.png` for the Troll Chieftain and `items/troll_hide.png` for the Chieftain's Tusk (`components/art/images.ts`, marked PLACEHOLDER; `tests/art.test.ts` lists them). **Real art pending owner approval** (art pipeline in `tools/art` untouched).
+- [first boss, 30] `AwayModal.tsx` — the boss line names the only boss (`BOSSES.troll_chieftain`) because `summary.boss` is one aggregate `{fights, wins, losses}`. With a second boss the summary needs counters per boss.
+
 ## Engine and data
 
 - [pixel art, note] `engine/config/*` (`ITEMS`, `GEAR_PIECES`, `ENEMIES`, `DUNGEONS`, `TREES`, `ROCKS`, `BUILDINGS`), the views that copy them (`treeView`, `rockView`, `buildingView`, `constructionView`, worker / crew / node views) and stored `Item.icon` — the emoji `icon` fields are unused by the UI since the pixel art (art comes from `src/components/art/images.ts` by id). Remove them; `Item.icon` is in saves, so drop it in the next save migration (leave `engine/migrations.ts`' legacy literals alone). `tests/noEmoji.test.ts` allows exactly these fields until then.

@@ -63,7 +63,8 @@ const withSellBonus = (state: Buildings, base: number) =>
  * buys none. Gear depends on the instance's rarity: use sellPriceOfItem.
  */
 export function sellPriceOf(state: Buildings, defId: string): number {
-  return withSellBonus(state, getItemDef(defId)?.sellPrice ?? 0);
+  const def = getItemDef(defId);
+  return withSellBonus(state, def?.sellable === false ? 0 : (def?.sellPrice ?? 0));
 }
 
 /** What the merchant pays per unit of this instance right now: its base (gear: × the rarity multiplier) × (1 + bonus), floored. */

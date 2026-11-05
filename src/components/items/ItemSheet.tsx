@@ -63,7 +63,7 @@ export function ItemSheet({ item, anchor, quantity, equipped, children, actions,
           }
         />
       ))}
-      <PopoverRow icon={<GameIcon name="gold" />} label="Sell value" value={sell > 0 ? `${formatNumber(sell)}${def.stackable ? ' each' : ''}` : '—'} />
+      <PopoverRow icon={<GameIcon name="gold" />} label="Sell value" value={sell > 0 ? `${formatNumber(sell)}${def.stackable ? ' each' : ''}` : def.sellable === false ? 'Not sold' : '—'} />
       {children}
       {error ? <PopoverText tone="bad">{error}</PopoverText> : null}
       {actions.length ? (

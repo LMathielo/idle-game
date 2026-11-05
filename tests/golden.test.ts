@@ -217,8 +217,25 @@ const restoreStackAt = (defId: string, index: number) => (s: GameState): GameSta
  * hash must equal the 1.12.0 pin.
  */
 function asV12(s: GameState): unknown {
-  const { crafting: _c, buildings: { crafting: _b, storage: _st, ...buildings }, character, ...rest } = asV13(s);
+  const { crafting: _c, buildings: { crafting: _b, storage: _st, ...buildings }, character, ...rest } = asV13(asV19(s));
   return { ...rest, saveVersion: 12, buildings, character: { ...character, skills: { ...character.skills, smithing: { level: 1, xp: 0, xpToNext: 100 } } } };
+}
+
+/**
+ * A 1.20.0 state seen in the v19 shape: no boss counters, and a stage fight in progress without the v20 fields (the frozen limit,
+ * the enemy regen, the skills, the stun). A script that never meets a boss plays exactly as 1.19.0 did, so seen like this its hash
+ * is the 1.19.0 one: the pin of the 1.10.0 script below did NOT move in 1.20.0.
+ */
+function asV19(s: GameState): GameState {
+  const { bosses: _bosses, ...dungeon } = s.dungeon;
+  let activity: unknown = s.activity;
+  if (s.activity?.kind === 'dungeon' && s.activity.fight) {
+    const { maxFightMs: _m, enemyRegenBp: _r, enemyRegenProgress: _p, enemyRegenAtMs: _a, enemySkillReady: _k, heroStunStrikes: _h, hero, enemy, ...fight } = s.activity.fight;
+    const { skills: _hs, ...heroSide } = hero;
+    const { skills: _es, ...enemySide } = enemy;
+    activity = { ...s.activity, fight: { ...fight, hero: heroSide, enemy: enemySide } };
+  }
+  return { ...s, saveVersion: 19, dungeon, activity } as unknown as GameState;
 }
 
 /**
@@ -529,6 +546,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.17.0', 17],
       ['1.18.0', 18],
       ['1.19.0', 19],
+      ['1.20.0', 20],
     ]);
   });
 });
@@ -641,6 +659,7 @@ describe('golden', () => {
         "actions": 475,
         "activity": "training",
         "dungeon": {
+          "bosses": {},
           "byDungeon": {
             "bat_cave": {
               "losses": 0,
@@ -1246,7 +1265,7 @@ describe('golden', () => {
     // New: full HP at level 5 (50 + 10 × 4), empty fight state.
     expect(s.character.level).toBe(5);
     expect([hp, hpRegenProgress]).toEqual([90, 0]);
-    expect(dungeon).toEqual({ lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {} });
+    expect(dungeon).toEqual({ lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {}, bosses: {} });
 
     // Plays on: Oak (Woodcutting built again) cuts a log every 2:00 (its +5 DEX is normal, not core, since 1.16.0), then
     // a dungeon searches 2:00 and fights.
@@ -1305,7 +1324,8 @@ describe('golden 1.13.0: the Crafting house', () => {
     // 1.17.0 re-pin (1.16.0: ea51d10b): no automatic level points (a few fights last longer, a shifted RNG stream), the
     // new character fields (spent / unspent points, mana). Every crafting outcome above is unchanged.
     // 1.19.0 re-pin (was 2dbabf75): crit draws shift every later roll; END gives max HP; logged strikes carry crit / physical / magic; save v19.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.19.0', hash: '11f7779b' });
+    // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.20.0', hash: '11f7779b' });
   });
 });
 
@@ -1354,7 +1374,8 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     // 1.17.0 re-pin (1.16.0: gold 4,061, hash aa5c4e76): the Steel Axe (2,500 g) is now the first gear listing.
     // 1.19.0 re-pin (1.17.0: gold 2,162, hash d4a2e1d2): the refresh rolled new listings (the first gear listing is the 500 g Iron Sword,
     // not the 2,500 g Steel Axe, so 2,000 g stay in the purse), the gear rolls differ, a shifted RNG stream everywhere.
-    expect({ gold: s.character.gold, hash: hashState(s) }).toEqual({ gold: 4160, hash: '09b4ec22' });
+    // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
+    expect({ gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ gold: 4160, hash: '09b4ec22' });
   });
 });
 
@@ -1400,7 +1421,8 @@ describe('golden 1.15.0: continuous material pipes', () => {
     expect(s.crafting.pipes[0]!.done).toBeGreaterThan(s.crafting.pipes[1]!.done);
     // 1.16.0 re-pin (1.15.0: gold 10,580, hash eaf63de1). 1.17.0 re-pin (1.16.0: gold 9,973, hash 7950bd86).
     // 1.19.0 re-pin (1.18.0: gold 8,172, hash 6df72287): the 2,000 g gear listing difference of the 1.14.0 segment (see there) and the shifted RNG stream.
-    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(s) }).toEqual({ engineVersion: '1.19.0', gold: 10218, hash: 'a4eba9d5' });
+    // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
+    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.20.0', gold: 10218, hash: 'a4eba9d5' });
   });
 });
 
@@ -1474,7 +1496,8 @@ describe('golden 1.16.0: normal and core attributes', () => {
     const s = runScript(SCRIPT_116, SEED);
     expect(s.stats.totalActions).toBe(16 + 65); // ~30 min then 2 h 2 s of 110,004 ms cuts
     // 1.17.0 re-pin (1.16.0: df33601f): points to spend instead of level points, WS from total STR (more logs), mana.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.19.0', hash: '233aa32a' });
+    // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.20.0', hash: '233aa32a' });
   });
 });
 
@@ -1516,6 +1539,7 @@ describe('golden 1.17.0: spendable points, total STR → WS, mana', () => {
     const s = runScript(SCRIPT_117, SEED);
     expect(s.character.spentPoints.strength).toBe(6);
     // 1.19.0 re-pin (was b27e380f): crit draws, END max HP, regen units, logged strikes with crit / physical / magic, save v19.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(s) }).toEqual({ engineVersion: '1.19.0', hash: '3be73d3c' });
+    // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.20.0', hash: '3be73d3c' });
   });
 });

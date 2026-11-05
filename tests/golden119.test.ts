@@ -3,6 +3,10 @@
 // for the Town Hall and Merchant, a Merchant refresh and buy, then dungeon runs (Rat Cellar, then the Bat Cave it opens) with
 // crits, magic and 0.2-per-point regen. If a pin here moves, the rules changed outcomes: bump ENGINE_VERSION, check the change is
 // intended, update the pin. (The older scripts, from the 1.17.0 start, are in tests/golden.test.ts.)
+//
+// 1.20.0 (save v20, first boss): this script plays no boss, so every OUTCOME pin below (gold 1221, hp [145,0], rng, runs 146/58)
+// is unchanged from 1.19.0. Only the whole-state `hash` moved, because the v20 state has new fields (dungeon.bosses, the fight's
+// regen/skill/stun fields, side.skills). golden.test.ts proves it: the older scripts' 1.19.0 hashes still hold in the v19 shape (asV19).
 import { describe, expect, it } from 'vitest';
 import {
   applyCommand,
@@ -90,7 +94,7 @@ function play(until: number = Infinity): GameState {
 
 describe('golden 1.19.0: a whole game from newGame', () => {
   it('starts with 500 gold and nothing built; the first two real BUILD commands cost 50 gold each', () => {
-    expect(ENGINE_VERSION).toBe('1.19.0');
+    expect(ENGINE_VERSION).toBe('1.20.0');
     const s0 = newGame(SEED, T0);
     expect(s0.character.gold).toBe(500);
     expect(Object.values(s0.buildings).every((b) => b.state === 'locked')).toBe(true);
@@ -169,7 +173,7 @@ describe('golden 1.19.0: a whole game from newGame', () => {
           },
         },
         "gold": 1221,
-        "hash": "fff9656e",
+        "hash": "2e1282a3",
         "hp": [
           145,
           0,

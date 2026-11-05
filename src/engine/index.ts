@@ -17,7 +17,40 @@ export * from './stamina';
 export * from './hp';
 export * from './mana';
 export { msUntilFull, REGEN_RATE_SCALE, REGEN_UNIT, regenAmount, regenRateUnits } from './regen';
-export { critDamage, dealtDamage, newFight, nextFightEvent, reducedDamage, resolveFight, strikeRange, type Combatant, type FightEvent, type FightResult } from './combat';
+export {
+  critDamage,
+  dealtDamage,
+  enemyHpAt,
+  enemyRegen,
+  ENEMY_REGEN_UNIT,
+  fightView,
+  newFight,
+  nextFightEvent,
+  reducedDamage,
+  regenEnemyTo,
+  resolveFight,
+  strike,
+  strikeRange,
+  type Combatant,
+  type FightEvent,
+  type FightOptions,
+  type FightResult,
+} from './combat';
+export {
+  bossEntryView,
+  bossRunView,
+  bossTotals,
+  bossUnlockView,
+  checkBossEntry,
+  fightIsOn,
+  isBossUnlocked,
+  type BossEntryBlock,
+  type BossEntryView,
+  type BossError,
+  type BossErrorCode,
+  type BossRunView,
+  type BossUnlockView,
+} from './boss';
 export {
   dungeonRunView,
   dungeonTotals,

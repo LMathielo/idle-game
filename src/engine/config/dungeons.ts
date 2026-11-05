@@ -1,6 +1,7 @@
 // Dungeons, enemies and combat (data). Rules in src/engine/combat.ts and src/engine/dungeon.ts;
 // formulas in docs/ENGINE.md ("Dungeon & combat").
-import type { DungeonId, EnemyId } from '../types';
+import type { BossId, CombatSkillId, DungeonId, DungeonOrBossId, EnemyId, ItemRarity } from '../types';
+import { GEAR, type RarityWeight } from './gear';
 
 const SEC_MS = 1000;
 const MIN_MS = 60 * SEC_MS;
@@ -45,6 +46,12 @@ export type EnemyDef = {
   magicResist: number;
   /** Time between two of its strikes; the first lands this long after the fight starts. */
   attackIntervalMs: number;
+  /** Bosses (1.20.0): HP regenerated per second while it fights, in basis points of its max HP (50 = 0.5% per second). Missing = none. */
+  regenBpPerSec?: number;
+  /** Bosses (1.20.0): overrides COMBAT.maxFightMs for a fight against it. Missing = COMBAT.maxFightMs. */
+  maxFightMs?: number;
+  /** Combat skills it casts (ids into COMBAT_SKILLS, config/skills.ts), in priority order. Missing = none. */
+  skills?: readonly CombatSkillId[];
 };
 
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
@@ -53,6 +60,21 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   wolf: { id: 'wolf', name: 'Wolf', icon: '🐺', hp: 110, damage: { min: 10, max: 14 }, armor: 12, magicResist: 12, attackIntervalMs: 1000 },
   skeleton: { id: 'skeleton', name: 'Skeleton', icon: '💀', hp: 180, damage: { min: 15, max: 20 }, armor: 20, magicResist: 20, attackIntervalMs: 1000 },
   troll: { id: 'troll', name: 'Troll', icon: '👹', hp: 300, damage: { min: 22, max: 30 }, armor: 30, magicResist: 30, attackIntervalMs: 1000 },
+  // The Tier 1 boss (1.20.0, owner-approved 2026-11-05). The starting numbers are unchanged after the balance sim
+  // (tests/balanceSimBoss.test.ts; results and the open tuning question in docs/ENGINE.md "Bosses and combat skills").
+  troll_chieftain: {
+    id: 'troll_chieftain',
+    name: 'Troll Chieftain',
+    icon: '👹',
+    hp: 1000,
+    damage: { min: 26, max: 36 },
+    armor: 40,
+    magicResist: 40,
+    attackIntervalMs: 1000,
+    regenBpPerSec: 50,
+    maxFightMs: 120 * SEC_MS,
+    skills: ['heavy_bash'],
+  },
 };
 
 /**
@@ -65,8 +87,10 @@ export type UnlockRule = { dungeonId: DungeonId; wins: number };
 export type DungeonDef = {
   id: DungeonId;
   name: string;
-  /** 1-based difficulty tier; the list is shown in this order. */
+  /** The dungeon tier it belongs to (DUNGEON_TIERS); 1 for all five stages today. */
   tier: number;
+  /** 1-based stage inside its tier, "Stage 3 · Wolf Den" (these were "tiers" 1–5 before 1.20.0); the list is shown in this order. */
+  stage: number;
   icon: string;
   enemyId: EnemyId;
   /** How long the search for an opponent takes (the first phase of a run). */
@@ -91,6 +115,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     id: 'rat_cellar',
     name: 'Rat Cellar',
     tier: 1,
+    stage: 1,
     icon: '🕳️',
     enemyId: 'rat',
     search: searchFrom(2), // core DEX 0 → 2:00, 10 → 1:51
@@ -100,7 +125,8 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
   bat_cave: {
     id: 'bat_cave',
     name: 'Bat Cave',
-    tier: 2,
+    tier: 1,
+    stage: 2,
     icon: '⛰️',
     enemyId: 'bat',
     search: searchFrom(2), // core DEX 0 → 2:00
@@ -110,7 +136,8 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
   wolf_den: {
     id: 'wolf_den',
     name: 'Wolf Den',
-    tier: 3,
+    tier: 1,
+    stage: 3,
     icon: '🌲',
     enemyId: 'wolf',
     search: searchFrom(2), // core DEX 0 → 2:00
@@ -120,7 +147,8 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
   forgotten_crypt: {
     id: 'forgotten_crypt',
     name: 'Forgotten Crypt',
-    tier: 4,
+    tier: 1,
+    stage: 4,
     icon: '⚰️',
     enemyId: 'skeleton',
     search: searchFrom(2), // core DEX 0 → 2:00
@@ -130,7 +158,8 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
   troll_bridge: {
     id: 'troll_bridge',
     name: 'Troll Bridge',
-    tier: 5,
+    tier: 1,
+    stage: 5,
     icon: '🌉',
     enemyId: 'troll',
     search: searchFrom(2), // core DEX 0 → 2:00
@@ -139,6 +168,87 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
   },
 };
 
+// ---------- bosses and dungeon tiers (1.20.0) ----------
+
+/** A boss's drop of one gear piece (rolled with the existing gear machinery: colour table, then a quality in [min, max]). */
+export type BossGearDrop = {
+  chance: number;
+  /** One piece is picked by weight. */
+  pieces: readonly { itemId: string; weight: number }[];
+  rarityWeights: readonly RarityWeight[];
+  quality: { min: number; max: number };
+};
+
+export type BossDef = {
+  id: BossId;
+  name: string;
+  icon: string;
+  /** The dungeon tier it caps (DUNGEON_TIERS). */
+  tier: number;
+  enemyId: EnemyId;
+  /** What opens it: lifetime wins in a stage dungeon (permanent, same rule as the stages). */
+  unlock: UnlockRule;
+  /** Paid up front when the fight is entered; never refunded (lost, fled or timed out). */
+  entryStamina: number;
+  /**
+   * Win only. Rolled in this order on the main RNG stream: gold, the gear drop's chance (then, on a hit: the piece, its colour,
+   * its quality), then each material drop (independent of the gear drop). A drop that does not fit is lost.
+   */
+  rewards: {
+    heroXp: number;
+    gold: { min: number; max: number };
+    gear: BossGearDrop;
+    drops: readonly { itemId: string; chance: number }[];
+  };
+};
+
+export const BOSSES: Record<BossId, BossDef> = {
+  troll_chieftain: {
+    id: 'troll_chieftain',
+    name: 'Troll Chieftain',
+    icon: '👹',
+    tier: 1,
+    enemyId: 'troll_chieftain',
+    unlock: { dungeonId: 'troll_bridge', wins: 50 },
+    entryStamina: 10,
+    rewards: {
+      heroXp: 2000,
+      gold: { min: 300, max: 450 },
+      gear: {
+        chance: 0.35,
+        pieces: ['iron_sword', 'iron_helm', 'iron_chestplate', 'iron_shield', 'iron_gloves', 'iron_boots'].map((itemId) => ({ itemId, weight: 1 })),
+        rarityWeights: [
+          { value: 'uncommon' as ItemRarity, weight: 75 },
+          { value: 'rare' as ItemRarity, weight: 25 },
+        ],
+        quality: { min: 0, max: GEAR.drops.maxQuality },
+      },
+      drops: [{ itemId: 'chieftains_tusk', chance: 0.5 }],
+    },
+  },
+};
+
+export const BOSS_IDS = Object.keys(BOSSES) as BossId[];
+
+export function isBossId(id: unknown): id is BossId {
+  return typeof id === 'string' && Object.prototype.hasOwnProperty.call(BOSSES, id);
+}
+
+/**
+ * Dungeon tiers: a group of stage dungeons and the boss that caps it. Tier 1 is the five existing dungeons (stages 1–5) and the
+ * Troll Chieftain; Tier 2 will be more data here. The UI lists a tier as a header, its stages in order, then its boss.
+ */
+export type DungeonTierDef = { tier: number; name: string; stages: readonly DungeonId[]; boss: BossId | null };
+
+export const DUNGEON_TIERS: readonly DungeonTierDef[] = [
+  { tier: 1, name: 'Tier 1', stages: ['rat_cellar', 'bat_cave', 'wolf_den', 'forgotten_crypt', 'troll_bridge'], boss: 'troll_chieftain' },
+];
+
+/** "Rat Cellar" / "Troll Chieftain": the name of a stage dungeon or a boss. */
+export function dungeonOrBossName(id: DungeonOrBossId): string {
+  return isBossId(id) ? BOSSES[id].name : DUNGEONS[id].name;
+}
+
 /**
  * Danger hint shown before a run (dangerHint in src/engine/danger.ts): expected HP lost per fight, with
  * average rolls, as a percent of max HP. Below `toughAtPercent` → Easy; below `deadlyAtPercent` → Tough;
@@ -146,8 +256,8 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
  */
 export const DANGER = { toughAtPercent: 40, deadlyAtPercent: 100 } as const;
 
-/** All dungeons, by tier (the list order in the UI). */
-export const DUNGEON_IDS = (Object.keys(DUNGEONS) as DungeonId[]).sort((a, b) => DUNGEONS[a].tier - DUNGEONS[b].tier);
+/** All stage dungeons, by tier then stage (the list order in the UI). Bosses are in BOSS_IDS. */
+export const DUNGEON_IDS = (Object.keys(DUNGEONS) as DungeonId[]).sort((a, b) => DUNGEONS[a].tier - DUNGEONS[b].tier || DUNGEONS[a].stage - DUNGEONS[b].stage);
 
 export function isDungeonId(id: unknown): id is DungeonId {
   return typeof id === 'string' && Object.prototype.hasOwnProperty.call(DUNGEONS, id);

@@ -267,7 +267,7 @@ export function sellItem(draft: GameState, itemId: unknown, quantity: unknown): 
   }
   const item = items[index];
   const def = getItemDef(item.defId);
-  if (!def || !(def.sellPrice > 0)) return err('NOT_SELLABLE', 'The merchant does not buy that');
+  if (!def || !(def.sellPrice > 0) || def.sellable === false) return err('NOT_SELLABLE', 'The merchant does not buy that');
   const owned = item.stackable ? (item.quantity ?? 0) : 1;
   if (!isWhole(quantity) || quantity < 1 || quantity > owned) return err('INVALID_AMOUNT', `Quantity must be 1 to ${owned}`);
   // Town Hall Lv2+ adds to every sell price (floored); still below every buy price (tested).

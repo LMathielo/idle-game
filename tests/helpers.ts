@@ -2,7 +2,8 @@ import { FakeClock } from '../src/client/clock';
 import { LocalGameClient } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import type { CommandInput } from '../src/client/types';
-import { applyCommand, type AttributeKey, BUILDING_IDS, BUILDINGS, type BuildingId, type Command, type CombatSide, ENGINE_VERSION, type GameState, newGame, type ReplayEntry, v12SkillProgress } from '../src/engine';
+import { makeItem } from '../src/engine/inventory';
+import { ATTRIBUTE_POINTS, applyCommand, type AttributeKey, BUILDING_IDS, BUILDINGS, type BuildingId, type Command, type CombatSide, ENGINE_VERSION, type GameState, getDerivedStats, type EquipmentSlot, newGame, type ReplayEntry, v12SkillProgress } from '../src/engine';
 
 export const T0 = Date.UTC(2026, 9, 25, 12, 0, 0); // fixed epoch for deterministic tests
 export const SEC = 1000;
@@ -164,7 +165,7 @@ export function v16Attributes<T extends Record<string, number>>(attributes: T): 
 
 /** A combat side with the 1.19.0 fields neutral (no magic, no crits): override what a test is about. */
 export function fightSide(s: Partial<CombatSide> = {}): CombatSide {
-  return { damage: { min: 1, max: 1 }, armor: 0, magicDamage: 0, magicResist: 0, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000, ...s };
+  return { damage: { min: 1, max: 1 }, armor: 0, magicDamage: 0, magicResist: 0, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000, skills: [], ...s };
 }
 
 /**
@@ -176,11 +177,63 @@ export function v19Regen<C extends { hpRegenProgress?: number; manaRegenProgress
 }
 
 /**
- * What the v18 → v19 migration does to a raw older `dungeon` slice: every strike of the last fight's log gets
- * `crit: false`, `physical` = the damage dealt and `magic: 0` (exactly what a 1.18.0 strike was).
+ * What the v18 → v19 and v19 → v20 migrations do to a raw older `dungeon` slice: every strike of the last fight's log gets
+ * `crit: false`, `physical` = the damage dealt and `magic: 0` (exactly what a 1.18.0 strike was), and the boss kill counters start
+ * empty (`bosses: {}`, v20; the logs need nothing more, the v20 log fields only exist when they apply).
  */
-export function v19Dungeon<D extends { lastFight: { log: { dealt: number }[] } | null }>(dungeon: D): D {
-  if (!dungeon.lastFight) return dungeon;
+export function v19Dungeon<D extends { lastFight: { log: { dealt: number }[] } | null }>(dungeon: D): D & { bosses: Record<string, never> } {
+  if (!dungeon.lastFight) return { ...dungeon, bosses: {} };
   const log = dungeon.lastFight.log.map((e) => ({ ...e, crit: false, physical: e.dealt, magic: 0 }));
-  return { ...dungeon, lastFight: { ...dungeon.lastFight, log } };
+  return { ...dungeon, lastFight: { ...dungeon.lastFight, log }, bosses: {} };
+}
+
+// ---------- first boss (1.20.0) ----------
+
+export type BossBuild = 'STR' | 'DEX' | 'END' | 'INT' | 'balanced' | 'STR+END';
+const BUILD_KEYS = { STR: 'strength', DEX: 'dexterity', END: 'endurance', INT: 'intelligence' } as const;
+const IRON_SET: [EquipmentSlot, string][] = [
+  ['weapon', 'iron_sword'],
+  ['helmet', 'iron_helm'],
+  ['armor', 'iron_chestplate'],
+  ['shield', 'iron_shield'],
+  ['gloves', 'iron_gloves'],
+  ['boots', 'iron_boots'],
+];
+
+/**
+ * A built game whose hero is `level` with every level-up point spent by `build` (no core, no training), wearing the whole Iron set at
+ * `quality`, at full HP. `STR+END` splits the points evenly between STR and END (the remainder to STR). The tests and the balance
+ * sim (tests/balanceSimBoss.test.ts) use the same hero.
+ */
+export function bossHero(level: number, build: BossBuild, quality = 25, rarity: 'common' | 'uncommon' | 'rare' = 'common'): GameState {
+  const points = ATTRIBUTE_POINTS.unspentPerLevel * (level - 1);
+  const spent = { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 };
+  if (build === 'balanced') {
+    const q = Math.floor(points / 4);
+    spent.strength = spent.dexterity = spent.endurance = spent.intelligence = q;
+    spent.strength += points - 4 * q;
+  } else if (build === 'STR+END') {
+    spent.endurance = Math.floor(points / 2);
+    spent.strength = points - spent.endurance;
+  } else {
+    spent[BUILD_KEYS[build]] = points;
+  }
+  const s = builtGame(1, T0);
+  const equipment = { ...s.character.equipment };
+  for (const [slot, defId] of IRON_SET) equipment[slot] = makeItem(defId, 1, `${defId}#hero`, { quality, rarity });
+  const withGear: GameState = { ...s, character: { ...s.character, level, unspentPoints: 0, spentPoints: spent, equipment } };
+  return { ...withGear, character: { ...withGear.character, hp: getDerivedStats(withGear).maxHp.value } };
+}
+
+/** The state with `wins` lifetime Troll Bridge wins on the books (50 opens the Troll Chieftain), no debug command used. */
+export function withTrollBridgeWins(state: GameState, wins = 50): GameState {
+  const before = state.dungeon.byDungeon.troll_bridge ?? { runs: 0, wins: 0, losses: 0 };
+  return { ...state, dungeon: { ...state.dungeon, byDungeon: { ...state.dungeon.byDungeon, troll_bridge: { ...before, runs: before.runs + wins, wins: before.wins + wins } } } };
+}
+
+/** An unbeatable hero (huge STR): kills the Troll Chieftain with his first strike, before it acts. Boss unlocked, full HP. */
+export function bossSlayer(seed = 1): GameState {
+  const base = withTrollBridgeWins(builtGame(seed, T0));
+  const s: GameState = { ...base, character: { ...base.character, spentPoints: { ...base.character.spentPoints, strength: 5000 } } };
+  return { ...s, character: { ...s.character, hp: getDerivedStats(s).maxHp.value } };
 }

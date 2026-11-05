@@ -4,10 +4,10 @@
 import { memo, useEffect, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
-import type { FightLogEntry, FightRecord } from '../../engine';
+import { COMBAT_SKILLS, type FightLogEntry, type FightRecord } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { PixelButton } from '../PixelButton';
-import { OUTCOME_LABELS } from './outcome';
+import { outcomeLabel } from './outcome';
 
 /** Whole replay takes about this long (each line between 40 and 600 ms). */
 const REPLAY_TOTAL_MS = 3000;
@@ -41,17 +41,22 @@ export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
     return () => clearTimeout(id);
   }, [shown, total, reducedMotion]);
 
-  // HP after the last shown strike of each side.
+  // HP after the last shown strike of each side. A regenerating enemy (a boss) logs its HP after every strike (enemyHpAfter);
+  // the stun left is what the shown Heavy Bash casts gave minus the hero strikes already lost.
   let heroHp = fight.heroHpStart;
   let enemyHp = fight.enemyMaxHp;
+  let stunLeft = 0;
   for (let i = 0; i < shown; i++) {
     const e = fight.log[i];
     if (e.actor === 'hero') enemyHp = e.targetHpAfter;
     else heroHp = e.targetHpAfter;
+    if (e.enemyHpAfter !== undefined) enemyHp = e.enemyHpAfter;
+    if (e.stunned) stunLeft = Math.max(0, stunLeft - 1);
+    else if (e.stun) stunLeft = Math.max(stunLeft, e.stun);
   }
   const done = shown >= total;
   if (done) heroHp = fight.heroHpEnd; // a time-limit loss ends at 0 even though no strike says so (and regen shows here)
-  const result = OUTCOME_LABELS[fight.endReason];
+  const result = outcomeLabel(fight.endReason, fight.dungeonId);
 
   // Screen readers hear the result once, not every line as it appears.
   useEffect(() => {
@@ -64,6 +69,7 @@ export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
         <AnimatedHpBar label={heroName} value={heroHp} max={fight.heroMaxHp} color={colors.skill} instant={reducedMotion} />
         <AnimatedHpBar label={enemyName} value={enemyHp} max={fight.enemyMaxHp} color={colors.hp} instant={reducedMotion} />
       </View>
+      {!done && stunLeft > 0 ? <StunNotice name={heroName} strikes={stunLeft} /> : null}
       <View style={styles.log}>
         {fight.log.length === 0 ? <Text style={styles.line}>{heroName} had no HP left and could not fight.</Text> : null}
         {fight.log.slice(0, shown).map((e, i) => (
@@ -88,22 +94,45 @@ export function strikeTime(atMs: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/** "Stunned: loses the next 2 strikes", shown while a stun is on (live fight and replay). Text, not colour alone. */
+export function StunNotice({ name, strikes }: { name: string; strikes: number }) {
+  const text = `${name} is stunned: loses the next ${strikes === 1 ? 'strike' : `${strikes} strikes`}`;
+  return (
+    <Text style={styles.stunNotice} accessibilityRole="alert" accessibilityLabel={text}>
+      Stunned! {text.replace(`${name} is stunned: `, '')}
+    </Text>
+  );
+}
+
 export const LogLine = memo(function LogLine({ entry, heroName, enemyName }: { entry: FightLogEntry; heroName: string; enemyName: string }) {
+  if (entry.stunned) {
+    // The hero's strike lost to a stun: no roll, no damage.
+    const lost = `${strikeTime(entry.atMs)} · ${heroName} is stunned and loses the strike`;
+    return (
+      <Text style={[styles.line, styles.stunLine]} accessibilityLabel={lost}>
+        {lost}
+      </Text>
+    );
+  }
   const hero = entry.actor === 'hero';
   const attacker = hero ? heroName : enemyName;
   const target = hero ? enemyName : heroName;
+  const skill = entry.skill ? COMBAT_SKILLS[entry.skill] : null;
   // The number is the total; a magic part and the raw roll are shown only when they explain it. A crit says so in words and
-  // in gold (the colour never carries the meaning alone).
+  // in gold (the colour never carries the meaning alone). A skill cast says its name; a stun says how many strikes it costs.
   const parts = [entry.magic > 0 ? `${entry.magic} magic` : '', entry.dealt !== entry.roll || entry.crit ? `rolled ${entry.roll}` : ''].filter(Boolean);
   const prefix = `${strikeTime(entry.atMs)} · ${attacker} hits ${target} for `;
   const suffix = `${parts.length > 0 ? ` (${parts.join(', ')})` : ''} → ${entry.targetHpAfter} HP`;
-  const label = `${prefix}${entry.dealt}${entry.crit ? ', critical hit' : ''}${suffix}`;
+  const stunText = skill ? (entry.stun ? ` Stunned for ${entry.stun} strikes!` : ' No stun.') : '';
+  const label = `${prefix}${entry.dealt}${entry.crit ? ', critical hit' : ''}${skill ? `, ${skill.name}` : ''}${suffix}${stunText}`;
   return (
     <Text style={[styles.line, hero ? styles.heroLine : styles.enemyLine]} accessibilityLabel={label}>
       {prefix}
       <Text style={entry.crit ? styles.critDamage : undefined}>{entry.dealt}</Text>
       {entry.crit ? <Text style={styles.critTag}> Crit!</Text> : null}
+      {skill ? <Text style={styles.skillTag}> {skill.name}!</Text> : null}
       {suffix}
+      {skill ? <Text style={entry.stun ? styles.skillTag : undefined}>{stunText}</Text> : null}
     </Text>
   );
 });
@@ -171,6 +200,9 @@ const styles = StyleSheet.create({
   enemyLine: { color: colors.hp },
   critDamage: { fontFamily: fonts.bodyBold, color: colors.crit },
   critTag: { fontFamily: fonts.bodyBold, color: colors.crit },
+  skillTag: { fontFamily: fonts.bodyBold, color: colors.crit },
+  stunLine: { fontFamily: fonts.body, color: colors.inkSoft, fontStyle: 'italic' },
+  stunNotice: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.hp, textAlign: 'center' },
   result: { fontFamily: fonts.title, fontSize: 20, marginTop: 4 },
   win: { color: colors.skill },
   loss: { color: colors.hp },

@@ -344,7 +344,7 @@ describe('save v17 migration (v16 → v17)', () => {
     expect(s.character.mana).toBe(30); // 20 + 5 × 2, full
     const { character: _c, saveVersion: _v, ...rest } = s;
     const { character: _rc, saveVersion: _rv, ...raw } = V16_SAVE;
-    expect(rest).toEqual({ ...raw, buildings: { ...raw.buildings, storage: V18_ADDED.storageBuilding } }); // v18: Storage, unbuilt
+    expect(rest).toEqual({ ...raw, dungeon: { ...raw.dungeon, bosses: {} }, buildings: { ...raw.buildings, storage: V18_ADDED.storageBuilding } }); // v18: Storage, unbuilt
     // 1.16.0 read STR as 10 level + 3 extra + 5 core = 18 and WS from core only (10 + 10 + 5 + 1 = 26). Now: 3 + 5 = 8 until
     // the 10 points are spent; WS = 10 + 10 + 8 + 1 = 29.
     expect(effectiveAttributes(s)).toEqual({ strength: 8, dexterity: 0, endurance: 2, intelligence: 0 });

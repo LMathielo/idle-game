@@ -8,6 +8,7 @@ import {
   dangerHint,
   DUNGEON_IDS,
   type DungeonId,
+  type DungeonOrBossId,
   DUNGEONS,
   dungeonRunView,
   dungeonTotals,
@@ -55,7 +56,7 @@ function startDungeon(s: GameState, dungeonId: DungeonId, at = T0) {
 function playUntil(start: GameState, pred: (s: GameState) => boolean) {
   let s = start;
   const events: GameEvent[] = [];
-  const unlocked: DungeonId[] = [];
+  const unlocked: DungeonOrBossId[] = [];
   for (let i = 0; i < 100_000 && !pred(s); i++) {
     const r = simulate(s, s.time.lastSimulatedAt + SEC);
     s = r.state;
@@ -82,7 +83,7 @@ describe('tier table (config)', () => {
       const d = DUNGEONS[id];
       const e = ENEMIES[d.enemyId];
       return [
-        d.tier,
+        d.stage,
         d.name,
         `${e.name} ${e.hp} · ${e.damage.min}–${e.damage.max} · ${e.armor}`,
         d.search.baseMs / MIN,

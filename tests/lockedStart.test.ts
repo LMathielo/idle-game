@@ -232,7 +232,7 @@ describe('save v18 migration (v17 → v18)', () => {
     expect(s.character.gold).not.toBe(500);
     const { saveVersion: _v, buildings, ...rest } = s;
     const { saveVersion: _rv, buildings: rawBuildings, ...raw } = V17_SAVE;
-    expect(rest).toEqual(raw);
+    expect(rest).toEqual({ ...raw, dungeon: { ...raw.dungeon, bosses: {} } }); // v20: boss counters;
     expect(buildings).toEqual({ ...rawBuildings, storage: V18_ADDED.storageBuilding });
     expect(hashState(loadSave(V17_SAVE))).toBe(hashState(s)); // deterministic
   });

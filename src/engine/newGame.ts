@@ -48,7 +48,7 @@ export function newGame(seed: number, now: number): GameState {
     offline: { capMs: DEFAULT_OFFLINE_CAP_MS, efficiency: DEFAULT_OFFLINE_EFFICIENCY },
     activity: null,
     stamina: { current: STAMINA.startMax, max: STAMINA.startMax, progressMs: 0 },
-    dungeon: { lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {} },
+    dungeon: { lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {}, bosses: {} },
     training,
     merchant: newMerchantState(merchantStockSlots({ buildings })),
     buildings,

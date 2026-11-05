@@ -16,7 +16,7 @@ import { QuantityStepper } from '../items/QuantityStepper';
 import { ModalScreen } from '../ModalScreen';
 import { PixelButton } from '../PixelButton';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
-import type { AnchorRect } from '../ui/InfoPopover';
+import { type AnchorRect, PopoverText } from '../ui/InfoPopover';
 import { useCommand } from '../ui/useCommand';
 
 type Tab = 'buy' | 'sell';
@@ -233,12 +233,13 @@ function SellSheet({ item, anchor, unitPrice, onClose }: { item: Item; anchor: A
       actions={[
         {
           label: 'Sell',
-          sublabel: sellable ? `${formatNumber(unitPrice * quantity)} gold` : 'Not wanted',
+          sublabel: sellable ? `${formatNumber(unitPrice * quantity)} gold` : def.sellable === false ? 'Not sold' : 'Not wanted',
           disabled: busy || !sellable,
           onPress: () => send({ type: 'SELL_ITEM', itemId: item.id, quantity }, quantity >= owned),
         },
       ]}
     >
+      {def.sellable === false ? <PopoverText tone="note">The Merchant does not buy this. It is kept for crafting.</PopoverText> : null}
       {owned > 1 ? <QuantityStepper value={quantity} max={owned} onChange={setQty} /> : null}
       {unitPrice !== baseSellPrice(item) ? <SheetRow icon="gold" label="Price" value={`${formatNumber(unitPrice)} (Town Hall bonus)`} /> : null}
       <SheetRow icon="gold" label="Total" value={formatNumber(unitPrice * quantity)} strong />

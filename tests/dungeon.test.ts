@@ -330,7 +330,7 @@ describe('rewards', () => {
   it('only the last fight is stored', () => {
     const s = simulate(dungeonGame(), T0 + 10 * (SEARCH_MS + 10 * SEC)).state;
     expect(s.dungeon.totals.runs).toBe(10);
-    expect(Object.keys(s.dungeon).sort()).toEqual(['byDungeon', 'lastFight', 'totals']);
+    expect(Object.keys(s.dungeon).sort()).toEqual(['bosses', 'byDungeon', 'lastFight', 'totals']);
     expect(s.dungeon.byDungeon).toEqual({ rat_cellar: s.dungeon.totals }); // counters only, no per-run log
     expect(s.dungeon.lastFight?.log.length).toBeLessThanOrEqual(2 * (COMBAT.maxFightMs / 1000));
   });

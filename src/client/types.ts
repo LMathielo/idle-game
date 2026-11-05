@@ -1,5 +1,5 @@
 // Contracts between the UI, the client and storage. No React, no Expo.
-import type { AttributeKey, BuildingId, Command, CommandError, DungeonId, GameState, LogType, SimulationSummary } from '../engine';
+import type { AttributeKey, BuildingId, Command, CommandError, DungeonId, DungeonOrBossId, GameState, LogType, SimulationSummary } from '../engine';
 
 /** Wall clock. The app uses SystemClock; tests use a fake. */
 export interface Clock {
@@ -56,7 +56,7 @@ export type GameSnapshot = {
   /** Pending "While you were away" summary, cleared by dismissAwaySummary(). */
   awaySummary: SimulationSummary | null;
   /** Dungeons unlocked since the banner was last dismissed (dismissUnlocks()), in unlock order. */
-  unlockedDungeons: readonly DungeonId[];
+  unlockedDungeons: readonly DungeonOrBossId[];
   /** Debug clock offset in ms (0 in normal play). */
   clockOffsetMs: number;
 };

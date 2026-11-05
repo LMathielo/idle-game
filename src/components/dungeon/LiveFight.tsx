@@ -7,7 +7,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import type { DungeonFightView, EnemyId } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { EnemySprite } from '../art/Sprites';
-import { AnimatedHpBar, LogLine, strikeTime } from './FightReplay';
+import { AnimatedHpBar, LogLine, StunNotice, strikeTime } from './FightReplay';
 
 /** Lines kept on screen; older strikes scroll out (the last fight's replay has them all). */
 const VISIBLE_LINES = 8;
@@ -25,6 +25,8 @@ export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, e
   const lines = fight.log.slice(-VISIBLE_LINES);
   const hidden = fight.log.length - lines.length;
   const clock = `${strikeTime(fight.elapsedMs)} / ${strikeTime(fight.maxFightMs)}`;
+  // A regenerating enemy (a boss): whole HP a second, from its basis points of max HP (display only, the engine heals it).
+  const regenPerSec = Math.floor((fight.enemyMaxHp * fight.enemyRegenBp) / 10_000);
   return (
     <View style={styles.root}>
       <View
@@ -42,6 +44,8 @@ export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, e
         <AnimatedHpBar label={heroName} value={fight.heroHp} max={fight.heroMaxHp} color={colors.skill} instant={reducedMotion} />
         <AnimatedHpBar label={enemyName} value={fight.enemyHp} max={fight.enemyMaxHp} color={colors.hp} instant={reducedMotion} />
       </View>
+      {regenPerSec > 0 ? <Text style={styles.note}>{enemyName} heals {regenPerSec} HP a second.</Text> : null}
+      {fight.heroStunStrikes > 0 ? <StunNotice name={heroName} strikes={fight.heroStunStrikes} /> : null}
       <View style={styles.log}>
         {fight.log.length === 0 ? <Text style={styles.wait}>The {enemyName} circles you…</Text> : null}
         {hidden > 0 ? <Text style={styles.more}>… {hidden} earlier {hidden === 1 ? 'strike' : 'strikes'}</Text> : null}

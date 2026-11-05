@@ -22,6 +22,7 @@ export const LOG_TYPES = [
   'START_ACTIVITY',
   'STOP_ACTIVITY',
   'SKIP_DUNGEON_RUN',
+  'ENTER_BOSS',
   'DEBUG_GRANT_HERO_XP',
   'DEBUG_SPEND_STAMINA',
   'DEBUG_REFILL_STAMINA',
@@ -162,6 +163,7 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'START_ACTIVITY':
     case 'STOP_ACTIVITY':
     case 'SKIP_DUNGEON_RUN':
+    case 'ENTER_BOSS':
     case 'DEBUG_SET_HERO_HP':
     case 'DEBUG_ADD_DUNGEON_WINS':
     case 'DEBUG_FINISH_DUNGEON_RUN':

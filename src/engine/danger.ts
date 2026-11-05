@@ -10,11 +10,12 @@
 //   expectedHpLoss = enemyHits × enemyAvg   (regen during the fight is ignored: a hint, not a sim)
 //   percent  = expectedHpLoss / max HP
 //   Easy < toughAtPercent ≤ Tough < deadlyAtPercent ≤ Deadly; killAt > COMBAT.maxFightMs is always Deadly.
-import { COMBAT, DANGER, DUNGEONS, ENEMIES } from './config/dungeons';
+import { BOSSES, COMBAT, DANGER, DUNGEONS, ENEMIES } from './config/dungeons';
+import { COMBAT_SKILLS } from './config/skills';
 import { BASIS_POINTS } from './config/stats';
 import { critDamage, dealtDamage, reducedDamage } from './combat';
 import { getDerivedStats, type StatsInput } from './stats';
-import type { DungeonId } from './types';
+import type { BossId, DungeonId } from './types';
 
 /** How much one fight costs in HP (not the chance to lose): Tough fights are usually won, at a price. */
 export type DangerLevel = 'easy' | 'tough' | 'deadly';
@@ -87,4 +88,109 @@ export function dangerHint(state: StatsInput, dungeonId: DungeonId): DangerHint 
   if (fightMs > COMBAT.maxFightMs || percent >= DANGER.deadlyAtPercent) level = 'deadly';
   else if (percent >= DANGER.toughAtPercent) level = 'tough';
   return { level, expectedHpLoss, maxHp, percent, heroAvg, heroMagicAvg, critChanceBp, critMultBp, heroHits, enemyHits, fightMs };
+}
+
+
+// ---------- bosses ----------
+
+/**
+ * Danger hint for a boss (pure, read-only, no RNG): an average-rolls RATE estimate, not a sim. It accounts for what makes a boss
+ * different from a stage fight:
+ *   regen     the boss heals regenBp of its max HP per second, so the hero's net damage rate is heroAvg ÷ interval − regen; if that is not
+ *             positive the boss can never be killed
+ *   Heavy Bash  one enemy strike in `cooldownStrikes` is the skill (roll × multiplier, then armor); each cast stuns with its chance for
+ *             `strikes` hero strikes, which removes that many hero strikes (rate: chance × strikes per cooldown window)
+ *   limit     the boss's time limit (BossDef enemy maxFightMs): killing it takes longer than that = Deadly
+ *   fightMs   boss HP ÷ net rate; expectedHpLoss = enemy damage per second × fightMs; percent of max HP; same Tough/Deadly thresholds as stages.
+ * The hero's own regen and potions are ignored (a hint).
+ */
+export type BossDangerHint = {
+  level: DangerLevel;
+  expectedHpLoss: number;
+  maxHp: number;
+  percent: number;
+  /** Average damage of one hero strike (after the boss's armor and magic resist, expected crit). */
+  heroAvg: number;
+  /** Hero damage per second after the stun loss, before the boss's regen. */
+  heroDps: number;
+  /** The boss's regen, HP per second (whole HP, rounded down). */
+  regenPerSec: number;
+  /** Net damage per second on the boss (heroDps − regen); 0 or less means it can not be killed. */
+  netDps: number;
+  /** The boss can be killed at all (netDps > 0). */
+  canKill: boolean;
+  /** Expected time to kill with average rolls, ms (Infinity when it can not be killed). */
+  fightMs: number;
+  /** The time limit, ms; `overLimit` is true when fightMs exceeds it. */
+  limitMs: number;
+  overLimit: boolean;
+  /** Average damage of a normal boss strike and of a Heavy Bash, after the hero's armor. */
+  enemyAvg: number;
+  bashAvg: number;
+  /** Chance (percent) that a cast stuns, and for how many hero strikes. */
+  stunChancePercent: number;
+  stunStrikes: number;
+  /** Boss damage per second on the hero, Bash included. */
+  enemyDps: number;
+};
+
+export function bossDangerHint(state: StatsInput, bossId: BossId): BossDangerHint {
+  const enemy = ENEMIES[BOSSES[bossId].enemyId];
+  const skill = COMBAT_SKILLS.heavy_bash;
+  const stun = skill.effects.find((e) => e.type === 'stun');
+  const stats = getDerivedStats(state);
+  const maxHp = stats.maxHp.value;
+  const heroInterval = Math.max(1, stats.attackIntervalMs.value);
+  const enemyInterval = Math.max(1, enemy.attackIntervalMs);
+  const limitMs = enemy.maxFightMs ?? COMBAT.maxFightMs;
+
+  const heroMagicAvg = reducedDamage(stats.magicDamage.value, enemy.magicResist);
+  const heroAvg = Math.max(COMBAT.minDamage, averagePhysical(stats.damage, enemy.armor, stats.critChanceBp.value, stats.critMultiplierBp.value) + heroMagicAvg);
+
+  // Hero strikes lost to stuns per second: chance × strikes per cooldown window (cooldownStrikes enemy strikes long).
+  const windowSec = (skill.cooldownStrikes * enemyInterval) / 1000;
+  const stunChance = stun ? stun.chanceBp / BASIS_POINTS : 0;
+  const lostPerSec = stun ? (stunChance * stun.strikes) / windowSec : 0;
+  const strikesPerSec = Math.max(0, 1000 / heroInterval - lostPerSec);
+  const heroDps = heroAvg * strikesPerSec;
+  const regenPerSec = Math.floor((enemy.hp * (enemy.regenBpPerSec ?? 0)) / BASIS_POINTS);
+  const regenExact = (enemy.hp * (enemy.regenBpPerSec ?? 0)) / BASIS_POINTS;
+  const netDps = heroDps - regenExact;
+  const canKill = netDps > 0;
+  const fightMs = canKill ? Math.ceil((enemy.hp / netDps) * 1000) : Infinity;
+
+  const enemyAvg = averageDealt(enemy.damage, stats.armor.value);
+  const bashRange = { min: Math.floor(enemy.damage.min), max: Math.floor(enemy.damage.max) };
+  let bashSum = 0;
+  for (let roll = bashRange.min; roll <= bashRange.max; roll++) bashSum += dealtDamage(critDamage(roll, skill.damageMultBp), stats.armor.value);
+  const bashAvg = bashSum / (bashRange.max - bashRange.min + 1);
+  const perWindow = (enemyAvg * (skill.cooldownStrikes - 1) + bashAvg) / skill.cooldownStrikes;
+  const enemyDps = (perWindow * 1000) / enemyInterval;
+
+  const lossMs = Number.isFinite(fightMs) ? fightMs : limitMs;
+  const expectedHpLoss = Math.round((enemyDps * Math.min(lossMs, limitMs)) / 1000);
+  const percent = maxHp > 0 ? Math.round((expectedHpLoss * 100) / maxHp) : 100;
+  const overLimit = !canKill || fightMs > limitMs;
+  let level: DangerLevel = 'easy';
+  if (overLimit || percent >= DANGER.deadlyAtPercent) level = 'deadly';
+  else if (percent >= DANGER.toughAtPercent) level = 'tough';
+  return {
+    level,
+    expectedHpLoss,
+    maxHp,
+    percent,
+    heroAvg,
+    heroDps,
+    regenPerSec,
+    netDps,
+    canKill,
+    fightMs,
+    limitMs,
+    overLimit,
+    enemyAvg,
+    bashAvg,
+    stunChancePercent: Math.round(stunChance * 100),
+    stunStrikes: stun?.strikes ?? 0,
+    enemyDps,
+  };
 }

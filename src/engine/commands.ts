@@ -1,5 +1,6 @@
 // Player commands. Serializable, validated here (never in the UI), applied after simulating to `now`.
 import { grantHeroXp } from './activities';
+import { type BossErrorCode, checkBossEntry, newBossActivity } from './boss';
 import { build, buildingForActivity, completeBuilding, completeConstruction, isBuilt, startUpgrade, type UpgradeErrorCode } from './buildings';
 import { onUpgraded } from './upgradeEffects';
 import { cloneState } from './clone';
@@ -10,7 +11,7 @@ import { isGatheringKind, isTreeId, TREES } from './config/woodcutting';
 import { SKILL_XP_CURVE } from './config/xpCurve';
 import { xpToNext } from './progression';
 import { DEV_TOOLS_ENABLED } from './config/dev';
-import { DUNGEONS, isDungeonId } from './config/dungeons';
+import { BOSSES, DUNGEONS, isDungeonId } from './config/dungeons';
 import { beginFight, forfeitFight, isDungeonUnlocked, recordDungeonResults, searchMsFor, skipCost } from './dungeon';
 import { equipItem, unequipItem, useItem } from './equipment';
 import { markDebugUsed } from './flags';
@@ -26,6 +27,7 @@ import {
   type Activity,
   ATTRIBUTE_KEYS,
   type AttributeKey,
+  type BossId,
   type BuildingId,
   type DungeonId,
   type EquipmentSlot,
@@ -61,6 +63,14 @@ export type Command =
    * if that run already finished, or the real cost is higher, the skip fails with RUN_CHANGED and nothing changes.
    */
   | { id: string; type: 'SKIP_DUNGEON_RUN'; run: number; maxCost: number }
+  /**
+   * Enters a boss fight (1.20.0): pays the boss's entry stamina up front (never refunded), stops the current activity (a dungeon
+   * search is cancelled, gathering and training stop) and starts the one fight at once: no search, no repeat, the hero is idle
+   * when it ends. `maxCost` is the stamina the button showed (COST_CHANGED if the real cost is higher). Refused, with nothing
+   * changed or spent: BOSS_LOCKED, FIGHT_IN_PROGRESS (a boss or dungeon fight is on; a second tap never pays twice), NO_HP,
+   * NOT_ENOUGH_STAMINA.
+   */
+  | { id: string; type: 'ENTER_BOSS'; bossId: BossId; maxCost: number }
   /**
    * Spends ceil(remaining minutes) stamina to finish the current log now (exactly one log). `log` is the log
    * the player saw (WoodcutActivityView.log) and `maxCost` the cost shown: if that log already finished, or the
@@ -196,7 +206,7 @@ export type CommandErrorCode =
   | 'NO_ACTIVE_ACTIVITY'
   | 'NO_DUNGEON_RUN'
   | 'RUN_CHANGED'
-  | 'FIGHT_IN_PROGRESS'
+  | BossErrorCode
   | 'INVALID_AMOUNT'
   | 'UNKNOWN_ATTRIBUTE'
   | 'NOT_ENOUGH_STAMINA'
@@ -378,6 +388,19 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       if (!spent.ok) return fail(spent.error.code, spent.error.message);
       draft = spent.state;
       startFightNow(draft, events);
+      break;
+    }
+    case 'ENTER_BOSS': {
+      const e = checkBossEntry(draft, cmd.bossId, cmd.maxCost);
+      if (e) return fail(e.code, e.message);
+      const boss = BOSSES[cmd.bossId];
+      const spent = spendStamina(draft, boss.entryStamina);
+      if (!spent.ok) return fail(spent.error.code, spent.error.message);
+      draft = spent.state;
+      // One activity at a time: a dungeon search is cancelled, gathering / training stop (a fight can't be on: checked above).
+      if (draft.activity) stopActivity(draft, events);
+      draft.activity = newBossActivity(draft, cmd.bossId, now);
+      events.push({ type: 'ACTIVITY_STARTED', kind: 'boss' });
       break;
     }
     case 'SKIP_WOODCUT': {
@@ -749,14 +772,15 @@ function spendAttributePoints(draft: GameState, points: unknown): CommandError |
 
 /**
  * Stops the running activity on a full draft copy. A dungeon run still searching is lost (no fight, no rewards);
- * a dungeon fight in progress is forfeited (a loss: 0 HP, no rewards, counted).
+ * a dungeon or boss fight in progress is forfeited (a loss: 0 HP, no rewards, counted; a boss's entry stamina is not refunded).
  */
 function stopActivity(draft: GameState, events: GameEvent[]) {
   const a = draft.activity;
   if (!a) return;
   // During the fight, leaving is a forfeit: the fight ends as a loss (FIGHT_RESOLVED). During the search, the run
   // is just cancelled.
-  if (a.kind === 'dungeon' && !forfeitFight(draft, events)) events.push({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: a.dungeonId });
+  if (a.kind === 'boss') forfeitFight(draft, events);
+  else if (a.kind === 'dungeon' && !forfeitFight(draft, events)) events.push({ type: 'DUNGEON_RUN_CANCELLED', dungeonId: a.dungeonId });
   events.push({ type: 'ACTIVITY_STOPPED', kind: a.kind });
   draft.activity = null;
 }

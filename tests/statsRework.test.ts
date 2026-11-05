@@ -518,12 +518,14 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
   it('the fight in progress: defense -> armor, no magic, no crits (1.5x), the Bat keeps its resist; logged strikes widened; the rest untouched', () => {
     const s = loadSave(V18_SAVE);
     const f = (s.activity as { fight: ActiveFight }).fight;
-    expect(f.hero).toEqual({ damage: { min: 15, max: 17 }, armor: 17, magicDamage: 0, magicResist: 0, critChanceBp: 0, critMultBp: 15_000, attackIntervalMs: 1000 });
-    expect(f.enemy).toEqual({ damage: { min: 6, max: 9 }, armor: 6, magicDamage: 0, magicResist: 6, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000 });
+    // (and the v20 step on top: no skills on either side)
+    expect(f.hero).toEqual({ damage: { min: 15, max: 17 }, armor: 17, magicDamage: 0, magicResist: 0, critChanceBp: 0, critMultBp: 15_000, attackIntervalMs: 1000, skills: [] });
+    expect(f.enemy).toEqual({ damage: { min: 6, max: 9 }, armor: 6, magicDamage: 0, magicResist: 6, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000, skills: [] });
     expect(f.log).toEqual(V18_SAVE.activity.fight.log.map((e: { dealt: number }) => ({ ...e, crit: false, physical: e.dealt, magic: 0 })));
     const { hero: _h, enemy: _e, log: _l, ...fightRest } = f;
     const { hero: _rh, enemy: _re, log: _rl, ...rawFightRest } = V18_SAVE.activity.fight;
-    expect(fightRest).toEqual(rawFightRest);
+    // v20: the frozen 60 s limit, no enemy regen, no skills ready, no stun (tests/firstBoss.test.ts covers the v19 → v20 step)
+    expect(fightRest).toEqual({ ...rawFightRest, maxFightMs: 60_000, enemyRegenBp: 0, enemyRegenProgress: 0, enemyRegenAtMs: rawFightRest.elapsedMs, enemySkillReady: {}, heroStunStrikes: 0 });
     expect(s.dungeon.lastFight!.log).toHaveLength(9);
     expect(s.dungeon.lastFight!.log).toEqual(V18_SAVE.dungeon.lastFight.log.map((e: { dealt: number }) => ({ ...e, crit: false, physical: e.dealt, magic: 0 })));
   });
@@ -538,7 +540,7 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
     const { hpRegenProgress: _p, manaRegenProgress: _q, ...c } = character;
     const { hpRegenProgress: _rp, manaRegenProgress: _rq, ...rc } = rawCharacter;
     expect(c).toEqual(rc);
-    expect({ ...dungeon, lastFight: null }).toEqual({ ...rawDungeon, lastFight: null });
+    expect({ ...dungeon, lastFight: null }).toEqual({ ...rawDungeon, lastFight: null, bosses: {} }); // v20: boss counters
     expect(hashState(loadSave(V18_SAVE))).toBe(hashState(s));
   });
 
@@ -583,9 +585,9 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
   });
 });
 
-describe('a new game is a v19 game', () => {
-  it('saveVersion 19, engine 1.19.0', () => {
-    expect(newGame(1, T0).saveVersion).toBe(19);
-    expect(ENGINE_VERSION).toBe('1.19.0');
+describe('a new game is a v20 game', () => {
+  it('saveVersion 20, engine 1.20.0 (the stats rework shipped as 1.19.0 / v19)', () => {
+    expect(newGame(1, T0).saveVersion).toBe(20);
+    expect(ENGINE_VERSION).toBe('1.20.0');
   });
 });
