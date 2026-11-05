@@ -156,6 +156,7 @@ describe('derived stats', () => {
     const s = fresh();
     expect(s.character.hp).toBe(50);
     expect(s.character).not.toHaveProperty('maxHp');
-    expect(JSON.stringify(s)).not.toMatch(/"(damage|armor|defense|magicDamage|magicResist|maxMana|maxHp)"/);
+    expect(JSON.stringify(s)).not.toMatch(/"(damage|defense|magicDamage|magicResist|critChanceBp|critMultiplierBp|maxMana|maxHp)"/);
+    expect(JSON.stringify(s)).not.toMatch(/"armor":\d/); // the equipment slot is called armor, the derived stat is never stored
   });
 });

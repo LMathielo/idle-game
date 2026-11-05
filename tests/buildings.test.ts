@@ -27,7 +27,7 @@ import {
   simulate,
 } from '../src/engine';
 import { makeItem } from '../src/engine/inventory';
-import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, v12Skills, withBuilt, withoutGearRolls, v16Attributes, v17Added } from './helpers';
+import { apply, cmd, HOUR, makeClient, MIN, qty, SEC, T0, v12Skills, withBuilt, withoutGearRolls, v16Attributes, v17Added, v19Dungeon } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v9 save + its action log, written by the 1.8.0 engine before buildings (tests/fixtures). */
@@ -367,7 +367,7 @@ describe('frozen v9 save (tests/fixtures/save-v9.json) → v10', () => {
     expect(s.merchant.stock[4]).toEqual({ defId: 'iron_pickaxe', quantity: 1, unitPrice: 600 });
     const { activity: _a, buildings: _b, construction: _k, workers: _w, crafting: _cr, merchant, character, saveVersion: _v, ...rest } = s;
     const { activity: _ra, merchant: rm, character: rc, saveVersion: _rv, ...rawRest } = V9_SAVE;
-    expect(rest).toEqual(rawRest);
+    expect(rest).toEqual({ ...rawRest, dungeon: v19Dungeon(rawRest.dungeon) }); // v19: the logged strikes gain crit / physical / magic
     const { pickaxe: _p, ...equipment } = character.equipment;
     // v11 → v12 (1.12.0) then recomputes each skill's level from its total XP on the new skill curve.
     expect({ ...character, equipment }).toEqual({ ...rc, ...v17Added(rc.level), attributes: v16Attributes(rc.attributes), skills: v12Skills({ ...rc.skills, mining: { level: 1, xp: 0, xpToNext: 500 } }) });

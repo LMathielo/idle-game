@@ -360,11 +360,13 @@ describe('trained (core) points feed every rule', () => {
     expect(d1.breakdown.find((p) => p.source === 'strength')).toMatchObject({ min: 1, max: 1 });
   });
 
-  it('END: defense and HP regen (total); DEX: dungeon search time (core, on the curve)', () => {
+  it('END: armor, HP regen (total) and the core multiplier; DEX: dungeon search time (core, on the curve)', () => {
     const base = heroAtTier(2);
     const trained = { ...base, training: { ...base.training, attributes: { ...base.training.attributes, endurance: { level: 7, xp: 0, progressMs: 0 }, dexterity: { level: 25, xp: 0, progressMs: 0 } } } };
-    expect(getDerivedStats(trained).armor.value - getDerivedStats(base).armor.value).toBe(7);
-    expect(hpRegenPerMinute(trained)).toBe(15 + 7);
+    // 7 core END: +7 armor (total) → 20, then the core multiplier floor(5000 × 7 / 57) = 614 bp → round(20 × 1.0614) = 21 (13 → 21)
+    expect(getDerivedStats(trained).armor.value - getDerivedStats(base).armor.value).toBe(8);
+    expect(hpRegenPerMinute(trained)).toBe(16.4); // 15 + 0.2 × 7
+    expect(getDerivedStats(trained).maxHp.value - getDerivedStats(base).maxHp.value).toBe(35); // 5 per END
     const search = (s: GameState) => dungeonRunView(apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0))!.searchMs;
     expect(search(base)).toBe(120 * SEC);
     expect(search(trained)).toBe(100_008); // core DEX 25: 1666 bp

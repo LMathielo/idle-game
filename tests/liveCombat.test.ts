@@ -280,11 +280,11 @@ describe('determinism across simulate boundaries', () => {
    * A timeline where T0 + 8 h falls inside a fight with strikes already landed and at least one more second of fight to
    * go. `s` is the state at exactly 8 h (no cap: requested = 8 h). Wolf Den (1.16.0): a new hero loses there in a few
    * seconds, so it never levels up and every fight lasts several strikes (on the Rat Cellar, 8 h of wins give level
-   * points that make every fight a one-strike kill). The search progress at the start, 47,500 ms (re-found in 1.18.0, when every search became 2:00; it was
+   * points that make every fight a one-strike kill). The search progress at the start, 36,250 ms (re-found in 1.19.0, when the crit draw moved the rolls, and in 1.18.0, when every search became 2:00; it was
    * 252,250 ms of a 5:00 search), was found once by scanning 0..2:00 in 250 ms steps (about 1,000 full 8 h simulates, too slow to repeat in every test); computed once per
    * file and checked, so a rules change that moves the fights fails here loudly.
    */
-  const CAP_IN_FIGHT_PROGRESS_MS = 47_500;
+  const CAP_IN_FIGHT_PROGRESS_MS = 36_250;
   let capPick: { g: GameState; s: GameState } | null = null;
   function capInsideFight(): { g: GameState; s: GameState } {
     if (capPick) return capPick;

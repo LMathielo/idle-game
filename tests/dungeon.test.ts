@@ -14,6 +14,7 @@ import {
   resolveFight,
   searchMsFor,
   activityTimeMs,
+  REGEN_UNIT,
   simulate,
   skipCost,
 } from '../src/engine';
@@ -27,13 +28,18 @@ function withCharacter(s: GameState, patch: Partial<GameState['character']>): Ga
   return { ...s, character: { ...s.character, ...patch } };
 }
 
-/**
- * The hero with total END = `end` − 10 (stored extra points, negative here): regen 5 + `end` per minute and defense
- * armor + `end`, exactly what "END `end`" gave before 1.16.0 (the old starting 10 moved into the base). Test-only.
- */
-function withOldEnd(s: GameState, end: number): GameState {
-  const extra = end - 10 - s.character.spentPoints.endurance - s.training.attributes.endurance.level;
-  return withCharacter(s, { attributes: { ...s.character.attributes, endurance: extra } });
+/** The first four dungeons already opened (counters set directly), so a test can run the Forgotten Crypt. */
+const CRYPT_OPEN: GameState['dungeon']['byDungeon'] = {
+  rat_cellar: { runs: 10, wins: 10, losses: 0 },
+  bat_cave: { runs: 15, wins: 15, losses: 0 },
+  wolf_den: { runs: 25, wins: 25, losses: 0 },
+};
+
+/** New game at T0 with the Forgotten Crypt running: the Skeleton (180 HP, 15–20 damage, armor 20) beats a fresh hero on 30 HP. */
+function cryptGame(seed = 3, tweak: (s: GameState) => GameState = (s) => s): GameState {
+  const g = tweak(builtGame(seed, T0));
+  const open = { ...g, dungeon: { ...g.dungeon, totals: { runs: 50, wins: 50, losses: 0 }, byDungeon: CRYPT_OPEN } };
+  return apply(open, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'forgotten_crypt' }, T0);
 }
 
 /** The skip the UI would send for the search it shows in `s` (run number + cost on the button). */
@@ -206,9 +212,9 @@ describe('skip (search only)', () => {
 });
 
 describe('combat', () => {
-  it('dealt = max(1, round(roll × 50 / (defense + 50))), half-up, integer math', () => {
+  it('dealt = max(1, round(roll × 50 / (armor + 50))), half-up, integer math', () => {
     expect(COMBAT).toMatchObject({ armorK: 50, maxFightMs: 60_000, minDamage: 1 });
-    expect(dealtDamage(100, 13)).toBe(79); // 13 defense blocks ~21%
+    expect(dealtDamage(100, 13)).toBe(79); // 13 armor blocks ~21%
     expect(dealtDamage(12, 2)).toBe(12); // 11.54
     expect(dealtDamage(14, 2)).toBe(13); // 13.46
     expect(dealtDamage(3, 13)).toBe(2);
@@ -216,7 +222,7 @@ describe('combat', () => {
     expect(dealtDamage(3, 50)).toBe(2); // exactly 1.5 rounds up
     expect(dealtDamage(10, 0)).toBe(10);
     expect(dealtDamage(1, 1_000_000)).toBe(1); // minimum 1
-    expect(dealtDamage(5, -20)).toBe(5); // negative defense counts as 0
+    expect(dealtDamage(5, -20)).toBe(5); // negative armor counts as 0
   });
 
   it('fixed seed → fixed fight log; with equal 1 s intervals the rolls are exactly the old alternating fight', () => {
@@ -224,15 +230,18 @@ describe('combat', () => {
     const rat = { hp: 30, ...fightSide({ damage: { min: 3, max: 5 }, armor: 2, magicResist: 2 }) };
     const a = resolveFight(hero, rat, createRng(123));
     expect(resolveFight(hero, rat, createRng(123))).toEqual(a);
-    // Same rolls, dealt, HP and final seed as the 1.7.0 turn-based fight (pinned there as rounds 1–3).
+    // Re-pinned in 1.19.0. Every hero strike now draws a crit check after its damage roll (even at 0% chance), so the enemy's
+    // rolls come from later in the stream than in 1.7.0–1.18.0 (hero roll 1 is still 14; the hero's rolls were 14, 13, 13 then).
+    // The strike times, the damage formula and the winner are unchanged.
     expect(a.log.map((e) => [e.atMs, e.actor, e.strike, e.roll, e.dealt, e.targetHpAfter])).toEqual([
       [1000, 'hero', 1, 14, 13, 17],
-      [1000, 'enemy', 1, 3, 2, 48],
-      [2000, 'hero', 2, 13, 13, 4],
-      [2000, 'enemy', 2, 3, 2, 46],
-      [3000, 'hero', 3, 13, 13, 0],
+      [1000, 'enemy', 1, 4, 3, 47],
+      [2000, 'hero', 2, 12, 12, 5],
+      [2000, 'enemy', 2, 5, 4, 43],
+      [3000, 'hero', 3, 14, 13, 0],
     ]);
-    expect(a).toMatchObject({ won: true, endReason: 'enemy_defeated', durationMs: 3000, heroHp: 46, enemyHp: 0, rng: { seed: 567894596 } });
+    expect(a.log.every((e) => !e.crit && e.magic === 0 && e.physical === e.dealt)).toBe(true);
+    expect(a).toMatchObject({ won: true, endReason: 'enemy_defeated', durationMs: 3000, heroHp: 43, enemyHp: 0, rng: { seed: 1767624739 } });
     for (const e of a.log) expect(e.dealt).toBe(dealtDamage(e.roll, e.actor === 'hero' ? rat.armor : hero.armor));
   });
 
@@ -304,12 +313,12 @@ describe('rewards', () => {
   });
 
   it('loss: no XP, no gold, no loot; the hero ends at 0 HP', () => {
-    // From 0 HP with old END −2 (3/min, defense 1) and a 2:00 search: the fight starts at 6 HP.
-    // The rat needs 3 hero hits; its strikes at 1 s and 2 s (3–5 each after defense) kill 6 HP first.
-    const s = dungeonGame(3, (g) => withOldEnd(withCharacter(g, { hp: 0 }), -2));
+    // From 0 HP a 2:00 search regens 30 HP (15/min), so the fight starts at 30 HP. The Skeleton needs about 20 hero hits;
+    // its strikes (15–20, about 14 after the hero's 13 armor) take the 30 HP first.
+    const s = cryptGame(3, (g) => withCharacter(g, { hp: 0 }));
     const r = simulate(s, T0 + SEARCH_MS + 10 * SEC);
     const f = r.state.dungeon.lastFight!;
-    expect(f.heroHpStart).toBe(6);
+    expect(f.heroHpStart).toBe(30);
     expect(f.won).toBe(false);
     expect(f.endReason).toBe('hero_defeated');
     expect(f.rewards).toEqual({ heroXp: 0, gold: 0, items: {}, itemsLost: {} });
@@ -335,8 +344,9 @@ describe('HP regen', () => {
     const s = hurt(10);
     expect(simulate(s, T0 + MIN).state.character).toMatchObject({ hp: 25, hpRegenProgress: 0 });
     expect(simulate(s, T0 + 4 * SEC).state.character.hp).toBe(11); // 1 HP every 4 s
-    expect(simulate(s, T0 + 4 * SEC - 1).state.character).toMatchObject({ hp: 10, hpRegenProgress: 59_985 });
-    expect(simulate(hurt(10, (g) => withOldEnd(g, 0)), T0 + MIN).state.character.hp).toBe(15); // total END −10: 5/min
+    expect(simulate(s, T0 + 4 * SEC - 1).state.character).toMatchObject({ hp: 10, hpRegenProgress: 5_998_500 }); // (4 s − 1 ms) × 1500 rate units; 6 000 000 make 1 HP (save v19)
+    // 10 extra END: 15 + 0.2 × 10 = 17/min (1.19.0), and +50 max HP
+    expect(simulate(hurt(10, (g) => withCharacter(g, { attributes: { ...g.character.attributes, endurance: 10 } })), T0 + MIN).state.character.hp).toBe(27);
     expect(hpView(s)).toMatchObject({ hp: 10, regenPerMin: 15, full: false, fullInMs: 160 * SEC });
   });
 
@@ -374,12 +384,12 @@ describe('HP regen', () => {
   });
 
   it('not limited by the 8h cap (max HP bounds it)', () => {
-    // Level 500 → max 5040. Old END 0 → 5/min (level points taken back out). 12h = 3600 HP; the 8h cap would give 2400.
-    const s = hurt(0, (g) => withOldEnd(withCharacter(g, { level: 500 }), 0));
+    // Level 2000 → max 20 040. 15/min: 12h = 10 800 HP; the 8h cap would give 7200.
+    const s = hurt(0, (g) => withCharacter(g, { level: 2000 }));
     const r = simulate(s, T0 + 12 * HOUR);
     expect(r.summary.grantedMs).toBe(8 * HOUR);
-    expect(r.state.character.hp).toBe(3600);
-    expect(simulate(s, T0 + 365 * 24 * HOUR).state.character).toMatchObject({ hp: 5040, hpRegenProgress: 0 });
+    expect(r.state.character.hp).toBe(10_800);
+    expect(simulate(s, T0 + 365 * 24 * HOUR).state.character).toMatchObject({ hp: 20_040, hpRegenProgress: 0 });
   });
 
   it('invalid time is a no-op', () => {
@@ -422,17 +432,17 @@ describe('offline catch-up', () => {
   });
 
   it('regen and runs interleave in time order: each fight sees the HP regenerated during its search', () => {
-    // Old END −2 (3/min, defense 1), 2:00 searches: every search regens exactly 6 HP; every fight at 6 HP is lost in 2 s.
-    const s = dungeonGame(3, (g) => withOldEnd(withCharacter(g, { hp: 0 }), -2));
-    const r = simulate(s, T0 + 10 * (SEARCH_MS + 2 * SEC) + 25 * SEC);
-    expect(r.state.dungeon.totals).toEqual({ runs: 10, wins: 0, losses: 10 });
-    expect(r.state.dungeon.lastFight?.heroHpStart).toBe(6);
+    // 2:00 searches: every search regens exactly 30 HP (15/min); every fight at 30 HP against the Skeleton is lost within seconds.
+    const s = cryptGame(3, (g) => withCharacter(g, { hp: 0 }));
+    const r = simulate(s, T0 + 10 * (SEARCH_MS + 3 * SEC) + 25 * SEC);
+    expect(r.state.dungeon.totals).toEqual({ runs: 60, wins: 50, losses: 10 });
+    expect(r.state.dungeon.lastFight?.heroHpStart).toBe(30);
     // A loss keeps the regen remainder (also what the fight's seconds banked, always under 1 HP here), so after the
-    // 10th loss the hero holds the current search's regen at 5/min plus less than 1 HP of carried remainder.
+    // 10th loss the hero holds the current search's regen at 15/min plus less than 1 HP of carried remainder.
     const c = r.state.character;
-    const units = c.hp * MIN + c.hpRegenProgress;
-    expect(units).toBeGreaterThanOrEqual(progressMs(r.state)! * 3);
-    expect(units).toBeLessThan(progressMs(r.state)! * 3 + MIN);
+    const units = c.hp * REGEN_UNIT + c.hpRegenProgress;
+    expect(units).toBeGreaterThanOrEqual(progressMs(r.state)! * 1500);
+    expect(units).toBeLessThan(progressMs(r.state)! * 1500 + REGEN_UNIT);
   });
 
   it('a chain at low HP: the next run starts at once whatever the HP, and regen carries the hero back', () => {
@@ -507,10 +517,12 @@ describe('one activity at a time', () => {
   });
 
   it('a dungeon can start at 0 HP: the fight is an immediate loss, then regen carries on', () => {
-    const s = dungeonGame(1, (g) => withOldEnd(withCharacter(g, { hp: 0 }), -5)); // rate 0
-    const r = simulate(s, T0 + SEARCH_MS).state;
+    // Regen can no longer be 0 (15/min base), so the search is skipped: a skip gives no regen, and the fight opens at 0 HP.
+    const s = dungeonGame(1, (g) => withCharacter(g, { hp: 0 }));
+    const r = simulate(apply(s, skipAny(s), T0), T0 + 5 * SEC).state;
     expect(r.dungeon.lastFight).toMatchObject({ won: false, endReason: 'no_hp', durationMs: 0, heroHpStart: 0, log: [] });
-    expect(r.activity).toMatchObject({ phase: 'search', progressMs: 0, fight: null });
+    expect(r.activity).toMatchObject({ phase: 'search', progressMs: 5 * SEC, fight: null }); // the new search began at once; regen carries on (5 s = 1 HP)
+    expect(r.character.hp).toBe(1);
   });
 });
 

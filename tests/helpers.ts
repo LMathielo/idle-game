@@ -174,3 +174,13 @@ export function fightSide(s: Partial<CombatSide> = {}): CombatSide {
 export function v19Regen<C extends { hpRegenProgress?: number; manaRegenProgress?: number }>(character: C): C {
   return { ...character, hpRegenProgress: (character.hpRegenProgress ?? 0) * 100, manaRegenProgress: (character.manaRegenProgress ?? 0) * 100 };
 }
+
+/**
+ * What the v18 → v19 migration does to a raw older `dungeon` slice: every strike of the last fight's log gets
+ * `crit: false`, `physical` = the damage dealt and `magic: 0` (exactly what a 1.18.0 strike was).
+ */
+export function v19Dungeon<D extends { lastFight: { log: { dealt: number }[] } | null }>(dungeon: D): D {
+  if (!dungeon.lastFight) return dungeon;
+  const log = dungeon.lastFight.log.map((e) => ({ ...e, crit: false, physical: e.dealt, magic: 0 }));
+  return { ...dungeon, lastFight: { ...dungeon.lastFight, log } };
+}
