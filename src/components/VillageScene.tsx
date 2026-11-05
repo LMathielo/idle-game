@@ -1,8 +1,8 @@
 // The village map: the artwork (bigger than the screen) can be dragged in any direction and
 // pinch-zoomed (about the fingers' midpoint), clamped so it always covers the screen (no empty bars), from about the
-// whole width up to 2.5× the starting zoom. It starts centred on the core village. Signs keep their on-screen size while
-// zooming; their positions follow the map. A drag starting on a sign pans; a tap on a sign still opens it (the pan only
-// activates after the finger moves, and then cancels the press).
+// whole width up to 2.5× the starting zoom. It starts centred on the core village. Signs live inside the map layer at
+// SIGN_SCALE of their natural size, so they grow and shrink with the buildings. A drag starting on a sign pans; a tap on
+// a sign still opens it (the pan only activates after the finger moves, and then cancels the press).
 //
 // Gestures and the camera live on the UI thread (Reanimated shared values + Gesture Handler v3 hooks); React only
 // re-renders when the game state changes. The HUD and the activity strip are overlays drawn by the screens above this.
@@ -19,7 +19,7 @@ import { colors, fonts } from '../theme';
 import { GameIcon } from './art/Sprites';
 import { type IconName, VILLAGE_BACKGROUND, VILLAGE_PIECES, type VillagePieceId } from './art/images';
 import { PixelButton } from './PixelButton';
-import { clampCamera, mapLimits, PIECES, SIGNS, type VillageAction, WORLD } from './village/villageMap';
+import { clampCamera, mapLimits, PIECES, SIGN_BUTTON_H, SIGN_HIT_SLOP, SIGN_SCALE, SIGNS, type VillageAction, WORLD } from './village/villageMap';
 
 export type { VillageAction } from './village/villageMap';
 
@@ -31,11 +31,28 @@ const pieceStyles = StyleSheet.create(
   Object.fromEntries(PIECES.map((p) => [p.id, { position: 'absolute', left: p.x, top: p.y, width: p.w, height: p.h }] as const)),
 );
 
-/** Box each sign is centred in. Wider than any label so the text never wraps or gets squeezed. */
+/**
+ * Each sign's wrapper, in the map's world px: a box wider than any label (so the text never wraps) centred on the sign's
+ * x, its top edge on the sign's y, scaled by SIGN_SCALE around its top centre. The button inside has its natural size.
+ */
 const SIGN_BOX_W = 200;
-const SIGN_BOX_H = 56;
-/** The sign button itself: 38pt inner + 3pt frame each side (PixelButton), centred in the box. */
-const SIGN_BUTTON_H = 44;
+const signStyles = StyleSheet.create(
+  Object.fromEntries(
+    SIGNS.map((s) => [
+      s.key,
+      {
+        position: 'absolute',
+        left: s.x - SIGN_BOX_W / 2,
+        top: s.y,
+        width: SIGN_BOX_W,
+        height: SIGN_BUTTON_H,
+        alignItems: 'center',
+        transform: [{ scale: SIGN_SCALE }],
+        transformOrigin: '50% 0%',
+      },
+    ] as const),
+  ),
+);
 /** Timer pill under a sign (the building being upgraded). */
 const BADGE_H = 20;
 const BADGE_GAP = 2;
@@ -103,14 +120,17 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
       rootOrigin.current = { x, y };
     });
   }, []);
-  /** A sign's button box on screen from the camera: root origin + camera position of its anchor, constant size. */
+  /** A sign's button box on screen from the camera: root origin + camera position of its anchor, size × SIGN_SCALE × zoom. */
   const anchorOf = useCallback(
-    (sign: (typeof SIGNS)[number], button: { w: number; h: number }): AnchorRect => ({
-      x: rootOrigin.current.x + tx.get() + sign.x * zoom.get() - button.w / 2,
-      y: rootOrigin.current.y + ty.get() + sign.y * zoom.get() - button.h / 2,
-      width: button.w,
-      height: button.h,
-    }),
+    (sign: (typeof SIGNS)[number], button: { w: number; h: number }): AnchorRect => {
+      const k = SIGN_SCALE * zoom.get();
+      return {
+        x: rootOrigin.current.x + tx.get() + sign.x * zoom.get() - (button.w * k) / 2,
+        y: rootOrigin.current.y + ty.get() + sign.y * zoom.get(),
+        width: button.w * k,
+        height: button.h * k,
+      };
+    },
     [tx, ty, zoom],
   );
 
@@ -157,7 +177,7 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
   const gesture = useSimultaneousGestures(pan, pinch);
 
   // Transform only (no layout per frame): the map is laid out at 1 pt per base px and scaled from its top-left corner,
-  // so world point p lands at (tx + p.x × zoom, ty + p.y × zoom), the same formula the signs use.
+  // so world point p lands at (tx + p.x × zoom, ty + p.y × zoom). The signs are inside it.
   const mapStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.get() }, { translateY: ty.get() }, { scale: zoom.get() }],
   }));
@@ -175,24 +195,21 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
       >
         {ready ? (
           <>
-            <Animated.View style={[styles.map, mapStyle]} pointerEvents="none">
+            <Animated.View style={[styles.map, mapStyle]} pointerEvents="box-none">
               <MapArt locked={locked} />
+              {SIGNS.map((s) => (
+                <Sign
+                  key={s.key}
+                  sign={s}
+                  locked={!!locked?.has(s.key)}
+                  active={active === s.key}
+                  badge={badges?.[s.key]}
+                  onAction={onAction}
+                  anchorOf={anchorOf}
+                  onPressStart={measureRoot}
+                />
+              ))}
             </Animated.View>
-            {SIGNS.map((s) => (
-              <Sign
-                key={s.key}
-                sign={s}
-                zoom={zoom}
-                tx={tx}
-                ty={ty}
-                locked={!!locked?.has(s.key)}
-                active={active === s.key}
-                badge={badges?.[s.key]}
-                onAction={onAction}
-                anchorOf={anchorOf}
-                onPressStart={measureRoot}
-              />
-            ))}
           </>
         ) : null}
       </View>
@@ -203,14 +220,14 @@ export const VillageScene = memo(function VillageScene({ onAction, active, locke
 /** Background, then every building piece back to front; a building not built yet is left out. */
 const MapArt = memo(function MapArt({ locked }: { locked?: ReadonlySet<VillageAction> }) {
   return (
-    <>
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Image source={VILLAGE_BACKGROUND} style={styles.image} resizeMode="stretch" fadeDuration={0} accessibilityIgnoresInvertColors />
       {PIECES.map((p) => {
         const source = VILLAGE_PIECES[p.id as VillagePieceId];
         if (!source || (p.sign && locked?.has(p.sign))) return null;
         return <Image key={p.id} source={source} style={pieceStyles[p.id]} resizeMode="stretch" fadeDuration={0} accessibilityIgnoresInvertColors />;
       })}
-    </>
+    </View>
   );
 });
 
@@ -223,9 +240,6 @@ function cancelDecay(tx: SharedValue<number>, ty: SharedValue<number>) {
 
 type SignProps = {
   sign: (typeof SIGNS)[number];
-  zoom: SharedValue<number>;
-  tx: SharedValue<number>;
-  ty: SharedValue<number>;
   locked: boolean;
   active: boolean;
   badge?: SignBadge;
@@ -235,9 +249,9 @@ type SignProps = {
   onPressStart: () => void;
 };
 
-/** One sign: a constant-size button whose box follows its anchor on the map. */
-const Sign = memo(function Sign({ sign, zoom, tx, ty, locked, active, badge, onAction, anchorOf, onPressStart }: SignProps) {
-  /** The button's own size (layout, untransformed; it never changes with zoom). */
+/** One sign: a button inside the map layer, scaled with it (SIGN_SCALE × zoom), top-centred under its building. */
+const Sign = memo(function Sign({ sign, locked, active, badge, onAction, anchorOf, onPressStart }: SignProps) {
+  /** The button's own natural size (layout, before any scale). */
   const button = useRef({ w: 0, h: SIGN_BUTTON_H });
   const onButtonLayout = useCallback((e: LayoutChangeEvent) => {
     button.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height };
@@ -246,15 +260,13 @@ const Sign = memo(function Sign({ sign, zoom, tx, ty, locked, active, badge, onA
     onPressStart();
     onAction?.(sign.key, anchorOf(sign, button.current));
   }, [onAction, onPressStart, anchorOf, sign]);
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: tx.get() + sign.x * zoom.get() - SIGN_BOX_W / 2 }, { translateY: ty.get() + sign.y * zoom.get() - SIGN_BOX_H / 2 }],
-  }));
   return (
-    <Animated.View style={[styles.sign, style]} pointerEvents="box-none">
+    <View style={signStyles[sign.key]} pointerEvents="box-none">
       <View onLayout={onButtonLayout}>
         <PixelButton
           sign
           label={sign.label}
+          hitSlop={SIGN_HIT_SLOP}
           icon={locked ? 'locked' : undefined}
           muted={locked}
           active={!locked && active}
@@ -271,7 +283,7 @@ const Sign = memo(function Sign({ sign, zoom, tx, ty, locked, active, badge, onA
           </Text>
         </View>
       ) : null}
-    </Animated.View>
+    </View>
   );
 });
 
@@ -279,13 +291,11 @@ const styles = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden', backgroundColor: colors.night },
   map: { position: 'absolute', left: 0, top: 0, width: WORLD.w, height: WORLD.h, transformOrigin: 'left top' },
   image: { width: '100%', height: '100%' },
-  // fixed box centred on the anchor point; the button is centred inside it at its natural size
-  sign: { position: 'absolute', left: 0, top: 0, width: SIGN_BOX_W, height: SIGN_BOX_H, alignItems: 'center', justifyContent: 'center' },
-  // Pinned just under the centred button; it may hang below the box.
+  // Pinned just under the button; it hangs below the sign's box and scales with it.
   badge: {
     position: 'absolute',
     alignSelf: 'center',
-    top: SIGN_BOX_H / 2 + SIGN_BUTTON_H / 2 + BADGE_GAP,
+    top: SIGN_BUTTON_H + BADGE_GAP,
     height: BADGE_H,
     paddingHorizontal: 6,
     flexDirection: 'row',

@@ -1,8 +1,24 @@
 // The village map's pure geometry: signs and plots inside the world, the start camera centred on the core, and the
-// clamp that never shows an empty bar.
+// clamp that never shows an empty bar. Signs scale with the map (2026-11-05), so their sizes and overlaps are in world px
+// and do not depend on the phone.
 import { describe, expect, it } from 'vitest';
 import { HUD_MARGIN_LEFT, HUD_WIDTH, hudBottom } from '../src/components/hud/hudLayout';
-import { CORE, clampCamera, mapLimits, PIECES, PLOTS, SIGNS, WORLD } from '../src/components/village/villageMap';
+import {
+  CORE,
+  clampCamera,
+  mapLimits,
+  PIECES,
+  PLOTS,
+  SIGN_BUTTON_H,
+  SIGN_GAP,
+  SIGN_HIT_SLOP,
+  SIGN_LABEL_PT,
+  SIGN_NUDGE,
+  SIGN_SCALE,
+  SIGNS,
+  signWorldBox,
+  WORLD,
+} from '../src/components/village/villageMap';
 
 /** Signs on the core village (visible at start) and signs on a building plot outside it (reached by panning). */
 const CORE_SIGNS = SIGNS.filter((s) => !s.plot);
@@ -13,6 +29,26 @@ const SCREENS = [
   { w: 390, h: 844 },
   { w: 430, h: 932 },
 ];
+
+// A sign's natural width: its label in Pixelify Sans Bold 18 (measured, rounded up) + 30 of PixelButton chrome, + 20 for
+// the padlock while its building is not built. The widths are hand-measured (TECH_DEBT); sizes and gaps are not.
+const LABEL_W: Record<string, number> = { dungeon: 76, mine: 98, merchant: 91, woodcutting: 116, training: 72, town_hall: 80, crafting: 80, storage: 76 };
+const LOCKABLE = new Set(['woodcutting', 'mine', 'town_hall', 'training', 'crafting']);
+const naturalWidth = (key: string, padlock: boolean) => LABEL_W[key] + 30 + (padlock && LOCKABLE.has(key) ? 20 : 0);
+/** The timer pill under a sign (20 high + 2 gap, natural px) hangs below the sign. */
+const BADGE_BELOW = 22;
+const boxOf = (s: (typeof SIGNS)[number], padlock = true) => signWorldBox(s, naturalWidth(s.key, padlock));
+
+/** Screen rect of a sign's box (with its badge under it) for a camera. */
+function screenBox(s: (typeof SIGNS)[number], c: { zoom: number; tx: number; ty: number }) {
+  const b = boxOf(s);
+  return {
+    x0: c.tx + b.x0 * c.zoom,
+    x1: c.tx + b.x1 * c.zoom,
+    y0: c.ty + b.y0 * c.zoom,
+    y1: c.ty + (b.y1 + BADGE_BELOW * SIGN_SCALE) * c.zoom,
+  };
+}
 
 describe('village map', () => {
   it('every core sign sits in the start framing; every plot is inside the world and empty ground in the art', () => {
@@ -33,6 +69,25 @@ describe('village map', () => {
     }
   });
 
+  // One rule: centred on the building's box, top edge SIGN_GAP (15) world px under the box's bottom edge.
+  it('every sign is centred under its building (one nudge listed), its top 15 world px below the building box, inside the world', () => {
+    expect(SIGN_GAP).toBe(15);
+    expect(SIGNS.map((s) => s.key).sort()).toEqual(PIECES.filter((p) => p.sign).map((p) => p.id).sort());
+    for (const s of SIGNS) {
+      const p = PIECES.find((q) => q.id === s.key)!;
+      expect(s.x, s.key).toBe(p.x + p.w / 2 + (SIGN_NUDGE[s.key]?.x ?? 0));
+      expect(Math.abs(s.x - (p.x + p.w / 2)), s.key).toBeLessThanOrEqual(7); // a nudge stays under the building's box
+      expect(s.y, s.key).toBe(p.y + p.h + SIGN_GAP);
+      for (const padlock of [false, true]) {
+        const b = boxOf(s, padlock);
+        expect(b.x0, s.key).toBeGreaterThanOrEqual(0);
+        expect(b.x1, s.key).toBeLessThanOrEqual(WORLD.w);
+        expect(b.y0, s.key).toBeGreaterThanOrEqual(p.y + p.h + SIGN_GAP);
+        expect(b.y1 + BADGE_BELOW * SIGN_SCALE, s.key).toBeLessThanOrEqual(WORLD.h);
+      }
+    }
+  });
+
   it.each(SCREENS)('start camera on $w×$h: covers the screen, every sign visible between the HUD and the strip', (view) => {
     const top = 100;
     const bottom = 44;
@@ -43,20 +98,22 @@ describe('village map', () => {
     expect(WORLD.h * minZoom).toBeGreaterThanOrEqual(view.h);
     expect(camera).toEqual(clampCamera(camera, view));
     for (const s of CORE_SIGNS) {
-      const x = camera.tx + s.x * camera.zoom;
-      const y = camera.ty + s.y * camera.zoom;
-      expect(x).toBeGreaterThan(40);
-      expect(x).toBeLessThan(view.w - 40);
-      expect(y - 22).toBeGreaterThanOrEqual(top);
-      expect(y + 22 + 22).toBeLessThanOrEqual(view.h - bottom); // sign + an upgrade badge under it
+      const r = screenBox(s, camera);
+      expect(r.x0, s.key).toBeGreaterThanOrEqual(0);
+      expect(r.x1, s.key).toBeLessThanOrEqual(view.w);
+      expect(r.y0, s.key).toBeGreaterThanOrEqual(top);
+      expect(r.y1, s.key).toBeLessThanOrEqual(view.h - bottom); // sign + an upgrade badge under it
     }
   });
 
-  it('a plot sign (Crafting, 1.13.0) sits on its plot and pans fully into view between the HUD and the strip', () => {
+  it('a plot sign (Crafting, 1.13.0) hangs under the building on its plot and pans fully into view between the HUD and the strip', () => {
     expect(PLOT_SIGNS.map((s) => [s.key, s.plot])).toEqual([['crafting', 'east']]);
     for (const s of PLOT_SIGNS) {
       const [x0, y0, x1, y1] = PLOTS[s.plot!];
-      expect(s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1).toBe(true);
+      const p = PIECES.find((q) => q.id === s.key)!;
+      const cx = (x0 + x1) / 2;
+      const cy = (y0 + y1) / 2;
+      expect(cx >= p.x && cx < p.x + p.w && cy >= p.y && cy < p.y + p.h).toBe(true); // the building stands on its plot
       for (const view of SCREENS) {
         const top = 100;
         const bottom = 44;
@@ -64,12 +121,11 @@ describe('village map', () => {
         // Pan so the sign is centred in the visible band (clamped like a real drag), at the start zoom.
         const bandMid = top + (view.h - top - bottom) / 2;
         const c = clampCamera({ zoom: start, tx: view.w / 2 - s.x * start, ty: bandMid - s.y * start }, view);
-        const x = c.tx + s.x * c.zoom;
-        const y = c.ty + s.y * c.zoom;
-        expect(x).toBeGreaterThan(40);
-        expect(x).toBeLessThan(view.w - 40);
-        expect(y - 22).toBeGreaterThanOrEqual(top);
-        expect(y + 22 + 22).toBeLessThanOrEqual(view.h - bottom);
+        const r = screenBox(s, c);
+        expect(r.x0).toBeGreaterThanOrEqual(0);
+        expect(r.x1).toBeLessThanOrEqual(view.w);
+        expect(r.y0).toBeGreaterThanOrEqual(top);
+        expect(r.y1).toBeLessThanOrEqual(view.h - bottom);
       }
     }
   });
@@ -90,9 +146,9 @@ describe('village map', () => {
     const bottom = 44;
     const { camera } = mapLimits(view, top, bottom);
     for (const s of CORE_SIGNS) {
-      const y = camera.ty + s.y * camera.zoom;
-      expect(y - 22).toBeGreaterThanOrEqual(top); // a sign's button is 44 high, centred on its anchor
-      expect(y + 22 + 22).toBeLessThanOrEqual(view.h - bottom);
+      const r = screenBox(s, camera);
+      expect(r.y0, s.key).toBeGreaterThanOrEqual(top);
+      expect(r.y1, s.key).toBeLessThanOrEqual(view.h - bottom);
     }
   });
 
@@ -110,32 +166,34 @@ describe('village map', () => {
     }
   });
 
-  // 2026-11-04: signs keep their size while the map zooms, so neighbours must clear each other at the start zoom (zooming
-  // in only separates them). A sign is 44 pt tall; its width is the label in Pixelify Sans Bold 18 (measured, rounded up)
-  // + 30 pt of PixelButton chrome, + 20 pt for the padlock while its building is not built.
-  const LABEL_W: Record<string, number> = { dungeon: 76, mine: 98, merchant: 91, woodcutting: 116, training: 72, town_hall: 80, crafting: 80, storage: 76 };
-  const LOCKABLE = new Set(['woodcutting', 'mine', 'town_hall', 'training', 'crafting']);
-  function overlapsAtStart(view: { w: number; h: number }, padlocks: boolean): string[] {
-    const width = (key: string) => LABEL_W[key] + 30 + (padlocks && LOCKABLE.has(key) ? 20 : 0);
-    const { start } = mapLimits(view, 100, 44);
+  // Signs scale with the map, so neighbours clear each other at every zoom when they do in world px.
+  function overlaps(padlocks: boolean): string[] {
     const out: string[] = [];
     for (let i = 0; i < SIGNS.length; i++) {
       for (let j = i + 1; j < SIGNS.length; j++) {
-        const a = SIGNS[i];
-        const b = SIGNS[j];
-        const apartX = Math.abs(a.x - b.x) * start >= (width(a.key) + width(b.key)) / 2;
-        const apartY = Math.abs(a.y - b.y) * start >= 44;
-        if (!apartX && !apartY) out.push(`${a.key}/${b.key}`);
+        const a = boxOf(SIGNS[i], padlocks);
+        const b = boxOf(SIGNS[j], padlocks);
+        // The badge hangs under its sign too.
+        const aY1 = a.y1 + BADGE_BELOW * SIGN_SCALE;
+        const bY1 = b.y1 + BADGE_BELOW * SIGN_SCALE;
+        const apart = a.x1 <= b.x0 || b.x1 <= a.x0 || aY1 <= b.y0 || bY1 <= a.y0;
+        if (!apart) out.push(`${SIGNS[i].key}/${SIGNS[j].key}`);
       }
     }
     return out;
   }
 
-  it.each(SCREENS)('no two built signs overlap at the start zoom on $w×$h', (view) => {
-    expect(overlapsAtStart(view, false)).toEqual([]);
+  it('no two built signs overlap (world px, so on every phone and zoom)', () => {
+    expect(overlaps(false)).toEqual([]);
   });
 
-  it.each(SCREENS)('no two signs overlap at the start zoom with padlocks (a new save) on $w×$h', (view) => {
-    expect(overlapsAtStart(view, true)).toEqual([]);
+  it('no two signs overlap with padlocks (a new save)', () => {
+    expect(overlaps(true)).toEqual([]);
+  });
+
+  it.each(SCREENS)('at the start zoom on $w×$h a sign label is at least 13 pt and its tap area at least 44 pt', (view) => {
+    const { start } = mapLimits(view, 100, 44);
+    expect(SIGN_LABEL_PT * SIGN_SCALE * start).toBeGreaterThanOrEqual(13);
+    expect((SIGN_BUTTON_H + 2 * SIGN_HIT_SLOP) * SIGN_SCALE * start).toBeGreaterThanOrEqual(44);
   });
 });
