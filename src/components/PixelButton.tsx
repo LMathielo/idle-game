@@ -27,8 +27,6 @@ type Props = {
   stretch?: boolean;
   /** Village sign: pixel title font. Other buttons use the readable body font. */
   sign?: boolean;
-  /** Extra touch area around the button (default 6), e.g. a village sign scaled down with the map. */
-  hitSlop?: number;
   /**
    * Hold-to-repeat (useHoldRepeat): a tap acts once; holding acts, waits 400 ms, then repeats every 100 ms until
    * release, a rejected action (return false), `disabled`, or unmount. Replaces `onPress`. Ticks after the first get
@@ -40,7 +38,7 @@ type Props = {
 };
 
 /** Wooden sign button with hard pixel bevels (no rounded corners). */
-export function PixelButton({ label, icon, onPress, active, disabled, muted, accessibilityLabel, accessibilityHint, sublabel, sublabelIcon, stretch, sign, hitSlop = 6, repeat, ref }: Props) {
+export function PixelButton({ label, icon, onPress, active, disabled, muted, accessibilityLabel, accessibilityHint, sublabel, sublabelIcon, stretch, sign, repeat, ref }: Props) {
   const grey = disabled || muted;
   const hold = useHoldRepeat(repeat, !!repeat && !disabled);
   const pressProps = repeat
@@ -55,7 +53,7 @@ export function PixelButton({ label, icon, onPress, active, disabled, muted, acc
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint ?? (repeat ? 'Hold to repeat' : undefined)}
       accessibilityState={{ selected: !!active, disabled: !!disabled }}
-      hitSlop={hitSlop}
+      hitSlop={6}
       style={stretch ? styles.stretch : undefined}
     >
       {({ pressed }) => (

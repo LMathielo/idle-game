@@ -12,6 +12,7 @@ import {
   SIGN_BUTTON_H,
   SIGN_GAP,
   SIGN_HIT_SLOP,
+  SIGN_LAYOUT_SCALE,
   SIGN_LABEL_PT,
   SIGN_NUDGE,
   SIGN_TOUCH_H,
@@ -70,9 +71,9 @@ describe('village map', () => {
     }
   });
 
-  // One rule: centred on the building's box, top edge SIGN_GAP (15) world px under the box's bottom edge.
-  it('every sign is centred under its building (one nudge listed), its top 15 world px below the building box, inside the world', () => {
-    expect(SIGN_GAP).toBe(15);
+  // One rule: centred on the building's box, top edge on the box's bottom edge (SIGN_GAP = 0).
+  it('every sign is centred under its building (one nudge listed), its top on the bottom edge of the building box, inside the world', () => {
+    expect(SIGN_GAP).toBe(0);
     expect(SIGNS.map((s) => s.key).sort()).toEqual(PIECES.filter((p) => p.sign).map((p) => p.id).sort());
     for (const s of SIGNS) {
       const p = PIECES.find((q) => q.id === s.key)!;
@@ -190,6 +191,12 @@ describe('village map', () => {
 
   it('no two signs overlap with padlocks (a new save)', () => {
     expect(overlaps(true)).toEqual([]);
+  });
+
+  // iOS rasterises text at its layout size: the bitmap must only ever be scaled down (sign scale × zoom <= layout scale).
+  it.each(SCREENS)('on $w×$h a sign (and its badge) is laid out big enough to stay crisp at the maximum zoom', (view) => {
+    const { maxZoom } = mapLimits(view, 100, 44);
+    expect(SIGN_SCALE * maxZoom).toBeLessThanOrEqual(SIGN_LAYOUT_SCALE);
   });
 
   it.each(SCREENS)('at the start zoom on $w×$h a sign label is at least 13 pt and its tap area at least 44 pt', (view) => {

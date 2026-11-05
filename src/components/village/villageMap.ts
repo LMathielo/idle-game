@@ -11,10 +11,10 @@ export const WORLD = { w: 360, h: 560 } as const;
 /**
  * The start framing (the map opens centred on it, its width filling the screen): x spans the usable buildings and their
  * signs (Woodcutting's sign to the Merchant's), y is centred on the buildings plus the signs under them (world y 181 to
- * about 460); tall enough that the width sets the start zoom
+ * about 445); tall enough that the width sets the start zoom
  * on every phone. The Crafting house sits on the east plot, outside it (reached by panning).
  */
-export const CORE = { x: 44, y: 50, w: 248, h: 540 } as const;
+export const CORE = { x: 44, y: 42, w: 248, h: 540 } as const;
 
 export type VillageAction = 'storage' | 'merchant' | 'dungeon' | 'training' | 'woodcutting' | 'mine' | 'town_hall' | 'crafting';
 
@@ -56,14 +56,20 @@ export const SIGN_BUTTON_H = 44;
 /** Natural label size of a sign (PixelButton `sign`). */
 export const SIGN_LABEL_PT = 18;
 /**
+ * Signs are LAID OUT this many times bigger than their natural size and shrunk by SIGN_SCALE / SIGN_LAYOUT_SCALE in the
+ * map layer. iOS rasterises text at its layout size and scales the bitmap with the map, so a sign shown at SIGN_SCALE ×
+ * zoom stays crisp as long as that is at most SIGN_LAYOUT_SCALE (0.5 × max zoom 4.3 on the widest phone = 2.2).
+ */
+export const SIGN_LAYOUT_SCALE = 3;
+/**
  * Extra touch area around a sign, in natural px (scaled with it). The sign's wrappers are padded by this much, so the
  * slop lies inside their bounds (Android only hit-tests a hitSlop inside the parent).
  */
 export const SIGN_HIT_SLOP = 10;
 /** The real touch height, natural px: 44 + 2 × 10 = 64, so 64 × 0.5 × 1.512 = 48.4 pt at the start zoom on 375 pt. */
 export const SIGN_TOUCH_H = SIGN_BUTTON_H + 2 * SIGN_HIT_SLOP;
-/** A sign's top edge sits this far below its building box's bottom edge, world px. */
-export const SIGN_GAP = 15;
+/** A sign's top edge sits this far below its building box's bottom edge, world px (0 since 2026-11-05: on the edge). */
+export const SIGN_GAP = 0;
 
 /**
  * The only exceptions to the rule, world px, listed in the PR: Woodcutting's sign (padlocked, the widest) would overlap
@@ -83,7 +89,7 @@ export function signWorldBox(sign: { x: number; y: number }, naturalWidth: numbe
   return { x0: sign.x - w / 2, x1: sign.x + w / 2, y0: sign.y, y1: sign.y + SIGN_BUTTON_H * SIGN_SCALE };
 }
 
-/** Each sign: centred under its building, top 15 world px below the building's bottom (`signAnchor`). Text only. */
+/** Each sign: centred under its building, its top edge on the building's bottom edge (`signAnchor`). Text only. */
 export const SIGNS: readonly { key: VillageAction; label: string; x: number; y: number; plot?: PlotId }[] = (Object.keys(SIGN_LABELS) as VillageAction[]).map((key) => {
   const piece = LAYOUT.pieces[key];
   if (!piece) throw new Error(`village_layout.json has no building for ${key}`);

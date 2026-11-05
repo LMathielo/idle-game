@@ -18,8 +18,8 @@ import Animated, { type SharedValue, useAnimatedStyle, useSharedValue, withDecay
 import { colors, fonts } from '../theme';
 import { GameIcon } from './art/Sprites';
 import { type IconName, VILLAGE_BACKGROUND, VILLAGE_PIECES, type VillagePieceId } from './art/images';
-import { PixelButton } from './PixelButton';
-import { clampCamera, mapLimits, PIECES, SIGN_BUTTON_H, SIGN_HIT_SLOP, SIGN_SCALE, SIGN_TOUCH_H, SIGNS, type VillageAction, WORLD } from './village/villageMap';
+import { SignButton } from './village/SignButton';
+import { clampCamera, mapLimits, PIECES, SIGN_BUTTON_H, SIGN_HIT_SLOP, SIGN_LAYOUT_SCALE, SIGN_SCALE, SIGN_TOUCH_H, SIGNS, type VillageAction, WORLD } from './village/villageMap';
 
 export type { VillageAction } from './village/villageMap';
 
@@ -32,12 +32,14 @@ const pieceStyles = StyleSheet.create(
 );
 
 /**
- * Each sign's wrapper, in the map's world px: a box wider than any label (so the text never wraps) centred on the sign's
- * x, scaled by SIGN_SCALE around the button's top centre. It is SIGN_HIT_SLOP taller on each side than the button (the
- * button sits SIGN_HIT_SLOP inside, so its top edge is on the sign's y): the slop must lie inside the parents' bounds or
- * Android never hit-tests it.
+ * Each sign's wrapper. Its content is laid out SIGN_LAYOUT_SCALE (L) times bigger than natural, so iOS rasterises the text
+ * large, and shrunk by SIGN_SCALE / L around the button's top centre; with the map's own zoom the bitmap is only ever
+ * scaled down (crisp at every zoom). That point (x centre, button top) is placed on the sign's anchor in world px. The
+ * wrapper is a box wider than any label (the text never wraps) and SIGN_HIT_SLOP taller on each side than the button
+ * (the slop must lie inside the parents' bounds or Android never hit-tests it).
  */
-const SIGN_BOX_W = 200;
+const L = SIGN_LAYOUT_SCALE;
+const SIGN_BOX_W = 200 * L;
 const signStyles = StyleSheet.create(
   Object.fromEntries(
     SIGNS.map((s) => [
@@ -45,17 +47,17 @@ const signStyles = StyleSheet.create(
       {
         position: 'absolute',
         left: s.x - SIGN_BOX_W / 2,
-        top: s.y - SIGN_HIT_SLOP,
+        top: s.y - SIGN_HIT_SLOP * L,
         width: SIGN_BOX_W,
-        height: SIGN_TOUCH_H,
+        height: SIGN_TOUCH_H * L,
         alignItems: 'center',
-        transform: [{ scale: SIGN_SCALE }],
-        transformOrigin: `50% ${SIGN_HIT_SLOP}px`,
+        transform: [{ scale: SIGN_SCALE / L }],
+        transformOrigin: `50% ${SIGN_HIT_SLOP * L}px`,
       },
     ] as const),
   ),
 );
-/** Timer pill under a sign (the building being upgraded). */
+/** Timer pill under a sign (the building being upgraded), natural sizes (× L below). */
 const BADGE_H = 20;
 const BADGE_GAP = 2;
 /** The finger must move this far before a drag starts, so a tap on a sign stays a tap. */
@@ -253,11 +255,11 @@ type SignProps = {
 
 /** One sign: a button inside the map layer, scaled with it (SIGN_SCALE × zoom), top-centred under its building. */
 const Sign = memo(function Sign({ sign, locked, active, badge, onAction, anchorOf, onPressStart }: SignProps) {
-  /** The button's own natural size (layout, before any scale). */
+  /** The button's natural size (layout ÷ L). */
   const button = useRef({ w: 0, h: SIGN_BUTTON_H });
   const onButtonLayout = useCallback((e: LayoutChangeEvent) => {
     // The measured view is padded by the slop on every side: the visible button is what is left.
-    button.current = { w: e.nativeEvent.layout.width - 2 * SIGN_HIT_SLOP, h: SIGN_BUTTON_H };
+    button.current = { w: e.nativeEvent.layout.width / L - 2 * SIGN_HIT_SLOP, h: SIGN_BUTTON_H };
   }, []);
   const press = useCallback(() => {
     onPressStart();
@@ -266,10 +268,10 @@ const Sign = memo(function Sign({ sign, locked, active, badge, onAction, anchorO
   return (
     <View style={signStyles[sign.key]} pointerEvents="box-none">
       <View onLayout={onButtonLayout} style={styles.buttonBox}>
-        <PixelButton
-          sign
+        <SignButton
+          scale={L}
+          hitSlop={SIGN_HIT_SLOP * L}
           label={sign.label}
-          hitSlop={SIGN_HIT_SLOP}
           icon={locked ? 'locked' : undefined}
           muted={locked}
           active={!locked && active}
@@ -280,7 +282,7 @@ const Sign = memo(function Sign({ sign, locked, active, badge, onAction, anchorO
       </View>
       {badge ? (
         <View style={styles.badge} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no">
-          <GameIcon name={badge.icon} size={14} />
+          <GameIcon name={badge.icon} size={14 * L} />
           <Text style={styles.badgeText} numberOfLines={1}>
             {badge.text}
           </Text>
@@ -295,20 +297,20 @@ const styles = StyleSheet.create({
   map: { position: 'absolute', left: 0, top: 0, width: WORLD.w, height: WORLD.h, transformOrigin: 'left top' },
   image: { width: '100%', height: '100%' },
   // The button plus SIGN_HIT_SLOP of padding on every side (the real touch area lies inside this box).
-  buttonBox: { padding: SIGN_HIT_SLOP },
+  buttonBox: { padding: SIGN_HIT_SLOP * L },
   // Pinned just under the button; it hangs below the sign's box and scales with it.
   badge: {
     position: 'absolute',
     alignSelf: 'center',
-    top: SIGN_HIT_SLOP + SIGN_BUTTON_H + BADGE_GAP,
-    height: BADGE_H,
-    paddingHorizontal: 6,
+    top: (SIGN_HIT_SLOP + SIGN_BUTTON_H + BADGE_GAP) * L,
+    height: BADGE_H * L,
+    paddingHorizontal: 6 * L,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 4 * L,
     backgroundColor: colors.woodDark,
-    borderWidth: 1,
+    borderWidth: L,
     borderColor: colors.gold,
   },
-  badgeText: { fontFamily: fonts.bodyBold, fontSize: 13, lineHeight: 16, color: colors.gold },
+  badgeText: { fontFamily: fonts.bodyBold, fontSize: 13 * L, lineHeight: 16 * L, color: colors.gold },
 });
