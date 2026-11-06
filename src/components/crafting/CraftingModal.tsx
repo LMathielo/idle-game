@@ -11,7 +11,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, type HostInstance, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { collectedItemIdOf } from '../../client/dispatchEvents';
 import { useGameSnapshot } from '../../client/GameProvider';
-import { type CraftJobView, craftingView, craftJobView, freeSlots, type PipeView, type RecipeId, recipeView } from '../../engine';
+import { type CraftJobView, craftingView, craftJobView, DEV_TOOLS_ENABLED, freeSlots, type PipeView, type RecipeId, recipeView } from '../../engine';
 import { colors, fonts, rarityColors } from '../../theme';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
 import { IconText, ItemIcon } from '../art/Sprites';
@@ -88,6 +88,15 @@ export function CraftingModal() {
     },
     [client, send],
   );
+  /** Debug: Finish now, free, hold-to-repeat; bound to the job and craft on screen (read live at each tick). Refused ticks stay quiet. */
+  const onFinish = useCallback(
+    (pipe: number, repeat: boolean) => {
+      const live = craftJobView(client.getState(), pipe);
+      if (!live || live.status !== 'running') return Promise.resolve(false);
+      return send({ type: 'DEBUG_FINISH_CRAFT', pipe, jobId: live.id, craft: live.craftNumber }, { quiet: repeat });
+    },
+    [client, send],
+  );
   /** ×10 on the craft on screen (one tap, that craft only), bound to it and to the stamina shown. */
   const onX10 = useCallback(
     (pipe: number) => {
@@ -105,14 +114,17 @@ export function CraftingModal() {
       const items = amounts(live.refund);
       if (live.kind === 'gear') {
         const lost = live.staminaInvested > 0 ? ` The ${formatNumber(live.staminaInvested)} stamina you invested is lost.` : '';
-        const ok = await dialog.confirm({ title: `Cancel ${live.recipeName}?`, message: `You get back ${items}.${lost}`, confirmLabel: 'Cancel job', destructive: true });
+        const back = live.free ? 'This was a free debug craft: nothing is refunded.' : `You get back ${items}.`;
+        const ok = await dialog.confirm({ title: `Cancel ${live.recipeName}?`, message: `${back}${lost}`, confirmLabel: 'Cancel job', destructive: true });
         if (ok) await send({ type: 'CANCEL_CRAFT', pipe, jobId: live.id });
         return;
       }
       const message =
-        live.refund.length === 0
-          ? `The pipe is waiting for materials; nothing was taken. The ${formatNumber(live.done)} crafted stay yours.`
-          : `You get back ${items} from the craft in progress${live.prepaid > 0 ? ' and the prepaid crafts' : ''}. The ${formatNumber(live.done)} crafted stay yours.${live.x10 ? ' The ×10 stamina is not refunded.' : ''}`;
+        live.free && live.refund.length === 0
+          ? `This was a free debug craft: nothing is refunded. The ${formatNumber(live.done)} crafted stay yours.`
+          : live.refund.length === 0
+            ? `The pipe is waiting for materials; nothing was taken. The ${formatNumber(live.done)} crafted stay yours.`
+            : `You get back ${items} from the craft in progress${live.prepaid > 0 ? ' and the prepaid crafts' : ''}. The ${formatNumber(live.done)} crafted stay yours.${live.x10 ? ' The ×10 stamina is not refunded.' : ''}`;
       const ok = await dialog.confirm({ title: `Stop ${live.recipeName}?`, message, confirmLabel: 'Stop', destructive: true });
       if (ok) await send({ type: 'STOP_CRAFT', pipe, jobId: live.id });
     },
@@ -123,14 +135,16 @@ export function CraftingModal() {
    * of an idle pipe's list used its pipe, so from then on the list behaves like the header's Recipes view.
    */
   const onCraft = useCallback(
-    async (pipe: number | null, recipeId: string, stamina?: number) => {
-      const base = pipe === null ? { type: 'START_CRAFT' as const, recipeId } : { type: 'START_CRAFT' as const, pipe, recipeId };
+    async (pipe: number | null, recipeId: string, stamina?: number, force?: boolean) => {
+      const type = force ? ('DEBUG_FORCE_CRAFT' as const) : ('START_CRAFT' as const);
+      const base = pipe === null ? { type, recipeId } : { type, pipe, recipeId };
       const res = await sendForResult(stamina === undefined ? base : { ...base, stamina, maxCost: stamina });
       if (!res) return false;
       let startedPipe = pipe;
       for (const e of res.events) if (e.type === 'CRAFT_STARTED' && e.recipeId === recipeId && (pipe === null || e.pipe === pipe)) startedPipe = e.pipe;
       const name = recipeView(res.state, recipeId as RecipeId).name;
-      setStarted(startedPipe === null ? `${name} started` : `${name} started in Pipe ${startedPipe + 1}`);
+      const where = startedPipe === null ? `${name} started` : `${name} started in Pipe ${startedPipe + 1}`;
+      setStarted(force ? `${where} (debug)` : where);
       setSub({ kind: 'list', pipe: null });
       return true;
     },
@@ -193,6 +207,7 @@ export function CraftingModal() {
               invFull={invFull}
               onPick={openPicker}
               onInsta={onInsta}
+              onFinish={onFinish}
               onX10={onX10}
               onEnd={onEnd}
               onDone={onDone}
@@ -222,6 +237,7 @@ type PipeRowProps = {
   invFull: boolean;
   onPick: (pipe: number) => void;
   onInsta: (pipe: number, repeat: boolean) => Promise<boolean>;
+  onFinish: (pipe: number, repeat: boolean) => Promise<boolean>;
   onX10: (pipe: number) => void;
   onEnd: (pipe: number) => void;
   onDone: (pipe: number, node: HostInstance | null) => void;
@@ -237,15 +253,17 @@ const samePipeRow = (a: PipeRowProps, b: PipeRowProps) =>
   a.invFull === b.invFull &&
   a.onPick === b.onPick &&
   a.onInsta === b.onInsta &&
+  a.onFinish === b.onFinish &&
   a.onX10 === b.onX10 &&
   a.onEnd === b.onEnd &&
   a.onDone === b.onDone &&
   JSON.stringify(a.pipe) === JSON.stringify(b.pipe);
 
-const PipeRow = memo(function PipeRow({ pipe, paused, stamina, invFull, onPick, onInsta, onX10, onEnd, onDone }: PipeRowProps) {
+const PipeRow = memo(function PipeRow({ pipe, paused, stamina, invFull, onPick, onInsta, onFinish, onX10, onEnd, onDone }: PipeRowProps) {
   const n = pipe.index + 1;
   const index = pipe.index;
   const insta = useCallback(({ repeat }: { repeat: boolean }) => onInsta(index, repeat), [onInsta, index]);
+  const finish = useCallback(({ repeat }: { repeat: boolean }) => onFinish(index, repeat), [onFinish, index]);
   const x10 = useCallback(() => onX10(index), [onX10, index]);
   const end = useCallback(() => onEnd(index), [onEnd, index]);
   const done = useCallback((node: HostInstance | null) => onDone(index, node), [onDone, index]);
@@ -275,9 +293,9 @@ const PipeRow = memo(function PipeRow({ pipe, paused, stamina, invFull, onPick, 
     );
   }
   if (job.kind === 'gear') {
-    return <GearJobRow n={n} job={job} paused={paused} stamina={stamina} invFull={invFull} onInsta={insta} onCancel={end} onDone={done} />;
+    return <GearJobRow n={n} job={job} paused={paused} stamina={stamina} invFull={invFull} onInsta={insta} onFinish={finish} onCancel={end} onDone={done} />;
   }
-  return <MaterialJobRow n={n} job={job} paused={paused} stamina={stamina} onInsta={insta} onX10={x10} onStop={end} />;
+  return <MaterialJobRow n={n} job={job} paused={paused} stamina={stamina} onInsta={insta} onFinish={finish} onX10={x10} onStop={end} />;
 }, samePipeRow);
 
 /** The current craft's bar, "0:03 left" and the live "xx.yy%". */
@@ -299,12 +317,13 @@ type MaterialJobRowProps = {
   paused: boolean;
   stamina: number;
   onInsta: (info: { repeat: boolean }) => Promise<boolean>;
+  onFinish: (info: { repeat: boolean }) => Promise<boolean>;
   onX10: () => void;
   onStop: () => void;
 };
 
 /** A continuous material pipe: recipe, "Crafted N", then the craft in progress, or why it waits. */
-function MaterialJobRow({ n, job, paused, stamina, onInsta, onX10, onStop }: MaterialJobRowProps) {
+function MaterialJobRow({ n, job, paused, stamina, onInsta, onFinish, onX10, onStop }: MaterialJobRowProps) {
   const running = job.status === 'running';
   const tap = job.x10Tap;
   const waitingText = job.waitingFor.map((w) => `${itemName(w.defId)} (${formatNumber(w.have)}/${formatNumber(w.need)})`).join(', ');
@@ -354,6 +373,11 @@ function MaterialJobRow({ n, job, paused, stamina, onInsta, onX10, onStop }: Mat
         ) : null}
         <PixelButton label="Stop" onPress={onStop} stretch accessibilityHint="Asks to confirm; the craft in progress is refunded" />
       </View>
+      {DEV_TOOLS_ENABLED && running ? (
+        <View style={styles.buttons}>
+          <PixelButton label="Finish now (debug)" repeat={onFinish} stretch accessibilityLabel="Debug: finish this craft now, free" />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -365,12 +389,13 @@ type GearJobRowProps = {
   stamina: number;
   invFull: boolean;
   onInsta: (info: { repeat: boolean }) => Promise<boolean>;
+  onFinish: (info: { repeat: boolean }) => Promise<boolean>;
   onCancel: () => void;
   onDone: (node: HostInstance | null) => void;
 };
 
 /** A gear pipe (unchanged in 1.15.0): one piece; Insta / Cancel while crafting, "✓ Ready — Done" when finished. */
-function GearJobRow({ n, job, paused, stamina, invFull, onInsta, onCancel, onDone }: GearJobRowProps) {
+function GearJobRow({ n, job, paused, stamina, invFull, onInsta, onFinish, onCancel, onDone }: GearJobRowProps) {
   const rowRef = useRef<HostInstance>(null);
   return (
     <View ref={rowRef} style={[styles.pipe, styles.pipeActive, job.ready && styles.pipeReady]}>
@@ -409,6 +434,11 @@ function GearJobRow({ n, job, paused, stamina, invFull, onInsta, onCancel, onDon
             />
             <PixelButton label="Cancel" onPress={onCancel} stretch accessibilityHint="Asks to confirm; materials are refunded, invested stamina is not" />
           </View>
+          {DEV_TOOLS_ENABLED && !job.ready ? (
+            <View style={styles.buttons}>
+              <PixelButton label="Finish now (debug)" repeat={onFinish} stretch accessibilityLabel="Debug: finish this craft now, free" />
+            </View>
+          ) : null}
         </>
       )}
     </View>

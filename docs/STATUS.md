@@ -8,9 +8,9 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.22.0** | 1.1.0 |
+| Engine | **1.23.0** | 1.1.0 |
 | Save | **v21** | v2 |
-| Contents | Everything below, up to the compact Crafting recipe list and the Done reveal fix (UI only), gear rarity tiers and affixes (#36), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
+| Contents | Everything below, up to the Crafting debug buttons (Force craft, Finish now), the compact Crafting recipe list and the Done reveal fix (UI only), gear rarity tiers and affixes (#36), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is behind `dev` by PRs #3–#25. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
 - **Open PRs:** Expo Go previews by label plus per-branch saves (`feat/expo-test-previews`).
@@ -20,6 +20,13 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.23.0 · save v21 (unchanged)
+- **Crafting debug buttons** (`feat/crafting-debug`; owner-approved 2026-11-06; dev tools only):
+  - **Force craft (debug)** in the recipe popover (under Craft): starts the craft with no materials needed or taken. Material pipe: only the first craft is free (then it takes materials or waits as normal); gear: one free piece, rolled like a normal craft, invested stamina still paid. Enabled when materials are short; still greyed for "All pipes busy" and "Not enough stamina". Confirmation line "X started in Pipe N (debug)".
+  - **Finish now (debug)** on running material and gear pipes: finishes the current craft free (one craft per tap on a material pipe; gear turns Ready), hold to repeat.
+  - **Engine:** `DEBUG_FORCE_CRAFT`, `DEBUG_FINISH_CRAFT` (refused with `DEBUG_DISABLED` when debug is off; set `debugUsed`; logged and replayed). A forced craft carries an optional `free` flag on the job, so Stop / Cancel refund nothing for it (no material minting). No save change; goldens unchanged (version labels re-pinned).
+  - **Tests:** `tests/craftingDebug.test.ts`.
 
 ### Engine 1.22.0 · save v21 (unchanged)
 - **Compact Crafting recipe list and Done reveal fix** (`feat/crafting-compact`; owner-approved 2026-11-06; UI only, engine and save unchanged):

@@ -13,6 +13,9 @@
 //   INSTA_CRAFT   ceil(remaining minutes) stamina finishes the current craft now (also a ×10 one)
 //   STOP_CRAFT    ends a material job: refunds the inputs of the craft in progress (×10 included) and any prepaid ones
 //   COLLECT_CRAFT a ready gear piece goes into the inventory (Done)
+//   DEBUG_FORCE_CRAFT   (1.23.0) START_CRAFT whose first craft (the one piece for gear) takes and needs no inputs; the job
+//                 carries `free` until the next craft starts, so Stop / Cancel refund nothing for it (no minting)
+//   DEBUG_FINISH_CRAFT  (1.23.0) INSTA_CRAFT's effect at no stamina cost
 //
 // Gear jobs (1.14.0, unchanged): one piece, any invested stamina (0..50) paid at start and never refunded. Its quality (a
 // uniform integer in [floor, 100], floor = 1 per stamina + minQuality, capped at 100) and rarity are rolled
@@ -155,10 +158,14 @@ export function gearRarityWeights(recipe: RecipeDef) {
  * otherwise the pipe waits (`CRAFT_WAITING` once). Returns whether a craft started. Mutates `draft` (the crafting slice
  * and the inventory must already be the caller's copies).
  */
-function startNextCraft(draft: GameState, index: number, job: CraftJob, events: GameEvent[]): boolean {
+function startNextCraft(draft: GameState, index: number, job: CraftJob, events: GameEvent[], free = false): boolean {
   if (!isRecipeId(job.recipeId)) return false;
   const recipe = RECIPES[job.recipeId];
-  if ((job.prepaid ?? 0) > 0) {
+  // The previous craft's free mark ends here: every craft after a forced one pays (or waits) as normal.
+  delete job.free;
+  if (free) {
+    job.free = true;
+  } else if ((job.prepaid ?? 0) > 0) {
     job.prepaid = (job.prepaid ?? 0) - 1;
     if (job.prepaid <= 0) delete job.prepaid;
   } else if (shortInputs(draft, recipe, 1).length > 0) {
@@ -332,12 +339,15 @@ export function firstFreePipe(state: Pick<GameState, 'crafting'>): number | null
  * START_CRAFT: `recipeId` in pipe `pipe`, or (no `pipe`) in the first free open pipe (ALL_PIPES_BUSY when none).
  * Material: a continuous job; nothing is paid now beyond its first craft's inputs, and with too few the pipe waits.
  * Gear: one piece; every input and the invested stamina are paid at once, and the piece is rolled now.
+ * `free` (DEBUG_FORCE_CRAFT only): the first craft (the piece, for gear) takes and needs no inputs and the job is marked
+ * `free` so ending it refunds nothing for that craft; everything else (pipe rules, stamina, rolling) is unchanged.
  */
 export function startCraft(
   draft: GameState,
   cmd: { pipe?: unknown; recipeId: unknown; maxCost?: unknown; stamina?: unknown },
   now: number,
   events: GameEvent[],
+  free = false,
 ): CraftError {
   if (!isBuilt(draft, 'crafting')) return err('BUILDING_LOCKED', `Build the ${BUILDINGS.crafting.name} house first`);
   const c = draft.crafting;
@@ -365,18 +375,18 @@ export function startCraft(
     c.pipes[index] = job;
     c.nextJobSerial += 1;
     events.push({ type: 'CRAFT_STARTED', pipe: index, jobId: job.id, recipeId });
-    startNextCraft(draft, index, job, events);
+    startNextCraft(draft, index, job, events, free);
     return null;
   }
   if (!isCount(invest, 0) || invest > GEAR.craft.maxStamina) return err('INVALID_AMOUNT', `Invest 0 to ${GEAR.craft.maxStamina} stamina`);
-  const missing = shortInputs(draft, recipe, 1);
+  const missing = free ? [] : shortInputs(draft, recipe, 1);
   if (missing.length > 0) {
     const text = missing.map((i) => `${i.need} ${nameOf(i.defId)} (you have ${i.have})`).join(', ');
     return err('NOT_ENOUGH_ITEMS', `${recipe.name} needs ${text}`);
   }
   if (invest > maxCost) return err('COST_CHANGED', `This job now costs ${invest} stamina, more than the ${maxCost} shown`);
   if (invest > draft.stamina.current) return err('NOT_ENOUGH_STAMINA', `Needs ${invest} stamina, has ${draft.stamina.current}`);
-  for (const i of recipe.inputs) consumeItem(draft, i.defId, i.quantity);
+  if (!free) for (const i of recipe.inputs) consumeItem(draft, i.defId, i.quantity);
   if (invest > 0) draft.stamina = { ...draft.stamina, current: draft.stamina.current - invest };
   // The piece is rolled now, the moment it is paid for: quality, then rarity (two draws of the main stream). A rare or epic piece
   // then rolls its affixes (1.22.0) from a salted sub-stream, so the main stream is exactly what it was.
@@ -393,6 +403,7 @@ export function startCraft(
     x10: false,
     status: 'running',
     startedAt: now,
+    ...(free ? { free: true } : {}),
     gear: { staminaInvested: invest, quality: q.value, rarity: r.value, ...(affixes ? { affixes } : {}) },
   };
   c.pipes[index] = job;
@@ -408,7 +419,8 @@ export function startCraft(
 export function stopRefund(job: CraftJob): ItemAmount[] {
   if (!isRecipeId(job.recipeId)) return [];
   const recipe = RECIPES[job.recipeId];
-  const current = job.status === 'waiting' || job.status === 'ready' ? 0 : job.x10 ? CRAFTING.x10.multiplier : 1;
+  // A free (forced) craft took no inputs, so nothing comes back for it; its ×10 tap still took 9× the inputs.
+  const current = job.status === 'waiting' || job.status === 'ready' ? 0 : job.x10 ? CRAFTING.x10.multiplier - (job.free ? 1 : 0) : job.free ? 0 : 1;
   return inputsFor(recipe, current + (job.prepaid ?? 0)).filter((i) => i.quantity > 0);
 }
 
@@ -464,9 +476,15 @@ export function cancelCraft(draft: GameState, pipe: unknown, jobId: unknown, eve
 function shownCraft(draft: GameState, cmd: { pipe: unknown; jobId: unknown; craft: unknown; maxCost: unknown }): { index: number; job: CraftJob } | { error: CraftError } {
   if (!isCount(cmd.maxCost, 1)) return { error: err('INVALID_AMOUNT', `Invalid maxCost ${String(cmd.maxCost)}`) };
   if (!isCount(cmd.craft, 1)) return { error: err('INVALID_COMMAND', `Invalid craft ${String(cmd.craft)}`) };
+  return shownRunningCraft(draft, cmd);
+}
+
+/** As shownCraft without the amounts; `craft` is optional here (DEBUG_FINISH_CRAFT) and, when given, must be a count. */
+function shownRunningCraft(draft: GameState, cmd: { pipe: unknown; jobId: unknown; craft?: unknown }): { index: number; job: CraftJob } | { error: CraftError } {
+  if (cmd.craft !== undefined && !isCount(cmd.craft, 1)) return { error: err('INVALID_COMMAND', `Invalid craft ${String(cmd.craft)}`) };
   const s = shownJob(draft, cmd.pipe, cmd.jobId);
   if ('error' in s) return s;
-  if (cmd.craft !== s.job.done + 1) return { error: err('CRAFT_CHANGED', 'That craft already finished') };
+  if (cmd.craft !== undefined && cmd.craft !== s.job.done + 1) return { error: err('CRAFT_CHANGED', 'That craft already finished') };
   if (s.job.status === 'ready') return { error: err('CRAFT_READY', 'The piece is finished: collect it with Done') };
   if (s.job.status === 'waiting') return { error: err('CRAFT_WAITING', 'The pipe is waiting for materials') };
   if (s.job.status !== 'running' || !isRecipeId(s.job.recipeId)) return { error: err('INVENTORY_FULL', 'This craft is done and waits for room in the inventory') };
@@ -490,6 +508,23 @@ export function instaCraft(draft: GameState, cmd: { pipe: unknown; jobId: unknow
   // Gear waits in the pipe (ready), so it needs no room now; materials go straight into the inventory.
   if (recipe.kind !== 'gear' && !canAdd(draft.inventory, recipe.output.defId)) return err('INVENTORY_FULL', 'No room in the inventory for the crafted items');
   draft.stamina = { ...draft.stamina, current: draft.stamina.current - cost };
+  job.progressMs = job.craftMs;
+  deliver(draft, index, events, null);
+  return null;
+}
+
+/**
+ * DEBUG_FINISH_CRAFT: INSTA_CRAFT's effect for free. Finishes the pipe's current craft now: a material pipe delivers that
+ * one craft (the next starts or waits as normal), a gear job turns ready. Bound to the job (and the craft number, when
+ * given: CRAFT_CHANGED once it finished). Same refusals as INSTA_CRAFT: CRAFT_READY, CRAFT_WAITING, INVENTORY_FULL (held,
+ * or no room for the output), NO_CRAFT_JOB on an idle pipe. Costs nothing.
+ */
+export function finishCraftDebug(draft: GameState, cmd: { pipe: unknown; jobId: unknown; craft?: unknown }, events: GameEvent[]): CraftError {
+  const s = shownRunningCraft(draft, cmd);
+  if ('error' in s) return s.error;
+  const { index, job } = s;
+  const recipe = RECIPES[job.recipeId as RecipeId];
+  if (recipe.kind !== 'gear' && !canAdd(draft.inventory, recipe.output.defId)) return err('INVENTORY_FULL', 'No room in the inventory for the crafted items');
   job.progressMs = job.craftMs;
   deliver(draft, index, events, null);
   return null;

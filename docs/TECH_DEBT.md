@@ -82,6 +82,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 
 - [PR #34, 50] `tests/golden119.test.ts:176` — 1.19 hash re-pinned (fff9656e → 2e1282a3) without proof. Hash `asV19(s)` against the old pin like the 1.13–1.17 pins (move the helper to tests/helpers.ts).
 - [PR #35, 30] `tests/crafting.test.ts`, `tests/gear.test.ts` — hard-coded catalog counts and iron skip list. Fix: derive from GEAR_SETS × GEAR_PIECE_IDS.
+- [PR #38, 55] `tests/craftingDebug.test.ts` — no split-invariance test for a forced material job (a→b→c vs a→c, including held then released). Add one.
 - [PR #37, 40] `src/components/crafting/CraftingModal.tsx` presentReveal — the 400 ms gap before a new reveal is untested. Extract a pure `revealDelayMs` and unit-test it.
 
 ## Docs and workflow
@@ -93,3 +94,5 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#4, 45] `pr-review-council/SKILL.md:13-18` — `R=`/`$N` shell variables don't survive between agent tool calls; inline the repo and PR number.
 - [#32, 25] `config/dungeons.ts`, `docs/PRODUCT.md`, `docs/ENGINE.md` — the locked-start decision is dated 2026-11-05 in some places and 2026-11-04 in others (same owner message, 2026-11-04 local). Use one date.
 - [PR #37, 55] `src/client/types.ts` (DispatchResult.events doc) — says events include the time simulated before the command; only applyCommand's events are returned (pre-command advance() events go to rows / the away summary). Reword the comment.
+- [PR #38, 50] `docs/ENGINE.md` debug tools paragraph — does not list Force craft / Finish now. Append them.
+- [PR #38, 25] `docs/ENGINE.md` 1.23.0 note — a downgrade with a free job in flight would refund it (the old engine ignores `free`); accepted for debug. Add one line.

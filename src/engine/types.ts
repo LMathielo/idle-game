@@ -466,6 +466,11 @@ export type CraftJob = {
    * inventory). The next crafts use them before drawing new inputs; Stop refunds them. Missing = 0.
    */
   prepaid?: number;
+  /**
+   * DEBUG_FORCE_CRAFT only (engine 1.23.0): the craft in progress (a gear job's one piece) took no inputs. Stop / Cancel
+   * refund nothing for it (a ×10 tap on it still refunds its 9× extra). Cleared when the next craft starts. Missing = false.
+   */
+  free?: true;
   status: CraftJobStatus;
   /** Engine time the job started. Informational only. */
   startedAt: number;
