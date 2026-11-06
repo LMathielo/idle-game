@@ -215,7 +215,11 @@ describe('unlocking Hard and Extreme', () => {
     const strong = structuredClone(heroGame('normal'));
     strong.character.spentPoints = { ...strong.character.spentPoints, strength: 5000 };
     strong.character.hp = getDerivedStats(strong).maxHp.value;
-    const won = simulate(ok(strong, { type: 'ENTER_BOSS', bossId: 'troll_chieftain', maxCost: 10 }), T0 + 5 * SEC);
+    // 1.25.0: the hero's strike at fight time 0 is played by the command itself, so the one-shot kill (and its unlock) is in ENTER_BOSS's result.
+    const entered = applyCommand(strong, cmd({ type: 'ENTER_BOSS', bossId: 'troll_chieftain', maxCost: 10 }), T0 + 5 * SEC);
+    if (!entered.ok) throw new Error(entered.error.message);
+    const won = { state: entered.state, events: entered.events, summary: entered.summary };
+    expect(won.state.activity).toBeNull();
     expect(won.state.dungeon.lastFight).toMatchObject({ won: true, difficulty: 'normal' });
     expect(won.events).toContainEqual({ type: 'DIFFICULTY_UNLOCKED', tier: 1, difficulty: 'hard' });
     expect(won.events.filter((e) => e.type === 'DIFFICULTY_UNLOCKED')).toHaveLength(1);

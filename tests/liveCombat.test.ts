@@ -39,6 +39,7 @@ import {
   searchMsFor,
   simulate,
   SKILL_XP_CURVE,
+  strikeTimeMs,
   xpToNext,
 } from '../src/engine';
 import { apply, builtGame, fightSide, HOUR, makeClient, MIN, SEC, T0, progressMs, withCore } from './helpers';
@@ -139,31 +140,66 @@ describe('hero XP curve (base 100)', () => {
 });
 
 describe('strike timing', () => {
-  it('both sides strike on their own timers from the fight start; the first strikes land at t = interval; ties go to the hero', () => {
+  it('the opening (1.25.0): the hero strikes at t = 0, the monster 300 ms later, then each every own interval', () => {
+    expect([COMBAT.heroFirstStrikeMs, COMBAT.enemyFirstStrikeMs]).toEqual([0, 300]);
     const r = resolveFight({ hp: 1000, ...side(1000) }, { hp: 1000, ...side(1000) }, createRng(1));
+    expect(r.log.slice(0, 6).map((e) => [e.atMs, e.actor, e.strike])).toEqual([
+      [0, 'hero', 1],
+      [300, 'enemy', 1],
+      [1000, 'hero', 2],
+      [1300, 'enemy', 2],
+      [2000, 'hero', 3],
+      [2300, 'enemy', 3],
+    ]);
+  });
+
+  it('strike n of a side lands at firstStrikeMs + (n - 1) x its interval (the one formula)', () => {
+    expect([1, 2, 3, 10].map((n) => strikeTimeMs(0, 1000, n))).toEqual([0, 1000, 2000, 9000]);
+    expect([1, 2, 3, 10].map((n) => strikeTimeMs(300, 1000, n))).toEqual([300, 1300, 2300, 9300]);
+    expect(strikeTimeMs(300, 450, 4)).toBe(1650);
+  });
+
+  it('the old timing (first strike one interval in) is a fight option: both sides at t = interval, ties go to the hero, then the pack order', () => {
+    const old = { heroFirstStrikeMs: 1000, enemyFirstStrikeMs: 1000 };
+    const r = resolveFight({ hp: 1000, ...side(1000) }, { hp: 1000, ...side(1000) }, createRng(1), COMBAT.maxFightMs, old);
     expect(r.log.slice(0, 4).map((e) => [e.atMs, e.actor, e.strike])).toEqual([
       [1000, 'hero', 1],
       [1000, 'enemy', 1],
       [2000, 'hero', 2],
       [2000, 'enemy', 2],
     ]);
+    // Any other offsets can tie too: both open at 0 -> the hero first.
+    const zero = resolveFight({ hp: 1000, ...side(1000) }, { hp: 1000, ...side(1000) }, createRng(1), COMBAT.maxFightMs, { heroFirstStrikeMs: 0, enemyFirstStrikeMs: 0 });
+    expect(zero.log.slice(0, 4).map((e) => [e.atMs, e.actor])).toEqual([[0, 'hero'], [0, 'enemy'], [1000, 'hero'], [1000, 'enemy']]);
   });
 
   it('different intervals: each side keeps its own rhythm, merged in time order (hero first on a tie)', () => {
     const r = resolveFight({ hp: 1000, ...side(700) }, { hp: 1000, ...side(1000) }, createRng(1), 3500);
     expect(r.log.map((e) => [e.atMs, e.actor])).toEqual([
+      [0, 'hero'],
+      [300, 'enemy'],
       [700, 'hero'],
-      [1000, 'enemy'],
+      [1300, 'enemy'],
       [1400, 'hero'],
-      [2000, 'enemy'],
       [2100, 'hero'],
+      [2300, 'enemy'],
       [2800, 'hero'],
-      [3000, 'enemy'],
+      [3300, 'enemy'],
       [3500, 'hero'],
     ]);
-    // A slower hero: the enemy gets the early strikes; at 3 s both are due and the hero goes first.
+    // A slower hero: the monster gets the early strikes after the opening hit.
     const slow = resolveFight({ hp: 1000, ...side(1500) }, { hp: 1000, ...side(1000) }, createRng(1), 3000);
     expect(slow.log.map((e) => [e.atMs, e.actor])).toEqual([
+      [0, 'hero'],
+      [300, 'enemy'],
+      [1300, 'enemy'],
+      [1500, 'hero'],
+      [2300, 'enemy'],
+      [3000, 'hero'],
+    ]);
+    // On the old timing the same fight ties at 3 s and the hero goes first.
+    const old = resolveFight({ hp: 1000, ...side(1500) }, { hp: 1000, ...side(1000) }, createRng(1), 3000, { heroFirstStrikeMs: 1500, enemyFirstStrikeMs: 1000 });
+    expect(old.log.map((e) => [e.atMs, e.actor])).toEqual([
       [1000, 'enemy'],
       [1500, 'hero'],
       [2000, 'enemy'],
@@ -173,19 +209,31 @@ describe('strike timing', () => {
   });
 
   it('a faster side can win before the other strikes at all', () => {
-    const r = resolveFight({ hp: 10, ...fightSide({ damage: { min: 50, max: 50 }, attackIntervalMs: 400 }) }, { hp: 60, ...fightSide({ damage: { min: 99, max: 99 } }) }, createRng(3));
-    expect(r).toMatchObject({ won: true, durationMs: 800, heroHp: 10 });
+    const r = resolveFight({ hp: 10, ...fightSide({ damage: { min: 50, max: 50 }, attackIntervalMs: 150 }) }, { hp: 60, ...fightSide({ damage: { min: 99, max: 99 } }) }, createRng(3));
+    expect(r).toMatchObject({ won: true, durationMs: 150, heroHp: 10 });
     expect(r.log.map((e) => e.actor)).toEqual(['hero', 'hero']);
   });
 
   it('nextFightEvent: the time limit comes after the last strike due at or before it', () => {
     const f = newFight('rat', side(1000), side(1000), 10, 10, 10);
-    expect(nextFightEvent(f, 60_000)).toEqual({ type: 'strike', actor: 'hero', mob: 0, atMs: 1000 });
+    expect(nextFightEvent(f, 60_000)).toEqual({ type: 'strike', actor: 'hero', mob: 0, atMs: 0 });
+    f.heroStrikes = 1;
+    expect(nextFightEvent(f, 60_000)).toEqual({ type: 'strike', actor: 'enemy', mob: 0, atMs: 300 });
+    // The hero's 61st strike is due at exactly 60 s: it still lands; the monster's 61st (60.3 s) is past the limit.
     f.heroStrikes = 60;
-    f.mobs[0].strikes = 59;
-    expect(nextFightEvent(f, 60_000)).toEqual({ type: 'strike', actor: 'enemy', mob: 0, atMs: 60_000 });
     f.mobs[0].strikes = 60;
+    expect(nextFightEvent(f, 60_000)).toEqual({ type: 'strike', actor: 'hero', mob: 0, atMs: 60_000 });
+    f.heroStrikes = 61;
     expect(nextFightEvent(f, 60_000)).toEqual({ type: 'time_limit', atMs: 60_000 });
+    // A strike on the old timing sits at the limit too (tie rule unchanged): the monster's 60th, due at 60 s, with the hero's 60th.
+    const o = newFight('rat', side(1000), side(1000), 10, 10, 10, { heroFirstStrikeMs: 1000, enemyFirstStrikeMs: 1000 });
+    o.heroStrikes = 59;
+    o.mobs[0].strikes = 59;
+    expect(nextFightEvent(o, 60_000)).toEqual({ type: 'strike', actor: 'hero', mob: 0, atMs: 60_000 });
+    o.heroStrikes = 60;
+    expect(nextFightEvent(o, 60_000)).toEqual({ type: 'strike', actor: 'enemy', mob: 0, atMs: 60_000 });
+    o.mobs[0].strikes = 60;
+    expect(nextFightEvent(o, 60_000)).toEqual({ type: 'time_limit', atMs: 60_000 });
   });
 
   it('in a dungeon the fight uses the hero derived stats and the enemy config, frozen at its start', () => {
@@ -203,9 +251,12 @@ describe('strike timing', () => {
       skills: [],
     });
     expect(f.mobs[0].side).toEqual({ damage: ENEMIES.rat.damage, armor: ENEMIES.rat.armor, magicDamage: 0, magicResist: ENEMIES.rat.magicResist, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000, skills: [] });
-    expect(f).toMatchObject({ elapsedMs: 0, heroHpStart: 50, heroMaxHp: 50, log: [] });
+    // 1.25.0: the opening is stored on the fight, and the hero's strike at fight time 0 is already played.
+    expect(f).toMatchObject({ elapsedMs: 0, heroHpStart: 50, heroMaxHp: 50, heroStrikes: 1, heroFirstStrikeMs: 0, enemyFirstStrikeMs: 300 });
+    expect(f.log.map((e) => [e.atMs, e.actor])).toEqual([[0, 'hero']]);
     expect(f.mobs).toHaveLength(1);
-    expect(f.mobs[0]).toMatchObject({ variant: 'base', multBp: 10_000, hp: 30, maxHp: 30 });
+    expect(f.mobs[0]).toMatchObject({ variant: 'base', multBp: 10_000, maxHp: 30, strikes: 0 });
+    expect(f.mobs[0].hp).toBeLessThan(30); // the opening hit landed
     // 1.20.0: a dungeon fight has the plain 60 s limit, no regen, no skills, no stun
     expect(f).toMatchObject({ maxFightMs: 60_000, heroStunStrikes: 0 });
     expect(f.mobs[0]).toMatchObject({ regenBp: 0, regenProgress: 0, skillReady: {} });
@@ -223,11 +274,12 @@ describe('fight time limit', () => {
     });
     const search = searchMsFor('troll_bridge', s);
     const mid = simulate(s, T0 + search + 59_999).state;
-    expect(fightOf(mid)?.log).toHaveLength(118);
+    expect(fightOf(mid)?.log).toHaveLength(120); // hero 0..59 s (60), monster 0.3..59.3 s (60)
     const r = simulate(s, T0 + search + 60_000);
     const f = r.state.dungeon.lastFight!;
     expect(f).toMatchObject({ won: false, endReason: 'time_limit', durationMs: 60_000, heroHpEnd: 0, rewards: { heroXp: 0, gold: 0, items: {}, itemsLost: {} } });
-    expect(f.log).toHaveLength(120);
+    expect(f.log).toHaveLength(121); // the hero's strike due at exactly 60 s still lands; the monster's (60.3 s) is past the limit
+    expect(f.log.at(-1)).toMatchObject({ atMs: 60_000, actor: 'hero' });
     expect(r.state.character.hp).toBe(0);
     expect(r.state.dungeon.byDungeon.troll_bridge).toEqual({ runs: 1, wins: 0, losses: 1 });
     expect(r.summary.dungeon).toEqual({ runs: 1, wins: 0, losses: 1 });
@@ -286,11 +338,11 @@ describe('determinism across simulate boundaries', () => {
    * A timeline where T0 + 8 h falls inside a fight with strikes already landed and at least one more second of fight to
    * go. `s` is the state at exactly 8 h (no cap: requested = 8 h). Wolf Den (1.16.0): a new hero loses there in a few
    * seconds, so it never levels up and every fight lasts several strikes (on the Rat Cellar, 8 h of wins give level
-   * points that make every fight a one-strike kill). The search progress at the start, 36,250 ms (re-found in 1.19.0, when the crit draw moved the rolls, and in 1.18.0, when every search became 2:00; it was
-   * 252,250 ms of a 5:00 search), was found once by scanning 0..2:00 in 250 ms steps (about 1,000 full 8 h simulates, too slow to repeat in every test); computed once per
+   * points that make every fight a one-strike kill). The search progress at the start, 110,500 ms (re-found in 1.25.0, when the fights got their opening; it was 36,250 ms in 1.19.0, when the crit draw
+   * moved the rolls, and in 1.18.0, when every search became 2:00; it was 252,250 ms of a 5:00 search), was found once by scanning 0..2:00 in 250 ms steps (about 1,000 full 8 h simulates, too slow to repeat in every test); computed once per
    * file and checked, so a rules change that moves the fights fails here loudly.
    */
-  const CAP_IN_FIGHT_PROGRESS_MS = 36_250;
+  const CAP_IN_FIGHT_PROGRESS_MS = 110_500;
   let capPick: { g: GameState; s: GameState } | null = null;
   function capInsideFight(): { g: GameState; s: GameState } {
     if (capPick) return capPick;
@@ -380,7 +432,7 @@ describe('determinism across simulate boundaries', () => {
     clock.advance(1500);
     await client.tick();
     const mid = fightOf(client.getState())!;
-    expect(mid.log.map((e) => e.atMs)).toEqual([1000, 1000]);
+    expect(mid.log.map((e) => e.atMs)).toEqual([0, 300, 1000, 1300]);
     await client.persist(); // app goes to the background mid-fight
 
     // Killed. Relaunched 40 minutes later with the same repository.
@@ -426,7 +478,7 @@ describe('skip: search only', () => {
   it('stopping mid-fight is a forfeit: a loss with the normal loss rules (0 HP, no rewards, counted, lastFight)', () => {
     const s = simulate(apply(runningIn('rat_cellar', 6), { type: 'SKIP_DUNGEON_RUN', run: 91, maxCost: 2 }, T0), T0 + 1500).state;
     const fight = fightOf(s)!;
-    expect(fight.log).toHaveLength(2);
+    expect(fight.log).toHaveLength(4);
     const stop = applyCommand(s, { id: 'st', type: 'STOP_ACTIVITY' }, T0 + 1500);
     if (!stop.ok) throw new Error(stop.error.message);
     expect(stop.state.activity).toBeNull();
@@ -490,7 +542,7 @@ describe('skip: search only', () => {
     const fight = dungeonRunView(simulate(s, T0 + SEARCH_MS + 1000).state)!;
     expect(fight).toMatchObject({ phase: 'fight', skipCost: null, remainingMs: 0, fraction: 1 });
     expect(fight.fight).toMatchObject({ elapsedMs: 1000, maxFightMs: 60_000, heroMaxHp: 50, enemyMaxHp: 30 });
-    expect(fight.fight!.log).toHaveLength(2);
+    expect(fight.fight!.log.map((e) => [e.atMs, e.actor])).toEqual([[0, 'hero'], [300, 'enemy'], [1000, 'hero']]);
   });
 });
 
@@ -603,7 +655,8 @@ describe('frozen v8 save (tests/fixtures/save-v8.json) → v9', () => {
     const t = s.time.lastSimulatedAt;
     const next = simulate(s, t + 1).state;
     expect(next.activity).toMatchObject({ phase: 'fight' });
-    expect(fightOf(next)).toMatchObject({ elapsedMs: 1, log: [] });
+    expect(fightOf(next)).toMatchObject({ elapsedMs: 1 });
+    expect(fightOf(next)!.log.map((e) => [e.atMs, e.actor])).toEqual([[0, 'hero']]); // the opening strike, 1 ms ago
     const later = simulate(s, t + MIN).state;
     expect(later.dungeon.totals.runs).toBe(38);
   });

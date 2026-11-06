@@ -1,6 +1,8 @@
 // Live fight rules (pure, deterministic). The engine produces the log; the UI shows it as it lands.
 //
-//   each side strikes on its own timer from the fight's start: strike n of a side lands at n × its attackIntervalMs
+//   each side strikes on its own timer from the fight's start: strike n (1-based) of a side lands at
+//     firstStrikeMs + (n - 1) × its attackIntervalMs        (1.25.0: hero first strike 0, every mob 300 ms; COMBAT, stored on the fight)
+//   (before 1.25.0 the first strike landed one interval in, i.e. firstStrikeMs = the interval: a fight in progress keeps that)
 //   on a tie the hero strikes first
 //   PACKS (1.24.0, save v22): a fight has one or more mobs (Normal and bosses: one). Every ALIVE mob strikes on its own timer from the
 //     fight's start; the hero strikes the FIRST alive mob in pack order (no overkill carry-over: a strike only hurts its target; when it
@@ -80,10 +82,27 @@ export function safeInterval(ms: number): number {
   return Number.isFinite(ms) ? Math.max(1, Math.floor(ms)) : COMBAT.maxFightMs;
 }
 
+/** A whole number of ms ≥ 0: when a side's first strike lands. */
+function safeOffset(ms: number | undefined, fallback: number): number {
+  const v = ms === undefined ? fallback : ms;
+  return Number.isFinite(v) ? Math.max(0, Math.floor(v)) : fallback;
+}
+
+/**
+ * Fight time of strike number `strikeNo` (1-based) of a side that opens at `firstStrikeMs` and strikes every `intervalMs`:
+ * firstStrikeMs + (strikeNo - 1) × intervalMs. The one strike-time formula (docs/ENGINE.md "Fight").
+ */
+export function strikeTimeMs(firstStrikeMs: number, intervalMs: number, strikeNo: number): number {
+  return firstStrikeMs + (strikeNo - 1) * intervalMs;
+}
+
 /** What a fight needs besides the two sides: set for a boss (1.20.0), all defaults for a dungeon enemy. */
 export type FightOptions = {
   /** Time limit, ms (default COMBAT.maxFightMs). */
   maxFightMs?: number;
+  /** When the hero's / every mob's first strike lands, fight ms (defaults COMBAT.heroFirstStrikeMs / enemyFirstStrikeMs; the old timing = one interval). */
+  heroFirstStrikeMs?: number;
+  enemyFirstStrikeMs?: number;
   /** Enemy HP regeneration, basis points of its max HP per second (default 0). */
   enemyRegenBp?: number;
 };
@@ -135,7 +154,7 @@ export function newPackFight(
   mobs: readonly MobInit[],
   heroHp: number,
   heroMaxHp: number,
-  options: Pick<FightOptions, 'maxFightMs'> = {},
+  options: Pick<FightOptions, 'maxFightMs' | 'heroFirstStrikeMs' | 'enemyFirstStrikeMs'> = {},
 ): ActiveFight {
   return {
     enemyId,
@@ -144,6 +163,8 @@ export function newPackFight(
     heroMaxHp,
     hero: copySide(hero),
     heroStrikes: 0,
+    heroFirstStrikeMs: safeOffset(options.heroFirstStrikeMs, COMBAT.heroFirstStrikeMs),
+    enemyFirstStrikeMs: safeOffset(options.enemyFirstStrikeMs, COMBAT.enemyFirstStrikeMs),
     mobs: mobs.map(newMob),
     maxFightMs: Number.isFinite(options.maxFightMs) ? Math.max(1, Math.floor(options.maxFightMs!)) : COMBAT.maxFightMs,
     heroStunStrikes: 0,
@@ -185,13 +206,13 @@ export type FightEvent = { type: 'strike'; actor: 'hero' | 'enemy'; mob: number;
  * The limit is the fight's own (frozen at its start).
  */
 export function nextFightEvent(fight: ActiveFight, maxFightMs: number = fight.maxFightMs): FightEvent {
-  let atMs = (fight.heroStrikes + 1) * fight.hero.attackIntervalMs;
+  let atMs = strikeTimeMs(fight.heroFirstStrikeMs, fight.hero.attackIntervalMs, fight.heroStrikes + 1);
   let actor: 'hero' | 'enemy' = 'hero';
   let mob = frontMob(fight);
   for (let i = 0; i < fight.mobs.length; i++) {
     const m = fight.mobs[i];
     if (m.hp <= 0) continue;
-    const at = (m.strikes + 1) * m.side.attackIntervalMs;
+    const at = strikeTimeMs(fight.enemyFirstStrikeMs, m.side.attackIntervalMs, m.strikes + 1);
     if (at < atMs) {
       atMs = at;
       actor = 'enemy';
@@ -357,7 +378,7 @@ export function resolveFight(
   if (heroHp <= 0) return { won: false, endReason: 'no_hp', durationMs: 0, heroHp: 0, enemyHp: startHp, log: [], rng };
   // `options.enemyRegenBp` is the regen of the one enemy; a pack lists each mob's own `regenBp`.
   const mobs: MobInit[] = pack.map((m) => ({ side: m, hp: m.hp, regenBp: single ? options.enemyRegenBp : m.regenBp }));
-  const fight = newPackFight('rat', hero, mobs, heroHp, heroHp, { maxFightMs });
+  const fight = newPackFight('rat', hero, mobs, heroHp, heroHp, { maxFightMs, heroFirstStrikeMs: options.heroFirstStrikeMs, enemyFirstStrikeMs: options.enemyFirstStrikeMs });
   const left = () => fight.mobs.reduce((n, m) => n + m.hp, 0);
   let r = rng;
   for (;;) {
@@ -425,6 +446,9 @@ export type FightOutcome = {
   endReason: FightEndReason;
   durationMs: number;
   enemyId: EnemyId;
+  /** The fight's opening (1.25.0): when the first strikes of the hero and of the mobs landed, fight ms. */
+  heroFirstStrikeMs: number;
+  enemyFirstStrikeMs: number;
   heroHpStart: number;
   heroMaxHp: number;
   /** The whole pack's max HP and what was left (sums over `mobs`). */
@@ -446,6 +470,8 @@ export function outcomeOf(fight: ActiveFight, endReason: FightEndReason, duratio
     endReason,
     durationMs,
     enemyId: fight.enemyId,
+    heroFirstStrikeMs: fight.heroFirstStrikeMs,
+    enemyFirstStrikeMs: fight.enemyFirstStrikeMs,
     heroHpStart: fight.heroHpStart,
     heroMaxHp: fight.heroMaxHp,
     enemyMaxHp: mobs.reduce((n, m) => n + m.maxHp, 0),

@@ -16,6 +16,7 @@ import {
   ENEMIES,
   fightView,
   getDerivedStats,
+  heroCombatSide,
   type GameState,
   hashState,
   mobName,
@@ -167,9 +168,12 @@ describe('rolling a pack', () => {
     expect(f.mobs.map((m) => m.variant)).toEqual(by.variants);
     expect(f.mobs.map((m) => m.multBp)).toEqual(by.mults);
     expect(f.mobs.map((m) => m.maxHp)).toEqual(by.mults.map((bp) => scaleStat(ENEMIES.rat.hp, bp)));
-    expect(at.rng).toEqual(by.rng);
-    // Every mob starts at full HP, at fight time 0, on its own timer.
-    expect(f.mobs.every((m) => m.hp === m.maxHp && m.strikes === 0)).toBe(true);
+    // The pack is rolled (1 + size draws), then the hero's opening strike at t = 0 draws its roll + crit and nothing else has struck yet.
+    expect(at.rng).toEqual(skip(by.rng, 2));
+    // Every mob starts at full HP (but the front one, just hit by the opening strike), at fight time 0; no monster has struck (its first is at 300 ms).
+    expect(f.mobs.every((m) => m.strikes === 0)).toBe(true);
+    expect(f.mobs.slice(1).every((m) => m.hp === m.maxHp)).toBe(true);
+    expect(f.heroStrikes).toBe(1);
     expect(f.elapsedMs).toBe(0);
     expect(f.maxFightMs).toBe(60_000);
   });
@@ -177,9 +181,17 @@ describe('rolling a pack', () => {
   it('a Normal run of the same hero draws nothing at the start of the fight and plays one plain mob', () => {
     const s = start(openGame(25, 4242), 'rat_cellar', 'normal');
     const at = simulate(s, T0 + searchMsFor('rat_cellar', s)).state;
-    expect(at.rng).toEqual(s.rng);
-    expect(fightOf(at)!.mobs).toHaveLength(1);
-    expect(fightOf(at)!.mobs[0]).toMatchObject({ variant: 'base', multBp: 10_000, maxHp: ENEMIES.rat.hp });
+    // This hero one-shots the rat with his opening strike (t = 0): the fight is already over at the instant the search ends.
+    const f = at.dungeon.lastFight!;
+    expect(f.won).toBe(true);
+    expect(f.durationMs).toBe(0);
+    expect(f.mobs).toHaveLength(1);
+    expect(f.mobs[0]).toMatchObject({ variant: 'base', multBp: 10_000, maxHp: ENEMIES.rat.hp });
+    // No pack draws: the stream is the opening strike (roll + crit), then the reward rolls (gold, the skin drop).
+    let rng = skip(s.rng, 2);
+    rng = nextInt(rng, DUNGEONS.rat_cellar.rewards.gold.min, DUNGEONS.rat_cellar.rewards.gold.max).rng;
+    rng = chance(rng, 0.5).rng;
+    expect(at.rng).toEqual(rng);
   });
 });
 
@@ -222,7 +234,8 @@ describe('pack combat (all mobs fight at once, the hero strikes the front-most a
   });
 
   it('every alive mob strikes on its own timer from the fight start; a dead mob falls silent', () => {
-    // The hero is too slow to matter (50 s); mobs on 700 / 1100 / 1300 ms timers; mob 0 is killed (by hand) after its strike at 1400 ms.
+    // The hero is too slow to matter beyond his opening strike (50 s interval); mobs on 700 / 1100 / 1300 ms timers, each opening 300 ms
+    // into the fight; mob 0 is killed (by hand) after its 2nd strike, at 1000 ms (300, 1000, 1700...).
     const f = newPackFight('rat', hero(1, 50_000), [mob(1000, 700), mob(1000, 1100), mob(1000, 1300)], 1_000_000, 1_000_000);
     const seen: [number, number][] = [];
     let rng = createRng(3);
@@ -231,15 +244,25 @@ describe('pack combat (all mobs fight at once, the hero strikes the front-most a
       if (ev.type === 'time_limit' || ev.atMs > 4000) break;
       seen.push([ev.mob, ev.atMs]);
       rng = strike(f, ev.actor, ev.atMs, 1_000_000, rng, ev.mob).rng;
-      if (ev.atMs === 1400) f.mobs[0].hp = 0;
+      if (ev.actor === 'enemy' && ev.mob === 0 && ev.atMs === 1000) f.mobs[0].hp = 0;
     }
-    expect(seen).toEqual([[0, 700], [1, 1100], [2, 1300], [0, 1400], [1, 2200], [2, 2600], [1, 3300], [2, 3900]]);
+    // [mob, atMs]: the hero opens at 0 (on the front mob), then all three mobs at 300 ms, then each on its own interval.
+    expect(seen).toEqual([[0, 0], [0, 300], [1, 300], [2, 300], [0, 1000], [1, 1400], [2, 1600], [1, 2500], [2, 2900], [1, 3600]]);
   });
 
   it('same-instant ties: the hero first, then the mobs in pack order', () => {
-    const f = newPackFight('rat', hero(1), [mob(100), mob(100), mob(100)], 1_000_000, 1_000_000);
+    // New opening: a 300 ms hero collides with every mob's first strike at 300 ms.
+    const f = newPackFight('rat', hero(1, 300), [mob(100), mob(100), mob(100)], 1_000_000, 1_000_000);
     const r = play(f, 1_000_000);
-    const at1000 = r.events.filter((e) => e.atMs === 1000);
+    expect(r.events.filter((e) => e.atMs === 300)).toEqual([
+      { actor: 'hero', mob: 0, atMs: 300 },
+      { actor: 'enemy', mob: 0, atMs: 300 },
+      { actor: 'enemy', mob: 1, atMs: 300 },
+      { actor: 'enemy', mob: 2, atMs: 300 },
+    ]);
+    // The old opening (a fight stamped by a v22 save): everything collides at 1000 ms.
+    const old = newPackFight('rat', hero(1), [mob(100), mob(100), mob(100)], 1_000_000, 1_000_000, { heroFirstStrikeMs: 1000, enemyFirstStrikeMs: 1000 });
+    const at1000 = play(old, 1_000_000).events.filter((e) => e.atMs === 1000);
     expect(at1000).toEqual([
       { actor: 'hero', mob: 0, atMs: 1000 },
       { actor: 'enemy', mob: 0, atMs: 1000 },
@@ -251,9 +274,10 @@ describe('pack combat (all mobs fight at once, the hero strikes the front-most a
   it('hero first at a tie: the hero kills the last mob before the one that would have killed him strikes', () => {
     // Mob 0 (1 HP) dies to the hero at 1000 ms; mob 1 (also 1 HP, behind it) strikes at 1000 ms for the hero's last HP: he is dead before
     // mob 1 is ever targeted, so it is a LOSS; but with ONE mob left the hero's kill at the tie wins the fight.
-    const lose = newPackFight('rat', hero(10), [mob(1), mob(1, 1000, 99)], 50, 50);
+    const oldOpening = { heroFirstStrikeMs: 1000, enemyFirstStrikeMs: 1000 }; // a tie at 1000 ms needs the old opening (or a 300 ms hero)
+    const lose = newPackFight('rat', hero(10), [mob(1), mob(1, 1000, 99)], 50, 50, oldOpening);
     expect(play(lose, 50).reason).toBe('lost');
-    const win = newPackFight('rat', hero(10), [mob(1, 1000, 99)], 50, 50);
+    const win = newPackFight('rat', hero(10), [mob(1, 1000, 99)], 50, 50, oldOpening);
     const w = play(win, 50);
     expect(w.reason).toBe('won');
     expect(w.heroHp).toBe(50); // he struck first and the dead mob never did
@@ -279,9 +303,13 @@ describe('pack combat (all mobs fight at once, the hero strikes the front-most a
     expect(r2.reason).toBe('won');
     expect(g.mobs.every((m) => m.hp === 0)).toBe(true);
     expect(g.log.filter((e) => e.actor === 'hero')).toHaveLength(50);
-    // One strike short at the 60 s limit (a strike AT 60 s still lands) is a loss.
-    const h = newPackFight('rat', hero(10), [...Array.from({ length: 9 }, () => mob(50, 1000, 0)), mob(160, 1000, 0)], 1_000_000, 1_000_000);
-    expect(play(h, 1_000_000).reason).toBe('time_limit');
+    // The hero strikes at 0, 1 s ... 60 s: 61 strikes (a strike AT 60 s still lands). 61 strikes needed is a win, one more is a loss.
+    const exact = newPackFight('rat', hero(10), [...Array.from({ length: 9 }, () => mob(50, 1000, 0)), mob(160, 1000, 0)], 1_000_000, 1_000_000);
+    expect(play(exact, 1_000_000).reason).toBe('won');
+    expect(exact.log.filter((e) => e.actor === 'hero')).toHaveLength(61);
+    expect(exact.log[exact.log.length - 1].atMs).toBe(60_000); // the last kill is AT the limit
+    const short = newPackFight('rat', hero(10), [...Array.from({ length: 9 }, () => mob(50, 1000, 0)), mob(170, 1000, 0)], 1_000_000, 1_000_000);
+    expect(play(short, 1_000_000).reason).toBe('time_limit');
   });
 
   it('resolveFight takes a pack too (tests / sims): the same result as the event walk', () => {
@@ -289,7 +317,7 @@ describe('pack combat (all mobs fight at once, the hero strikes the front-most a
     const res = resolveFight({ ...hero(10), hp: 1_000_000 }, pack, createRng(5));
     expect(res.won).toBe(true);
     expect(res.endReason).toBe('enemy_defeated');
-    expect(res.durationMs).toBe(9000); // 9 hero strikes, 3 per mob
+    expect(res.durationMs).toBe(8000); // 9 hero strikes, 3 per mob: the 1st at 0, the 9th at 8 s
     // One mob in a list behaves as a bare mob.
     const one = resolveFight({ ...hero(10), hp: 1000 }, [{ ...mob(30).side, hp: 30 }], createRng(5));
     const bare = resolveFight({ ...hero(10), hp: 1000 }, { ...mob(30).side, hp: 30 }, createRng(5));
@@ -321,7 +349,8 @@ describe('rewards: the whole run only, per mob, on a full clear', () => {
         expect(f.difficulty).toBe(d);
         const heroStrikes = f.log.filter((e) => e.actor === 'hero').length;
         const mobStrikes = f.log.length - heroStrikes;
-        let rng = skip(begun.rng, 2 * heroStrikes + mobStrikes);
+        // `begun` already holds the hero's opening strike (t = 0): its two draws are behind it.
+        let rng = skip(begun.rng, 2 * (heroStrikes - 1) + mobStrikes);
         let xp = 0;
         let gold = 0;
         let skins = 0;
@@ -358,10 +387,7 @@ describe('rewards: the whole run only, per mob, on a full clear', () => {
   it('a loss pays nothing: kills made before it included; no gold / drop draws; the hero ends at 0 HP', () => {
     // Pack: a mob that dies at once, then a mob that kills the hero. Hero 60 HP.
     const s = openGame(30, 77);
-    const hero = (() => {
-      const base = fightOf(simulate(start(s, 'rat_cellar', 'normal'), T0 + searchMsFor('rat_cellar', start(s, 'rat_cellar', 'normal'))).state)!;
-      return base.hero;
-    })();
+    const hero = heroCombatSide(getDerivedStats(s));
     const fight = newPackFight(
       'rat',
       { ...hero, damage: { min: 1000, max: 1000 }, attackIntervalMs: 1000, critChanceBp: 0 },
@@ -389,8 +415,7 @@ describe('rewards: the whole run only, per mob, on a full clear', () => {
 
   it('a time-limit loss pays nothing either, even with all but one mob dead', () => {
     const s = openGame(30, 78);
-    const probe = start(s, 'rat_cellar', 'normal');
-    const hero = fightOf(simulate(probe, T0 + searchMsFor('rat_cellar', probe)).state)!.hero;
+    const hero = heroCombatSide(getDerivedStats(s));
     const fight = newPackFight(
       'rat',
       { ...hero, damage: { min: 100, max: 100 }, critChanceBp: 0, attackIntervalMs: 1000 },
@@ -442,7 +467,9 @@ describe('the Troll Chieftain on Hard and Extreme', () => {
 
   it('entry is unchanged (10 stamina), the fight is a single Chieftain with scaled stats and its own 120 s limit', () => {
     for (const [d, hp] of [['normal', 1000], ['hard', 2000], ['extreme', 8000]] as const) {
+      // Not a slayer here: a hero who kills the boss with his opening strike (t = 0) would end the fight inside the command.
       const s = slayer(d, 1);
+      s.character.spentPoints = { ...s.character.spentPoints, strength: 0 };
       const e = enter(s, d);
       expect(e.stamina.current).toBe(s.stamina.current - 10);
       const f = fightOf(e)!;
@@ -671,13 +698,14 @@ describe('golden pack fights (fixed seed, fixed hero: any change of the pack rul
   };
 
   it('a Hard Wolf Den pack of 4 (3 plain, 1 Veteran): the hero wins', () => {
+    // 1.25.0 combat opening (hero at 0, monsters at 300 ms): only the clock moved -- durationMs was 23000, logHash was 95eff8a3; strikes, HP, rewards and the stream are the same.
     expect(fightFingerprint(play(openGame(25, 20261126), 'wolf_den', 'hard'))).toMatchInlineSnapshot(`
       {
         "difficulty": "hard",
-        "durationMs": 23000,
+        "durationMs": 22000,
         "endReason": "enemy_defeated",
         "heroHpEnd": 81,
-        "logHash": "95eff8a3",
+        "logHash": "61bf4f6e",
         "pack": [
           "base:220:0",
           "veteran:330:0",
@@ -699,13 +727,14 @@ describe('golden pack fights (fixed seed, fixed hero: any change of the pack rul
   });
 
   it('an Extreme Rat Cellar pack of 10 (8 Veteran, 2 Extreme): an unbeatable hero clears it', () => {
+    // 1.25.0 combat opening: durationMs was 10000, logHash was d1386011; everything else is the same.
     expect(fightFingerprint(play(godGame(20261112), 'rat_cellar', 'extreme'))).toMatchInlineSnapshot(`
       {
         "difficulty": "extreme",
-        "durationMs": 10000,
+        "durationMs": 9000,
         "endReason": "enemy_defeated",
         "heroHpEnd": 15340,
-        "logHash": "d1386011",
+        "logHash": "94c49584",
         "pack": [
           "veteran:360:0",
           "veteran:360:0",
@@ -733,13 +762,14 @@ describe('golden pack fights (fixed seed, fixed hero: any change of the pack rul
   });
 
   it('an Extreme Rat Cellar pack of 7: an ordinary Lv 30 hero is wiped out, with nothing paid (the wall)', () => {
+    // 1.25.0 combat opening: durationMs was 6000 (the hero now falls at 5300), logHash was 6e5a32c2; everything else is the same.
     expect(fightFingerprint(play(openGame(30, 20261106), 'rat_cellar', 'extreme'))).toMatchInlineSnapshot(`
       {
         "difficulty": "extreme",
-        "durationMs": 6000,
+        "durationMs": 5300,
         "endReason": "hero_defeated",
         "heroHpEnd": 0,
-        "logHash": "6e5a32c2",
+        "logHash": "4f2ba252",
         "pack": [
           "veteran:360:0",
           "veteran:360:360",

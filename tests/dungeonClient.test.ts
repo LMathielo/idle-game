@@ -38,10 +38,12 @@ describe('dungeon through the client', () => {
     expect(client.getState().activity).toMatchObject({ phase: 'fight' });
     expect(client.getState().dungeon.totals.runs).toBe(0);
 
-    // The fight plays out tick by tick: strikes appear as engine time reaches them.
+    // The fight plays out tick by tick: strikes appear as engine time reaches them. 1.25.0: the hero's opening strike (fight time 0) is
+    // already in right after the skip; a second later the Rat's 300 ms strike and the hero's 2nd are too.
+    expect(dungeonRunView(client.getState())!.fight!.log.map((e) => [e.actor, e.atMs])).toEqual([['hero', 0]]);
     clock.advance(SEC);
     await client.tick();
-    expect(dungeonRunView(client.getState())!.fight!.log).toHaveLength(2);
+    expect(dungeonRunView(client.getState())!.fight!.log.map((e) => [e.actor, e.atMs])).toEqual([['hero', 0], ['enemy', 300], ['hero', 1000]]);
     for (let i = 0; i < 10 && client.getState().dungeon.totals.runs === 0; i++) {
       clock.advance(SEC);
       await client.tick();
@@ -56,8 +58,8 @@ describe('dungeon through the client', () => {
     expect(client.getState().flags.debugUsed).toBe(true);
     clock.advance(SEC);
     await client.tick();
-    // At 1 HP the Rat's first strike (1 s, after the hero's) is fatal.
-    expect(client.getState().dungeon.lastFight).toMatchObject({ heroHpStart: 1, won: false, heroHpEnd: 0, durationMs: 1000 });
+    // At 1 HP the Rat's first strike (300 ms, after the hero's opening strike) is fatal.
+    expect(client.getState().dungeon.lastFight).toMatchObject({ heroHpStart: 1, won: false, heroHpEnd: 0, durationMs: 300 });
 
     clock.advance(100 * SEC);
     await client.tick();

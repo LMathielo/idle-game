@@ -1,0 +1,182 @@
+{
+ "pack": {
+  "engine": "1.24.0",
+  "start": {
+   "engine": "1.24.0",
+   "rng": 3596822490
+  },
+  "fightEnd": {
+   "won": true,
+   "endReason": "enemy_defeated",
+   "durationMs": 27000,
+   "heroHpEnd": 412,
+   "difficulty": "hard",
+   "rewards": {
+    "heroXp": 2700,
+    "gold": 442,
+    "items": {
+     "old_bone": 1
+    },
+    "itemsLost": {}
+   },
+   "logLen": 88,
+   "logHash": "4b66481e",
+   "enemyHpEnd": 0,
+   "mobs": [
+    {
+     "variant": "base",
+     "multBp": 20000,
+     "maxHp": 360,
+     "hpEnd": 0
+    },
+    {
+     "variant": "base",
+     "multBp": 20000,
+     "maxHp": 360,
+     "hpEnd": 0
+    },
+    {
+     "variant": "veteran",
+     "multBp": 30000,
+     "maxHp": 540,
+     "hpEnd": 0
+    },
+    {
+     "variant": "base",
+     "multBp": 20000,
+     "maxHp": 360,
+     "hpEnd": 0
+    }
+   ],
+   "lastDungeon": "forgotten_crypt",
+   "rng": 742197525,
+   "gold": 1234,
+   "xp": 4500,
+   "level": 45,
+   "hp": 433,
+   "totals": {
+    "runs": 409,
+    "wins": 409,
+    "losses": 0
+   },
+   "harder": {
+    "hard": {
+     "byDungeon": {
+      "forgotten_crypt": {
+       "runs": 3,
+       "wins": 3,
+       "losses": 0
+      }
+     },
+     "bosses": {}
+    },
+    "extreme": {
+     "byDungeon": {},
+     "bosses": {}
+    }
+   },
+   "byDungeon": {
+    "rat_cellar": {
+     "runs": 130,
+     "wins": 130,
+     "losses": 0
+    },
+    "bat_cave": {
+     "runs": 90,
+     "wins": 90,
+     "losses": 0
+    },
+    "wolf_den": {
+     "runs": 70,
+     "wins": 70,
+     "losses": 0
+    },
+    "forgotten_crypt": {
+     "runs": 60,
+     "wins": 60,
+     "losses": 0
+    },
+    "troll_bridge": {
+     "runs": 55,
+     "wins": 55,
+     "losses": 0
+    }
+   },
+   "bosses": {
+    "troll_chieftain": {
+     "runs": 1,
+     "wins": 1,
+     "losses": 0
+    }
+   },
+   "activity": "dungeon"
+  },
+  "seed": 3
+ },
+ "boss": {
+  "engine": "1.24.0",
+  "fightEnd": {
+   "won": true,
+   "endReason": "enemy_defeated",
+   "durationMs": 39000,
+   "heroHpEnd": 70,
+   "difficulty": "normal",
+   "rewards": {
+    "heroXp": 2000,
+    "gold": 307,
+    "items": {
+     "chieftains_tusk": 1
+    },
+    "itemsLost": {}
+   },
+   "logLen": 77,
+   "logHash": "24e1a959",
+   "enemyHpEnd": 0,
+   "mobs": [
+    {
+     "variant": "base",
+     "multBp": 10000,
+     "maxHp": 1000,
+     "hpEnd": 0
+    }
+   ],
+   "lastDungeon": "troll_chieftain",
+   "rng": 2704054174,
+   "gold": 807,
+   "xp": 2000,
+   "level": 22,
+   "hp": 110,
+   "totals": {
+    "runs": 55,
+    "wins": 55,
+    "losses": 0
+   },
+   "harder": {
+    "hard": {
+     "byDungeon": {},
+     "bosses": {}
+    },
+    "extreme": {
+     "byDungeon": {},
+     "bosses": {}
+    }
+   },
+   "byDungeon": {
+    "troll_bridge": {
+     "runs": 55,
+     "wins": 55,
+     "losses": 0
+    }
+   },
+   "bosses": {
+    "troll_chieftain": {
+     "runs": 1,
+     "wins": 1,
+     "losses": 0
+    }
+   },
+   "activity": null
+  },
+  "seed": 1
+ }
+}

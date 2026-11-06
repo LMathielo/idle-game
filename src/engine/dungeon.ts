@@ -2,7 +2,7 @@
 // A run = a search for an opponent, then a fight that plays out in engine time. See docs/ENGINE.md
 // ("Dungeon & combat").
 import { cloneState } from './clone';
-import { DUNGEON_RUN, DUNGEONS, ENEMIES } from './config/dungeons';
+import { COMBAT, DUNGEON_RUN, DUNGEONS, ENEMIES } from './config/dungeons';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { grantHeroXp } from './activities';
 import { finishBossFight } from './boss';
@@ -158,6 +158,8 @@ function finishFight(draft: GameState, activity: DungeonActivity, outcome: Fight
     dungeonId,
     difficulty,
     enemyId: outcome.enemyId,
+    heroFirstStrikeMs: outcome.heroFirstStrikeMs,
+    enemyFirstStrikeMs: outcome.enemyFirstStrikeMs,
     won,
     endReason: outcome.endReason,
     durationMs: outcome.durationMs,
@@ -212,6 +214,8 @@ export function beginFight(draft: GameState, activity: DungeonActivity, summary:
       endReason: 'no_hp',
       durationMs: 0,
       enemyId: enemy.id,
+      heroFirstStrikeMs: COMBAT.heroFirstStrikeMs,
+      enemyFirstStrikeMs: COMBAT.enemyFirstStrikeMs,
       heroHpStart: 0,
       heroMaxHp,
       enemyMaxHp: mob.enemy.hp,
@@ -374,6 +378,20 @@ export function advanceDungeon(
   const beyondCap = requestedMs - grantedMs;
   if (beyondCap > 0 && (activity.kind === 'boss' ? draft.activity === activity : activity.phase === 'fight')) walk(beyondCap, true);
   regen(regenLeft);
+}
+
+/**
+ * Plays the strikes of a fight that are due at its current instant, with no time passing (the hero's opening strike at fight time 0 when a
+ * COMMAND just started the fight: a search skip, ENTER_BOSS, the debug finish; the walk in simulate() plays it by itself). Afterwards no
+ * fight rests in a state with an event already due, so the screen shows the opening hit at once and a later simulate() starts from the
+ * same state however the time is split. A no-op unless a dungeon or boss fight has such an event. Mutates `draft` (a full copy).
+ */
+export function settleFightStart(draft: GameState, summary: SimulationSummary, events: GameEvent[]): void {
+  const a = draft.activity;
+  if (a?.kind !== 'dungeon' && a?.kind !== 'boss') return;
+  const fight = a.kind === 'boss' ? a.fight : a.phase === 'fight' ? a.fight : null;
+  if (!fight || nextFightEvent(fight).atMs > fight.elapsedMs) return;
+  advanceDungeon(draft, a, 0, 0, summary, events);
 }
 
 /**

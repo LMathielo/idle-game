@@ -35,6 +35,7 @@ export {
   resolveFight,
   strike,
   strikeRange,
+  strikeTimeMs,
   type Combatant,
   type FightEvent,
   type FightOptions,

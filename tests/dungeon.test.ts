@@ -91,7 +91,9 @@ describe('search time', () => {
     expect(before.activity).toMatchObject({ phase: 'search', progressMs: SEARCH_MS - 1, fight: null });
     const atEnd = simulate(s, T0 + SEARCH_MS).state;
     expect(atEnd.activity).toMatchObject({ phase: 'fight', progressMs: 0 });
-    expect(atEnd.activity?.kind === 'dungeon' && atEnd.activity.fight).toMatchObject({ elapsedMs: 0, log: [], heroStrikes: 0, mobs: [{ strikes: 0 }] });
+    expect(atEnd.activity?.kind === 'dungeon' && atEnd.activity.fight).toMatchObject({ elapsedMs: 0, heroStrikes: 1, mobs: [{ strikes: 0 }] });
+    // 1.25.0: the hero's opening strike lands at fight time 0, the very instant the search ends (nothing else yet).
+    expect(atEnd.activity?.kind === 'dungeon' && atEnd.activity.fight?.log.map((e) => [e.actor, e.atMs])).toEqual([['hero', 0]]);
     expect(atEnd.dungeon.totals.runs).toBe(0);
     const { state, endsAt, fight } = firstRun(s);
     expect(fight.durationMs).toBeGreaterThan(0);
@@ -122,11 +124,13 @@ describe('skip (search only)', () => {
     expect(r.state.dungeon.totals.runs).toBe(0); // nothing resolved yet
     expect(r.events.some((e) => e.type === 'FIGHT_RESOLVED')).toBe(false);
     expect(r.state.activity).toMatchObject({ kind: 'dungeon', phase: 'fight', progressMs: 0 });
-    // One second later the hero's first strike has landed.
+    // 1.25.0: the command itself played the hero's opening strike (fight time 0); one second later the monster's 300 ms strike and the hero's 2nd are in.
+    expect(r.state.activity?.kind === 'dungeon' && r.state.activity.fight?.log.map((e) => [e.actor, e.atMs])).toEqual([['hero', 0]]);
     const t1 = simulate(r.state, at + SEC).state;
     expect(t1.activity?.kind === 'dungeon' && t1.activity.fight?.log.map((e) => [e.actor, e.atMs])).toEqual([
+      ['hero', 0],
+      ['enemy', 300],
       ['hero', 1000],
-      ['enemy', 1000],
     ]);
     // The run ends with its fight, then a full search starts.
     const done = simulate(r.state, at + FIGHT_MS).state;
@@ -234,23 +238,31 @@ describe('combat', () => {
     // rolls come from later in the stream than in 1.7.0–1.18.0 (hero roll 1 is still 14; the hero's rolls were 14, 13, 13 then).
     // The strike times, the damage formula and the winner are unchanged.
     expect(a.log.map((e) => [e.atMs, e.actor, e.strike, e.roll, e.dealt, e.targetHpAfter])).toEqual([
-      [1000, 'hero', 1, 14, 13, 17],
-      [1000, 'enemy', 1, 4, 3, 47],
-      [2000, 'hero', 2, 12, 12, 5],
-      [2000, 'enemy', 2, 5, 4, 43],
-      [3000, 'hero', 3, 14, 13, 0],
+      [0, 'hero', 1, 14, 13, 17],
+      [300, 'enemy', 1, 4, 3, 47],
+      [1000, 'hero', 2, 12, 12, 5],
+      [1300, 'enemy', 2, 5, 4, 43],
+      [2000, 'hero', 3, 14, 13, 0],
     ]);
+    // 1.25.0: only the strike TIMES moved (the hero opens at 0, the Rat at 300 ms; they were 1 s, 1 s, 2 s, 2 s, 3 s): the same draws in the same
+    // order, so the same rolls, damage, winner and RNG state, and the fight is a second shorter.
     expect(a.log.every((e) => !e.crit && e.magic === 0 && e.physical === e.dealt)).toBe(true);
-    expect(a).toMatchObject({ won: true, endReason: 'enemy_defeated', durationMs: 3000, heroHp: 43, enemyHp: 0, rng: { seed: 1767624739 } });
+    expect(a).toMatchObject({ won: true, endReason: 'enemy_defeated', durationMs: 2000, heroHp: 43, enemyHp: 0, rng: { seed: 1767624739 } });
     for (const e of a.log) expect(e.dealt).toBe(dealtDamage(e.roll, e.actor === 'hero' ? rat.armor : hero.armor));
   });
 
   it('time limit: a stalemate is a loss at 60 s that leaves the hero at 0 HP; strikes due at exactly 60 s still land', () => {
     const tank = { hp: 1000, ...fightSide({ armor: 1_000_000, magicResist: 1_000_000 }) };
     const r = resolveFight(tank, tank, createRng(1));
-    expect(r.log).toHaveLength(120);
-    expect(r).toMatchObject({ won: false, endReason: 'time_limit', durationMs: 60_000, heroHp: 0, enemyHp: 940 });
-    expect(r.log.at(-1)).toMatchObject({ atMs: 60_000, strike: 60, actor: 'enemy', targetHpAfter: 940 });
+    // 1.25.0: the hero opens at 0 (61 strikes by 60 s, the last exactly at the limit), the monster at 300 ms (60 strikes; its 61st is at 60.3 s).
+    expect(r.log).toHaveLength(121);
+    expect(r).toMatchObject({ won: false, endReason: 'time_limit', durationMs: 60_000, heroHp: 0, enemyHp: 939 });
+    expect(r.log.at(-1)).toMatchObject({ atMs: 60_000, strike: 61, actor: 'hero', targetHpAfter: 939 });
+    // The old timing (first strikes one interval in): 60 strikes each, the last two both at exactly 60 s, the hero first.
+    const old = resolveFight(tank, tank, createRng(1), 60_000, { heroFirstStrikeMs: 1000, enemyFirstStrikeMs: 1000 });
+    expect(old.log).toHaveLength(120);
+    expect(old.log.slice(-2).map((e) => [e.atMs, e.actor, e.strike])).toEqual([[60_000, 'hero', 60], [60_000, 'enemy', 60]]);
+    expect(old).toMatchObject({ won: false, endReason: 'time_limit', durationMs: 60_000, enemyHp: 940 });
   });
 
   it('starting at 0 HP is an immediate loss with no rolls', () => {
@@ -559,6 +571,6 @@ describe('debug commands', () => {
     const now = apply(dungeonGame(4), { type: 'DEBUG_SET_HERO_HP', hp: 1 }, T0);
     const finish = apply(now, { type: 'DEBUG_FINISH_DUNGEON_RUN' }, T0);
     const f = simulate(finish, T0 + FIGHT_MS).state.dungeon.lastFight;
-    expect(f).toMatchObject({ heroHpStart: 1, won: false, heroHpEnd: 0, endReason: 'hero_defeated', durationMs: 1000 });
+    expect(f).toMatchObject({ heroHpStart: 1, won: false, heroHpEnd: 0, endReason: 'hero_defeated', durationMs: 300 }); // 1.25.0: the monster's first strike (300 ms) is the only one in the fight (was 1000)
   });
 });

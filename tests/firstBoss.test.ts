@@ -30,6 +30,7 @@ import {
   isBossUnlocked,
   chance,
   loadSave,
+  mergeSummaries,
   nextFloat,
   nextInt,
   type ReplayEntry,
@@ -63,18 +64,23 @@ function errorOf(s: GameState, now = T0, c: Parameters<typeof cmd>[0] = ENTER): 
   return r.error.code;
 }
 
-/** The whole boss fight (enter at T0, play to long after the 120 s limit). */
+/**
+ * The whole boss fight (enter at T0, play to long after the 120 s limit). 1.25.0: ENTER_BOSS plays the hero's opening strike (fight time 0)
+ * itself, so a one-shot kill happens inside the command: the summary and events are the command's and the simulation's together.
+ */
 function fightAll(s: GameState) {
-  const sim = simulate(enter(s), T0 + 130 * SEC);
-  return { ...sim, fight: sim.state.dungeon.lastFight! };
+  const entered = applyCommand(s, cmd(ENTER), T0);
+  if (!entered.ok) throw new Error(`${entered.error.code}: ${entered.error.message}`);
+  const sim = simulate(entered.state, T0 + 130 * SEC);
+  return { state: sim.state, events: [...entered.events.filter((e) => e.type !== 'ACTIVITY_STARTED'), ...sim.events], summary: mergeSummaries(entered.summary, sim.summary), fight: sim.state.dungeon.lastFight! };
 }
 
 const bossFightOf = (s: GameState): ActiveFight | null => (s.activity?.kind === 'boss' ? s.activity.fight : null);
 
 /** A boss fight from `resolveFight` with the real boss data against a hero side (no regen of the hero, no potions). */
-function bossFight(hero: { hp: number } & ReturnType<typeof fightSide>, seed: number) {
+function bossFight(hero: { hp: number } & ReturnType<typeof fightSide>, seed: number, opening: { heroFirstStrikeMs?: number; enemyFirstStrikeMs?: number } = {}) {
   const opts = enemyFightOptions(chieftain);
-  return resolveFight(hero, { hp: chieftain.hp, ...enemyCombatSide(chieftain) }, createRng(seed), opts.maxFightMs, opts);
+  return resolveFight(hero, { hp: chieftain.hp, ...enemyCombatSide(chieftain) }, createRng(seed), opts.maxFightMs, { ...opts, ...opening });
 }
 
 /** A hero side that survives and deals ~nothing (armor huge, damage 1): the boss casts on schedule for the whole limit. */
@@ -160,9 +166,12 @@ describe('entry', () => {
     expect(r.events.map((e) => e.type)).toEqual(['ACTIVITY_STARTED']);
     expect(r.state.activity).toMatchObject({ kind: 'boss', bossId: 'troll_chieftain', startedAt: T0, progressMs: 0 });
     const f = bossFightOf(r.state)!;
-    expect(f).toMatchObject({ enemyId: 'troll_chieftain', elapsedMs: 0, heroHpStart: s.character.hp, maxFightMs: 120_000, heroStunStrikes: 0, heroStrikes: 0 });
+    expect(f).toMatchObject({ enemyId: 'troll_chieftain', elapsedMs: 0, heroHpStart: s.character.hp, maxFightMs: 120_000, heroStunStrikes: 0, heroStrikes: 1, heroFirstStrikeMs: 0, enemyFirstStrikeMs: 300 });
+    // 1.25.0: the hero's opening strike (fight time 0) is already played by the command; the Chieftain's first strike is due at 300 ms.
+    expect(f.log.map((e) => [e.actor, e.atMs])).toEqual([['hero', 0]]);
     expect(f.mobs).toHaveLength(1);
-    expect(f.mobs[0]).toMatchObject({ variant: 'base', multBp: 10_000, hp: 1000, maxHp: 1000, regenBp: 50, strikes: 0 });
+    expect(f.mobs[0]).toMatchObject({ variant: 'base', multBp: 10_000, maxHp: 1000, regenBp: 50, strikes: 0 });
+    expect(f.mobs[0].hp).toBeLessThan(1000);
     expect(f.mobs[0].skillReady).toEqual({ heavy_bash: 3 });
     expect(f.mobs[0].side.skills).toEqual(['heavy_bash']);
     expect(f.hero.skills).toEqual([]);
@@ -257,9 +266,12 @@ describe('Heavy Bash', () => {
     const casts = r.log.filter((e) => e.actor === 'enemy' && e.skill === 'heavy_bash').map((e) => e.strike);
     expect(r.endReason).toBe('time_limit');
     expect(casts).toEqual([3, 10, 17, 24, 31, 38, 45, 52, 59, 66, 73, 80, 87, 94, 101, 108, 115]);
-    // The enemy strikes once a second: strike n lands at n x 1000 ms.
+    // The enemy strikes once a second from 300 ms (1.25.0): strike n lands at 300 + (n - 1) x 1000 ms, so the 3rd (the first Bash) is at 2.3 s.
     expect(r.log.filter((e) => e.actor === 'enemy').length).toBe(120);
-    expect(r.log.filter((e) => e.actor === 'enemy' && e.skill).map((e) => e.atMs)).toEqual(casts.map((n) => n * 1000));
+    expect(r.log.filter((e) => e.actor === 'enemy' && e.skill).map((e) => e.atMs)).toEqual(casts.map((n) => 300 + (n - 1) * 1000));
+    // On the old timing (first strike one interval in) the same fight casts on strikes 3, 10, 17... at 3 s, 10 s, 17 s...
+    const old = bossFight(dummy(), 11, { heroFirstStrikeMs: 1000, enemyFirstStrikeMs: 1000 });
+    expect(old.log.filter((e) => e.actor === 'enemy' && e.skill).map((e) => [e.strike, e.atMs])).toEqual(casts.map((n) => [n, n * 1000]));
   });
 
   it('deals the roll x 1.4 (half up), then armor, with the minimum-damage rule', () => {
@@ -287,18 +299,33 @@ describe('Heavy Bash', () => {
     expect(found).not.toBeNull();
     const log = found!.log;
     const cast = log.find((e) => e.skill)!;
-    expect(cast).toMatchObject({ strike: 3, atMs: 3000, stun: 3 });
+    // 1.25.0: the 3rd enemy strike lands at 2.3 s (the hero has struck at 0, 1 s and 2 s by then and none of those is stunned).
+    expect(cast).toMatchObject({ strike: 3, atMs: 2300, stun: 3 });
+    expect(log.filter((e) => e.actor === 'hero' && e.atMs < cast.atMs).every((e) => !e.stunned)).toBe(true);
     const heroAfter = log.filter((e) => e.actor === 'hero' && e.atMs > cast.atMs).slice(0, 5);
     expect(heroAfter.map((e) => [e.atMs, !!e.stunned, e.dealt > 0 ? 'hit' : 'none'])).toEqual([
+      [3000, true, 'none'],
       [4000, true, 'none'],
       [5000, true, 'none'],
-      [6000, true, 'none'],
+      [6000, false, 'hit'],
       [7000, false, 'hit'],
-      [8000, false, 'hit'],
     ]);
     for (const e of heroAfter.slice(0, 3)) expect(e).toMatchObject({ roll: 0, physical: 0, magic: 0, dealt: 0, crit: false });
-    // The hero's strike on the very tick of the cast (hero goes first on a tie) was not stunned.
-    expect(log.find((e) => e.actor === 'hero' && e.atMs === 3000)!.stunned).toBeUndefined();
+  });
+
+  it('on the old timing (a fight in progress at the 1.25.0 update) the cast is at 3 s and the hero strike on the very tick of the cast is not stunned (tie: hero first)', () => {
+    const old = { heroFirstStrikeMs: 1000, enemyFirstStrikeMs: 1000 };
+    let found: ReturnType<typeof bossFight> | null = null;
+    for (let seed = 1; seed < 200 && !found; seed++) {
+      const r = bossFight({ hp: 1_000_000, ...fightSide({ damage: { min: 5, max: 5 }, armor: 1_000_000 }) }, seed, old);
+      if (r.log.find((e) => e.skill)?.stun) found = r;
+    }
+    expect(found).not.toBeNull();
+    const log = found!.log;
+    const cast = log.find((e) => e.skill)!;
+    expect(cast).toMatchObject({ strike: 3, atMs: 3000, stun: 3 });
+    const heroAfter = log.filter((e) => e.actor === 'hero' && e.atMs >= cast.atMs).slice(0, 5);
+    expect(heroAfter.map((e) => [e.atMs, !!e.stunned])).toEqual([[3000, false], [4000, true], [5000, true], [6000, true], [7000, false]]);
   });
 
   it('a stunned strike draws NO random number (the stream skips it), other strikes draw 2 (hero) / 1 (boss) / 2 (cast)', () => {
@@ -638,26 +665,28 @@ describe('rewards', () => {
 });
 
 describe('golden fight (pins the RNG draw order, Bash and a stun)', () => {
-  it('seed 2: the Chieftain\'s first Heavy Bash (strike 3) stuns, the hero loses strikes 4-6, wins at 36 s', () => {
+  it('seed 2: the Chieftain\'s first Heavy Bash (strike 3) stuns, the hero loses strikes 4-6, wins at 35 s', () => {
     const { state, fight, events, summary } = fightAll(fighter(2));
     const line = (e: FightLogEntry) => `${e.atMs} ${e.actor[0]}${e.strike} roll${e.roll} p${e.physical} d${e.dealt} -> ${e.targetHpAfter}${e.enemyHpAfter !== undefined ? ` (boss ${e.enemyHpAfter})` : ''}${e.skill ? ` ${e.skill}` : ''}${e.stun !== undefined ? ` stun${e.stun}` : ''}${e.stunned ? ' STUNNED' : ''}`;
     expect(fight.log.slice(0, 14).map(line)).toEqual([
-      '1000 h1 roll66 p37 d37 -> 963 (boss 963)',
-      '1000 e1 roll29 p12 d12 -> 463 (boss 963)',
-      '2000 h2 roll66 p37 d37 -> 931 (boss 931)',
-      '2000 e2 roll32 p13 d13 -> 450 (boss 931)',
-      '3000 h3 roll65 p36 d36 -> 900 (boss 900)',
-      '3000 e3 roll34 p19 d19 -> 431 (boss 900) heavy_bash stun3',
-      '4000 h4 roll0 p0 d0 -> 905 (boss 905) STUNNED',
-      '4000 e4 roll34 p13 d13 -> 419 (boss 905)',
-      '5000 h5 roll0 p0 d0 -> 910 (boss 910) STUNNED',
-      '5000 e5 roll28 p11 d11 -> 408 (boss 910)',
-      '6000 h6 roll0 p0 d0 -> 915 (boss 915) STUNNED',
-      '6000 e6 roll30 p12 d12 -> 397 (boss 915)',
-      '7000 h7 roll67 p37 d37 -> 883 (boss 883)',
-      '7000 e7 roll27 p11 d11 -> 386 (boss 883)',
+      // 1.25.0: the same rolls, damage and RNG draws; only the times moved (the hero opens at 0, the Chieftain at 300 ms; they were 1 s, 1 s, 2 s,
+      // 2 s ... and the Bash on strike 3 at 3 s) and the boss's regen shows 1 HP more at each of its strikes (it regenerates 0.3 s of its 5 HP/s first).
+      '0 h1 roll66 p37 d37 -> 963 (boss 963)',
+      '300 e1 roll29 p12 d12 -> 463 (boss 964)',
+      '1000 h2 roll66 p37 d37 -> 931 (boss 931)',
+      '1300 e2 roll32 p13 d13 -> 450 (boss 932)',
+      '2000 h3 roll65 p36 d36 -> 900 (boss 900)',
+      '2300 e3 roll34 p19 d19 -> 431 (boss 901) heavy_bash stun3',
+      '3000 h4 roll0 p0 d0 -> 905 (boss 905) STUNNED',
+      '3300 e4 roll34 p13 d13 -> 419 (boss 906)',
+      '4000 h5 roll0 p0 d0 -> 910 (boss 910) STUNNED',
+      '4300 e5 roll28 p11 d11 -> 408 (boss 911)',
+      '5000 h6 roll0 p0 d0 -> 915 (boss 915) STUNNED',
+      '5300 e6 roll30 p12 d12 -> 397 (boss 916)',
+      '6000 h7 roll67 p37 d37 -> 883 (boss 883)',
+      '6300 e7 roll27 p11 d11 -> 386 (boss 884)',
     ]);
-    expect(fight).toMatchObject({ won: true, endReason: 'enemy_defeated', durationMs: 36_000, enemyHpEnd: 0, rewards: { heroXp: 2000, gold: 410, items: {}, itemsLost: {} } });
+    expect(fight).toMatchObject({ won: true, endReason: 'enemy_defeated', durationMs: 35_000, enemyHpEnd: 0, rewards: { heroXp: 2000, gold: 410, items: {}, itemsLost: {} } });
     expect(fight.log).toHaveLength(71);
     expect(fight.log.filter((e) => e.skill).map((e) => [e.strike, e.stun ?? 0])).toEqual([[3, 3], [10, 0], [17, 0], [24, 0], [31, 0]]);
     expect(fight.log.filter((e) => e.stunned)).toHaveLength(3);
@@ -667,13 +696,15 @@ describe('golden fight (pins the RNG draw order, Bash and a stun)', () => {
     expect(state.rng).toEqual({ seed: 2072178003 });
     // 1.22.0: d611449f is the 1.20.0 hash df20ce2e in the v21 shape (only saveVersion moved: no gear dropped here, so no affixes).
     // 1.24.0: seen in the v21 shape (asV21: no difficulty fields, the fight's one enemy flat) the hash is still the 1.22.0 one: no outcome moved.
-    expect(hashState(asV21(state))).toBe('d611449f');
-    expect(hashState({ ...asV21(state), saveVersion: 20 } as unknown as GameState)).toBe('df20ce2e');
+    // 1.25.0: re-pinned (was d611449f / df20ce2e). The RNG state above is unchanged (same draws in the same order); the hashes moved because the fight's
+    // strike times, its duration and the boss's regen at each strike differ.
+    expect(hashState(asV21(state))).toBe('16eeaa39');
+    expect(hashState({ ...asV21(state), saveVersion: 20 } as unknown as GameState)).toBe('dc459450');
   });
 
-  it('seed 1: a loss with five stuns (12 strikes lost): the hero falls at 38 s', () => {
+  it('seed 1: a loss with five stuns (12 strikes lost): the hero falls at 37.3 s', () => {
     const { fight, state } = fightAll(fighter(1));
-    expect(fight).toMatchObject({ won: false, endReason: 'hero_defeated', durationMs: 38_000, heroHpEnd: 0 });
+    expect(fight).toMatchObject({ won: false, endReason: 'hero_defeated', durationMs: 37_300, heroHpEnd: 0 }); // 1.25.0: 37.3 s (was 38 s: the 38th strike now lands at 37.3 s)
     expect(fight.log.filter((e) => e.skill && e.stun).map((e) => e.strike)).toEqual([10, 17, 24, 31, 38]);
     expect(fight.log.filter((e) => e.stunned)).toHaveLength(12);
     expect(state.dungeon.bosses.troll_chieftain).toEqual({ runs: 1, wins: 0, losses: 1 });
@@ -852,7 +883,7 @@ describe('save v20', () => {
     expect('maxFightMs' in doc.activity.fight).toBe(false);
     const s = loadSave(V19);
     expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
-    expect(CURRENT_SAVE_VERSION).toBe(22);
+    expect(CURRENT_SAVE_VERSION).toBe(23);
     expect(s.dungeon.bosses).toEqual({});
     const f = s.activity?.kind === 'dungeon' ? s.activity.fight! : null;
     expect(f).toMatchObject({ maxFightMs: 60_000, heroStunStrikes: 0 });

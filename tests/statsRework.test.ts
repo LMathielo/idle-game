@@ -371,7 +371,7 @@ describe('the hero strike (1.19.0)', () => {
     const enemy = { hp: 1_000_000_000, ...fightSide({ armor: 0 }) };
     const r = resolveFight(hero, enemy, createRng(2026), 4_000_000);
     const heroStrikes = r.log.filter((e) => e.actor === 'hero');
-    expect(heroStrikes).toHaveLength(4000);
+    expect(heroStrikes).toHaveLength(4001); // 1.25.0: the hero opens at 0, so the strike due at exactly 4,000 s lands too (it was 4000)
     const crits = heroStrikes.filter((e) => e.crit).length;
     expect(crits).toBeGreaterThan(900);
     expect(crits).toBeLessThan(1100);
@@ -525,7 +525,8 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
     const { hero: _h, mobs: _m, log: _l, ...fightRest } = f;
     const { hero: _rh, enemy: _re, enemyHp: rawHp, enemyMaxHp: rawMax, enemyStrikes: rawStrikes, log: _rl, ...rawFightRest } = V18_SAVE.activity.fight;
     // v20: the frozen 60 s limit, no enemy regen, no skills ready, no stun (tests/firstBoss.test.ts covers the v19 → v20 step)
-    expect(fightRest).toEqual({ ...rawFightRest, maxFightMs: 60_000, heroStunStrikes: 0 });
+    // v23: stamped with the old opening (first strikes one interval in) so it finishes the way it was going to
+    expect(fightRest).toEqual({ ...rawFightRest, maxFightMs: 60_000, heroStunStrikes: 0, heroFirstStrikeMs: 1000, enemyFirstStrikeMs: 1000 });
     // v22: the one enemy is mob 0 of the pack, unchanged
     expect(f.mobs).toHaveLength(1);
     expect(f.mobs[0]).toMatchObject({ variant: 'base', multBp: 10_000, hp: rawHp, maxHp: rawMax, strikes: rawStrikes, regenBp: 0, regenProgress: 0, regenAtMs: rawFightRest.elapsedMs, skillReady: {} });
@@ -588,9 +589,9 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
   });
 });
 
-describe('a new game is a v22 game', () => {
-  it('saveVersion 22, engine 1.24.0 (the stats rework shipped as 1.19.0 / v19)', () => {
-    expect(newGame(1, T0).saveVersion).toBe(22);
-    expect(ENGINE_VERSION).toBe('1.24.0');
+describe('a new game is a v23 game', () => {
+  it('saveVersion 23, engine 1.25.0 (the stats rework shipped as 1.19.0 / v19)', () => {
+    expect(newGame(1, T0).saveVersion).toBe(23);
+    expect(ENGINE_VERSION).toBe('1.25.0');
   });
 });

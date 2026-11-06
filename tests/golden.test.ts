@@ -554,6 +554,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.22.0', 21],
       ['1.23.0', 21],
       ['1.24.0', 22],
+      ['1.25.0', 23],
     ]);
   });
 });
@@ -574,16 +575,16 @@ describe('golden', () => {
         "actions": 420,
         "dungeon": {
           "losses": 0,
-          "runs": 90,
-          "wins": 90,
+          "runs": 91,
+          "wins": 91,
         },
-        "gold": 333,
+        "gold": 335,
         "heroLevel": 12,
         "hp": [
           160,
           0,
         ],
-        "lastFightMs": 2000,
+        "lastFightMs": 1000,
         "stamina": {
           "current": 100,
           "max": 100,
@@ -613,26 +614,26 @@ describe('golden', () => {
     }).toMatchInlineSnapshot(`
       {
         "actions": 420,
-        "batWings": 17,
+        "batWings": 20,
         "byDungeon": {
           "bat_cave": {
             "losses": 0,
-            "runs": 48,
-            "wins": 48,
+            "runs": 49,
+            "wins": 49,
           },
           "rat_cellar": {
             "losses": 0,
-            "runs": 90,
-            "wins": 90,
+            "runs": 91,
+            "wins": 91,
           },
         },
         "gold": 682,
         "heroLevel": 12,
         "hp": [
-          160,
-          0,
+          141,
+          5550000,
         ],
-        "lastFightMs": 5000,
+        "lastFightMs": 4000,
         "nests": 2,
         "stamina": {
           "current": 100,
@@ -670,18 +671,18 @@ describe('golden', () => {
           "byDungeon": {
             "bat_cave": {
               "losses": 0,
-              "runs": 48,
-              "wins": 48,
+              "runs": 49,
+              "wins": 49,
             },
             "rat_cellar": {
               "losses": 0,
-              "runs": 119,
-              "wins": 119,
+              "runs": 120,
+              "wins": 120,
             },
           },
           "lastFight": {
             "dungeonId": "rat_cellar",
-            "durationMs": 2000,
+            "durationMs": 1000,
             "endReason": "enemy_defeated",
             "enemyHpEnd": 0,
             "enemyId": "rat",
@@ -692,40 +693,40 @@ describe('golden', () => {
             "log": [
               {
                 "actor": "hero",
-                "atMs": 1000,
+                "atMs": 0,
                 "crit": false,
-                "dealt": 18,
+                "dealt": 17,
                 "magic": 0,
-                "physical": 18,
-                "roll": 19,
+                "physical": 17,
+                "roll": 18,
                 "strike": 1,
-                "targetHpAfter": 12,
+                "targetHpAfter": 13,
               },
               {
                 "actor": "enemy",
-                "atMs": 1000,
+                "atMs": 300,
                 "crit": false,
                 "dealt": 2,
                 "magic": 0,
                 "physical": 2,
-                "roll": 5,
+                "roll": 4,
                 "strike": 1,
                 "targetHpAfter": 368,
               },
               {
                 "actor": "hero",
-                "atMs": 2000,
+                "atMs": 1000,
                 "crit": false,
-                "dealt": 18,
+                "dealt": 17,
                 "magic": 0,
-                "physical": 18,
-                "roll": 19,
+                "physical": 17,
+                "roll": 18,
                 "strike": 2,
                 "targetHpAfter": 0,
               },
             ],
             "rewards": {
-              "gold": 2,
+              "gold": 3,
               "heroXp": 35,
               "items": {},
               "itemsLost": {},
@@ -734,22 +735,22 @@ describe('golden', () => {
           },
           "totals": {
             "losses": 0,
-            "runs": 167,
-            "wins": 167,
+            "runs": 169,
+            "wins": 169,
           },
         },
-        "gold": 981,
+        "gold": 994,
         "heroLevel": 13,
         "hp": [
           370,
           0,
         ],
         "logs": {
-          "birch_logs": 38,
-          "oak_logs": 1842,
+          "birch_logs": 37,
+          "oak_logs": 1839,
         },
         "rng": {
-          "seed": 52031315,
+          "seed": 3523339350,
         },
         "stamina": {
           "current": 91,
@@ -814,10 +815,10 @@ describe('golden', () => {
         "actions": 487,
         "dungeon": {
           "losses": 0,
-          "runs": 197,
-          "wins": 197,
+          "runs": 199,
+          "wins": 199,
         },
-        "gold": 1295,
+        "gold": 1302,
         "heroLevel": 13,
         "hp": [
           370,
@@ -839,7 +840,7 @@ describe('golden', () => {
               "icon": "🪵",
               "id": "oak_logs",
               "name": "Oak Logs",
-              "quantity": 1742,
+              "quantity": 1739,
               "stackable": true,
             },
             {
@@ -855,7 +856,7 @@ describe('golden', () => {
               "icon": "🐾",
               "id": "rat_skin",
               "name": "Rat Skin",
-              "quantity": 64,
+              "quantity": 63,
               "stackable": true,
             },
             {
@@ -863,7 +864,7 @@ describe('golden', () => {
               "icon": "🪽",
               "id": "bat_wing",
               "name": "Bat Wing",
-              "quantity": 17,
+              "quantity": 20,
               "stackable": true,
             },
             {
@@ -871,7 +872,7 @@ describe('golden', () => {
               "icon": "🪵",
               "id": "birch_logs",
               "name": "Birch Logs",
-              "quantity": 62,
+              "quantity": 63,
               "stackable": true,
             },
             {
@@ -885,19 +886,19 @@ describe('golden', () => {
           ],
         },
         "logs": {
-          "birch_logs": 62,
-          "oak_logs": 1742,
+          "birch_logs": 63,
+          "oak_logs": 1739,
         },
         "nests": 2,
         "nextItemSerial": 3,
-        "seed": 3940622529,
+        "seed": 3116963268,
         "stamina": {
           "current": 100,
           "max": 100,
           "progressMs": 0,
         },
         "tier": 2,
-        "xp": 1422,
+        "xp": 1517,
       }
     `);
   });
@@ -910,7 +911,8 @@ describe('golden', () => {
     // 1.16.0: re-pinned (was d6b0bd86): 2:00 cuts, ores and searches at core DEX 0, level points in every fight.
     // 1.17.0: re-pinned (was 0aefeb9f): no automatic level points (fights a little longer), points to spend, mana.
     // 1.19.0: re-pinned (was 19a041ff): crit draws shift the fight rolls, END gives max HP, logged strikes carry crit / physical / magic.
-    expect(hashState(asV12(s))).toBe('305eb62d');
+    // 1.25.0: re-pinned (was 305eb62d): the combat opening (hero at 0, monster at 300 ms) shortens every fight by a second: more runs, other rolls.
+    expect(hashState(asV12(s))).toBe('3fb7c705');
   });
 
   it('the 1.11.0 segment: Training Grounds Lv2 completes mid-training (1 → 2 XP/min at that instant), speed-up at 2 XP/min', () => {
@@ -977,7 +979,7 @@ describe('golden', () => {
         "actions": 810,
         "activity": "training",
         "axe": "iron_axe",
-        "batWings": 17,
+        "batWings": 20,
         "buildings": {
           "merchant": {
             "level": 1,
@@ -1003,26 +1005,26 @@ describe('golden', () => {
         "byDungeon": {
           "bat_cave": {
             "losses": 0,
-            "runs": 48,
-            "wins": 48,
+            "runs": 49,
+            "wins": 49,
           },
           "rat_cellar": {
             "losses": 0,
-            "runs": 414,
-            "wins": 414,
+            "runs": 417,
+            "wins": 417,
           },
         },
         "construction": null,
         "dungeon": {
           "losses": 0,
-          "runs": 462,
-          "wins": 462,
+          "runs": 466,
+          "wins": 466,
         },
         "dungeonActivity": null,
         "engineVersion": "1.16.0",
         "gloves": "iron_gloves#2",
-        "gold": 1388,
-        "hash": "4dff3151",
+        "gold": 1389,
+        "hash": "67dd69a4",
         "heroLevel": 15,
         "hp": [
           390,
@@ -1032,10 +1034,10 @@ describe('golden', () => {
           "endReason": "enemy_defeated",
           "won": true,
         },
-        "lastFightMs": 2000,
+        "lastFightMs": 1000,
         "logs": {
-          "birch_logs": 62,
-          "oak_logs": 6733,
+          "birch_logs": 63,
+          "oak_logs": 6744,
         },
         "merchant": {
           "chargeProgressMs": 0,
@@ -1065,11 +1067,12 @@ describe('golden', () => {
           "xp": 1820,
           "xpToNext": 1852,
         },
-        "nests": 2,
+        "nests": 4,
         "nextItemSerial": 4,
         "ores": {
-          "copper_ore": 17,
-          "stone": 372,
+          "copper_ore": 19,
+          "geode": 1,
+          "stone": 385,
         },
         "pickaxe": "start-wooden_pickaxe",
         "potions": 2,
@@ -1322,7 +1325,7 @@ describe('golden 1.13.0: the Crafting house', () => {
     expect(c17.crafting.pipesUnlocked).toBe(3);
     const s = at('q0'); // the whole 1.13.0 script
     expect(s.crafting.pipes.every((p) => p === null)).toBe(true);
-    expect([qtyOf(s, 'oak_plank'), qtyOf(s, 'stone_brick'), qtyOf(s, 'birch_plank'), qtyOf(s, 'copper_ingot')]).toEqual([300, 20, 3, 3]);
+    expect([qtyOf(s, 'oak_plank'), qtyOf(s, 'stone_brick'), qtyOf(s, 'birch_plank'), qtyOf(s, 'copper_ingot')]).toEqual([300, 20, 0, 3]); // 1.25.0: Birch Plank 3 -> 0 (the shifted fights moved the logs cut by the end)
     expect(s.flags.debugUsed).toBe(true);
     expect(s.activity).toEqual(expect.objectContaining({ kind: 'training', attribute: 'strength' })); // pipes never touch the hero
     expect(s.training.attributes.strength).toEqual({ level: 18, xp: 5, progressMs: 10_212 }); // same as 1.15.0
@@ -1332,7 +1335,8 @@ describe('golden 1.13.0: the Crafting house', () => {
     // new character fields (spent / unspent points, mana). Every crafting outcome above is unchanged.
     // 1.19.0 re-pin (was 2dbabf75): crit draws shift every later roll; END gives max HP; logged strikes carry crit / physical / magic; save v19.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.24.0', hash: '11f7779b' });
+    // 1.25.0: re-pinned (was 11f7779b): the combat opening shifted every fight (see the header).
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.25.0', hash: '60c1b72a' });
   });
 });
 
@@ -1346,20 +1350,23 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     // 1.16.0, 1.17.0 and 1.19.0: re-pinned (the main RNG stream before the refresh moved, so the stock and the gear rolls differ).
     expect(q3.merchant.stock).toEqual([
       { defId: 'health_potion_t1', quantity: 10, unitPrice: 12 },
-      { defId: 'iron_sword', quantity: 1, unitPrice: 500, quality: 4, rarity: 'common' },
-      { defId: 'steel_sword', quantity: 1, unitPrice: 2000, quality: 26, rarity: 'common' },
-      { defId: 'iron_chestplate', quantity: 1, unitPrice: 700, quality: 16, rarity: 'common' },
-      { defId: 'iron_axe', quantity: 1, unitPrice: 1200, quality: 3, rarity: 'rare', affixes: { attributes: ['intelligence'] } }, // 1.22.0: the rare piece rolled an affix
+      { defId: 'iron_shield', quantity: 1, unitPrice: 550, quality: 3, rarity: 'common' },
+      { defId: 'iron_gloves', quantity: 1, unitPrice: 250, quality: 43, rarity: 'common' },
+      { defId: 'iron_helm', quantity: 1, unitPrice: 400, quality: 4, rarity: 'common' },
+      { defId: 'iron_chestplate', quantity: 1, unitPrice: 700, quality: 49, rarity: 'common' },
     ]);
-    const q4 = at('q4'); // the first gear listing: the Iron Sword
-    expect(q4.inventory.items.find((i) => i.id === 'iron_sword#5')).toMatchObject({ quality: 4, rarity: 'common' });
-    expect(q3.character.gold - q4.character.gold).toBe(500);
+    // 1.25.0: re-pinned (the stock was Iron Sword q4 500 g, Steel Sword q26 2,000 g, Iron Chestplate q16 700 g, a rare Iron Axe q3 1,200 g with an INT
+    // affix): the combat opening shifts the main RNG stream before the refresh, so the listings differ.
+    const q4 = at('q4'); // the first gear listing: the Iron Shield
+    expect(q4.inventory.items.find((i) => i.id === 'iron_shield#5')).toMatchObject({ quality: 3, rarity: 'common' });
+    expect(q3.character.gold - q4.character.gold).toBe(550);
     // Gear jobs: inputs and invested stamina paid at start; the roll is on the job (sword: floor 20).
     const q7 = at('q7');
     expect(q7.crafting.pipes.slice(0, 3).map((j) => j && { recipeId: j.recipeId, gear: j.gear, status: j.status })).toEqual([
-      { recipeId: 'stone_sword', gear: { staminaInvested: 20, quality: 28, rarity: 'rare', affixes: { attributes: ['intelligence'] } }, status: 'running' },
-      { recipeId: 'stone_helm', gear: { staminaInvested: 0, quality: 30, rarity: 'uncommon' }, status: 'running' },
-      { recipeId: 'stone_gloves', gear: { staminaInvested: 5, quality: 83, rarity: 'uncommon' }, status: 'running' },
+      // 1.25.0: re-pinned (was quality 28 + an INT affix, 30, 83): the craft rolls moved with the shifted stream.
+      { recipeId: 'stone_sword', gear: { staminaInvested: 20, quality: 25, rarity: 'rare', affixes: { attributes: ['dexterity'] } }, status: 'running' },
+      { recipeId: 'stone_helm', gear: { staminaInvested: 0, quality: 46, rarity: 'uncommon' }, status: 'running' },
+      { recipeId: 'stone_gloves', gear: { staminaInvested: 5, quality: 99, rarity: 'uncommon' }, status: 'running' },
     ]);
     // Cancel: the gloves' 2 bricks and 1 plank come back; the 5 stamina do not.
     const q8 = at('q8');
@@ -1371,12 +1378,13 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     expect(q8b.crafting.pipes.slice(0, 2).map((j) => j?.status)).toEqual(['ready', 'ready']);
     const s = at('u1'); // the whole 1.14.0 script
     expect(s.crafting.pipes.every((p) => p === null)).toBe(true);
-    expect(s.character.equipment.weapon).toMatchObject({ id: 'stone_sword#6', quality: 28, rarity: 'rare' });
-    expect(s.inventory.items.find((i) => i.defId === 'stone_helm')).toMatchObject({ id: 'stone_helm#7', quality: 30, rarity: 'uncommon' });
+    expect(s.character.equipment.weapon).toMatchObject({ id: 'stone_sword#6', quality: 25, rarity: 'rare' });
+    expect(s.inventory.items.find((i) => i.defId === 'stone_helm')).toMatchObject({ id: 'stone_helm#7', quality: 46, rarity: 'uncommon' });
     expect(getDerivedStats(s).damage.breakdown[0]).toMatchObject({ source: 'weapon', min: 3, max: 5 }); // 3–5 at quality 28, rare ×1.25 since 1.22.0 (3–4 before; it was 4–6 at quality 53 before 1.19.0)
     expect(qtyOf(s, 'stone_brick')).toBe(13);
     // 1.15.0: 620 Stone; 1.16.0: 480; 1.17.0: 521; 1.19.0: 522 (a shifted RNG stream rolls one more Stone).
-    expect([s.training.attributes.strength, qtyOf(s, 'stone')]).toEqual([{ level: 19, xp: 180, progressMs: 16_212 }, 522]);
+    // 1.25.0: 542 (the shorter fights leave more time and a different roll stream).
+    expect([s.training.attributes.strength, qtyOf(s, 'stone')]).toEqual([{ level: 19, xp: 180, progressMs: 16_212 }, 542]);
     // 1.16.0 re-pin (1.15.0: gold 3,762; the 1.14.0 pin f6345886 in the v14 shape): the outcomes before it moved.
     // 1.17.0 re-pin (1.16.0: gold 4,061, hash aa5c4e76): the Steel Axe (2,500 g) is now the first gear listing.
     // 1.19.0 re-pin (1.17.0: gold 2,162, hash d4a2e1d2): the refresh rolled new listings (the first gear listing is the 500 g Iron Sword,
@@ -1384,7 +1392,8 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
     // 1.22.0: hash 09b4ec22 -> 1163d991; diffed against the 1.20.0 engine, the only change is the equipped rare Stone Sword's +INT affix (mana 140 -> 145).
     // rng, gold, HP, items, crafting: identical.
-    expect({ gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ gold: 4160, hash: '1163d991' });
+    // 1.25.0: re-pinned (was gold 4,160, hash 1163d991): the combat opening shifted the fights and the RNG stream of the script.
+    expect({ gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ gold: 4111, hash: '600bc2ee' });
   });
 });
 
@@ -1421,10 +1430,10 @@ describe('golden 1.15.0: continuous material pipes', () => {
     // 5 h away: both live off the logs as they are cut (each cut goes to pipe 1 first) and wait in between (1.16.0: the
     // 5 h end inside a craft of each; 1.15.0 ended with both waiting, 827 and 642 crafted; 1.16.0: 715 and 637).
     expect(s.crafting.pipes.slice(0, 2).map((j) => j && [j.status, j.done])).toEqual([
-      ['running', 744],
+      ['running', 743], // 1.25.0: 743 (was 744)
       ['running', 637],
     ]);
-    expect(qtyOf(s, 'oak_logs')).toBe(8); // (1.19.0: 8, was 10: the yield rolls moved with the RNG stream) a cut just landed; each craft takes its 2 logs when it starts
+    expect(qtyOf(s, 'oak_logs')).toBe(9); // 1.25.0: 9 (was 8) // (1.19.0: 8, was 10: the yield rolls moved with the RNG stream) a cut just landed; each craft takes its 2 logs when it starts
     expect(s.crafting.pipes[2]).toBeNull();
     expect(s.crafting.pipes[0]!.done).toBeGreaterThan(p0!.done);
     expect(s.crafting.pipes[0]!.done).toBeGreaterThan(s.crafting.pipes[1]!.done);
@@ -1433,7 +1442,8 @@ describe('golden 1.15.0: continuous material pipes', () => {
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
     // 1.22.0: hash a4eba9d5 -> 6d9814be, the ONLY change in the state (diffed against the 1.20.0 engine): the equipped Iron Sword is rare, so its
     // +INT affix adds 5 mana (140 -> 145; the hash above is seen without affixes, the mana is the one real difference). rng, gold, HP, items: identical.
-    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.24.0', gold: 10218, hash: '6d9814be' });
+    // 1.25.0: re-pinned (was gold 10,218, hash 6d9814be): the combat opening.
+    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.25.0', gold: 10186, hash: '059ced31' });
   });
 });
 
@@ -1508,7 +1518,8 @@ describe('golden 1.16.0: normal and core attributes', () => {
     expect(s.stats.totalActions).toBe(16 + 65); // ~30 min then 2 h 2 s of 110,004 ms cuts
     // 1.17.0 re-pin (1.16.0: df33601f): points to spend instead of level points, WS from total STR (more logs), mana.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.24.0', hash: '233aa32a' });
+    // 1.25.0: re-pinned (was 233aa32a): the combat opening.
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.25.0', hash: 'a9a3d620' });
   });
 });
 
@@ -1551,6 +1562,7 @@ describe('golden 1.17.0: spendable points, total STR → WS, mana', () => {
     expect(s.character.spentPoints.strength).toBe(6);
     // 1.19.0 re-pin (was b27e380f): crit draws, END max HP, regen units, logged strikes with crit / physical / magic, save v19.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.24.0', hash: '3be73d3c' });
+    // 1.25.0: re-pinned (was 3be73d3c): the combat opening.
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.25.0', hash: '8b52e922' });
   });
 });

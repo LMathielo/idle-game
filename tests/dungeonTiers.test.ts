@@ -135,7 +135,7 @@ describe('search time per tier', () => {
     expect(dungeonRunView(simulate(r.state, T0 + 120 * SEC - 1).state)).toMatchObject({ phase: 'search', remainingMs: 1 });
     const fight = simulate(r.state, T0 + 120 * SEC).state;
     expect(dungeonRunView(fight)).toMatchObject({ dungeonId: 'bat_cave', run: 11, searchMs: 120 * SEC, phase: 'fight' });
-    expect(dungeonRunView(fight)?.fight).toMatchObject({ enemyId: 'bat', enemyHp: 60, elapsedMs: 0 });
+    expect(dungeonRunView(fight)?.fight).toMatchObject({ enemyId: 'bat', elapsedMs: 0, maxFightMs: 60_000 }); // 1.25.0: the hero's opening strike has landed (the Bat is below 60 HP)
     const done = simulate(r.state, T0 + 120 * SEC + COMBAT.maxFightMs).state;
     expect(dungeonTotals(done, 'bat_cave').runs).toBe(1);
   });
@@ -291,8 +291,8 @@ describe('rewards and loot per tier', () => {
     };
     s = apply(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: id }, T0);
     const before = dungeonTotals(s, id);
-    const r = simulate(s, T0 + 8 * HOUR); // ~half-length searches + a one-strike fight (1 s) each
-    const runs = Math.floor((8 * HOUR) / (searchMsFor(id, s) + SEC));
+    const r = simulate(s, T0 + 8 * HOUR); // ~half-length searches + a one-strike fight each: the hero opens the fight, so it lasts 0 ms (1.25.0; it was 1 s)
+    const runs = Math.floor((8 * HOUR) / searchMsFor(id, s));
     const d = DUNGEONS[id];
     expect(dungeonTotals(r.state, id)).toEqual({ runs: before.runs + runs, wins: before.wins + runs, losses: 0 });
     expect(r.summary.dungeon).toEqual({ runs, wins: runs, losses: 0 });
@@ -374,13 +374,13 @@ describe('danger hint', () => {
 
   it('fresh hero: Easy, Tough, Deadly, Deadly, Deadly', () => {
     expect(levels(fresh)).toEqual<DangerLevel[]>(['easy', 'tough', 'deadly', 'deadly', 'deadly']);
-    // Rat: 3 hits to kill (avg 12.67 vs 30 HP), at 3 s; the rat lands 2 strikes before that (1 s, 2 s; the one at 3 s
-    // comes after the hero's killing blow) for ~3 → 6 of 50 HP. A fresh hero has no magic and no crit chance (1.19.0).
+    // Rat: 3 hits to kill (avg 12.67 vs 30 HP), the 3rd at 2 s (1.25.0: the hero's strikes are at 0, 1 s, 2 s); the rat lands 2 strikes before that
+    // (0.3 s, 1.3 s; its 3rd, 2.3 s, comes after the killing blow) for ~3 → 6 of 50 HP. A fresh hero has no magic and no crit chance (1.19.0).
     const rat = dangerHint(fresh, 'rat_cellar');
-    expect(rat).toMatchObject({ level: 'easy', expectedHpLoss: 6, maxHp: 50, percent: 12, heroMagicAvg: 0, critChanceBp: 0, critMultBp: 15_000, heroHits: 3, enemyHits: 2, fightMs: 3000 });
+    expect(rat).toMatchObject({ level: 'easy', expectedHpLoss: 6, maxHp: 50, percent: 12, heroMagicAvg: 0, critChanceBp: 0, critMultBp: 15_000, heroHits: 3, enemyHits: 2, fightMs: 2000 });
     expect(rat.heroAvg).toBeCloseTo(38 / 3, 10);
-    // Bat: 5 hits (avg 12 vs 60 HP) at 5 s, 4 bat strikes of 6 → 24 of 50 HP.
-    expect(dangerHint(fresh, 'bat_cave')).toMatchObject({ level: 'tough', expectedHpLoss: 24, maxHp: 50, percent: 48, heroHits: 5, enemyHits: 4, fightMs: 5000 });
+    // Bat: 5 hits (avg 12 vs 60 HP), the 5th at 4 s; 4 bat strikes (0.3, 1.3, 2.3, 3.3 s) of 6 → 24 of 50 HP.
+    expect(dangerHint(fresh, 'bat_cave')).toMatchObject({ level: 'tough', expectedHpLoss: 24, maxHp: 50, percent: 48, heroHits: 5, enemyHits: 4, fightMs: 4000 });
   });
 
   it('counts the expected crit and the magic part (1.19.0), with average rolls', () => {

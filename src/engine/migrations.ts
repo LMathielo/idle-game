@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 22 as const;
+export const CURRENT_SAVE_VERSION = 23 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -32,6 +32,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   19: migrateV19toV20,
   20: migrateV20toV21,
   21: migrateV21toV22,
+  22: migrateV22toV23,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -922,6 +923,43 @@ function migrateV21toV22(doc: SaveDoc): SaveDoc {
   if (isDoc(a) && (a.kind === 'dungeon' || a.kind === 'boss')) {
     out.activity = { ...a, difficulty: typeof a.difficulty === 'string' ? a.difficulty : 'normal', ...(a.fight ? { fight: migrateV22Fight(a.fight) } : {}) };
   }
+  return out;
+}
+
+// ---- v22 → v23 (2026-11-06): the fight's opening ----
+// Fights now open with the hero's strike at 0 and the monsters' at 300 ms (engine 1.25.0), stored on the fight as `heroFirstStrikeMs` /
+// `enemyFirstStrikeMs`. Strike n of a side lands at firstStrikeMs + (n - 1) x its interval. A fight IN PROGRESS when the update lands must
+// finish on the old timing (first strike one interval in), so it is stamped with first strike = the side's own interval (the hero's frozen
+// interval; the mobs' frozen interval: a fight's mobs are all one enemy type, so they share it). The last finished fight records the
+// opening it was fought with, read from its own log: the time of the first hero entry and of the first enemy entry (what the old rule
+// produced: one interval in); with no entry of a side (a fight that ended before it could strike, or at 0 HP) the old default 1000 ms.
+// Frozen literal on purpose.
+
+const V23_OLD_OPENING_MS = 1000;
+
+const intervalOf = (side: unknown): number =>
+  isDoc(side) && typeof side.attackIntervalMs === 'number' && Number.isFinite(side.attackIntervalMs) ? Math.max(1, Math.floor(side.attackIntervalMs)) : V23_OLD_OPENING_MS;
+
+function migrateV23Fight(fight: unknown): unknown {
+  if (!isDoc(fight) || typeof fight.heroFirstStrikeMs === 'number') return fight;
+  const mobs = Array.isArray(fight.mobs) ? fight.mobs : [];
+  return { ...fight, heroFirstStrikeMs: intervalOf(fight.hero), enemyFirstStrikeMs: intervalOf(isDoc(mobs[0]) ? mobs[0].side : undefined) };
+}
+
+function firstEntryMs(log: unknown, actor: 'hero' | 'enemy'): number {
+  if (!Array.isArray(log)) return V23_OLD_OPENING_MS;
+  const e = log.find((x) => isDoc(x) && x.actor === actor);
+  return isDoc(e) && typeof e.atMs === 'number' && Number.isFinite(e.atMs) ? e.atMs : V23_OLD_OPENING_MS;
+}
+
+function migrateV22toV23(doc: SaveDoc): SaveDoc {
+  const out: SaveDoc = { ...doc, saveVersion: 23 };
+  if (isDoc(doc.dungeon) && isDoc(doc.dungeon.lastFight) && typeof doc.dungeon.lastFight.heroFirstStrikeMs !== 'number') {
+    const f = doc.dungeon.lastFight;
+    out.dungeon = { ...doc.dungeon, lastFight: { ...f, heroFirstStrikeMs: firstEntryMs(f.log, 'hero'), enemyFirstStrikeMs: firstEntryMs(f.log, 'enemy') } };
+  }
+  const a = doc.activity;
+  if (isDoc(a) && (a.kind === 'dungeon' || a.kind === 'boss') && a.fight) out.activity = { ...a, fight: migrateV23Fight(a.fight) };
   return out;
 }
 
