@@ -12,7 +12,7 @@
 // Every multiplier is in basis points of the Normal enemy (10 000 = x1) and applies to HP, damage min / max, armor and magic resist.
 // Attack interval and the fight time limit are never scaled. ONE rounding rule everywhere: half up, integers only
 // (scaleStat in src/engine/difficulty.ts: floor((value × bp + 5 000) / 10 000), like the gear code).
-import type { Difficulty, MobVariant } from '../types';
+import type { Difficulty, EnemyId, MobVariant } from '../types';
 import type { RarityWeight } from './gear';
 
 export const DIFFICULTIES: readonly Difficulty[] = ['normal', 'hard', 'extreme'];
@@ -105,6 +105,23 @@ export const DIFFICULTY: Record<Difficulty, DifficultyDef> = {
   },
 };
 
-/** How a variant is shown in a name: "Veteran Troll", "Extreme Troll"; the plain variant adds nothing. */
-export const MOB_VARIANT_LABEL: Record<MobVariant, string> = { base: '', veteran: 'Veteran', extreme: 'Extreme' };
+/** A variant creature: `id` names its sprite (assets/images/enemies/variants/<id>.png, built by tools/art/monsters.py), `name` is shown everywhere. */
+export type VariantCreature = { id: string; name: string };
 
+/**
+ * The creature a pack mob IS on Hard and Extreme (1.25.0, owner decision 2026-11-06), per enemy: the "veteran" variant (Hard 25%, every
+ * Extreme mob) is the Hard creature, the "extreme" variant (Extreme 25%) the Extreme creature. The plain Hard mob ("base") keeps the
+ * enemy's own sprite and name, and the boss has none (it never comes in a pack). Names are data: nothing in the UI builds one.
+ */
+export const ENEMY_VARIANTS: Partial<Record<EnemyId, Record<Exclude<MobVariant, 'base'>, VariantCreature>>> = {
+  rat: { veteran: { id: 'giant_rat', name: 'Giant Rat' }, extreme: { id: 'blight_rat', name: 'Blight Rat' } },
+  bat: { veteran: { id: 'vampire_bat', name: 'Vampire Bat' }, extreme: { id: 'plague_bat', name: 'Plague Bat' } },
+  wolf: { veteran: { id: 'dire_wolf', name: 'Dire Wolf' }, extreme: { id: 'shadow_wolf', name: 'Shadow Wolf' } },
+  skeleton: { veteran: { id: 'skeleton_knight', name: 'Skeleton Knight' }, extreme: { id: 'bone_champion', name: 'Bone Champion' } },
+  troll: { veteran: { id: 'stone_troll', name: 'Stone Troll' }, extreme: { id: 'magma_troll', name: 'Magma Troll' } },
+};
+
+/** The variant creature of `enemyId` for `variant`, or null for the plain mob (and for an enemy without variants: the boss). */
+export function variantCreature(enemyId: EnemyId, variant: MobVariant): VariantCreature | null {
+  return variant === 'base' ? null : (ENEMY_VARIANTS[enemyId]?.[variant] ?? null);
+}

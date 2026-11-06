@@ -18,23 +18,22 @@ const VISIBLE_LINES = 8;
 type Props = {
   fight: DungeonFightView;
   heroName: string;
-  enemyName: string;
   enemyId: EnemyId;
   paused: boolean;
 };
 
-export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, enemyId, paused }: Props) {
+export const LiveFight = memo(function LiveFight({ fight, heroName, enemyId, paused }: Props) {
   const reducedMotion = useReducedMotion();
   const lines = fight.log.slice(-VISIBLE_LINES);
   const hidden = fight.log.length - lines.length;
   const clock = `${strikeTime(fight.elapsedMs)} / ${strikeTime(fight.maxFightMs)}`;
   // A regenerating enemy (a boss): whole HP a second, from its basis points of max HP (display only, the engine heals it).
   const regenPerSec = Math.floor((fight.enemyMaxHp * fight.enemyRegenBp) / 10_000);
-  // A pack (Hard / Extreme, 1.24.0): the mobs as rows, the log naming the mob ("Veteran Troll #3 hits ..."). One mob keeps the two bars.
+  // A pack (Hard / Extreme, 1.24.0): the mobs as rows, the log naming the creature ("Blight Rat #3 hits ..."). One mob keeps the two bars.
   const size = fight.mobs.length;
   const packed = size > 1;
-  const soloName = mobName(enemyName, fight.mobs[0]?.variant ?? 'base');
-  const nameOf = (mob: number | undefined) => mobLabel(enemyName, fight.mobs[mob ?? 0]?.variant ?? 'base', mob ?? 0, size);
+  const soloName = mobName(enemyId, fight.mobs[0]?.variant ?? 'base');
+  const nameOf = (mob: number | undefined) => mobLabel(enemyId, fight.mobs[mob ?? 0]?.variant ?? 'base', mob ?? 0, size);
   const title = packed ? `Fighting a pack: ${packText(size)}` : `Fighting ${soloName}`;
   const down = fight.mobs.filter((m) => !m.alive).length;
   return (
@@ -45,7 +44,7 @@ export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, e
         accessibilityLabel={`${title}${packed ? `, ${down} down` : ''}. ${heroName} HP ${fight.heroHp} of ${fight.heroMaxHp}, ${packed ? 'pack' : soloName} HP ${fight.enemyHp} of ${fight.enemyMaxHp}. ${clock}${paused ? ', paused' : ''}`}
       >
         <View style={styles.who}>
-          <EnemySprite enemyId={enemyId} />
+          <EnemySprite enemyId={enemyId} variant={packed ? 'base' : (fight.mobs[0]?.variant ?? 'base')} />
           <Text style={styles.title}>{title}</Text>
         </View>
         <Text style={styles.clock}>{paused ? `Paused · ${clock}` : clock}</Text>
@@ -54,7 +53,7 @@ export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, e
         <AnimatedHpBar label={heroName} value={fight.heroHp} max={fight.heroMaxHp} color={colors.skill} instant={reducedMotion} />
         {packed ? null : <AnimatedHpBar label={soloName} value={fight.enemyHp} max={fight.enemyMaxHp} color={colors.hp} instant={reducedMotion} />}
       </View>
-      {packed ? <PackRows enemyId={enemyId} enemyName={enemyName} mobs={fight.mobs} instant={reducedMotion} /> : null}
+      {packed ? <PackRows enemyId={enemyId} mobs={fight.mobs} instant={reducedMotion} /> : null}
       {regenPerSec > 0 ? <Text style={styles.note}>{soloName} heals {regenPerSec} HP a second.</Text> : null}
       {fight.heroStunStrikes > 0 ? <StunNotice name={heroName} strikes={fight.heroStunStrikes} /> : null}
       <View style={styles.log}>

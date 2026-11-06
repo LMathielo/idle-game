@@ -11,6 +11,8 @@ import {
   COMBAT,
   COMBAT_SKILLS,
   createRng,
+  dangerHint,
+  DUNGEON_IDS,
   type Difficulty,
   DUNGEONS,
   type GameState,
@@ -269,6 +271,48 @@ describe('the time limit with the new opening', () => {
     const r = play(f, 1_000_000);
     expect(r.events.filter((e) => e.actor === 'hero')).toHaveLength(121);
     expect(r.events.filter((e) => e.actor === 'enemy')).toHaveLength(120);
+  });
+});
+
+// ---------- the danger hints ----------
+
+/** Strikes of a 1 s monster that land strictly before `t` (a tie goes to the hero): at 300, 1300, 2300 ... counted one by one. */
+function monsterStrikesBefore(t: number): number {
+  let n = 0;
+  for (let at = 300; at < t; at += 1000) n += 1;
+  return n;
+}
+
+describe('the danger hints follow the new timing', () => {
+  it('stage hint: the hero\'s heroHits-th strike lands at (heroHits - 1) intervals, and the monster strikes from 300 ms on', () => {
+    for (const level of [5, 12, 25]) {
+      const hero = openGame(level, 7);
+      for (const id of DUNGEON_IDS) {
+        const h = dangerHint(hero, id);
+        const killAt = (h.heroHits - 1) * 1000; // hero 1 s interval, first strike at 0
+        expect(h.fightMs, `${id} L${level} fight time`).toBe(killAt);
+        // enemy strikes at 300, 1300, ...: those strictly before killAt (a tie goes to the hero)
+        const before = monsterStrikesBefore(killAt);
+        expect(h.enemyHits, `${id} L${level} enemy strikes`).toBe(before);
+      }
+    }
+  });
+
+  it('pack hint: a pack of k mobs ends at (k x heroHits - 1) intervals; every alive mob strikes from 300 ms', () => {
+    const hero = openGame(25, 8);
+    for (const d of ['hard', 'extreme'] as const) {
+      const h = dangerHint(hero, 'wolf_den', d);
+      let fight = 0;
+      let hits = 0;
+      let sizes = 0;
+      for (let k = h.packMin; k <= h.packMax; k++) {
+        fight += (k * h.heroHits - 1) * 1000;
+        for (let j = 0; j < k; j++) hits += monsterStrikesBefore(((j + 1) * h.heroHits - 1) * 1000);
+        sizes += 1;
+      }
+      expect(h.fightMs, d).toBeCloseTo(fight / sizes, 6);
+      expect(h.enemyHits, d).toBeCloseTo(hits / sizes, 6);
+    }
   });
 });
 

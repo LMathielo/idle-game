@@ -8,9 +8,9 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.24.0** | 1.1.0 |
-| Save | **v22** | v2 |
-| Contents | Everything below, up to the difficulty tiers (Hard / Extreme for Tier 1, pack fights; art pending owner approval), the Crafting debug buttons (Force craft, Finish now), the compact Crafting recipe list and the Done reveal fix (UI only), gear rarity tiers and affixes (#36), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
+| Engine | **1.25.0** | 1.1.0 |
+| Save | **v23** | v2 |
+| Contents | Everything below, up to the combat opening and the variant creatures (hero strikes at 0, monsters at 0.3 s; Hard / Extreme variants as their own creatures; art pending owner approval), the difficulty tiers (Hard / Extreme for Tier 1, pack fights; art pending owner approval), the Crafting debug buttons (Force craft, Finish now), the compact Crafting recipe list and the Done reveal fix (UI only), gear rarity tiers and affixes (#36), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is behind `dev` by PRs #3–#25. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
 - **Open PRs:** Expo Go previews by label plus per-branch saves (`feat/expo-test-previews`).
@@ -21,13 +21,24 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
 
+### Engine 1.25.0 · save v23
+- **Combat opening and variant creatures** (`feat/combat-opening`, stacked on #41; owner-approved 2026-11-06; **new art pending owner approval**):
+  - **Opening:** every fight (stage, Hard / Extreme pack, boss) starts with the **hero's first strike at t = 0** and **each monster's at 300 ms** (all mobs of a pack too), then every side on its own interval. Tunables `COMBAT.heroFirstStrikeMs` = 0 and `COMBAT.enemyFirstStrikeMs` = 300 (config); strike n lands at `firstStrikeMs + (n - 1) x interval` (`strikeTimeMs`). Unchanged: the hero first on a tie, the 60 s / 120 s limits (a strike due at exactly the limit lands), stun, Heavy Bash on the boss's 3rd / 10th / 17th strike (now at 2.3 s, 9.3 s, 16.3 s), regen, the draws per strike and their order. Live = offline = any split of time (tested at -1, 0, 1, 299, 300, 301 ms around the fight start); the opening strike lands inside the command that starts a fight (`ENTER_BOSS`, `SKIP_DUNGEON_RUN`).
+  - **Save v23:** the opening is stored on every fight and on `lastFight`; a fight in progress when the update lands is stamped with the OLD opening (each side's first strike one own interval in) and finishes the old way. Frozen v22 fixtures (a Hard pack, the boss) written by the untouched #41 engine, with a reference of what it produced; `tests/migrationV22.test.ts`.
+  - **Goldens re-pinned** (every fight's outcome shifted; old values noted at each pin, history in `tests/golden.test.ts`, rules-version note in ENGINE.md). Danger hints (stage, pack, boss) follow the new timing.
+  - **Balance (report only, no tuning):** both sims re-run: **the win rates did not change** (the order of strikes is the same), fights are 0.7-1.0 s shorter; table in ENGINE.md "Rules version" and the PR description.
+  - **UI:** the log shows each strike's time to a tenth ("0:00.0" the hero's opening hit, "0:00.3" the monster's first), read from the engine log; the replay shows the opening hit at once.
+  - **Variant creatures:** the Hard "Veteran" variant and the Extreme "Extreme" variant are their own creatures (`ENEMY_VARIANTS`: Giant Rat / Blight Rat, Vampire Bat / Plague Bat, Dire Wolf / Shadow Wolf, Skeleton Knight / Bone Champion, Stone Troll / Magma Troll; the plain Hard mob keeps its base sprite and name), named after the creature everywhere ("Blight Rat #3 hits you for 88"). Outline variants and `tools/art/variants.py` deleted. Names are data.
+  - **Art (pending owner approval):** `assets/images/enemies/variants/plague_bat.png`, `shadow_wolf.png`, `bone_champion.png`, `magma_troll.png` and `assets/images/enemies/troll_chieftain.png` (the boss; was the Stone Troll's placeholder), drawn in `tools/art/monsters.py`. Giant Rat, Blight Rat, Vampire Bat, Dire Wolf, Skeleton Knight and Stone Troll already existed.
+  - **Tests:** `tests/combatOpening.test.ts`, `tests/migrationV22.test.ts`; `tests/art.test.ts` covers every (enemy, variant) pair and the boss.
+
 ### Engine 1.24.0 · save v22
 - **Difficulty tiers: Hard and Extreme for Tier 1** (`feat/difficulty-tiers`; owner-approved 2026-11-06; **art pending owner approval**):
   - **Unlocks:** the first Troll Chieftain win on Normal opens Hard, the first on Hard opens Extreme (permanent). A tier header has three skull buttons (white Normal, red Hard, black with flaming eyes Extreme); a locked one is greyed with a padlock and a tap explains why. The selection is per tier, set by the logged `SET_DUNGEON_DIFFICULTY` (`UNKNOWN_TIER` / `UNKNOWN_DIFFICULTY` / `DIFFICULTY_LOCKED`). Rows, stage detail, danger hint, rewards and the boss follow it; a run keeps its own difficulty. Counters are per difficulty (existing ones are Normal). Boss unlock inside a difficulty: 50 / 100 / 400 Troll Bridge wins on it. Banners "Hard unlocked for Tier 1" / "Extreme unlocked for Tier 1".
   - **Packs:** Hard 1-4 mobs (25% Veteran; x2 / x3), Extreme 7-10 mobs (all Veteran x12, 25% Extreme x16). All mobs fight at once, the hero hits the front-most alive one, no overkill, ties hero first then pack order, 60 s fixed. Rewards for a full clear only, per mob (XP and gold x its multiplier, drops per mob). Fixed RNG draw order (size, then one variant roll per mob), pinned by goldens. Normal draws exactly as before.
   - **Boss:** still one Chieftain, stats x2 / x8, XP and gold x2 / x8, gear 35%, rarity blue 75 / purple 25 (Hard) and blue 25 / purple 75 (Extreme).
   - **UI:** pack rows in the live fight and the replay (two columns, target marked, dead greyed, log lines name the mob), stage detail "Pack of 1-4" with both mob kinds and loot per mob, scaled boss detail, away summary / activity strip / last fight state the difficulty, debug "+1 boss win" and difficulty-aware "+10 wins".
-  - **Art (pending owner approval):** three skull icons (`tools/art/icons.py`) and a Veteran (amber) and Extreme (violet) outline sprite per enemy (`tools/art/variants.py`).
+  - **Art (pending owner approval):** three skull icons (`tools/art/icons.py`) and a Veteran (amber) and Extreme (violet) outline sprite per enemy (`tools/art/variants.py`; **replaced in 1.25.0** by the variant creatures, above).
   - **Save v22:** counters become Normal's, a fight in progress becomes a pack of one that plays on as before. Frozen v21 fixture + reference of the untouched engine.
   - **Balance (report only, no tuning):** table in ENGINE.md "Difficulty and packs". Extreme is a wall; the Gold set clears Hard, boss included.
   - **Tests:** `tests/difficulty.test.ts`, `tests/difficultyPacks.test.ts`, `tests/migrationV21.test.ts`, gated `tests/balanceSimDifficulty.test.ts`; `tests/art.test.ts` covers the variant sprites.
@@ -213,8 +224,8 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 
 Decided and scoped; ready to brief to an engineer. Top = next.
 
-0. **Difficulty tiers: owner to try Hard / Extreme and approve the new art** (three skulls, Veteran / Extreme outlines). Then decide the balance (Hard may be easy for a Gold-tier hero; Extreme is a wall; see the table in ENGINE.md). Tier 2 will reuse the same difficulty system.
-0b. **Boss tuning: decided 2026-11-05, keep as is** (see PRODUCT.md decision log). Still open: real art for the Chieftain and the Tusk.
+0. **Difficulty tiers: owner to try Hard / Extreme and approve the new art** (three skulls; the variant creatures and the Troll Chieftain sprite: Plague Bat, Shadow Wolf, Bone Champion, Magma Troll, Troll Chieftain, 1.25.0). Then decide the balance (Hard may be easy for a Gold-tier hero; Extreme is a wall; see the table in ENGINE.md). Tier 2 will reuse the same difficulty system.
+0b. **Boss tuning: decided 2026-11-05, keep as is** (see PRODUCT.md decision log). Still open: real art for the Tusk (the Chieftain's sprite is new in 1.25.0, pending approval).
 1. **Enemy tier check after the stats rework:** the 1.19.0 balance sim (PR for `feat/stats-rework`) shows the Skeleton falls at core 10 from Lv1 and the Troll at core 20 even at Lv1/Lv5, where 1.18 needed Lv10-15. Decide the targets, then retune enemy HP / damage / armor (and the core curves) where a tier is off. Earlier note: since 1.17.0 a level gives 5 points to spend instead of +5 on every attribute (20 per level), so level growth drops a lot and the 1.16.0 "dungeons are easy" concern may be gone. Sim each tier with typical builds (all STR/END, mixed) and only retune enemy HP / damage / armor where a tier is now off its target effort. (Normal STR counting toward WS / MS was decided: yes, 1.17.0.)
 2. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
 3. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.

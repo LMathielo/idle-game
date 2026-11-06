@@ -16,11 +16,17 @@ def eye(c, x, y, col, glow=False, r=4):
 
 
 # ------------------------------------------------------------------ bat
-def bat(fur, wing, bone, eye_col='#ff3b2f', glow=False, fangs='#f2ead2', size=1.0, ears_tall=0):
+def bat(fur, wing, bone, eye_col='#ff3b2f', glow=False, fangs='#f2ead2', size=1.0, ears_tall=0, holes=(), post=None):
     c = Canvas(32, 32)
     # wings (far wing first, darker)
     far = c.m_poly([(19, 12), (23, 8), (28, 5), (31, 7), (31, 11), (29, 15), (27, 13), (26, 17), (23, 14), (22, 19), (19, 16)])
     near = c.m_poly([(13, 12), (9, 7), (4, 3), (0, 6), (0, 11), (2, 15), (4, 13), (5, 18), (8, 15), (10, 20), (13, 17)])
+    for hx_, hy_, hr in holes:  # torn membrane (the plague bat): holes cut before the wing is shaded and outlined
+        cut = ~c.m_ellipse(hx_, hy_, hr, hr)
+        if hx_ > 16:
+            far &= cut
+        else:
+            near &= cut
     for wm, dark in ((far, True), (near, False)):
         w = wing if not dark else [mix(x, hx('#000000'), .2) for x in wing]
         c.shade(wm, w, soft=1.6)
@@ -51,6 +57,8 @@ def bat(fur, wing, bone, eye_col='#ff3b2f', glow=False, fangs='#f2ead2', size=1.
     if not glow:
         c.px(13, 8, '#ffffff')
     c.px(12, 12, fangs); c.px(14, 12, fangs)
+    if post:
+        post(c, dict(body=body, head=head, ears=ears, near=near, far=far))
     return c
 
 
@@ -64,8 +72,22 @@ def bat_vampire():
                ramp('#2a0c14', '#4a1420', '#6e1e2c', '#962e3c'), '#c47a7a', eye_col='#ff3b2f', glow=True, ears_tall=1)
 
 
+def bat_plague():
+    """Plague Bat (Extreme variant of the bat): sickly green, bloated, wings torn through, boils and spore motes. No tall ears."""
+    def post(c, m):
+        boil = hx('#d8e070')
+        for x, y in ((14, 17), (17, 19), (15, 21), (18, 16)):  # boils on the swollen belly: a pale cap on a dark pit
+            c.px(x, y, boil); c.px(x + 1, y + 1, '#2c3a1c')
+        c.px(12, 13, '#2c3a1c'); c.px(12, 14, '#9ad03a')  # drool from the fangs
+        for x, y in ((6, 20), (25, 21), (9, 25), (22, 26), (3, 17), (28, 18)):  # spore motes drifting off it
+            c.px(x, y, '#7aa832'); c.px(x + 1, y, '#c4e85a') if (x + y) % 2 else None
+    return bat(ramp('#141a0e', '#26341a', '#3c5224', '#587234', '#7a9444'),
+               ramp('#161e12', '#2c4024', '#46603a', '#6a8648'), '#c8c070', eye_col='#d8ff3a', glow=False, fangs='#e8f0a0',
+               size=1.3, holes=((6, 8, 1.8), (9, 13, 1.4), (26, 9, 1.8), (28, 13, 1.2), (23, 15, 1.3)), post=post)
+
+
 # ------------------------------------------------------------------ wolf
-def wolf(fur, chest, eye_col='#ffcf3a', glow=False, scars=False, ruff=0):
+def wolf(fur, chest, eye_col='#ffcf3a', glow=False, scars=False, ruff=0, post=None):
     c = Canvas(32, 32)
     dk = [mix(x, hx('#000000'), .3) for x in fur]
     leg = lambda pts, w: c.m_line(pts, w)
@@ -114,6 +136,8 @@ def wolf(fur, chest, eye_col='#ffcf3a', glow=False, scars=False, ruff=0):
         c.px(x, 17, '#f2ead2'); c.px(x + 1, 19, '#f2ead2')
     eye(c, 5, 14, eye_col, glow)
     c.px(4, 13, fur[0]); c.px(5, 13, fur[0]); c.px(6, 13, fur[0])
+    if post:
+        post(c, dict(body=body, head=head, tail=tm, legs=near | far, allm=allm))
     return c
 
 
@@ -127,13 +151,48 @@ def wolf_dire():
                 ramp('#262030', '#3c3448', '#544a60', '#6a5e74'), eye_col='#ff3b2f', glow=True, scars=True, ruff=1)
 
 
+def wolf_shadow():
+    """Shadow Wolf (Extreme variant of the wolf): a hound of smoke. Near-black violet with a lit violet rim, runes along the flank,
+    legs and tail that dissolve into mist (dithered), pale violet eyes, a ragged mane."""
+    fur = ramp('#08060e', '#120e1c', '#1c1630', '#2a2044', '#3c2e5c', '#58448a')
+    chest = ramp('#1c1630', '#2e2450', '#463a74', '#5e4e96')
+
+    def post(c, m):
+        # lit violet rim on every top edge (the shadow is outlined in light, not in black)
+        top = c.alpha & ~np.roll(c.alpha, 1, 0)
+        c.fill(top, '#7a62c4')
+        # runes on the flank and haunch
+        for pts in ([(13, 14), (15, 17), (18, 15)], [(20, 13), (22, 16)], [(24, 17), (23, 20)]):
+            c.fill(c.m_line(pts) & c.alpha, '#a888ff')
+        c.px(16, 15, '#e8d8ff'); c.px(22, 15, '#e8d8ff')
+        # the lower legs and the end of the tail dissolve: more pixels missing the lower (or farther) they are
+        t = np.clip((c.yy - 23) / 6.0, 0, 1)
+        t = np.maximum(t, np.clip((c.xx - 28) / 4.0, 0, 1) * (c.yy > 12))
+        gone = (t > BAYER[c.yy % 4, c.xx % 4]) & c.alpha
+        c.alpha &= ~gone
+        c.alpha &= ~(c.yy >= 29)
+        # mist: violet motes under the paws, smoke curling off the back
+        for x, y in ((8, 28), (11, 29), (15, 29), (21, 28), (24, 29), (27, 27)):
+            c.px(x, y, '#58448a')
+        for x, y in ((10, 29), (17, 28), (22, 29), (26, 29)):
+            c.px(x, y, '#a888ff')
+        for x, y in ((12, 10), (15, 9), (18, 10), (21, 9), (24, 11), (28, 12), (30, 15)):
+            c.px(x, y, '#3c2e5c')
+        for x, y in ((14, 8), (20, 7), (26, 10)):
+            c.px(x, y, '#7a62c4')
+        c.glow(5, 14, 6, '#a888ff', .35, steps=3, mask=c.empty() | True)
+    return wolf(fur, chest, eye_col='#f0e0ff', glow=True, ruff=2, post=post)
+
+
 # ------------------------------------------------------------------ skeleton
 BONE = ramp('#4a4038', '#8a7e64', '#b9ad8c', '#ddd2b2', '#f2ead2')
 
 
-def skeleton(eye_col='#7fd8ff', helmet=None, armour=None, rag='#4a3a5a', blade=('#45424e', '#7b7884', '#a19d9f', '#d0cac4'), rust=True):
+def skeleton(eye_col='#7fd8ff', helmet=None, armour=None, rag='#4a3a5a', blade=('#45424e', '#7b7884', '#a19d9f', '#d0cac4'), rust=True, pre=None, post=None, blade_w=2):
     c = Canvas(32, 32)
     b = BONE
+    if pre:
+        pre(c)  # drawn first: behind the whole skeleton (the champion's cape)
     # shield on the back arm (behind)
     sh = c.m_ellipse(22, 16, 4.5, 5.5) & ~c.m_poly([(24, 9), (27, 12), (27, 9)])
     c.shade(sh, ramp('#2e1c12', '#4a2e1a', '#6b4528', '#8a5e36'), soft=1.5)
@@ -189,7 +248,7 @@ def skeleton(eye_col='#7fd8ff', helmet=None, armour=None, rag='#4a3a5a', blade=(
     arm = c.m_line([(13, 12), (10, 14), (7, 12)], 1)
     c.fill(arm, b[3]); c.outline(arm, OUT)
     # rusty sword pointing up-left
-    bl = c.m_line([(6, 11), (1, 2)], 2)
+    bl = c.m_line([(6, 11), (1, 2)], blade_w)
     c.fill(bl, hx(blade[1])); c.fill(bl & (c.xx + c.yy < 13 + (c.xx * 0)), hx(blade[2]))
     edge = c.m_line([(5, 10), (1, 3)], 1)
     c.fill(edge & bl, hx(blade[3]))
@@ -202,6 +261,8 @@ def skeleton(eye_col='#7fd8ff', helmet=None, armour=None, rag='#4a3a5a', blade=(
     # glowing eyes
     eye(c, 12, 6, eye_col, True, 4)
     eye(c, 15, 6, mix(hx(eye_col), hx('#000000'), .2), False)
+    if post:
+        post(c, dict(skull=skull, ribs=ribs, arm=arm, blade=bl))
     return c
 
 
@@ -215,8 +276,45 @@ def skeleton_knight():
                     blade=('#2e2a36', '#5d5a64', '#8f8b8f', '#c4bfb6'), rust=False)
 
 
+def skeleton_champion():
+    """Bone Champion (Extreme variant of the skeleton): a horned great helm, a crimson cape, a spiked pauldron, gold trim and a broad
+    two-handed blade; ember-orange eyes."""
+    gold = ramp('#5a3c10', '#8a6418', '#c8962a', '#f0c850')
+    steel = ramp('#22202a', '#3a3844', '#5a5866', '#7e7c8a', '#a8a6b4')
+    cape = ramp('#2a0810', '#4a0e1a', '#721a28', '#9a2a38')
+
+    def pre(c):
+        cp = c.m_poly([(14, 10), (20, 10), (27, 21), (26, 30), (21, 28), (18, 31), (14, 28), (12, 22)])
+        c.shade(cp, cape, soft=1.6)
+        c.fill(c.m_line([(17, 12), (22, 28)]) & cp, cape[0])
+        c.fill(c.m_line([(15, 22), (14, 29)]) & cp, cape[0])
+        c.outline(cp, OUT)
+
+    def post(c, m):
+        # horns curling out of the helm
+        for pts in ([(11, 4), (8, 3), (7, 0)], [(17, 4), (20, 3), (21, 0)]):
+            hn = c.m_line(pts, 1)
+            c.fill(hn, BONE[3]); c.px(*pts[-1], BONE[4])
+            c.outline(hn, OUT)
+        # gold band on the helm and a gold crest line
+        c.fill(c.m_rect(10, 5, 18, 5) & c.alpha, gold[2]); c.px(14, 1, gold[3]); c.px(14, 2, gold[2])
+        # spiked pauldron over the near shoulder
+        pa = c.m_ellipse(12, 12, 3.4, 2.6)
+        sp = c.m_poly([(10, 10), (9, 5), (12, 9)])
+        c.shade(pa | sp, steel, soft=1.2)
+        c.fill(c.m_rect(9, 12, 15, 12) & pa, gold[2]); c.px(12, 11, gold[3])
+        c.outline(pa | sp, OUT)
+        # gold-rimmed chest plate edge and a gold belt buckle
+        c.fill(c.m_rect(13, 18, 17, 18) & c.alpha, gold[2]); c.px(15, 19, gold[3])
+        # broad blade: a bright edge and a gold crossguard
+        c.fill(m['blade'] & (c.xx + c.yy < 12), '#c8d0dc')
+        c.fill(c.m_line([(3, 12), (9, 9)], 1), gold[2]); c.px(3, 12, gold[3]); c.px(9, 9, gold[3])
+    return skeleton(eye_col='#ff9a2a', helmet=steel, armour=ramp('#22202a', '#3a3844', '#5a5866', '#7e7c8a'), rag='#721a28',
+                    blade=('#44424e', '#8a8894', '#c8d0dc', '#f0f4fa'), rust=False, pre=pre, post=post, blade_w=3)
+
+
 # ------------------------------------------------------------------ troll (48x48)
-def troll(skin, moss, eye_col='#ffcf3a', crystals=None, club='wood', glow=False):
+def troll(skin, moss, eye_col='#ffcf3a', crystals=None, club='wood', glow=False, post=None):
     c = Canvas(48, 48)
     rng = np.random.default_rng(4)
     dk = [mix(x, hx('#000000'), .28) for x in skin]
@@ -286,6 +384,8 @@ def troll(skin, moss, eye_col='#ffcf3a', crystals=None, club='wood', glow=False)
     c.fill(c.m_rect(9, 36, 13, 36) & fist, skin[1])
     for x in (17, 20, 23):
         c.px(x, 46, skin[-1])
+    if post:
+        post(c, dict(allm=allm, hump=hump, gut=gut, head=head, arm=arm, fist=fist, nearleg=nearleg, farm=farm, farleg=farleg, club=cl, skin=skin, dk=dk))
     return c
 
 
@@ -299,10 +399,103 @@ def troll_stone():
                  [hx('#4a6a3a'), hx('#7a8a5a')], eye_col='#7fe0ff', crystals=('#1c1440', '#4dd6c2', '#a8fff0'), club='stone', glow=True)
 
 
-SET = [('bat', bat_cave, 'Cave Bat'), ('bat_vampire', bat_vampire, 'Vampire Bat'),
-       ('wolf', wolf_grey, 'Grey Wolf'), ('wolf_dire', wolf_dire, 'Dire Wolf'),
-       ('skeleton', skeleton_crypt, 'Crypt Skeleton'), ('skeleton_knight', skeleton_knight, 'Skeleton Knight'),
-       ('troll', troll_moss, 'Bridge Troll'), ('troll_stone', troll_stone, 'Stone Troll')]
+def troll_magma():
+    """Magma Troll (Extreme variant of the troll): black basalt hide split by glowing lava cracks, obsidian spines tipped with fire on
+    its back, a molten belly, ember-yellow eyes and a club of cooling rock."""
+    skin = ramp('#120e10', '#221a1c', '#34282a', '#4a3a38', '#665048', '#826a5c')
+
+    def post(c, m):
+        lava = ('#8a1c08', '#ff6a14', '#ffd23a')
+        allm = m['allm']
+        cracks = ([(24, 14), (27, 17), (25, 21), (29, 24)], [(33, 15), (31, 20), (35, 25)], [(20, 26), (24, 30), (22, 34)],
+                  [(28, 28), (31, 32), (29, 36)], [(18, 22), (17, 27)], [(36, 21), (37, 27), (35, 33)], [(12, 33), (14, 36)])
+        for pts in cracks:
+            ln = c.m_line(pts, 1) & allm
+            c.fill(ln, lava[1])
+            c.fill(ln & (c.yy % 2 == 0), lava[2])
+        c.fill(c.m_ellipse(23, 31, 3.5, 2.5) & m['gut'], lava[1]); c.fill(c.m_ellipse(23, 31, 1.6, 1.2) & m['gut'], lava[2])  # molten belly
+        c.glow(23, 31, 9, '#ff6a14', .32, steps=3, mask=allm)
+        # obsidian spines on the back, tipped with fire
+        for cx, cy, h in ((29, 11, 7), (34, 12, 5), (24, 12, 5), (38, 15, 4)):
+            sm = c.m_poly([(cx - 1, cy + 2), (cx, cy - h), (cx + 1, cy + 2)])
+            c.fill(sm, '#241a28'); c.fill(sm & (c.xx < cx), '#3a2c40')
+            c.px(cx, cy - h, lava[2]); c.px(cx, cy - h + 1, lava[1])
+            c.outline(sm, OUT)
+            c.glow(cx, cy - h, 4, '#ff6a14', .35, steps=2)
+        # ember eye, lava in the open mouth
+        c.px(11, 18, lava[2]); c.px(12, 18, '#ffe8a0'); c.fill(c.m_line([(10, 24), (15, 23)]), lava[1])
+        c.glow(11, 18, 3, '#ff9a2a', .35, steps=2)
+        # molten club: dark rock head with lava seams and an ember glow
+        cl = m['club']
+        c.fill(c.m_line([(1, 43), (4, 45), (6, 43)], 1) & cl, lava[1]); c.px(4, 44, lava[2]); c.px(3, 46, lava[1])
+        c.glow(4, 44, 6, '#ff6a14', .4, steps=3, mask=cl)
+        # embers drifting up
+        for x, y in ((8, 9), (19, 7), (41, 9), (44, 18), (4, 30), (45, 36)):
+            c.px(x, y, lava[2] if (x + y) % 2 else lava[1])
+    return troll(skin, None, eye_col='#ffd23a', club='stone', glow=False, post=post)
+
+
+def troll_chieftain():
+    """Troll Chieftain (the boss): a heavier, darker olive troll in a crown of iron and gold, red war paint across face and chest,
+    long upturned tusks, a fur mantle on the shoulders, a necklace of fangs and a huge iron-spiked club. Unmistakably the boss."""
+    skin = ramp('#141c10', '#26341a', '#3a4e24', '#546c30', '#6f8a3e', '#8ca64e')
+    paint = ('#6a0c10', '#b81c1c', '#e8402a')
+    fur = ramp('#1a120c', '#32221a', '#4e3828', '#6e5238')
+    gold = ramp('#5a3c10', '#8a6418', '#c8962a', '#f0c850')
+    iron = ramp('#16141c', '#2e2c36', '#4c4a56', '#78767f', '#a8a6ae')
+    wood = ramp('#2e1c12', '#4a2e1a', '#6b4528', '#8a5e36', '#ab7a45')
+
+    def post(c, m):
+        allm = m['allm']
+        # fur mantle trimming the top of the shoulders (clipped to the hump, so the silhouette stays the troll's), ragged hem
+        mantle = c.m_poly([(17, 15), (20, 11), (26, 9), (33, 9), (39, 13), (41, 17), (38, 15), (36, 18), (33, 15), (30, 18), (27, 15), (24, 18), (21, 15), (18, 18)]) & (m['hump'] | c.m_rect(16, 8, 42, 14))
+        c.shade(mantle, fur, soft=1.4)
+        for x, y in ((24, 11), (29, 10), (34, 11), (38, 14), (27, 13), (33, 13)):
+            c.px(x, y, fur[3]); c.px(x + 1, y + 1, fur[0])
+        c.outline(mantle, OUT)
+        for sx in (27, 35):  # iron shoulder spikes through the fur
+            sp = c.m_poly([(sx - 1, 10), (sx, 5), (sx + 1, 10)])
+            c.fill(sp, iron[3]); c.fill(sp & (c.xx < sx), iron[2]); c.px(sx, 5, '#ffffff'); c.outline(sp, OUT)
+        # a necklace of fangs
+        for x, y in ((15, 25), (17, 27), (20, 28), (23, 28), (26, 27)):
+            c.px(x, y, '#f2ead2'); c.px(x, y + 1, '#c9b878')
+        # war paint: slashes across the cheek and brow, three stripes over the chest and gut
+        for a, b_ in (((8, 19), (12, 21)), ((9, 21), (13, 22)), ((10, 15), (13, 16))):
+            c.fill(c.m_line([a, b_]) & allm, paint[1])
+        c.px(9, 20, paint[2]); c.px(11, 15, paint[2])
+        for k in range(3):
+            c.fill(c.m_line([(20 + k * 4, 25), (24 + k * 4, 33)], 1) & allm & ~mantle, paint[1])
+            c.px(21 + k * 4, 27, paint[2])
+        # longer tusks curling up past the snout
+        for pts in ([(9, 24), (7, 21), (8, 18)], [(14, 24), (16, 21)]):
+            tk = c.m_line(pts, 1)
+            c.fill(tk, '#f2ead2'); c.px(*pts[-1], '#ffffff'); c.px(*pts[0], '#c9b878'); c.outline(tk, OUT)
+        # crown: an iron band, four gold points and a red stone
+        c.fill(c.m_rect(8, 14, 18, 15), iron[2]); c.fill(c.m_rect(8, 14, 18, 14), iron[3])
+        for x, h in ((9, 3), (12, 5), (15, 4), (18, 3)):
+            pt = c.m_poly([(x - 1, 14), (x, 14 - h), (x + 1, 14)])
+            c.fill(pt, gold[2]); c.px(x, 14 - h, gold[3]); c.outline(pt, OUT)
+        c.px(13, 15, paint[2]); c.px(12, 15, paint[1]); c.outline(c.m_rect(8, 14, 18, 15), OUT)
+        # an iron belt with a skull buckle, over the loincloth (kept inside the body)
+        belt = c.m_rect(15, 33, 33, 34) & c.alpha
+        c.fill(belt, iron[1]); c.fill(belt & (c.yy == 33), iron[3])
+        c.fill(c.m_rect(22, 33, 25, 36), '#e8dcc0'); c.px(23, 34, '#120c14'); c.px(24, 34, '#120c14')
+        # the club: a huge iron-banded maul head with spikes, on the troll's own handle
+        head = c.m_ellipse(5, 43, 4.2, 3.8)
+        c.shade(head, wood, soft=1.4)
+        c.fill(c.m_line([(2, 43), (8, 43)]) & head, iron[2]); c.fill(c.m_line([(5, 40), (5, 46)]) & head, iron[2])
+        c.outline(head, OUT)
+        for x, y in ((1, 40), (5, 38), (9, 40), (10, 43), (9, 46), (1, 46)):
+            sp = c.m_poly([(x - 1, y + 1), (x, y - 1), (x + 1, y + 1)])
+            c.fill(sp, iron[4]); c.px(x, y - 1, '#ffffff'); c.outline(sp, OUT)
+    return troll(skin, None, eye_col='#ff5a2a', club='wood', glow=False, post=post)
+
+
+SET = [('bat', bat_cave, 'Cave Bat'), ('bat_vampire', bat_vampire, 'Vampire Bat'), ('bat_plague', bat_plague, 'Plague Bat'),
+       ('wolf', wolf_grey, 'Grey Wolf'), ('wolf_dire', wolf_dire, 'Dire Wolf'), ('wolf_shadow', wolf_shadow, 'Shadow Wolf'),
+       ('skeleton', skeleton_crypt, 'Crypt Skeleton'), ('skeleton_knight', skeleton_knight, 'Skeleton Knight'), ('skeleton_champion', skeleton_champion, 'Bone Champion'),
+       ('troll', troll_moss, 'Bridge Troll'), ('troll_stone', troll_stone, 'Stone Troll'), ('troll_magma', troll_magma, 'Magma Troll'),
+       ('troll_chieftain', troll_chieftain, 'Troll Chieftain')]
 
 if __name__ == '__main__':
     os.makedirs(OUTDIR, exist_ok=True)
@@ -314,7 +507,8 @@ if __name__ == '__main__':
         s = 8 if c.w == 32 else 6
         c.save(f'{OUTDIR}/{name}.png', s)
         tiles.append(c.image(8 if c.w == 32 else 6))
-    sheet = Image.new('RGB', (4 * 300, 2 * 300), (42, 31, 24))
+    rows = (len(tiles) + 3) // 4
+    sheet = Image.new('RGB', (4 * 300, rows * 300), (42, 31, 24))
     for i, t in enumerate(tiles):
         sheet.paste(t, ((i % 4) * 300 + (300 - t.width) // 2, (i // 4) * 300 + (300 - t.height) // 2), t)
     sheet.save(f'{OUTDIR}/_sheet.png')

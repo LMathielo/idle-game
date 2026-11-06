@@ -590,7 +590,7 @@ describe('danger hint and fight view on packs', () => {
     expect(v.targetIndex).toBe(1);
     expect(v.enemyHp).toBe(30);
     expect(v.enemyMaxHp).toBe(45);
-    expect(mobName('Rat', v.mobs[2].variant)).toBe('Extreme Rat');
+    expect(mobName('rat', v.mobs[2].variant)).toBe('Blight Rat');
   });
 });
 

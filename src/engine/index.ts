@@ -68,7 +68,7 @@ export {
   packSizeRange,
   type MobTypeView,
 } from './difficulty';
-export { DIFFICULTIES, DIFFICULTY, MOB_VARIANT_LABEL, type DifficultyDef, type PackRule } from './config/difficulty';
+export { DIFFICULTIES, DIFFICULTY, ENEMY_VARIANTS, variantCreature, type DifficultyDef, type PackRule, type VariantCreature } from './config/difficulty';
 export {
   bossEntryView,
   bossRunView,

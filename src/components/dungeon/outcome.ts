@@ -1,4 +1,4 @@
-import { BOSSES, COMBAT, DIFFICULTY, type Difficulty, type DungeonOrBossId, ENEMIES, type FightEndReason, isBossId, type MobVariant, mobName } from '../../engine';
+import { BOSSES, COMBAT, DIFFICULTY, type Difficulty, type DungeonOrBossId, ENEMIES, type EnemyId, type FightEndReason, isBossId, type MobVariant, mobName } from '../../engine';
 
 /** The time limit of a fight in this dungeon or boss, ms (60 s for a stage, the boss's own for a boss). */
 export function fightLimitMs(dungeonId: DungeonOrBossId): number {
@@ -27,11 +27,11 @@ export function difficultyName(difficulty: Difficulty): string {
 }
 
 /**
- * The name of mob `index` in a pack of `size`: "Veteran Troll #3" in a pack, "Veteran Troll" when it fights alone (a pack of one, or
- * Normal). The fight log, the pack rows and the screen reader labels all use it.
+ * The name of mob `index` in a pack of `size`: "Blight Rat #3" in a pack, "Blight Rat" when it fights alone (a pack of one, or Normal).
+ * The creature's name comes from the engine's variant table (mobName). The fight log, the pack rows and the screen reader labels all use it.
  */
-export function mobLabel(enemyName: string, variant: MobVariant, index: number, size: number): string {
-  const name = mobName(enemyName, variant);
+export function mobLabel(enemyId: EnemyId, variant: MobVariant, index: number, size: number): string {
+  const name = mobName(enemyId, variant);
   return size > 1 ? `${name} #${index + 1}` : name;
 }
 

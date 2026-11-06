@@ -21,14 +21,14 @@ export function replayStepMs(lines: number): number {
 type Props = {
   fight: FightRecord;
   heroName: string;
-  enemyName: string;
   onClose: () => void;
 };
 
-export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
+export function FightReplay({ fight, heroName, onClose }: Props) {
   const reducedMotion = useReducedMotion();
   const total = fight.log.length;
-  const [shown, setShown] = useState(reducedMotion ? total : 0);
+  // The hero's opening strike (fight time 0) is on screen at once; the monster's answer (300 ms in) follows with the next step.
+  const [shown, setShown] = useState(reducedMotion ? total : Math.min(1, total));
 
   // One line per step; the parent remounts this component (new key) for a new replay.
   useEffect(() => {
@@ -62,7 +62,7 @@ export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
   if (done) heroHp = fight.heroHpEnd; // a time-limit loss ends at 0 even though no strike says so (and regen shows here)
   const result = outcomeLabel(fight.endReason, fight.dungeonId);
   const size = fight.mobs.length;
-  const nameOf = (e: FightLogEntry) => mobLabel(enemyName, fight.mobs[e.mob ?? 0]?.variant ?? 'base', e.mob ?? 0, size);
+  const nameOf = (e: FightLogEntry) => mobLabel(fight.enemyId, fight.mobs[e.mob ?? 0]?.variant ?? 'base', e.mob ?? 0, size);
 
   // Screen readers hear the result once, not every line as it appears.
   useEffect(() => {
@@ -73,9 +73,9 @@ export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
     <View style={styles.root}>
       <View style={styles.bars}>
         <AnimatedHpBar label={heroName} value={heroHp} max={fight.heroMaxHp} color={colors.skill} instant={reducedMotion} />
-        {packed ? null : <AnimatedHpBar label={mobName(enemyName, fight.mobs[0]?.variant ?? 'base')} value={enemyHp} max={fight.enemyMaxHp} color={colors.hp} instant={reducedMotion} />}
+        {packed ? null : <AnimatedHpBar label={mobName(fight.enemyId, fight.mobs[0]?.variant ?? 'base')} value={enemyHp} max={fight.enemyMaxHp} color={colors.hp} instant={reducedMotion} />}
       </View>
-      {packed ? <PackRows enemyId={fight.enemyId} enemyName={enemyName} mobs={fight.mobs.map((m, i) => ({ variant: m.variant, hp: mobHp[i], maxHp: m.maxHp }))} instant={reducedMotion} /> : null}
+      {packed ? <PackRows enemyId={fight.enemyId} mobs={fight.mobs.map((m, i) => ({ variant: m.variant, hp: mobHp[i], maxHp: m.maxHp }))} instant={reducedMotion} /> : null}
       {!done && stunLeft > 0 ? <StunNotice name={heroName} strikes={stunLeft} /> : null}
       <View style={styles.log}>
         {fight.log.length === 0 ? <Text style={styles.line}>{heroName} had no HP left and could not fight.</Text> : null}
@@ -103,6 +103,16 @@ export function strikeTime(atMs: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/**
+ * "0:00.3": the fight time of a log line, with tenths of a second, read from the engine's log (`atMs`) -- so the hero's opening
+ * strike reads 0:00.0 and a monster's first 0:00.3, whatever the opening is set to.
+ */
+export function logTime(atMs: number): string {
+  const tenths = Math.max(0, Math.floor(atMs / 100));
+  const s = Math.floor(tenths / 10);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}.${tenths % 10}`;
+}
+
 /** "Stunned: loses the next 2 strikes", shown while a stun is on (live fight and replay). Text, not colour alone. */
 export function StunNotice({ name, strikes }: { name: string; strikes: number }) {
   const text = `${name} is stunned: loses the next ${strikes === 1 ? 'strike' : `${strikes} strikes`}`;
@@ -116,7 +126,7 @@ export function StunNotice({ name, strikes }: { name: string; strikes: number })
 export const LogLine = memo(function LogLine({ entry, heroName, enemyName }: { entry: FightLogEntry; heroName: string; enemyName: string }) {
   if (entry.stunned) {
     // The hero's strike lost to a stun: no roll, no damage.
-    const lost = `${strikeTime(entry.atMs)} · ${heroName} is stunned and loses the strike`;
+    const lost = `${logTime(entry.atMs)} · ${heroName} is stunned and loses the strike`;
     return (
       <Text style={[styles.line, styles.stunLine]} accessibilityLabel={lost}>
         {lost}
@@ -130,7 +140,7 @@ export const LogLine = memo(function LogLine({ entry, heroName, enemyName }: { e
   // The number is the total; a magic part and the raw roll are shown only when they explain it. A crit says so in words and
   // in gold (the colour never carries the meaning alone). A skill cast says its name; a stun says how many strikes it costs.
   const parts = [entry.magic > 0 ? `${entry.magic} magic` : '', entry.dealt !== entry.roll || entry.crit ? `rolled ${entry.roll}` : ''].filter(Boolean);
-  const prefix = `${strikeTime(entry.atMs)} · ${attacker} hits ${target} for `;
+  const prefix = `${logTime(entry.atMs)} · ${attacker} hits ${target} for `;
   const suffix = `${parts.length > 0 ? ` (${parts.join(', ')})` : ''} → ${entry.targetHpAfter} HP`;
   const stunText = skill ? (entry.stun ? ` Stunned for ${entry.stun} strikes!` : ' No stun.') : '';
   const label = `${prefix}${entry.dealt}${entry.crit ? ', critical hit' : ''}${skill ? `, ${skill.name}` : ''}${suffix}${stunText}`;

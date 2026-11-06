@@ -38,6 +38,7 @@ import {
   type EnemyId,
   type FightRecord,
   type GameState,
+  type MobVariant,
   getDerivedStats,
   hpView,
   isBossId,
@@ -451,6 +452,7 @@ const LockedCard = memo(function LockedCard({
 /** The enemy's stats beside the hero's current ones (shared by a stage's and a boss's detail). `enemy` is the mob as it is on the difficulty. */
 function Versus({
   enemyId,
+  variant = 'base',
   enemy,
   name,
   state,
@@ -458,6 +460,8 @@ function Versus({
   hp,
 }: {
   enemyId: EnemyId;
+  /** Which creature of the enemy it is (a stage on Hard / Extreme shows the variant's own sprite and name). */
+  variant?: MobVariant;
   enemy: EnemyDef;
   name: string;
   state: GameState;
@@ -471,7 +475,7 @@ function Versus({
         accessible
         accessibilityLabel={`${name}: HP ${enemy.hp}, damage ${range(enemy.damage.min, enemy.damage.max)}, armor ${enemy.armor}, magic resist ${enemy.magicResist}`}
       >
-        <IconText image={<EnemySprite enemyId={enemyId} />} style={styles.sideTitle} rowStyle={styles.sideHead}>
+        <IconText image={<EnemySprite enemyId={enemyId} variant={variant} />} style={styles.sideTitle} rowStyle={styles.sideHead}>
           {name}
         </IconText>
         <StatLine label="HP" value={formatNumber(enemy.hp)} />
@@ -616,7 +620,7 @@ function DungeonDetail({
       <DifficultySelector views={diffViews} onSelect={(to) => void selectDifficulty(to)} onExplain={explainDifficulty} />
 
       <Panel title={`Stage ${d.stage} · ${d.name} · Tier ${d.tier}${packed ? ` · ${difficultyName(difficulty)}` : ''}`}>
-        <Versus enemyId={d.enemyId} enemy={kinds[0].enemy} name={kinds[0].name} state={state} stats={stats} hp={hp} />
+        <Versus enemyId={d.enemyId} variant={kinds[0].variant} enemy={kinds[0].enemy} name={kinds[0].name} state={state} stats={stats} hp={hp} />
         {packed ? <PackInfo enemy={enemy} difficulty={difficulty} /> : null}
 
         <View
@@ -717,7 +721,7 @@ function DungeonDetail({
 
       <Panel title="Last fight">
         {replay ? (
-          <FightReplay key={replayKey} fight={replay} heroName={state.character.name} enemyName={enemy.name} onClose={() => setReplay(null)} />
+          <FightReplay key={replayKey} fight={replay} heroName={state.character.name} onClose={() => setReplay(null)} />
         ) : lastFight ? (
           <LastFight
             fight={lastFight}
@@ -892,7 +896,7 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
       <Panel title={run ? `Fight · ${difficultyName(run.difficulty)}` : 'Fight'}>
         {run ? (
           <View style={styles.runBox}>
-            <LiveFight fight={run.fight} heroName={state.character.name} enemyName={boss.name} enemyId={boss.enemyId} paused={paused} />
+            <LiveFight fight={run.fight} heroName={state.character.name} enemyId={boss.enemyId} paused={paused} />
             <View style={styles.buttons}>
               <PixelButton label="Flee (counts as loss)" onPress={flee} accessibilityHint={`Asks first: fleeing counts as a loss, drops your HP to 0 and the ${boss.entryStamina} stamina is not refunded`} />
             </View>
@@ -934,7 +938,7 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
 
       <Panel title="Last fight">
         {replay ? (
-          <FightReplay key={replayKey} fight={replay} heroName={state.character.name} enemyName={boss.name} onClose={() => setReplay(null)} />
+          <FightReplay key={replayKey} fight={replay} heroName={state.character.name} onClose={() => setReplay(null)} />
         ) : lastFight ? (
           <View ref={lastBoxRef} collapsable={false}>
             <LastFight
@@ -983,7 +987,7 @@ const RunControls = memo(function RunControls({
   hp: number;
   heroName: string;
   enemyName: string;
-  /** The run's plain mob, named for the hit line ("Veteran Troll" on Extreme). */
+  /** The run's plain mob, named for the hit line ("Stone Troll" on Extreme). */
   hitName: string;
   enemyId: EnemyId;
   /** What one enemy strike deals to the hero after armor (engine strikeRange). */
@@ -999,7 +1003,7 @@ const RunControls = memo(function RunControls({
     // Fight phase: plays live, no skip.
     return (
       <View style={styles.runBox}>
-        <LiveFight fight={run.fight} heroName={heroName} enemyName={enemyName} enemyId={enemyId} paused={paused} />
+        <LiveFight fight={run.fight} heroName={heroName} enemyId={enemyId} paused={paused} />
         <View style={styles.buttons}>
           <PixelButton label="Flee (counts as loss)" onPress={onFlee} accessibilityHint="Asks first: fleeing counts as a loss and drops your HP to 0" />
         </View>

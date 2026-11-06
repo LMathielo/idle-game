@@ -92,6 +92,13 @@
 // The 1.3.0 – 1.17.0 scripts still run from the 1.17.0 start with the 1.17.0 search times, now on a second copy of the engine
 // built with those times as data (`loadEngineWithSearchMinutes`) instead of by editing DUNGEONS in place. The 1.19.0 script from a
 // plain `newGame` is in tests/golden119.test.ts.
+// 1.24.0 → 1.25.0 (2026-11-06): save v23 (the combat opening: the hero's first strike lands at t = 0 and each monster's at 300 ms,
+// instead of both one interval in). Every fight is one second shorter for the hero and 700 ms earlier for the monster, so
+// every fight in every script ends sooner: more runs fit in the same time, the rolls after each strike come at other points
+// of the stream, and gold, loot, HP, the merchant's listings and every hash moved. The RNG draws per strike and their order did
+// NOT change (a fight's own rolls are the same draws; only their clock and the fights around them moved). The scripts were
+// not changed; every pin was re-pinned from the new engine and carries its old value ("was") where one was recorded. The
+// frozen older-shape fixtures still load (tests/migrationV22.test.ts: a fight in progress finishes on the old opening).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';

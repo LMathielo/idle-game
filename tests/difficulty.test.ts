@@ -20,6 +20,8 @@ import {
   dungeonUnlockView,
   DUNGEONS,
   ENEMIES,
+  ENEMY_VARIANTS,
+  type EnemyId,
   type GameState,
   getDerivedStats,
   isDungeonUnlocked,
@@ -149,10 +151,24 @@ describe('scaling and the one rounding rule (half up, integers)', () => {
     expect(scaledEnemy(rat, 130_000)).toMatchObject({ hp: 390, damage: { min: 39, max: 65 }, armor: 26 });
   });
 
-  it('labels: "Troll" (plain), "Veteran Troll", "Extreme Troll"', () => {
-    expect(mobName('Troll', 'base')).toBe('Troll');
-    expect(mobName('Troll', 'veteran')).toBe('Veteran Troll');
-    expect(mobName('Troll', 'extreme')).toBe('Extreme Troll');
+  it('names: the plain mob keeps the enemy name; the variants are their own creatures (1.25.0), from the data table, never "Veteran X"', () => {
+    const want = {
+      rat: ['Rat', 'Giant Rat', 'Blight Rat'],
+      bat: ['Bat', 'Vampire Bat', 'Plague Bat'],
+      wolf: ['Wolf', 'Dire Wolf', 'Shadow Wolf'],
+      skeleton: ['Skeleton', 'Skeleton Knight', 'Bone Champion'],
+      troll: ['Troll', 'Stone Troll', 'Magma Troll'],
+    } as const;
+    for (const [id, [base, veteran, extreme]] of Object.entries(want)) {
+      expect([mobName(id as EnemyId, 'base'), mobName(id as EnemyId, 'veteran'), mobName(id as EnemyId, 'extreme')], id).toEqual([base, veteran, extreme]);
+      expect(ENEMY_VARIANTS[id as EnemyId]).toEqual({ veteran: { id: veteran.toLowerCase().replace(' ', '_'), name: veteran }, extreme: { id: extreme.toLowerCase().replace(' ', '_'), name: extreme } });
+    }
+    // The boss never comes in a pack: no variants, its own name whatever is asked.
+    expect(ENEMY_VARIANTS.troll_chieftain).toBeUndefined();
+    expect(mobName('troll_chieftain', 'base')).toBe('Troll Chieftain');
+    expect(mobName('troll_chieftain', 'veteran')).toBe('Troll Chieftain');
+    // No name anywhere is a built "Veteran X" / "Extreme X" string.
+    for (const v of Object.values(ENEMY_VARIANTS)) for (const c of Object.values(v!)) expect(c.name).not.toMatch(/^(Veteran|Extreme) /);
   });
 });
 
@@ -163,8 +179,8 @@ describe('read-only views for the stage and boss detail', () => {
     expect(packSizeRange('extreme')).toEqual({ min: 7, max: 10 });
     const names = (d: Difficulty) => mobTypes(ENEMIES.troll, d).map((m) => [m.name, m.multBp, m.chanceBp]);
     expect(names('normal')).toEqual([['Troll', 10_000, 10_000]]);
-    expect(names('hard')).toEqual([['Troll', 20_000, 7500], ['Veteran Troll', 30_000, 2500]]);
-    expect(names('extreme')).toEqual([['Veteran Troll', 120_000, 7500], ['Extreme Troll', 160_000, 2500]]);
+    expect(names('hard')).toEqual([['Troll', 20_000, 7500], ['Stone Troll', 30_000, 2500]]);
+    expect(names('extreme')).toEqual([['Stone Troll', 120_000, 7500], ['Magma Troll', 160_000, 2500]]);
     expect(mobTypes(ENEMIES.troll, 'hard')[1].enemy).toEqual(scaledEnemy(ENEMIES.troll, 30_000));
   });
 

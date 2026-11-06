@@ -2,11 +2,11 @@
 // the pack roll. Data in src/engine/config/difficulty.ts; docs/ENGINE.md ("Difficulty and packs") and docs/PRODUCT.md ("Difficulty").
 //
 // This file imports no fight or dungeon code (dungeon.ts and boss.ts import it), only config and types.
-import { BOSS_IDS, BOSSES, DUNGEON_IDS, DUNGEON_TIERS, DUNGEONS, type EnemyDef } from './config/dungeons';
-import { DIFFICULTIES, DIFFICULTY, isDifficulty, MOB_VARIANT_LABEL } from './config/difficulty';
+import { BOSS_IDS, BOSSES, DUNGEON_IDS, DUNGEON_TIERS, DUNGEONS, type EnemyDef, ENEMIES } from './config/dungeons';
+import { DIFFICULTIES, DIFFICULTY, isDifficulty, variantCreature } from './config/difficulty';
 import { BASIS_POINTS } from './config/stats';
 import { nextInt } from './rng';
-import type { BossId, Difficulty, DifficultyCounters, DungeonId, DungeonState, DungeonTotals, GameEvent, MobVariant, RngState, SimulationSummary } from './types';
+import type { BossId, Difficulty, DifficultyCounters, DungeonId, DungeonState, DungeonTotals, EnemyId, GameEvent, MobVariant, RngState, SimulationSummary } from './types';
 
 export { DIFFICULTIES, isDifficulty };
 
@@ -34,10 +34,12 @@ export function scaledEnemy(enemy: EnemyDef, bp: number): EnemyDef {
   };
 }
 
-/** "Veteran Troll" / "Extreme Troll" / "Troll" (the plain variant). */
-export function mobName(enemyName: string, variant: MobVariant): string {
-  const label = MOB_VARIANT_LABEL[variant];
-  return label ? `${label} ${enemyName}` : enemyName;
+/**
+ * What a mob is called: its variant creature's name from the data table (config/difficulty.ts ENEMY_VARIANTS: "Giant Rat" / "Blight Rat" for
+ * the rat's Veteran / Extreme variants), or the enemy's own name for the plain mob (and for an enemy without variants, the boss).
+ */
+export function mobName(enemyId: EnemyId, variant: MobVariant): string {
+  return variantCreature(enemyId, variant)?.name ?? ENEMIES[enemyId].name;
 }
 
 // ---------- packs ----------
@@ -83,8 +85,8 @@ export function mobTypes(enemy: EnemyDef, difficulty: Difficulty): MobTypeView[]
   if (!rule) return [{ variant: 'base', name: enemy.name, multBp: BASIS_POINTS, chanceBp: BASIS_POINTS, enemy }];
   const up = rule.upgrade;
   return [
-    { variant: rule.base.variant, name: mobName(enemy.name, rule.base.variant), multBp: rule.base.bp, chanceBp: BASIS_POINTS - up.chanceBp, enemy: scaledEnemy(enemy, rule.base.bp) },
-    { variant: up.variant, name: mobName(enemy.name, up.variant), multBp: up.bp, chanceBp: up.chanceBp, enemy: scaledEnemy(enemy, up.bp) },
+    { variant: rule.base.variant, name: mobName(enemy.id, rule.base.variant), multBp: rule.base.bp, chanceBp: BASIS_POINTS - up.chanceBp, enemy: scaledEnemy(enemy, rule.base.bp) },
+    { variant: up.variant, name: mobName(enemy.id, up.variant), multBp: up.bp, chanceBp: up.chanceBp, enemy: scaledEnemy(enemy, up.bp) },
   ];
 }
 

@@ -3,7 +3,7 @@
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useGameSnapshot } from '../client/GameProvider';
-import { activityView, BOSSES, constructionView, DIFFICULTY, DUNGEONS, ENEMIES, hpView, itemQuantity, ROCKS, TREES } from '../engine';
+import { activityView, BOSSES, constructionView, DIFFICULTY, DUNGEONS, hpView, itemQuantity, mobName, ROCKS, TREES } from '../engine';
 import { colors, fonts } from '../theme';
 import { GameIcon, ItemIcon, SkillIcon } from './art/Sprites';
 import { ATTRIBUTE_NAMES, formatClock, formatCountdown, formatNumber, formatTrainingLeft } from './format';
@@ -41,7 +41,8 @@ export function ActivityStrip() {
     const fight = view.fight;
     if (fight) {
       // Fight phase: the bar shows the enemy's HP lost (snapped on every engine tick, never animated ahead).
-      const enemy = ENEMIES[fight.enemyId];
+      // The creature it is (a Hard / Extreme mob is a Giant Rat, a Plague Bat ...), from the engine's variant table.
+      const enemy = { name: mobName(fight.enemyId, fight.mobs[0]?.variant ?? 'base') };
       const lost = fight.enemyMaxHp > 0 ? 1 - fight.enemyHp / fight.enemyMaxHp : 1;
       // Hard / Extreme (1.24.0): the difficulty and how many mobs of the pack are still up.
       const harder = view.difficulty !== 'normal';
