@@ -16,14 +16,20 @@ export function isFreshFight(engineMs: number): boolean {
 }
 
 /**
- * The fight time the view has played to. `sinceOpenMs` is real time since the view opened (or since the fight began, for a fight that
- * replaced the one on screen). Not fresh: engine time. Fresh: the real-time clock minus the lead-in, capped at engine time and floored
- * at engine time minus the max lag.
+ * The fight time the view has played to. `openEngineMs` is the engine time when the view opened (or when the fight that replaced the one
+ * on screen began) and `sinceOpenMs` the real time since. Not fresh: engine time. Fresh: the fight time at open plus the real time that
+ * passed, minus the lead-in, capped at engine time and floored at engine time minus the max lag. A view opened at fight time 0 keeps the
+ * full lead; one opened at 1000 ms trails by the lead only until it catches up.
  */
-export function displayClockMs(engineMs: number, sinceOpenMs: number, fresh: boolean): number {
+export function displayClockMs(engineMs: number, openEngineMs: number, sinceOpenMs: number, fresh: boolean): number {
   if (!fresh) return engineMs;
-  const clock = sinceOpenMs - FIGHT_VIEW_LEAD_MS;
+  const clock = openEngineMs + sinceOpenMs - FIGHT_VIEW_LEAD_MS;
   return Math.min(engineMs, Math.max(clock, engineMs - FIGHT_VIEW_MAX_LAG_MS));
+}
+
+/** True while the display is behind the engine, i.e. the view must keep redrawing; false once it has caught up (no timer then). */
+export function isCatchingUp(displayMs: number, engineMs: number): boolean {
+  return displayMs < engineMs;
 }
 
 /** The entries of a time-ordered log that have landed by display time `displayMs` (a tie shows: `atMs <= displayMs`). */
@@ -40,8 +46,14 @@ export function visibleEntries(log: readonly FightLogEntry[], displayMs: number)
 export function displayedFight(fight: DungeonFightView, displayMs: number): DungeonFightView {
   const log = visibleEntries(fight.log, displayMs);
   if (log === fight.log) return fight;
-  let heroHp = fight.heroHp;
-  for (let i = log.length; i < fight.log.length; i++) if (fight.log[i].actor === 'enemy') heroHp += fight.log[i].dealt; // damage not shown yet
+  // Hero HP follows the shown entries: the last shown enemy strike's HP. With none shown yet the view does not expose the fight-start HP,
+  // so it is the current HP plus every enemy strike's damage (an approximation that ignores regen).
+  let heroHp = -1;
+  for (const e of log) if (e.actor === 'enemy') heroHp = e.targetHpAfter;
+  if (heroHp < 0) {
+    heroHp = fight.heroHp;
+    for (const e of fight.log) if (e.actor === 'enemy') heroHp += e.dealt;
+  }
   heroHp = Math.max(0, Math.min(heroHp, fight.heroMaxHp));
   const hp = fight.mobs.map((m) => m.maxHp);
   let stun = 0;

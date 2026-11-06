@@ -10,7 +10,7 @@ import { EnemySprite } from '../art/Sprites';
 import { LogLine, StunNotice, strikeTime } from './FightReplay';
 import { AnimatedHpBar } from './HpBars';
 import { PackRows } from './PackRows';
-import { displayClockMs, displayedFight, isFreshFight } from './fightDisplay';
+import { displayClockMs, displayedFight, isCatchingUp, isFreshFight } from './fightDisplay';
 import { mobLabel, packText } from './outcome';
 
 /** Lines kept on screen; older strikes scroll out (the last fight's replay has them all). */
@@ -31,15 +31,15 @@ const DISPLAY_STEP_MS = 50;
  * hit lands on screen after the screen opens. Not delayed for a fight already well underway or with reduce-motion on.
  */
 function useDisplayedFight(fight: DungeonFightView, reducedMotion: boolean): DungeonFightView {
-  const open = useRef<{ at: number; fresh: boolean; last: number } | null>(null);
+  const open = useRef<{ at: number; engineMs: number; fresh: boolean; last: number } | null>(null);
   const [, redraw] = useState(0);
   const now = Date.now();
   // A new fight replaces the one on screen (engine time went back): its lead-in plays again.
-  if (!open.current || fight.elapsedMs < open.current.last) open.current = { at: now, fresh: isFreshFight(fight.elapsedMs), last: fight.elapsedMs };
+  if (!open.current || fight.elapsedMs < open.current.last) open.current = { at: now, engineMs: fight.elapsedMs, fresh: isFreshFight(fight.elapsedMs), last: fight.elapsedMs };
   open.current.last = fight.elapsedMs;
   const fresh = open.current.fresh && !reducedMotion;
-  const displayMs = displayClockMs(fight.elapsedMs, now - open.current.at, fresh);
-  const behind = displayMs < fight.elapsedMs || (fresh && displayMs < 0);
+  const displayMs = displayClockMs(fight.elapsedMs, open.current.engineMs, now - open.current.at, fresh);
+  const behind = isCatchingUp(displayMs, fight.elapsedMs);
   useEffect(() => {
     if (!behind) return;
     const id = setInterval(() => redraw((n) => n + 1), DISPLAY_STEP_MS);
