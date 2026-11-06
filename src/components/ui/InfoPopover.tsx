@@ -2,7 +2,7 @@
 // stat, a locked dungeon, a tree or rock). A squared box in the dialog's visual family, anchored next to the tapped
 // element: below it when it fits, else above, clamped to the screen and the safe area; its content scrolls when it is
 // taller than the room. The element's actions go inside as buttons (PopoverActions). Dismissed by a tap anywhere
-// outside it, the ✕, or Android back.
+// outside it, the ✕, or Android back (item grids can instead pass `onOutsidePress` so a tap on another slot moves it).
 //
 // It is an RN <Modal> owned by the screen that renders it, so it presents over a full-screen village modal too. It
 // steps aside while the "While you were away" summary or a GameDialog is up (two RN modals never present at once);
@@ -12,6 +12,7 @@
 import { type ReactNode, type RefObject, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AccessibilityInfo,
+  type GestureResponderEvent,
   type HostInstance,
   type LayoutChangeEvent,
   Modal,
@@ -34,7 +35,7 @@ let presentationSeq = 0;
 export type AnchorRect = AnchorBox;
 
 /** Measures an element for InfoPopover. Resolves null when it is gone. */
-export function measureAnchor(node: HostInstance | null | undefined): Promise<AnchorRect | null> {
+export function measureAnchor(node: Pick<HostInstance, 'measureInWindow'> | null | undefined): Promise<AnchorRect | null> {
   return new Promise((resolve) => {
     if (!node) {
       resolve(null);
@@ -53,6 +54,12 @@ type Props = {
   /** null = closed. */
   anchor: AnchorRect | null;
   onClose: () => void;
+  /**
+   * Item grids: called with the window point of a tap on the backdrop. Resolve true when the tap landed on another
+   * slot and the caller already pointed `anchor` (and the content) at it: the popover then stays up and just moves,
+   * with no close / fade. Resolve false to close as usual.
+   */
+  onOutsidePress?: (point: { x: number; y: number }) => Promise<boolean>;
   title: string;
   /** Pixel-art image (GameIcon, ItemIcon…, up to 32 pt) in a framed square left of the title. */
   icon?: ReactNode;
@@ -65,7 +72,7 @@ type Props = {
   children?: ReactNode;
 };
 
-export function InfoPopover({ anchor, onClose, title, icon, titleColor, iconBorder, subtitle, children }: Props) {
+export function InfoPopover({ anchor, onClose, onOutsidePress, title, icon, titleColor, iconBorder, subtitle, children }: Props) {
   const { awaySummary } = useGameSnapshot();
   const dialogShowing = useDialogShowing();
   const win = useWindowDimensions();
@@ -96,13 +103,19 @@ export function InfoPopover({ anchor, onClose, title, icon, titleColor, iconBord
     [presentation],
   );
 
+  const onBackdrop = (e: GestureResponderEvent) => {
+    if (!onOutsidePress) return onClose();
+    const { pageX, pageY } = e.nativeEvent;
+    onOutsidePress({ x: pageX, y: pageY }).then((handled) => !handled && onClose(), onClose);
+  };
+
   if (!anchor) return null;
 
   const { left, top, width, maxHeight, boxH, below, caretLeft, caretFits } = placePopover(anchor, h, win, insets);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close info" />
+      <Pressable style={StyleSheet.absoluteFill} onPress={onBackdrop} accessibilityRole="button" accessibilityLabel="Close info" />
       <View
         key={presentation}
         style={[styles.box, { left, top, width, maxHeight, opacity: shown ? 1 : 0 }]}

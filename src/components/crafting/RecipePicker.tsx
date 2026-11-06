@@ -3,7 +3,7 @@
 // mounted), an open tier a wrapping grid of icon-only tiles the size of the Hero inventory slots. A tile dims when
 // the materials are short and gets a gold frame while a pipe crafts it. Tapping a tile opens an InfoPopover with
 // everything about the craft and the one Craft button. Rules stay in the engine; this reads craftingView().
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type HostInstance, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { type CraftingView, DEV_TOOLS_ENABLED, gearQualityFloor, type GameState, type RecipeView } from '../../engine';
 import { colors, fonts } from '../../theme';
@@ -13,6 +13,7 @@ import { INVENTORY_SLOT_SIZE } from '../items/ItemSlot';
 import { RARITY_COLOR_NAMES } from '../items/itemInfo';
 import { PixelButton } from '../PixelButton';
 import { type AnchorRect, InfoPopover, measureAnchor, POPOVER_BAD, PopoverActions, PopoverRow, PopoverSection, PopoverText } from '../ui/InfoPopover';
+import { type SlotHitTest, useSlotHitTest } from '../ui/useSlotHitTest';
 import { formatCraftTime, GearDetails, StaminaStepper, statText } from './recipeParts';
 
 type PickerTab = 'material' | 'gear';
@@ -52,6 +53,14 @@ export function RecipePicker({ pipe, view, buildings, stamina, started, onCraft 
     void measureAnchor(node).then((anchor) => anchor && setSelected({ recipeId, anchor }));
   }, []);
   const closeInfo = useCallback(() => setSelected(null), []);
+  // A tap on another tile while the popover is open moves it there (no close / fade); the same tile closes it.
+  const hitTest = useSlotHitTest();
+  const outsidePress = async (p: { x: number; y: number }) => {
+    const hit = await hitTest.resolve(p);
+    if (!hit || hit.id === selected?.recipeId) return false;
+    setSelected({ recipeId: String(hit.id), anchor: hit.anchor });
+    return true;
+  };
 
   const open = view.pipes.filter((p) => p.slot === 'open');
   const free = open.filter((p) => !p.job).length;
@@ -73,7 +82,7 @@ export function RecipePicker({ pipe, view, buildings, stamina, started, onCraft 
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={hitTest.viewportRef} contentContainerStyle={styles.content}>
         <View style={styles.tabs}>
           <PixelButton label="Materials" active={tab === 'material'} stretch onPress={() => setTab('material')} accessibilityLabel="Materials recipes" />
           <PixelButton label="Equipment" active={tab === 'gear'} stretch onPress={() => setTab('gear')} accessibilityLabel="Equipment recipes" />
@@ -109,7 +118,7 @@ export function RecipePicker({ pipe, view, buildings, stamina, started, onCraft 
               {isOpen ? (
                 <View style={styles.grid}>
                   {recipes.map((r) => (
-                    <RecipeTile key={r.recipeId} recipe={r} busy={busyRecipes.has(r.recipeId)} selected={selected?.recipeId === r.recipeId} onPress={onTile} />
+                    <RecipeTile key={r.recipeId} recipe={r} busy={busyRecipes.has(r.recipeId)} selected={selected?.recipeId === r.recipeId} onPress={onTile} hitTest={hitTest} />
                   ))}
                 </View>
               ) : null}
@@ -120,6 +129,7 @@ export function RecipePicker({ pipe, view, buildings, stamina, started, onCraft 
       <InfoPopover
         anchor={recipe && selected ? selected.anchor : null}
         onClose={closeInfo}
+        onOutsidePress={outsidePress}
         title={recipe?.name ?? ''}
         icon={recipe ? <ItemIcon defId={recipe.output.defId} size={32} /> : undefined}
       >
@@ -136,13 +146,16 @@ const RecipeTile = memo(function RecipeTile({
   busy,
   selected,
   onPress,
+  hitTest,
 }: {
+  hitTest: SlotHitTest;
   recipe: RecipeView;
   busy: boolean;
   selected: boolean;
   onPress: (recipeId: string, node: HostInstance | null) => void;
 }) {
   const ref = useRef<HostInstance>(null);
+  useEffect(() => hitTest.register(recipe.recipeId, ref), [hitTest, recipe.recipeId]);
   const press = useCallback(() => onPress(recipe.recipeId, ref.current), [onPress, recipe.recipeId]);
   const needs = recipe.inputs.map((i) => `${i.perCraft} ${itemName(i.defId)}, you have ${i.have}`).join('; ');
   const label = `${recipe.name}: ${needs}; ${formatCraftTime(recipe.craftMs)}${recipe.enough ? '' : '; not enough materials'}${busy ? '; a pipe is crafting it' : ''}`;
