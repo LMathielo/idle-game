@@ -50,3 +50,8 @@ export function crossfade(m: Crossfade, e: CrossfadeEvent): Crossfade {
 export function fadeInProgress(elapsedMs: number): number {
   return Math.max(0, Math.min(1, elapsedMs / FADE_IN_MS));
 }
+
+/** The new box takes touches only once it is visible (fading in, or idle and shown); hidden, it must not eat taps meant for the old box. */
+export function liveTouchable(phase: Phase, shown: boolean): boolean {
+  return phase === 'fadingIn' || (phase === 'idle' && shown);
+}

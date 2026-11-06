@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type Crossfade, type CrossfadeEvent, IDLE, crossfade, fadeInProgress } from '../src/components/ui/popoverCrossfade';
+import { type Crossfade, type CrossfadeEvent, IDLE, crossfade, fadeInProgress, liveTouchable } from '../src/components/ui/popoverCrossfade';
 import { FADE_IN_MS } from '../src/components/ui/popoverLayout';
 
 const run = (events: CrossfadeEvent[], from: Crossfade = IDLE) => events.reduce(crossfade, from);
@@ -72,5 +72,13 @@ describe('popover crossfade', () => {
     expect(fadeInProgress(-5)).toBe(0);
     expect(fadeInProgress(FADE_IN_MS / 2)).toBe(0.5);
     expect(fadeInProgress(FADE_IN_MS * 3)).toBe(1);
+  });
+
+  it('the new box takes touches only once visible', () => {
+    expect(liveTouchable('fadingOut', true)).toBe(false);
+    expect(liveTouchable('waitingMeasure', true)).toBe(false);
+    expect(liveTouchable('fadingIn', true)).toBe(true);
+    expect(liveTouchable('idle', false)).toBe(false);
+    expect(liveTouchable('idle', true)).toBe(true);
   });
 });

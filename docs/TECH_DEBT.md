@@ -102,3 +102,4 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #37, 55] `src/client/types.ts` (DispatchResult.events doc) — says events include the time simulated before the command; only applyCommand's events are returned (pre-command advance() events go to rows / the away summary). Reword the comment.
 - [PR #38, 50] `docs/ENGINE.md` debug tools paragraph — does not list Force craft / Finish now. Append them.
 - [PR #38, 25] `docs/ENGINE.md` 1.23.0 note — a downgrade with a free job in flight would refund it (the old engine ignores `free`); accepted for debug. Add one line.
+- [PR #40, 25] `src/app/(tabs)/hero.tsx` / `src/components/merchant/MerchantModal.tsx` - a single `busyScope` is overwritten by the latest send; going back to an item still in flight re-enables its buttons (the engine rejects the duplicate). Fix: a Set of in-flight scopes.

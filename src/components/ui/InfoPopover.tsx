@@ -34,7 +34,7 @@ import { useGameSnapshot } from '../../client/GameProvider';
 import { colors, fonts } from '../../theme';
 import { overlayFrame, useDialogShowing } from './GameDialog';
 import { useScreenInsets } from './insets';
-import { type Crossfade, type CrossfadeEvent, IDLE, crossfade, fadeInProgress } from './popoverCrossfade';
+import { type Crossfade, type CrossfadeEvent, IDLE, crossfade, fadeInProgress, liveTouchable } from './popoverCrossfade';
 import { type AnchorBox, type Measured, boxShown, CARET, FADE_IN_MS, FADE_OUT_MS, MEASURE_TIMEOUT_MS, measuredFor, placePopover } from './popoverLayout';
 
 let presentationSeq = 0;
@@ -173,12 +173,13 @@ export function InfoPopover({ anchor, onClose, onOutsidePress, title, icon, titl
     let next: Xf = { presentation, visible, m: IDLE, prev: null, live: null, inStart: null };
     if (xf.visible && visible) {
       const prevShown = displayed.current?.presentation === xf.presentation;
-      const m = crossfade(xf.m, { t: 'switch', prevShown, reduce });
+      let m = crossfade(xf.m, { t: 'switch', prevShown, reduce });
       let prev = m.hasPrev ? xf.prev : null;
       if (m.hasPrev && !xf.m.hasPrev && displayed.current) {
         const start = xf.m.phase === 'fadingIn' ? fadeInProgress(Date.now() - (xf.inStart ?? Date.now())) : 1;
         prev = { data: displayed.current.data, h: displayed.current.h, anim: new Animated.Value(start) };
       }
+      if (m.hasPrev && !prev) m = IDLE; // no snapshot to fade: plain mount, never stuck hidden
       next = { presentation, visible, m, prev, live: m.phase === 'idle' ? null : new Animated.Value(0), inStart: null };
     }
     setXf(next);
@@ -234,7 +235,7 @@ export function InfoPopover({ anchor, onClose, onOutsidePress, title, icon, titl
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <Pressable style={StyleSheet.absoluteFill} onPress={onBackdrop} accessibilityRole="button" accessibilityLabel="Close info" />
       {xf.prev ? <PopoverBox data={xf.prev.data} h={xf.prev.h} win={win} insets={insets} opacity={xf.prev.anim} live={false} onClose={onClose} /> : null}
-      <PopoverBox key={presentation} data={data} h={h} win={win} insets={insets} opacity={liveOpacity} live onClose={onClose} onLayout={onLayout} />
+      <PopoverBox key={presentation} data={data} h={h} win={win} insets={insets} opacity={liveOpacity} live touchable={liveTouchable(phase, shown)} onClose={onClose} onLayout={onLayout} />
     </Modal>
   );
 }
@@ -247,18 +248,20 @@ type BoxProps = {
   opacity: number | Animated.Value;
   /** false = the fading-out snapshot: inert and hidden from accessibility. */
   live: boolean;
+  /** live box only: false while it is invisible, so taps reach what is actually on screen. */
+  touchable?: boolean;
   onClose: () => void;
   onLayout?: (e: LayoutChangeEvent) => void;
 };
 
 /** One popover box with its caret; `opacity` fades both. */
-function PopoverBox({ data, h, win, insets, opacity, live, onClose, onLayout }: BoxProps) {
+function PopoverBox({ data, h, win, insets, opacity, live, touchable = true, onClose, onLayout }: BoxProps) {
   const { anchor, title, icon, titleColor, iconBorder, subtitle, children } = data;
   const { left, top, width, maxHeight, boxH, below, caretLeft, caretFits } = placePopover(anchor, h, win, insets);
   return (
     <Animated.View
       style={[StyleSheet.absoluteFill, { opacity }]}
-      pointerEvents={live ? 'box-none' : 'none'}
+      pointerEvents={live && touchable ? 'box-none' : 'none'}
       accessibilityElementsHidden={!live}
       importantForAccessibility={live ? 'auto' : 'no-hide-descendants'}
     >
