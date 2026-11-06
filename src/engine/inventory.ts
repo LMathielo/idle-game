@@ -2,11 +2,12 @@
 // a new stack needs a free slot, otherwise the item is lost.
 import { GEAR } from './config/gear';
 import { getItemDef } from './config/items';
+import { copyAffixes } from './gear';
 import type { GearRoll, Inventory, Item } from './types';
 
 /**
- * A new item instance. Gear (an item with a slot) carries `roll` (its quality and rarity), by default 25% / common: a
- * new hero's starting gear and the starter stock.
+ * A new item instance. Gear (an item with a slot) carries `roll` (its quality, rarity and, for rare / epic, its affixes), by default
+ * 25% / common without affixes: a new hero's starting gear and the starter stock.
  */
 export function makeItem(defId: string, quantity = 1, instanceId?: string, roll?: GearRoll): Item {
   const def = getItemDef(defId);
@@ -16,6 +17,8 @@ export function makeItem(defId: string, quantity = 1, instanceId?: string, roll?
     item.slot = def.slot;
     item.rarity = roll?.rarity ?? GEAR.defaultRarity;
     item.quality = roll?.quality ?? GEAR.defaultQuality;
+    const affixes = copyAffixes(roll?.affixes);
+    if (affixes) item.affixes = affixes;
   }
   if (def.stackable) {
     item.stackable = true;

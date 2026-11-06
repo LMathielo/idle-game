@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 20 as const;
+export const CURRENT_SAVE_VERSION = 21 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -30,6 +30,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   17: migrateV17toV18,
   18: migrateV18toV19,
   19: migrateV19toV20,
+  20: migrateV20toV21,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -768,6 +769,95 @@ function migrateV19toV20(doc: SaveDoc): SaveDoc {
   if (isDoc(doc.dungeon)) out.dungeon = { ...doc.dungeon, bosses: isDoc(doc.dungeon.bosses) ? doc.dungeon.bosses : {} };
   if (isDoc(doc.activity) && doc.activity.kind === 'dungeon' && doc.activity.fight) {
     out.activity = { ...doc.activity, fight: migrateV20Fight(doc.activity.fight) };
+  }
+  return out;
+}
+
+// ---- v20 → v21 (2026-11-05): gear affixes ----
+// Every existing RARE (blue) or EPIC (purple) gear instance gets the affixes it would have rolled: rare 1 attribute, epic 2 different
+// attributes + 1 perk (a tool's perk is fixed by its type). Common and uncommon gear get none. Only the PICKS are stored (the values
+// come from quality, rarity and the catalog gear level), so this step needs nothing from the catalog but the slot of a Merchant listing.
+//
+// Deterministic, and the main RNG (`rng`) is not touched: one salted stream seeded from rng.seed XOR V21_SALT, drawn in a fixed
+// order: equipped pieces (V21_SLOTS order), inventory (stored order), Merchant stock (stored order), then crafting jobs whose rolled
+// result exists (pipe order; a gear job holds one from START_CRAFT on, running or ready). A piece that already has affixes is kept.
+// Frozen literals and a private copy of mulberry32 on purpose: this migration must give the same result forever.
+
+const V21_SALT = 0x2f6c1d4b;
+const V21_ATTRIBUTES = ['strength', 'dexterity', 'endurance', 'intelligence'] as const;
+const V21_COMBAT_PERKS = ['max_damage', 'max_armor', 'hp_regen', 'mana_regen'] as const;
+const V21_SLOTS = ['helmet', 'amulet', 'armor', 'legs', 'weapon', 'shield', 'gloves', 'ring1', 'ring2', 'boots', 'axe', 'pickaxe'] as const;
+
+/** mulberry32, one draw: the uniform float in [0, 1) and the next seed. A frozen copy of src/engine/rng.ts nextFloat. */
+function v21Next(seed: number): [number, number] {
+  const a = (seed + 0x6d2b79f5) >>> 0;
+  let t = a;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return [((t ^ (t >>> 14)) >>> 0) / 4294967296, a];
+}
+
+/** The slot a gear item or listing is for: its own `slot`, else read from its defId (`..._pickaxe` / `..._axe`; the rest never matters). */
+function v21Slot(x: Doc): string | null {
+  if (typeof x.slot === 'string') return x.slot;
+  const id = typeof x.defId === 'string' ? x.defId : '';
+  if (id.endsWith('_pickaxe')) return 'pickaxe';
+  if (id.endsWith('_axe')) return 'axe';
+  return null;
+}
+
+function migrateV20toV21(doc: SaveDoc): SaveDoc {
+  const out: SaveDoc = { ...doc, saveVersion: 21 };
+  const rng = isDoc(doc.rng) ? doc.rng.seed : undefined;
+  let seed = (((typeof rng === 'number' && Number.isFinite(rng) ? rng : 0) >>> 0) ^ V21_SALT) >>> 0;
+
+  /** The affixes a rare / epic piece in `slot` rolls (consuming draws), or null for any other rarity. */
+  const roll = (rarity: unknown, slot: string | null): { attributes: string[]; perk?: string } | null => {
+    if (rarity !== 'rare' && rarity !== 'epic') return null;
+    const pool: string[] = [...V21_ATTRIBUTES];
+    const attributes: string[] = [];
+    for (let n = 0; n < (rarity === 'epic' ? 2 : 1); n += 1) {
+      const [f, next] = v21Next(seed);
+      seed = next;
+      attributes.push(pool.splice(Math.floor(f * pool.length), 1)[0]);
+    }
+    if (rarity === 'rare') return { attributes };
+    if (slot === 'axe') return { attributes, perk: 'woodcutting_strength' };
+    if (slot === 'pickaxe') return { attributes, perk: 'mining_strength' };
+    const [f, next] = v21Next(seed);
+    seed = next;
+    return { attributes, perk: V21_COMBAT_PERKS[Math.floor(f * V21_COMBAT_PERKS.length)] };
+  };
+
+  /** `x` with its affixes when it is a rare / epic piece that has none yet; anything else unchanged. */
+  const withAffixes = (x: unknown): unknown => {
+    if (!isDoc(x) || x.affixes !== undefined) return x;
+    const affixes = roll(x.rarity, v21Slot(x));
+    return affixes ? { ...x, affixes } : x;
+  };
+
+  if (isDoc(doc.character) && isDoc(doc.character.equipment)) {
+    const equipment: Doc = { ...doc.character.equipment };
+    // Slots in the frozen order first, then any other key (none exists) in stored order.
+    for (const slot of [...V21_SLOTS, ...Object.keys(equipment).filter((k) => !(V21_SLOTS as readonly string[]).includes(k))]) {
+      if (equipment[slot] !== undefined) equipment[slot] = withAffixes(equipment[slot]);
+    }
+    out.character = { ...doc.character, equipment };
+  }
+  if (isDoc(doc.inventory) && Array.isArray(doc.inventory.items)) {
+    out.inventory = { ...doc.inventory, items: doc.inventory.items.map(withAffixes) };
+  }
+  if (isDoc(doc.merchant) && Array.isArray(doc.merchant.stock)) {
+    out.merchant = { ...doc.merchant, stock: doc.merchant.stock.map(withAffixes) };
+  }
+  if (isDoc(doc.crafting) && Array.isArray(doc.crafting.pipes)) {
+    const pipes = doc.crafting.pipes.map((job) => {
+      if (!isDoc(job) || !isDoc(job.gear) || job.gear.affixes !== undefined) return job;
+      const id = typeof job.recipeId === 'string' ? job.recipeId : '';
+      const affixes = roll(job.gear.rarity, id.endsWith('_pickaxe') ? 'pickaxe' : id.endsWith('_axe') ? 'axe' : null);
+      return affixes ? { ...job, gear: { ...job.gear, affixes } } : job;
+    });
+    out.crafting = { ...doc.crafting, pipes };
   }
   return out;
 }

@@ -89,7 +89,7 @@ describe('mining strength (MS = 10 × level + 10 base + total STR + pickaxe, 1.1
   it('a new hero has MS 21 (10 + 10 base + 0 core STR + 1) with the Wooden Pickaxe equipped', () => {
     const s = builtGame(1, T0);
     expect(s.character.equipment.pickaxe).toEqual({ id: 'start-wooden_pickaxe', defId: 'wooden_pickaxe', name: 'Wooden Pickaxe', icon: '⛏️', slot: 'pickaxe', rarity: 'common', quality: 25 });
-    expect(miningStrength(s)).toEqual({ value: 21, breakdown: { level: 10, base: 10, strength: 0, pickaxe: 1, pickaxeDefId: 'wooden_pickaxe' } });
+    expect(miningStrength(s)).toEqual({ value: 21, breakdown: { level: 10, base: 10, strength: 0, pickaxe: 1, pickaxeDefId: 'wooden_pickaxe', perk: 0 } });
   });
 
   it('level 5 base hero = 61; total STR counts 1:1 (core, spent and extra); no pickaxe or an unknown one gives 0; the axe never counts', () => {

@@ -1,8 +1,23 @@
 // Display helpers for item sheets (read-only: catalog data and the engine's gear-quality selectors).
-import { type EquipmentSlot, gearStatsAt, getItemDef, type Item, type ItemDef, type ItemRarity, isGearDef, qualityOf, rarityOf } from '../../engine';
+import {
+  attributeBonusesOf,
+  type EquipmentSlot,
+  type GearAffixes,
+  type GearPerkKind,
+  gearStatsAt,
+  getItemDef,
+  type Item,
+  type ItemDef,
+  type ItemRarity,
+  isGearDef,
+  perkOf,
+  qualityOf,
+  rarityOf,
+} from '../../engine';
+import { ATTRIBUTE_NAMES } from '../format';
 
-/** What a popover or slot shows: a stored item, a merchant listing or a crafted piece (gear carries its roll). */
-export type ShownItem = Pick<Item, 'defId'> & { quality?: number; rarity?: ItemRarity };
+/** What a popover or slot shows: a stored item, a merchant listing or a crafted piece (gear carries its roll and affixes). */
+export type ShownItem = Pick<Item, 'defId'> & { quality?: number; rarity?: ItemRarity; affixes?: GearAffixes };
 
 export const RARITY_LABELS: Record<ItemRarity, string> = {
   junk: 'Junk',
@@ -74,8 +89,8 @@ export function statLines(item: ShownItem, equipped?: ShownItem | null): StatLin
   const def = defOf(item.defId);
   const lines: StatLine[] = [];
   const cmp = equipped !== undefined;
-  const st = gearStatsAt(def, qualityOf(item));
-  const eq = equipped ? gearStatsAt(getItemDef(equipped.defId), qualityOf(equipped)) : {};
+  const st = gearStatsAt(def, qualityOf(item), rarityOf(item));
+  const eq = equipped ? gearStatsAt(getItemDef(equipped.defId), qualityOf(equipped), rarityOf(equipped)) : {};
   if (def.slot) lines.push({ label: 'Slot', value: SLOT_LABELS[def.slot] });
   if (st.damage) {
     const d = eq.damage;
@@ -90,5 +105,30 @@ export function statLines(item: ShownItem, equipped?: ShownItem | null): StatLin
     lines.push({ label: 'Mining', value: `${signed(st.miningStrength)} MS`, delta: cmp ? st.miningStrength - (eq.miningStrength ?? 0) : undefined });
   }
   if (def.heal) lines.push({ label: 'Heals', value: `${def.heal} HP` });
+  return lines;
+}
+
+/** A perk's name in a line: "+5% max damage". */
+export const PERK_NAMES: Record<GearPerkKind, string> = {
+  max_damage: 'max damage',
+  max_armor: 'max armor',
+  hp_regen: 'HP regen',
+  mana_regen: 'mana regen',
+  woodcutting_strength: 'max woodcutting strength',
+  mining_strength: 'max mining strength',
+};
+
+/** "+5% max damage". */
+export const perkText = (kind: GearPerkKind, value: number) => `+${value}% ${PERK_NAMES[kind]}`;
+
+/**
+ * The affix lines of a gear piece, under its main stat: one "Bonus  +4 END" per attribute bonus and a "Perk  +5% max damage" for an epic.
+ * The values come from the engine (attributeBonusesOf, perkOf); this only words them. None for common / uncommon gear.
+ */
+export function affixLines(item: ShownItem): StatLine[] {
+  const shown = { defId: item.defId, quality: item.quality, rarity: item.rarity, affixes: item.affixes };
+  const lines: StatLine[] = attributeBonusesOf(shown).map((b) => ({ label: 'Bonus', value: `+${b.value} ${ATTRIBUTE_NAMES[b.attribute].short}` }));
+  const perk = perkOf(shown);
+  if (perk) lines.push({ label: 'Perk', value: perkText(perk.kind, perk.value) });
   return lines;
 }

@@ -1,8 +1,8 @@
 // Item catalog (data), keyed by item definition id. Stackable items are stored in the inventory with
 // id = definition id; every stored item carries `defId`. Gear stats here are the 100% maxima (since 1.14.0): each gear
 // instance carries its own `quality` and `rarity`, and every reader scales the catalog stat by the instance quality
-// (src/engine/gear.ts), so changing a number here rebalances every save without a migration. Rolled affixes (later)
-// will be stored on the instance too; see docs/ENGINE.md for where they enter the stat pipeline.
+// (src/engine/gear.ts), so changing a number here rebalances every save without a migration. Rolled affixes (1.22.0)
+// are stored on the instance too (picks only; values come from quality, rarity and `gearLevel`); see docs/ENGINE.md.
 import type { EquipmentSlot, ItemRarity } from '../types';
 import { GEAR, GEAR_PIECES, type GearPieceId, type GearSetId, GEAR_SETS } from './gear';
 
@@ -36,6 +36,12 @@ export type ItemDef = {
   woodcuttingStrength?: number;
   /** Pickaxes: mining strength added while equipped, at 100% quality. Integer. */
   miningStrength?: number;
+  /**
+   * Gear only (1.22.0): the gear level, an integer ≥ 1. It sets the top of the random attribute bonuses and the perk (rare: max =
+   * gearLevel; epic: attributes floor(1.5 × gearLevel), perk gearLevel %). Set pieces (tools included) = 5 × set tier (Stone 5 ... Gold 25),
+   * starter / wooden gear = 1, Steel = 20.
+   */
+  gearLevel?: number;
   /** Usable consumables (USE_ITEM): HP restored, capped at max HP. Integer. */
   heal?: number;
   /**
@@ -71,6 +77,18 @@ const MATERIALS = {
   gold_ingot: crafted('gold_ingot', 'Gold Ingot', '🟨', 1600, 'Smelted gold. Used for crafting.'),
 } as const;
 
+/** Gear level of a set piece = this × the set tier (Stone 5, Copper 10, Iron 15, Silver 20, Gold 25). */
+const GEAR_LEVEL_PER_TIER = 5;
+
+/** Gear level of the starter / wooden gear. */
+const STARTER_GEAR_LEVEL = 1;
+
+/** Gear level of the Steel items (sold by the Merchant; not a crafted set). */
+const STEEL_GEAR_LEVEL = 20;
+
+/** The Iron set's gear level (the existing iron items are the tier 3 set). */
+const IRON_GEAR_LEVEL = GEAR_LEVEL_PER_TIER * 3;
+
 /**
  * A crafted gear piece (1.14.0): `<set>_<piece>`, common in the catalog (each instance rolls its own rarity), not sold by
  * the Merchant, sell price = max(1, floor(25% × the sell value of its inputs)) for a common piece.
@@ -90,6 +108,7 @@ function craftedGear(setId: GearSetId, pieceId: GearPieceId) {
     sellPrice: Math.max(1, Math.floor((inputsValue * GEAR.craft.sellRatioBp) / 10_000)),
     stackable: false,
     slot: piece.slot,
+    gearLevel: GEAR_LEVEL_PER_TIER * set.tier,
   };
   const i = set.tier - 1;
   if (piece.damage) def.damage = { min: piece.damage[i][0], max: piece.damage[i][1] };
@@ -167,6 +186,7 @@ export const ITEMS = {
     sellPrice: 3,
     stackable: false,
     slot: 'weapon',
+    gearLevel: STARTER_GEAR_LEVEL,
     damage: { min: 3, max: 6 },
   },
   linen_tunic: {
@@ -178,6 +198,7 @@ export const ITEMS = {
     sellPrice: 2,
     stackable: false,
     slot: 'armor',
+    gearLevel: STARTER_GEAR_LEVEL,
     armor: 3,
   },
   worn_sandals: {
@@ -189,6 +210,7 @@ export const ITEMS = {
     sellPrice: 1,
     stackable: false,
     slot: 'boots',
+    gearLevel: STARTER_GEAR_LEVEL,
     armor: 2,
   },
   wooden_axe: {
@@ -200,6 +222,7 @@ export const ITEMS = {
     sellPrice: 1,
     stackable: false,
     slot: 'axe',
+    gearLevel: STARTER_GEAR_LEVEL,
     woodcuttingStrength: 2,
   },
   iron_axe: {
@@ -212,6 +235,7 @@ export const ITEMS = {
     buyPrice: 600,
     stackable: false,
     slot: 'axe',
+    gearLevel: IRON_GEAR_LEVEL,
     woodcuttingStrength: 64,
   },
   wooden_pickaxe: {
@@ -223,6 +247,7 @@ export const ITEMS = {
     sellPrice: 1,
     stackable: false,
     slot: 'pickaxe',
+    gearLevel: STARTER_GEAR_LEVEL,
     miningStrength: 2,
   },
   iron_pickaxe: {
@@ -235,6 +260,7 @@ export const ITEMS = {
     buyPrice: 600,
     stackable: false,
     slot: 'pickaxe',
+    gearLevel: IRON_GEAR_LEVEL,
     miningStrength: 64,
   },
   iron_sword: {
@@ -247,6 +273,7 @@ export const ITEMS = {
     buyPrice: 500,
     stackable: false,
     slot: 'weapon',
+    gearLevel: IRON_GEAR_LEVEL,
     damage: { min: 10, max: 14 },
   },
   iron_helm: {
@@ -259,6 +286,7 @@ export const ITEMS = {
     buyPrice: 400,
     stackable: false,
     slot: 'helmet',
+    gearLevel: IRON_GEAR_LEVEL,
     armor: 6,
   },
   iron_chestplate: {
@@ -271,6 +299,7 @@ export const ITEMS = {
     buyPrice: 700,
     stackable: false,
     slot: 'armor',
+    gearLevel: IRON_GEAR_LEVEL,
     armor: 10,
   },
   iron_shield: {
@@ -283,6 +312,7 @@ export const ITEMS = {
     buyPrice: 550,
     stackable: false,
     slot: 'shield',
+    gearLevel: IRON_GEAR_LEVEL,
     armor: 8,
   },
   iron_gloves: {
@@ -295,6 +325,7 @@ export const ITEMS = {
     buyPrice: 250,
     stackable: false,
     slot: 'gloves',
+    gearLevel: IRON_GEAR_LEVEL,
     armor: 3,
   },
   iron_boots: {
@@ -307,6 +338,7 @@ export const ITEMS = {
     buyPrice: 250,
     stackable: false,
     slot: 'boots',
+    gearLevel: IRON_GEAR_LEVEL,
     armor: 3,
   },
   greater_health_potion: {
@@ -330,6 +362,7 @@ export const ITEMS = {
     buyPrice: 2500,
     stackable: false,
     slot: 'axe',
+    gearLevel: STEEL_GEAR_LEVEL,
     woodcuttingStrength: 192,
   },
   steel_pickaxe: {
@@ -342,6 +375,7 @@ export const ITEMS = {
     buyPrice: 2500,
     stackable: false,
     slot: 'pickaxe',
+    gearLevel: STEEL_GEAR_LEVEL,
     miningStrength: 192,
   },
   steel_sword: {
@@ -354,6 +388,7 @@ export const ITEMS = {
     buyPrice: 2000,
     stackable: false,
     slot: 'weapon',
+    gearLevel: STEEL_GEAR_LEVEL,
     damage: { min: 16, max: 22 },
   },
   // Crafted gear (Crafting house, 1.14.0). Tier 3 is the iron set above.

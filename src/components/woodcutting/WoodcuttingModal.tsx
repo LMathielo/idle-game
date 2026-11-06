@@ -123,9 +123,9 @@ export function WoodcuttingModal() {
           <Bar value={view.xp} max={view.xpToNext} color={colors.skill} label={`Lv ${view.level} · ${formatNumber(view.xp)} / ${formatNumber(view.xpToNext)} XP`} />
           <Text
             style={styles.ws}
-            accessibilityLabel={`Woodcutting strength ${view.ws.value}: ${ws.level} from level, ${ws.base} base, ${ws.strength} from core strength, ${ws.axe} from axe`}
+            accessibilityLabel={`Woodcutting strength ${view.ws.value}: ${ws.level} from level, ${ws.base} base, ${ws.strength} from core strength, ${ws.axe} from axe${ws.perk > 0 ? `, ${ws.perk} from gear perk` : ''}`}
           >
-            WS {formatNumber(view.ws.value)} <Text style={styles.wsParts}>= {formatNumber(ws.level)} level + {formatNumber(ws.base)} base + {formatNumber(ws.strength)} STR + {formatNumber(ws.axe)} axe</Text>
+            WS {formatNumber(view.ws.value)} <Text style={styles.wsParts}>= {formatNumber(ws.level)} level + {formatNumber(ws.base)} base + {formatNumber(ws.strength)} STR + {formatNumber(ws.axe)} axe{ws.perk > 0 ? ` + ${formatNumber(ws.perk)} gear perk` : ''}</Text>
           </Text>
         </View>
       }

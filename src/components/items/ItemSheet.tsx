@@ -9,7 +9,7 @@ import type { IconName } from '../art/images';
 import { formatNumber } from '../format';
 import { PixelButton } from '../PixelButton';
 import { type AnchorRect, InfoPopover, PopoverActions, PopoverRow, PopoverText } from '../ui/InfoPopover';
-import { defOf, itemSubtitle, type ShownItem, statLines } from './itemInfo';
+import { affixLines, defOf, itemSubtitle, type ShownItem, statLines } from './itemInfo';
 
 export type SheetAction = { label: string; onPress: () => void; disabled?: boolean; sublabel?: string };
 
@@ -47,9 +47,9 @@ export function ItemSheet({ item, anchor, quantity, equipped, children, actions,
       subtitle={itemSubtitle(item, def)}
     >
       <PopoverText tone="note">{def.description}</PopoverText>
-      {statLines(item, equipped).map((line) => (
+      {[...statLines(item, equipped), ...affixLines(item)].map((line) => (
         <PopoverRow
-          key={line.label}
+          key={`${line.label}-${line.value}`}
           label={line.label}
           value={
             line.delta !== undefined && line.delta !== 0 ? (

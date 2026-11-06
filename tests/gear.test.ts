@@ -209,10 +209,11 @@ describe('every reader uses the instance-scaled stats', () => {
     const low = equip(s, makeItem('gold_sword', 1, 'x', { quality: 0, rarity: 'rare' }));
     const high = equip(s, makeItem('gold_sword', 1, 'x', { quality: 100, rarity: 'rare' }));
     const strFlat = base.damage.min - 2; // the starting Rusty Gladius at 25% = 2–4
-    expect(getDerivedStats(low).damage).toMatchObject({ min: 12 + strFlat, max: 17 + strFlat });
-    expect(getDerivedStats(high).damage).toMatchObject({ min: 24 + strFlat, max: 34 + strFlat });
+    // Rare = ×1.25 on the main stat (1.22.0): 24–34 at quality 0 → 15–21 (21.25), at quality 100 → 30–43 (42.5 rounds up).
+    expect(getDerivedStats(low).damage).toMatchObject({ min: 15 + strFlat, max: 21 + strFlat });
+    expect(getDerivedStats(high).damage).toMatchObject({ min: 30 + strFlat, max: 43 + strFlat });
     const helm = equip(s, makeItem('gold_helm', 1, 'h', { quality: 73, rarity: 'epic' }));
-    expect(getDerivedStats(helm).armor.value - base.armor.value).toBe(scaleGearStat(15, 73)); // 13
+    expect(getDerivedStats(helm).armor.value - base.armor.value).toBe(scaleGearStat(15, 73, 'epic')); // 15 × 1.73 × 1.5 = 38.9 → 39
   });
 
   it('WS / MS scale with the tool’s quality, and the tree / rock gate follows (the stop rule reads the same WS)', () => {

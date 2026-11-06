@@ -91,7 +91,7 @@ describe('woodcutting strength (WS = 10 × level + 10 base + total STR + axe, 1.
   it('a new hero has WS 21 (10 + 10 base + 0 core STR + 1) with the Wooden Axe equipped', () => {
     const s = builtGame(1, T0);
     expect(s.character.equipment.axe).toMatchObject({ id: 'start-wooden_axe', defId: 'wooden_axe', slot: 'axe' });
-    expect(woodcuttingStrength(s)).toEqual({ value: 21, breakdown: { level: 10, base: 10, strength: 0, axe: 1, axeDefId: 'wooden_axe' } });
+    expect(woodcuttingStrength(s)).toEqual({ value: 21, breakdown: { level: 10, base: 10, strength: 0, axe: 1, axeDefId: 'wooden_axe', perk: 0 } });
   });
 
   it('level 5 base hero = 61; total STR counts 1:1 (core, spent and extra); no axe or an unknown axe gives 0', () => {

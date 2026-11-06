@@ -1,0 +1,391 @@
+{
+  "saveVersion": 20,
+  "rng": {
+    "seed": 3051557061
+  },
+  "time": {
+    "lastSimulatedAt": 1792929600000,
+    "highestSeenAt": 1792929600000
+  },
+  "offline": {
+    "capMs": 28800000,
+    "efficiency": 1
+  },
+  "activity": null,
+  "stamina": {
+    "current": 100,
+    "max": 100,
+    "progressMs": 0
+  },
+  "dungeon": {
+    "lastFight": null,
+    "totals": {
+      "runs": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "byDungeon": {},
+    "bosses": {}
+  },
+  "training": {
+    "tier": 1,
+    "attributes": {
+      "strength": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "dexterity": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "endurance": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "intelligence": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      }
+    }
+  },
+  "merchant": {
+    "charges": 5,
+    "chargeProgressMs": 0,
+    "stock": [
+      {
+        "defId": "health_potion_t1",
+        "quantity": 10,
+        "unitPrice": 5
+      },
+      {
+        "defId": "iron_sword",
+        "quantity": 1,
+        "unitPrice": 1000,
+        "quality": 33,
+        "rarity": "rare"
+      },
+      {
+        "defId": "steel_axe",
+        "quantity": 1,
+        "unitPrice": 2500,
+        "quality": 41,
+        "rarity": "common"
+      },
+      {
+        "defId": "iron_helm",
+        "quantity": 1,
+        "unitPrice": 1600,
+        "quality": 7,
+        "rarity": "epic"
+      },
+      null
+    ]
+  },
+  "buildings": {
+    "woodcutting": {
+      "state": "built",
+      "level": 1
+    },
+    "mine_shaft": {
+      "state": "built",
+      "level": 1
+    },
+    "town_hall": {
+      "state": "built",
+      "level": 1
+    },
+    "training_grounds": {
+      "state": "built",
+      "level": 1
+    },
+    "merchant": {
+      "state": "built",
+      "level": 1
+    },
+    "crafting": {
+      "state": "built",
+      "level": 1
+    },
+    "storage": {
+      "state": "built",
+      "level": 1
+    }
+  },
+  "construction": null,
+  "workers": {
+    "list": [],
+    "nextSerial": 1,
+    "crews": {},
+    "paused": false,
+    "minuteLeftMs": 0,
+    "paidPerMin": 0
+  },
+  "crafting": {
+    "pipesUnlocked": 2,
+    "pipes": [
+      {
+        "id": 1,
+        "recipeId": "stone_pickaxe",
+        "done": 0,
+        "craftMs": 180000,
+        "progressMs": 0,
+        "x10": false,
+        "status": "running",
+        "startedAt": 1792929600000,
+        "gear": {
+          "staminaInvested": 0,
+          "quality": 64,
+          "rarity": "rare"
+        }
+      },
+      {
+        "id": 2,
+        "recipeId": "stone_helm",
+        "done": 0,
+        "craftMs": 240000,
+        "progressMs": 240000,
+        "x10": false,
+        "status": "ready",
+        "startedAt": 1792929600000,
+        "gear": {
+          "staminaInvested": 0,
+          "quality": 91,
+          "rarity": "epic"
+        }
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "remainders": {},
+    "nextJobSerial": 3
+  },
+  "nextItemSerial": 13,
+  "stats": {
+    "totalActions": 0,
+    "itemsGathered": {}
+  },
+  "flags": {
+    "debugUsed": false
+  },
+  "character": {
+    "name": "Lucius",
+    "title": "Novice Gladiator",
+    "level": 1,
+    "xp": 0,
+    "xpToNext": 100,
+    "hp": 50,
+    "hpRegenProgress": 0,
+    "mana": 20,
+    "manaRegenProgress": 0,
+    "gold": 500,
+    "attributes": {
+      "strength": 0,
+      "dexterity": 0,
+      "endurance": 0,
+      "intelligence": 0
+    },
+    "spentPoints": {
+      "strength": 0,
+      "dexterity": 0,
+      "endurance": 0,
+      "intelligence": 0
+    },
+    "unspentPoints": 0,
+    "equipment": {
+      "weapon": {
+        "id": "iron_sword#1",
+        "defId": "iron_sword",
+        "name": "Iron Sword",
+        "icon": "⚔️",
+        "slot": "weapon",
+        "rarity": "rare",
+        "quality": 80
+      },
+      "armor": {
+        "id": "iron_chestplate#3",
+        "defId": "iron_chestplate",
+        "name": "Iron Chestplate",
+        "icon": "🦺",
+        "slot": "armor",
+        "rarity": "epic",
+        "quality": 100
+      },
+      "boots": {
+        "id": "iron_boots#6",
+        "defId": "iron_boots",
+        "name": "Iron Boots",
+        "icon": "🥾",
+        "slot": "boots",
+        "rarity": "rare",
+        "quality": 12
+      },
+      "axe": {
+        "id": "iron_axe#4",
+        "defId": "iron_axe",
+        "name": "Iron Axe",
+        "icon": "🪓",
+        "slot": "axe",
+        "rarity": "uncommon",
+        "quality": 40
+      },
+      "pickaxe": {
+        "id": "steel_pickaxe#5",
+        "defId": "steel_pickaxe",
+        "name": "Steel Pickaxe",
+        "icon": "⛏️",
+        "slot": "pickaxe",
+        "rarity": "epic",
+        "quality": 55
+      },
+      "helmet": {
+        "id": "iron_helm#2",
+        "defId": "iron_helm",
+        "name": "Iron Helm",
+        "icon": "🪖",
+        "slot": "helmet",
+        "rarity": "epic",
+        "quality": 60
+      }
+    },
+    "skills": {
+      "woodcutting": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      },
+      "mining": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      },
+      "fishing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      }
+    }
+  },
+  "inventory": {
+    "capacity": 20,
+    "items": [
+      {
+        "id": "bread",
+        "defId": "bread",
+        "name": "Bread",
+        "icon": "🍞",
+        "stackable": true,
+        "quantity": 3
+      },
+      {
+        "id": "stone_brick",
+        "defId": "stone_brick",
+        "name": "Stone Brick",
+        "icon": "🧱",
+        "stackable": true,
+        "quantity": 34
+      },
+      {
+        "id": "oak_plank",
+        "defId": "oak_plank",
+        "name": "Oak Plank",
+        "icon": "🪚",
+        "stackable": true,
+        "quantity": 37
+      },
+      {
+        "id": "iron_ingot",
+        "defId": "iron_ingot",
+        "name": "Iron Ingot",
+        "icon": "⬛",
+        "stackable": true,
+        "quantity": 20
+      },
+      {
+        "id": "maple_plank",
+        "defId": "maple_plank",
+        "name": "Maple Plank",
+        "icon": "🪚",
+        "stackable": true,
+        "quantity": 20
+      },
+      {
+        "id": "oak_logs",
+        "defId": "oak_logs",
+        "name": "Oak Logs",
+        "icon": "🪵",
+        "stackable": true,
+        "quantity": 33
+      },
+      {
+        "id": "copper_ore",
+        "defId": "copper_ore",
+        "name": "Copper Ore",
+        "icon": "🟠",
+        "stackable": true,
+        "quantity": 7
+      },
+      {
+        "id": "iron_gloves#7",
+        "defId": "iron_gloves",
+        "name": "Iron Gloves",
+        "icon": "🧤",
+        "slot": "gloves",
+        "rarity": "rare",
+        "quality": 30
+      },
+      {
+        "id": "silver_sword#8",
+        "defId": "silver_sword",
+        "name": "Silver Sword",
+        "icon": "⚔️",
+        "slot": "weapon",
+        "rarity": "epic",
+        "quality": 10
+      },
+      {
+        "id": "stone_greaves#9",
+        "defId": "stone_greaves",
+        "name": "Stone Greaves",
+        "icon": "🦿",
+        "slot": "legs",
+        "rarity": "uncommon",
+        "quality": 50
+      },
+      {
+        "id": "stone_axe#10",
+        "defId": "stone_axe",
+        "name": "Stone Axe",
+        "icon": "🪓",
+        "slot": "axe",
+        "rarity": "epic",
+        "quality": 70
+      },
+      {
+        "id": "copper_helm#11",
+        "defId": "copper_helm",
+        "name": "Copper Helm",
+        "icon": "🪖",
+        "slot": "helmet",
+        "rarity": "common",
+        "quality": 25
+      },
+      {
+        "id": "iron_shield#12",
+        "defId": "iron_shield",
+        "name": "Iron Shield",
+        "icon": "🛡️",
+        "slot": "shield",
+        "rarity": "rare",
+        "quality": 0
+      }
+    ]
+  }
+}

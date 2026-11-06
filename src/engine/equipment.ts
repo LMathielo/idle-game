@@ -4,8 +4,28 @@
 import { getItemDef } from './config/items';
 import { maxHpOf } from './hp';
 import { freeSlots } from './inventory';
+import { maxManaOf } from './mana';
 import type { ItemError } from './merchant';
 import { EQUIPMENT_SLOTS, type EquipmentSlot, type GameState } from './types';
+
+/**
+ * Gear can carry END / INT bonuses (1.22.0), so an equipment change can lower max HP or mana: current HP and mana are brought down
+ * to the new max at once (and the banked regen cleared while full), keeping the invariant that nothing is above max. Raising the max
+ * never raises the current value (as a level-up or a point).
+ */
+function clampPools(draft: GameState): void {
+  const c = draft.character;
+  const maxHp = maxHpOf(draft);
+  if (c.hp >= maxHp) {
+    c.hp = maxHp;
+    c.hpRegenProgress = 0;
+  }
+  const maxMana = maxManaOf(draft);
+  if (c.mana >= maxMana) {
+    c.mana = maxMana;
+    c.manaRegenProgress = 0;
+  }
+}
 
 const err = (code: NonNullable<ItemError>['code'], message: string): ItemError => ({ code, message });
 
@@ -25,6 +45,7 @@ export function equipItem(draft: GameState, itemId: unknown): ItemError {
   draft.character.equipment[def.slot] = item;
   if (old) items[index] = old;
   else items.splice(index, 1);
+  clampPools(draft);
   return null;
 }
 
@@ -36,6 +57,7 @@ export function unequipItem(draft: GameState, slot: unknown): ItemError {
   if (freeSlots(draft.inventory) < 1) return err('INVENTORY_FULL', 'The inventory is full');
   draft.inventory.items.push(item);
   delete draft.character.equipment[slot];
+  clampPools(draft);
   return null;
 }
 

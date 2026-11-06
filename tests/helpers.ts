@@ -2,7 +2,9 @@ import { FakeClock } from '../src/client/clock';
 import { LocalGameClient } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import type { CommandInput } from '../src/client/types';
+import { rollAffixes } from '../src/engine/gear';
 import { makeItem } from '../src/engine/inventory';
+import { createRng } from '../src/engine/rng';
 import { ATTRIBUTE_POINTS, applyCommand, type AttributeKey, BUILDING_IDS, BUILDINGS, type BuildingId, type Command, type CombatSide, ENGINE_VERSION, type GameState, getDerivedStats, type EquipmentSlot, newGame, type ReplayEntry, v12SkillProgress } from '../src/engine';
 
 export const T0 = Date.UTC(2026, 9, 25, 12, 0, 0); // fixed epoch for deterministic tests
@@ -136,6 +138,27 @@ export function withoutGearRolls<T>(s: T): T {
 }
 
 /**
+ * A state (or save document) without the v20 → v21 additions: no `affixes` on any equipped item, inventory item, Merchant listing or
+ * crafting job (`gear`), and the save version is the caller's to set. Tests written before 1.22.0 compare in this shape: the
+ * affixes live on rare / epic gear only and do not change an outcome that does not read them.
+ */
+export function withoutAffixes<T>(s: T): T {
+  const strip = (x: unknown) => {
+    if (!x || typeof x !== 'object') return x;
+    const { affixes: _a, ...rest } = x as Record<string, unknown>;
+    return rest;
+  };
+  const d = JSON.parse(JSON.stringify(s)) as Record<string, any>;
+  if (d.character?.equipment) for (const k of Object.keys(d.character.equipment)) d.character.equipment[k] = strip(d.character.equipment[k]);
+  if (Array.isArray(d.inventory?.items)) d.inventory.items = d.inventory.items.map(strip);
+  if (Array.isArray(d.merchant?.stock)) d.merchant.stock = d.merchant.stock.map(strip);
+  if (Array.isArray(d.crafting?.pipes)) {
+    d.crafting.pipes = d.crafting.pipes.map((j: any) => (j && j.gear ? { ...j, gear: strip(j.gear) } : j));
+  }
+  return d as T;
+}
+
+/**
  * The state with these CORE points (training levels; xp and progress 0). Since 1.16.0 core points drive WS / MS (STR) and
  * the DEX / INT time curves; stored extra points (character.attributes) only add to the totals.
  */
@@ -205,7 +228,7 @@ const IRON_SET: [EquipmentSlot, string][] = [
  * `quality`, at full HP. `STR+END` splits the points evenly between STR and END (the remainder to STR). The tests and the balance
  * sim (tests/balanceSimBoss.test.ts) use the same hero.
  */
-export function bossHero(level: number, build: BossBuild, quality = 25, rarity: 'common' | 'uncommon' | 'rare' = 'common'): GameState {
+export function bossHero(level: number, build: BossBuild, quality = 25, rarity: 'common' | 'uncommon' | 'rare' | 'epic' = 'common', affixSeed?: number): GameState {
   const points = ATTRIBUTE_POINTS.unspentPerLevel * (level - 1);
   const spent = { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 };
   if (build === 'balanced') {
@@ -220,7 +243,13 @@ export function bossHero(level: number, build: BossBuild, quality = 25, rarity: 
   }
   const s = builtGame(1, T0);
   const equipment = { ...s.character.equipment };
-  for (const [slot, defId] of IRON_SET) equipment[slot] = makeItem(defId, 1, `${defId}#hero`, { quality, rarity });
+  // With an `affixSeed`, a rare / epic piece rolls its affixes (1.22.0) from a stream seeded by it, piece by piece; without, none.
+  let affixRng = createRng(affixSeed ?? 0);
+  for (const [slot, defId] of IRON_SET) {
+    const a = affixSeed === undefined ? { value: undefined, rng: affixRng } : rollAffixes(affixRng, slot, rarity);
+    affixRng = a.rng;
+    equipment[slot] = makeItem(defId, 1, `${defId}#hero`, { quality, rarity, affixes: a.value });
+  }
   const withGear: GameState = { ...s, character: { ...s.character, level, unspentPoints: 0, spentPoints: spent, equipment } };
   return { ...withGear, character: { ...withGear.character, hp: getDerivedStats(withGear).maxHp.value } };
 }

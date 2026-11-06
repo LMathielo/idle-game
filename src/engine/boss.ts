@@ -14,8 +14,9 @@
 import { grantHeroXp } from './activities';
 import { enemyCombatSide, enemyFightOptions, type DungeonFightView, fightView, type FightOutcome, heroCombatSide, newFight } from './combat';
 import { BOSSES, DUNGEONS, ENEMIES, isBossId } from './config/dungeons';
+import { GEAR } from './config/gear';
 import { getItemDef } from './config/items';
-import { rollQuality, rollRarity } from './gear';
+import { affixStream, rollAffixes, rollQuality, rollRarity } from './gear';
 import { addStackable, makeItem } from './inventory';
 import { chance, nextInt, weightedPick } from './rng';
 import { getDerivedStats } from './stats';
@@ -169,10 +170,12 @@ export function finishBossFight(draft: GameState, activity: BossActivity, outcom
       const quality = rollQuality(rarity.rng, r.gear.quality.min, r.gear.quality.max);
       draft.rng = quality.rng;
       const defId = piece.value;
+      // Affixes (1.22.0) come from a salted sub-stream of the main RNG after these draws: the main stream is not advanced.
+      const affixes = rollAffixes(affixStream(quality.rng, GEAR.drops.affixSalt), getItemDef(defId)?.slot, rarity.value).value;
       if (getItemDef(defId) && draft.inventory.items.length < draft.inventory.capacity) {
         const itemId = `${defId}#${draft.nextItemSerial}`;
         draft.nextItemSerial += 1;
-        draft.inventory.items.push(makeItem(defId, 1, itemId, { quality: quality.value, rarity: rarity.value }));
+        draft.inventory.items.push(makeItem(defId, 1, itemId, { quality: quality.value, rarity: rarity.value, affixes }));
         bump(rewards.items, defId, 1);
         rewards.gear = { itemId, defId, rarity: rarity.value, quality: quality.value };
       } else {

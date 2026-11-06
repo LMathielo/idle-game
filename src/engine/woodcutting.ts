@@ -1,13 +1,13 @@
 // Woodcutting (pure): woodcutting strength, tree requirements, cut time, cutting logs back-to-back inside
 // simulate(), and read-only views. See docs/ENGINE.md ("Woodcutting").
 //
-//   WS            = wsPerLevel × woodcutting level + wsBase + TOTAL STR + axe bonus (item catalog)   (1.17.0)
+//   WS            = (wsPerLevel × woodcutting level + wsBase + TOTAL STR + axe bonus (item catalog)) × (1 + gear perk woodcutting_strength)   (1.17.0; perk 1.22.0, half up)
 //   cut time/log  = max(minLogMs, ceil(tree base × (1 − core DEX reduction)))                     (1.16.0)
 //   unlocked      ⇔ woodcutting level ≥ tree reqLevel AND WS ≥ tree reqWs
 //   skip cost     = ceil(remaining min) stamina, at least 1
 import { activityTimeMs, dexActivityReductionBp, effectiveAttributes, type CoreInput, type TrainingLevels } from './attributes';
 import { cloneState } from './clone';
-import { gearStats } from './gear';
+import { applyPerk, gearPerkTotals, gearStats } from './gear';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { TREE_IDS, TREES, WOODCUTTING } from './config/woodcutting';
 import { SKILL_XP_CURVE } from './config/xpCurve';
@@ -25,7 +25,7 @@ export type WsInput = { character: Pick<Character, 'equipment' | 'skills' | 'att
 
 export type WoodcuttingStrength = {
   value: number;
-  /** The four parts add up to `value`. */
+  /** The five parts add up to `value`. */
   breakdown: {
     /** wsPerLevel × woodcutting level. */
     level: number;
@@ -37,6 +37,8 @@ export type WoodcuttingStrength = {
     axe: number;
     /** The equipped axe's definition id, if any. */
     axeDefId: string | null;
+    /** The gear perk "woodcutting strength" (epic axe, 1.22.0): the final multiplier's share, 0 without one. */
+    perk: number;
   };
 };
 
@@ -53,7 +55,10 @@ export function woodcuttingStrength(state: WsInput): WoodcuttingStrength {
   const base = WOODCUTTING.wsBase;
   const strength = effectiveAttributes(state).strength;
   const axe = axeBonus(state.character.equipment);
-  return { value: level + base + strength + axe, breakdown: { level, base, strength, axe, axeDefId: state.character.equipment.axe?.defId ?? null } };
+  const pre = level + base + strength + axe;
+  // The perk is one final multiplier on the hero's WS; crews take their share of this number, so they inherit it.
+  const value = applyPerk(pre, gearPerkTotals(state.character.equipment).woodcutting_strength);
+  return { value, breakdown: { level, base, strength, axe, axeDefId: state.character.equipment.axe?.defId ?? null, perk: value - pre } };
 }
 
 // ---------- trees ----------

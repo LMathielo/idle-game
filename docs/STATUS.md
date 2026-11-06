@@ -8,9 +8,9 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.21.0** | 1.1.0 |
-| Save | **v20** | v2 |
-| Contents | Everything below, up to equipment tabs and the Legs slot (this PR), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
+| Engine | **1.22.0** | 1.1.0 |
+| Save | **v21** | v2 |
+| Contents | Everything below, up to gear rarity tiers and affixes (this PR, stacked on the equipment tabs PR #35), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is behind `dev` by PRs #3–#25. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
 - **Open PRs:** Expo Go previews by label plus per-branch saves (`feat/expo-test-previews`).
@@ -20,6 +20,20 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.22.0 · save v21
+- **Gear rarity tiers and affixes** (`feat/gear-affixes`, stacked on #35; owner-approved 2026-11-05):
+  - **Gear level** (`gearLevel` on every gear ItemDef): set pieces 5 x tier (Stone 5, Copper 10, Iron 15, Silver 20, Gold 25, tools included), starter / wooden gear 1, Steel 20. The existing Iron items are 15.
+  - **Rarity multiplies the main stat** (damage min / max, armor, WS, MS): green x1.1, blue x1.25, purple x1.5, white x1. Effective = max(1, round_half_up(catalog max x (100 + quality) x ratio% / 20000)), one rounding, integers. Percents in `config/gear.ts`. Attack-interval mods are not scaled. Existing saves get it too (their rare / epic pieces get stronger).
+  - **Attribute affixes** (blue 1, purple 2 different of STR / DEX / END / INT; max = gear level, purple floor(1.5 x level) each; value = max(1, floor(max x quality / 100))), stored on the item instance as the picks only. They are plain points from equipment (count in the total, never core), computed in the attribute selectors and not written to `character.attributes`.
+  - **Perks** (purple only, one per piece): combat gear rolls max damage, max armor, HP regen or mana regen (equal odds); an axe rolls woodcutting strength, a pickaxe mining strength. Value = max(1, floor(gear level x quality / 100)) percent. Same-kind perks add across equipped pieces, then each kind is applied once, half up, as the last multiplier after everything including core. No stacking cap for now.
+  - **Rolling** from salted sub-streams (crafting at job start, hidden until Done; Merchant gear listings; the boss gear drop). The main RNG stream is untouched, so every stage fight and drop sequence is what it was.
+  - **Save v21:** every existing rare / epic gear instance (inventory, equipment, Merchant stock, crafting jobs with a rolled result) gets affixes rolled deterministically from a salted stream of the state's seed, without advancing the main RNG. Frozen v20 fixture test.
+  - **Fix:** `ALL_SLOTS_ORDER` (stats breakdown order) now includes `pickaxe` (derived from `EQUIPMENT_SLOTS`) with a coverage test.
+  - **UI:** item popovers (Hero tab, Merchant, Done reveal, boss reveal) list "Bonus +4 END" and "Perk +5% max damage" under the main stat; the Status panel counts gear attribute points as plain points (the breakdown names "Gear") and shows "Gear perks: +10% max damage"; the Woodcutting / Mine headers add the gear perk to the WS / MS sum. The Crafting house gear recipes (Equipment list and the per-pipe Craft list) have a **Details** button: a Green | Blue | Purple toggle with the chance, the main stat range at quality 0 to 100, the attribute bonus range and the perk range, all from the engine selector.
+  - **Prices unchanged.**
+  - **Golden hashes:** `hashState` includes `saveVersion` and the new fields, so whole-state hashes of fresh games moved; goldens keep their outcome pins (RNG seeds, gold, HP) and gained a v20-shape check; two pins that carry a rare weapon moved by its +INT affix (mana only). See the test comments.
+  - **Tests:** `tests/gearAffixes.test.ts` (formulas, odds, perks, streams, crews, ALL_SLOTS_ORDER, recipe details), `tests/migrationV20.test.ts` (frozen `tests/fixtures/save-v20.json`), gated `tests/balanceSimRarity.test.ts` (report only).
 
 ### Engine 1.21.0 · save v20 (unchanged)
 - **Equipment tabs, Legs slot, tool recipes** (`feat/equipment-tabs`):
@@ -188,6 +202,7 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 - **New long-term targets:** the old "Lv20 in about 2 days" target is obsolete since the 1.8.0 XP curve.
 - **Mid-game walls:** Wolf Den needs about Lv6–7, and training is the bottleneck for tiers 4–5 (Crypt/Troll).
 - **Worker upkeep:** it is expensive early (1g/min per worker against about 2g/min from dungeons). Watch how it feels.
+- **Gear perk stacking:** no cap for now (purple Gold pieces up to +25% each); revisit with balance.
 
 **Buildings and economy**
 - Future buildings go on the empty map plots (west of the barn, two south of the river; the east plot holds the Crafting house since 1.13.0).
@@ -212,10 +227,7 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 
 **Items**
 - Gear drops from normal mobs (quality 0–70; the first boss uses the constant since 1.20.0).
-- Stat jumps between rarity tiers (today rarity is colour only; quality alone scales stats).
 - Minimum-quality mechanics (the `minQuality` hook is 0: upgrades, skills or consumables could raise it).
-- Random affixes stored on item instances.
-- Sources of normal stats beyond levelling (gear affixes).
 
 **Gathering**
 - Fishing or a third gathering skill (after the gathering refactor).

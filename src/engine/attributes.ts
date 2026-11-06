@@ -3,7 +3,8 @@
 //
 //   total  = normal + core           (plain effects, flat: STR damage and WS / MS, DEX crit multiplier, END max HP / HP regen / armor,
 //                                     INT magic damage / magic resist / max mana / mana regen)
-//   normal = spent + stored extra    (spent = character.spentPoints, the player's choice on level-up; extra = character.attributes)
+//   normal = spent + stored extra + gear    (spent = character.spentPoints, the player's choice on level-up; extra = character.attributes;
+//                                            gear = the attribute bonuses of the equipped rare / epic pieces, computed from the equipment, 1.22.0)
 //   core   = training level          (Training is the only source; core effects read it alone)
 //
 // Core effects (diminishing curve, capped; 1.19.0 gave every attribute one): STR → physical damage ×, DEX → crit chance and
@@ -11,6 +12,7 @@
 // Level-ups grant UNSPENT points (character.unspentPoints), never attributes.
 import { STAT_EFFECTS, STATS } from './config/stats';
 import { diminishingBp } from './diminishing';
+import { gearAttributePoints } from './gear';
 import { regenRateUnits, REGEN_RATE_SCALE } from './regen';
 import { ATTRIBUTE_KEYS, type AttributeKey, type AttributeTraining, type Attributes, type Character } from './types';
 
@@ -22,8 +24,8 @@ export type TrainingLevels = { attributes: Record<AttributeKey, Pick<AttributeTr
 /** What core points read: training only. A GameState fits. */
 export type CoreInput = { training: TrainingLevels };
 
-/** What totals read. A GameState fits; UIs can pass just these slices. */
-export type AttributeInput = { character: Pick<Character, 'attributes' | 'spentPoints'>; training: TrainingLevels };
+/** What totals read. A GameState fits; UIs can pass just these slices. The equipment is read for the gear's attribute bonuses (1.22.0). */
+export type AttributeInput = { character: Pick<Character, 'attributes' | 'spentPoints' | 'equipment'>; training: TrainingLevels };
 
 /** Core points = training levels. */
 export function coreAttributes(state: CoreInput): Attributes {
@@ -32,12 +34,18 @@ export function coreAttributes(state: CoreInput): Attributes {
   return out;
 }
 
-/** Normal points = spent points + stored extra points (character.attributes). */
+/** The gear part of the normal points: the attribute bonuses of every equipped piece (never written to the save; never core). */
+export function gearAttributes(state: Pick<AttributeInput, 'character'>): Attributes {
+  return gearAttributePoints(state.character.equipment);
+}
+
+/** Normal points = spent points + stored extra points (character.attributes) + the equipped gear's attribute bonuses. */
 export function normalAttributes(state: AttributeInput): Attributes {
   const spent = state.character.spentPoints;
   const extra = state.character.attributes;
+  const gear = gearAttributes(state);
   const out = {} as Attributes;
-  for (const k of ATTRIBUTE_KEYS) out[k] = spent[k] + extra[k];
+  for (const k of ATTRIBUTE_KEYS) out[k] = spent[k] + extra[k] + gear[k];
   return out;
 }
 
@@ -119,8 +127,10 @@ export type AttributeView = {
   normal: number;
   /** Normal points the player spent (level-up points). */
   spent: number;
-  /** Stored extra normal points (debug now, gear later). */
+  /** Stored extra normal points (debug). */
   extra: number;
+  /** Normal points from the equipped gear's attribute bonuses (1.22.0). Part of `normal`. */
+  gear: number;
   /** Training level. */
   core: number;
   /** Effects of the TOTAL (empty = none yet). */
@@ -133,6 +143,7 @@ export type AttributeView = {
 export function attributeViews(state: AttributeInput): AttributeView[] {
   const total = effectiveAttributes(state);
   const core = coreAttributes(state);
+  const gear = gearAttributes(state);
   // Regens are fractional (0.2 per point): computed from the integer rate units, then ÷ 100, so 3 END is exactly 0.6.
   const regen = (perPoint: number, points: number) => (regenRateUnits(perPoint) * points) / REGEN_RATE_SCALE;
   const linear: Record<AttributeKey, AttributeEffect[]> = {
@@ -171,6 +182,7 @@ export function attributeViews(state: AttributeInput): AttributeView[] {
     normal: total[attribute] - core[attribute],
     spent: state.character.spentPoints[attribute],
     extra: state.character.attributes[attribute],
+    gear: gear[attribute],
     core: core[attribute],
     linear: linear[attribute],
     coreEffects: coreEffects[attribute],

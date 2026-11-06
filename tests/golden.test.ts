@@ -121,7 +121,7 @@ import {
   manaView,
   woodcuttingView,
 } from '../src/engine';
-import { HOUR, MIN, SEC, T0, v12Skills, v17Start, v16Attributes, v17Added, withBuilt, withCore, withoutGearRolls } from './helpers';
+import { HOUR, MIN, SEC, T0, v12Skills, v17Start, v16Attributes, v17Added, withBuilt, withCore, withoutAffixes, withoutGearRolls } from './helpers';
 
 /** End of the 1.5.0 script; the 1.6.0 segment starts here. */
 const B = T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC;
@@ -235,7 +235,8 @@ function asV19(s: GameState): GameState {
     const { skills: _es, ...enemySide } = enemy;
     activity = { ...s.activity, fight: { ...fight, hero: heroSide, enemy: enemySide } };
   }
-  return { ...s, saveVersion: 19, dungeon, activity } as unknown as GameState;
+  // 1.22.0: no gear affixes either (rare / epic pieces only; no script outcome reads them).
+  return withoutAffixes({ ...s, saveVersion: 19, dungeon, activity } as unknown as GameState);
 }
 
 /**
@@ -547,6 +548,8 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.18.0', 18],
       ['1.19.0', 19],
       ['1.20.0', 20],
+      ['1.21.0', 20],
+      ['1.22.0', 21],
     ]);
   });
 });
@@ -1325,7 +1328,7 @@ describe('golden 1.13.0: the Crafting house', () => {
     // new character fields (spent / unspent points, mana). Every crafting outcome above is unchanged.
     // 1.19.0 re-pin (was 2dbabf75): crit draws shift every later roll; END gives max HP; logged strikes carry crit / physical / magic; save v19.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.20.0', hash: '11f7779b' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.22.0', hash: '11f7779b' });
   });
 });
 
@@ -1342,7 +1345,7 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
       { defId: 'iron_sword', quantity: 1, unitPrice: 500, quality: 4, rarity: 'common' },
       { defId: 'steel_sword', quantity: 1, unitPrice: 2000, quality: 26, rarity: 'common' },
       { defId: 'iron_chestplate', quantity: 1, unitPrice: 700, quality: 16, rarity: 'common' },
-      { defId: 'iron_axe', quantity: 1, unitPrice: 1200, quality: 3, rarity: 'rare' },
+      { defId: 'iron_axe', quantity: 1, unitPrice: 1200, quality: 3, rarity: 'rare', affixes: { attributes: ['intelligence'] } }, // 1.22.0: the rare piece rolled an affix
     ]);
     const q4 = at('q4'); // the first gear listing: the Iron Sword
     expect(q4.inventory.items.find((i) => i.id === 'iron_sword#5')).toMatchObject({ quality: 4, rarity: 'common' });
@@ -1350,7 +1353,7 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     // Gear jobs: inputs and invested stamina paid at start; the roll is on the job (sword: floor 20).
     const q7 = at('q7');
     expect(q7.crafting.pipes.slice(0, 3).map((j) => j && { recipeId: j.recipeId, gear: j.gear, status: j.status })).toEqual([
-      { recipeId: 'stone_sword', gear: { staminaInvested: 20, quality: 28, rarity: 'rare' }, status: 'running' },
+      { recipeId: 'stone_sword', gear: { staminaInvested: 20, quality: 28, rarity: 'rare', affixes: { attributes: ['intelligence'] } }, status: 'running' },
       { recipeId: 'stone_helm', gear: { staminaInvested: 0, quality: 30, rarity: 'uncommon' }, status: 'running' },
       { recipeId: 'stone_gloves', gear: { staminaInvested: 5, quality: 83, rarity: 'uncommon' }, status: 'running' },
     ]);
@@ -1366,7 +1369,7 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     expect(s.crafting.pipes.every((p) => p === null)).toBe(true);
     expect(s.character.equipment.weapon).toMatchObject({ id: 'stone_sword#6', quality: 28, rarity: 'rare' });
     expect(s.inventory.items.find((i) => i.defId === 'stone_helm')).toMatchObject({ id: 'stone_helm#7', quality: 30, rarity: 'uncommon' });
-    expect(getDerivedStats(s).damage.breakdown[0]).toMatchObject({ source: 'weapon', min: 3, max: 4 }); // 3–4 at quality 28 (it was 4–6 at quality 53 before 1.19.0)
+    expect(getDerivedStats(s).damage.breakdown[0]).toMatchObject({ source: 'weapon', min: 3, max: 5 }); // 3–5 at quality 28, rare ×1.25 since 1.22.0 (3–4 before; it was 4–6 at quality 53 before 1.19.0)
     expect(qtyOf(s, 'stone_brick')).toBe(13);
     // 1.15.0: 620 Stone; 1.16.0: 480; 1.17.0: 521; 1.19.0: 522 (a shifted RNG stream rolls one more Stone).
     expect([s.training.attributes.strength, qtyOf(s, 'stone')]).toEqual([{ level: 19, xp: 180, progressMs: 16_212 }, 522]);
@@ -1375,7 +1378,9 @@ describe('golden 1.14.0: gear quality, rarity and gear crafting', () => {
     // 1.19.0 re-pin (1.17.0: gold 2,162, hash d4a2e1d2): the refresh rolled new listings (the first gear listing is the 500 g Iron Sword,
     // not the 2,500 g Steel Axe, so 2,000 g stay in the purse), the gear rolls differ, a shifted RNG stream everywhere.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
-    expect({ gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ gold: 4160, hash: '09b4ec22' });
+    // 1.22.0: hash 09b4ec22 -> 1163d991; diffed against the 1.20.0 engine, the only change is the equipped rare Stone Sword's +INT affix (mana 140 -> 145).
+    // rng, gold, HP, items, crafting: identical.
+    expect({ gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ gold: 4160, hash: '1163d991' });
   });
 });
 
@@ -1422,7 +1427,9 @@ describe('golden 1.15.0: continuous material pipes', () => {
     // 1.16.0 re-pin (1.15.0: gold 10,580, hash eaf63de1). 1.17.0 re-pin (1.16.0: gold 9,973, hash 7950bd86).
     // 1.19.0 re-pin (1.18.0: gold 8,172, hash 6df72287): the 2,000 g gear listing difference of the 1.14.0 segment (see there) and the shifted RNG stream.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
-    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.20.0', gold: 10218, hash: 'a4eba9d5' });
+    // 1.22.0: hash a4eba9d5 -> 6d9814be, the ONLY change in the state (diffed against the 1.20.0 engine): the equipped Iron Sword is rare, so its
+    // +INT affix adds 5 mana (140 -> 145; the hash above is seen without affixes, the mana is the one real difference). rng, gold, HP, items: identical.
+    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.22.0', gold: 10218, hash: '6d9814be' });
   });
 });
 
@@ -1497,7 +1504,7 @@ describe('golden 1.16.0: normal and core attributes', () => {
     expect(s.stats.totalActions).toBe(16 + 65); // ~30 min then 2 h 2 s of 110,004 ms cuts
     // 1.17.0 re-pin (1.16.0: df33601f): points to spend instead of level points, WS from total STR (more logs), mana.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.20.0', hash: '233aa32a' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.22.0', hash: '233aa32a' });
   });
 });
 
@@ -1540,6 +1547,6 @@ describe('golden 1.17.0: spendable points, total STR → WS, mana', () => {
     expect(s.character.spentPoints.strength).toBe(6);
     // 1.19.0 re-pin (was b27e380f): crit draws, END max HP, regen units, logged strikes with crit / physical / magic, save v19.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.20.0', hash: '3be73d3c' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.22.0', hash: '3be73d3c' });
   });
 });
