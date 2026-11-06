@@ -9,7 +9,7 @@
 // errors inside it are shown inline, not as dialogs.
 //
 // Usage: keep `{ key, anchor } | null` in state; on press, `measureAnchor(ref.current)` then set it.
-import { type ReactNode, type RefObject, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, type RefObject, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AccessibilityInfo,
   type HostInstance,
@@ -26,9 +26,12 @@ import { useGameSnapshot } from '../../client/GameProvider';
 import { colors, fonts } from '../../theme';
 import { overlayFrame, useDialogShowing } from './GameDialog';
 import { useScreenInsets } from './insets';
+import { type AnchorBox, type Measured, boxShown, CARET, MEASURE_TIMEOUT_MS, measuredFor, placePopover } from './popoverLayout';
+
+let presentationSeq = 0;
 
 /** The tapped element's box in window coordinates (measureInWindow). */
-export type AnchorRect = { x: number; y: number; width: number; height: number };
+export type AnchorRect = AnchorBox;
 
 /** Measures an element for InfoPopover. Resolves null when it is gone. */
 export function measureAnchor(node: HostInstance | null | undefined): Promise<AnchorRect | null> {
@@ -45,14 +48,6 @@ export function measureAnchor(node: HostInstance | null | undefined): Promise<An
 export function anchorOf(ref: RefObject<HostInstance | null>): Promise<AnchorRect | null> {
   return measureAnchor(ref.current);
 }
-
-/** Gap kept from the screen / safe-area edges and between the box and the element. */
-const MARGIN = 8;
-const GAP = 6;
-const MAX_W = 360;
-const CARET = 8;
-/** Smallest box height worth showing; below that the popover overlaps the element instead of shrinking further. */
-const MIN_H = 140;
 
 type Props = {
   /** null = closed. */
@@ -75,44 +70,42 @@ export function InfoPopover({ anchor, onClose, title, icon, titleColor, iconBord
   const dialogShowing = useDialogShowing();
   const win = useWindowDimensions();
   const insets = useScreenInsets();
-  const [h, setH] = useState<number | null>(null);
   const visible = !!anchor && !awaySummary && !dialogShowing;
 
-  // A new anchor (another element) is measured again before it shows.
-  useEffect(() => setH(null), [anchor]);
+  // One "presentation" = this anchor while the Modal is visible. Its id changes with either, so the measured box is
+  // remounted (a fresh onLayout is guaranteed) and an older measurement can never apply (no reset effect to race).
+  const presentation = useMemo(() => ++presentationSeq, [anchor, visible]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [measured, setMeasured] = useState<Measured | null>(null);
+  const [timedOutKey, setTimedOutKey] = useState<number | null>(null);
+  const h = measuredFor(measured, presentation);
+  const shown = boxShown(h, timedOutKey, presentation);
+
+  // Safety net: if the layout never arrives, show the box anyway so the backdrop never covers an invisible popover.
+  useEffect(() => {
+    if (!visible || shown) return;
+    const t = setTimeout(() => setTimedOutKey(presentation), MEASURE_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [visible, shown, presentation]);
+
   useEffect(() => {
     if (visible) AccessibilityInfo.announceForAccessibility(title);
   }, [visible, title]);
 
-  const onLayout = useCallback((e: LayoutChangeEvent) => setH(Math.round(e.nativeEvent.layout.height)), []);
+  const onLayout = useCallback(
+    (e: LayoutChangeEvent) => setMeasured({ key: presentation, h: Math.round(e.nativeEvent.layout.height) }),
+    [presentation],
+  );
 
   if (!anchor) return null;
 
-  const left0 = insets.left + MARGIN;
-  const right0 = win.width - insets.right - MARGIN;
-  const top0 = insets.top + MARGIN;
-  const bottom0 = win.height - insets.bottom - MARGIN;
-  const width = Math.min(MAX_W, right0 - left0);
-  const centerX = anchor.x + anchor.width / 2;
-  const left = Math.min(Math.max(centerX - width / 2, left0), right0 - width);
-
-  const spaceBelow = bottom0 - (anchor.y + anchor.height + GAP + CARET);
-  const spaceAbove = anchor.y - GAP - CARET - top0;
-  const natural = h ?? 0;
-  const below = h === null ? spaceBelow >= spaceAbove : natural <= spaceBelow || spaceBelow >= spaceAbove;
-  const room = Math.max(MIN_H, below ? spaceBelow : spaceAbove);
-  const maxHeight = Math.min(room, bottom0 - top0);
-  const boxH = Math.min(natural, maxHeight);
-  let top = below ? anchor.y + anchor.height + GAP + CARET : anchor.y - GAP - CARET - boxH;
-  top = Math.min(Math.max(top, top0), bottom0 - boxH);
-  const caretLeft = Math.min(Math.max(centerX - left - CARET, 10), width - 10 - 2 * CARET);
-  const caretFits = below ? top >= anchor.y + anchor.height : top + boxH <= anchor.y;
+  const { left, top, width, maxHeight, boxH, below, caretLeft, caretFits } = placePopover(anchor, h, win, insets);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close info" />
       <View
-        style={[styles.box, { left, top, width, maxHeight, opacity: h === null ? 0 : 1 }]}
+        key={presentation}
+        style={[styles.box, { left, top, width, maxHeight, opacity: shown ? 1 : 0 }]}
         onLayout={onLayout}
         accessibilityViewIsModal
       >
@@ -138,7 +131,7 @@ export function InfoPopover({ anchor, onClose, title, icon, titleColor, iconBord
           </View>
         </View>
       </View>
-      {h !== null && caretFits ? (
+      {shown && caretFits ? (
         <View
           pointerEvents="none"
           style={[
