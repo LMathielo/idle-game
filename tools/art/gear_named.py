@@ -118,6 +118,16 @@ def steel_pick():
     return tool(Canvas(32, 32), STEEL, 'pick', DARKWOOD, collar=TIERS['iron']['trim'])
 
 
+def crafted_tool(tier, kind):
+    """Crafted axes and pickaxes (Stone, Copper, Silver, Gold; Iron is iron_axe / iron_pickaxe): the tier's metal and wood."""
+    t = TIERS[tier]
+    return tool(Canvas(32, 32), t['metal'], kind, t['wood'], collar=t['trim'] if t['orn'] >= 3 else None, lashing=t['orn'] == 0)
+
+
+TOOL_SET = [(f'{tier}_{name}', (lambda tier=tier, kind=kind: crafted_tool(tier, kind)), f'{tier.title()} {name.title()}', icon)
+            for tier in ('stone', 'copper', 'silver', 'gold') for name, kind, icon in (('axe', 'axe', '🪓'), ('pickaxe', 'pick', '⛏️'))]
+
+
 def linen_tunic():
     c = Canvas(32, 32)
     lin = ramp('#6a5a48', '#9a8a70', '#c4b494', '#e0d4b4', '#f2ead2')
@@ -175,13 +185,13 @@ SET = [('rusty_gladius', rusty_gladius, 'Rusty Gladius', '🗡️'), ('steel_swo
        ('linen_tunic', linen_tunic, 'Linen Tunic', '🥋'), ('worn_sandals', worn_sandals, 'Worn Sandals', '👢'),
        ('wooden_axe', wooden_axe, 'Wooden Axe', '🪓'), ('iron_axe', iron_axe, 'Iron Axe', '🪓'), ('steel_axe', steel_axe, 'Steel Axe', '🪓'),
        ('wooden_pickaxe', wooden_pick, 'Wooden Pickaxe', '⛏️'), ('iron_pickaxe', iron_pick, 'Iron Pickaxe', '⛏️'),
-       ('steel_pickaxe', steel_pick, 'Steel Pickaxe', '⛏️')]
+       ('steel_pickaxe', steel_pick, 'Steel Pickaxe', '⛏️')] + TOOL_SET
 
 if __name__ == '__main__':
     os.makedirs(OUTDIR, exist_ok=True)
     from PIL import Image
     S = 5
-    sheet = Image.new('RGB', (5 * (32 * S + 12) + 12, 2 * (32 * S + 12) + 12), (58, 42, 28))
+    sheet = Image.new('RGB', (5 * (32 * S + 12) + 12, ((len(SET) + 4) // 5) * (32 * S + 12) + 12), (58, 42, 28))
     for i, (n, fn, _, _) in enumerate(SET):
         c = fn()
         c.save(f'{OUTDIR}/{n}_1x.png', 1); c.save(f'{OUTDIR}/{n}.png', 4)

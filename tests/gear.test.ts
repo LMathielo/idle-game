@@ -83,7 +83,7 @@ describe('formulas (config/gear.ts)', () => {
 
   it('gear = every equippable item (tools included); config: Merchant 0–50 c70/u25/r5, crafting u75/r20/e5, drops 0–70', () => {
     expect(GEAR_DEFS.map((d) => d.id)).toEqual(expect.arrayContaining(Object.keys(PRE_114)));
-    expect(GEAR_DEFS).toHaveLength(16 + 24);
+    expect(GEAR_DEFS).toHaveLength(16 + 24 + 13); // + 5 greaves, 4 axes, 4 pickaxes (1.21.0)
     expect([GEAR.maxQuality, GEAR.defaultQuality, GEAR.merchant.maxQuality, GEAR.drops.maxQuality]).toEqual([100, 25, 50, 70]);
     expect(GEAR.merchant.rarityWeights).toEqual([
       { value: 'common', weight: 70 },
@@ -130,6 +130,9 @@ describe('the catalog (100% maxima since 1.14.0)', () => {
       shield: [3, 5, 8, 13, 20],
       gloves: [1, 2, 3, 5, 8],
       boots: [1, 2, 3, 5, 8],
+      greaves: [2, 5, 8, 13, 20],
+      axe: [8, 24, 64, 128, 256],
+      pickaxe: [8, 24, 64, 128, 256],
     };
     for (const set of GEAR_SETS) {
       for (const piece of GEAR_PIECE_IDS) {
@@ -137,8 +140,10 @@ describe('the catalog (100% maxima since 1.14.0)', () => {
         expect(def.slot).toBe(GEAR_PIECES[piece].slot);
         const want = table[piece][set.tier - 1];
         if (Array.isArray(want)) expect(def.damage).toEqual({ min: want[0], max: want[1] });
+        else if (piece === 'axe') expect(def.woodcuttingStrength).toBe(want);
+        else if (piece === 'pickaxe') expect(def.miningStrength).toBe(want);
         else expect(def.armor).toBe(want);
-        if (set.id !== 'iron') {
+        if (set.id !== 'iron' || piece === 'greaves') {
           expect(def.name).toBe(`${set.name} ${GEAR_PIECES[piece].name}`);
           expect(def.buyPrice).toBeUndefined();
           expect(def.rarity).toBe('common');
@@ -157,7 +162,7 @@ describe('the catalog (100% maxima since 1.14.0)', () => {
       if (r.kind !== 'gear') continue;
       const value = r.inputs.reduce((n, i) => n + i.quantity * getItemDef(i.defId)!.sellPrice, 0);
       const def = getItemDef(r.output.defId)!;
-      if (def.id.startsWith('iron_')) continue;
+      if (['iron_sword', 'iron_helm', 'iron_chestplate', 'iron_shield', 'iron_gloves', 'iron_boots', 'iron_axe', 'iron_pickaxe'].includes(def.id)) continue;
       expect(def.sellPrice).toBe(Math.max(1, Math.floor(value / 4)));
     }
     expect(['iron_sword', 'iron_helm', 'iron_chestplate', 'iron_shield', 'iron_gloves', 'iron_boots'].map((id) => getItemDef(id)!.sellPrice)).toEqual([150, 120, 210, 165, 75, 75]);

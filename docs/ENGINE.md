@@ -257,7 +257,7 @@ Every color passes 4.5:1 on `colors.sheet`, `colors.slot` and `colors.night`, th
 Data: `src/engine/config/gear.ts` (`GEAR`, `GEAR_SETS`, `GEAR_PIECES`). Rules: `src/engine/gear.ts`. Owner-approved 2026-11-01, save v14.
 
 ```
-gear          = an item whose catalog entry has a slot (weapons, armor, axes, pickaxes)
+gear          = an item whose catalog entry has a slot (weapons, armor, axes, pickaxes); slots (1.21.0): helmet, amulet, armor ("Torso" in the UI), legs, weapon, shield, gloves, ring1, ring2, boots, axe, pickaxe
 instance      = { …, rarity, quality (integer 0..100) }                  every gear instance, equipped or not
 stat          = max(1, floor((max × (100 + q) + 100) ÷ 200))              = round(max × (100 + q) / 200), half up
                 damage min and max both scale; attackIntervalModMs does not
@@ -741,17 +741,17 @@ output (milli) = floor(units × (10 000 + yieldBp) ÷ 10)    units = output × (
 
 ### Gear crafting (1.14.0)
 
-30 recipes `<set>_<piece>`, kind `gear` (the Equipment tab). Tier n uses tier n's bar and plank; the iron set outputs the existing `iron_*` items.
+45 recipes `<set>_<piece>` (1.21.0: + greaves, axe, pickaxe per set; 30 before), kind `gear` (the Equipment tab). Tier n uses tier n's bar and plank; the iron set outputs the existing `iron_*` items.
 
-| Tier | Set | Inputs | Sword dmg | Helm | Chestplate | Shield | Gloves / Boots |
-| ---: | --- | --- | --- | ---: | ---: | ---: | ---: |
-| 1 | Stone | Stone Brick + Oak Plank | 4–6 | 2 | 3 | 3 | 1 |
-| 2 | Copper | Copper Ingot + Birch Plank | 7–10 | 4 | 6 | 5 | 2 |
-| 3 | Iron | Iron Ingot + Maple Plank | 10–14 | 6 | 10 | 8 | 3 |
-| 4 | Silver | Silver Ingot + Yew Plank | 16–22 | 10 | 16 | 13 | 5 |
-| 5 | Gold | Gold Ingot + Ironwood Plank | 24–34 | 15 | 24 | 20 | 8 |
+| Tier | Set | Inputs | Sword dmg | Helm | Chestplate | Shield | Greaves | Gloves / Boots | Axe WS / Pickaxe MS |
+| ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | Stone | Stone Brick + Oak Plank | 4–6 | 2 | 3 | 3 | 2 | 1 | 8 |
+| 2 | Copper | Copper Ingot + Birch Plank | 7–10 | 4 | 6 | 5 | 5 | 2 | 24 |
+| 3 | Iron | Iron Ingot + Maple Plank | 10–14 | 6 | 10 | 8 | 8 | 3 | 64 |
+| 4 | Silver | Silver Ingot + Yew Plank | 16–22 | 10 | 16 | 13 | 13 | 5 | 128 |
+| 5 | Gold | Gold Ingot + Ironwood Plank | 24–34 | 15 | 24 | 20 | 20 | 8 | 256 |
 
-Inputs per piece (every tier): Sword 4 + 2 (T1 5 min), Helm 3 + 1 (4 min), Chestplate 6 + 2 (8 min), Shield 3 + 3 (5 min), Gloves / Boots 2 + 1 (2 min); times double each tier, then the house × INT rule (1 s floor). Not sold by the Merchant; sellPrice = max(1, floor(25% × inputs' sell value)) at 25% quality (the iron items keep theirs). No yield bonus, no x10.
+Inputs per piece (every tier): Sword 4 + 2 (T1 5 min), Helm 3 + 1 (4 min), Chestplate 6 + 2 (8 min), Shield 3 + 3 (5 min), Greaves 4 + 2 (5 min), Gloves / Boots 2 + 1 (2 min), Axe / Pickaxe 3 + 2 (3 min); the Iron axe / pickaxe recipes output the existing `iron_axe` / `iron_pickaxe` (the other tiers are new items; `GEAR_PIECES` has optional `woodcuttingStrength` / `miningStrength` arrays); times double each tier, then the house × INT rule (1 s floor). Not sold by the Merchant; sellPrice = max(1, floor(25% × inputs' sell value)) at 25% quality (the iron items keep theirs). No yield bonus, no x10.
 
 - **`START_CRAFT {pipe?, recipeId, stamina, maxCost: stamina}`**: `stamina` 0..50 (`INVALID_AMOUNT`; materials refuse any), `NOT_ENOUGH_ITEMS`, `COST_CHANGED`, `NOT_ENOUGH_STAMINA`; no ×10 (`X10_CRAFT` refuses gear). Inputs and the invested stamina are paid at once, never refunded. Then two **main-RNG** draws: `quality = uniform integer in [floor, 100]` (both ends), floor = `gearQualityFloor(state, stamina)` = min(100, stamina + `minQuality(state)` (= `GEAR.craft.minQuality`, 0)); the screen reads the same selector; then rarity from the recipe's `rarityWeights` or the default uncommon 75 / rare 20 / epic 5. Stored as `job.gear`; stamina never changes the rarity odds (tested: same seed, same rarity at 0 and 50).
 - **Ready.** When the craft finishes the job turns `ready` (`CRAFT_READY`, summary `craftsReady[defId]`): progress stays at `craftMs`, the pipe starts nothing else, live and offline. `settleCrafting` never touches a ready pipe.

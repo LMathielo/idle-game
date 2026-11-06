@@ -94,6 +94,8 @@ function craftedGear(setId: GearSetId, pieceId: GearPieceId) {
   const i = set.tier - 1;
   if (piece.damage) def.damage = { min: piece.damage[i][0], max: piece.damage[i][1] };
   if (piece.armor) def.armor = piece.armor[i];
+  if (piece.woodcuttingStrength) def.woodcuttingStrength = piece.woodcuttingStrength[i];
+  if (piece.miningStrength) def.miningStrength = piece.miningStrength[i];
   return def;
 }
 
@@ -379,6 +381,20 @@ export const ITEMS = {
   gold_shield: craftedGear('gold', 'shield'),
   gold_gloves: craftedGear('gold', 'gloves'),
   gold_boots: craftedGear('gold', 'boots'),
+  // 1.21.0: greaves, axes and pickaxes (iron_axe / iron_pickaxe are the existing items above)
+  stone_greaves: craftedGear('stone', 'greaves'),
+  stone_axe: craftedGear('stone', 'axe'),
+  stone_pickaxe: craftedGear('stone', 'pickaxe'),
+  copper_greaves: craftedGear('copper', 'greaves'),
+  copper_axe: craftedGear('copper', 'axe'),
+  copper_pickaxe: craftedGear('copper', 'pickaxe'),
+  iron_greaves: craftedGear('iron', 'greaves'),
+  silver_greaves: craftedGear('silver', 'greaves'),
+  silver_axe: craftedGear('silver', 'axe'),
+  silver_pickaxe: craftedGear('silver', 'pickaxe'),
+  gold_greaves: craftedGear('gold', 'greaves'),
+  gold_axe: craftedGear('gold', 'axe'),
+  gold_pickaxe: craftedGear('gold', 'pickaxe'),
 } as const satisfies Record<string, ItemDef>;
 
 export type ItemId = keyof typeof ITEMS;

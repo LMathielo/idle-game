@@ -61,7 +61,7 @@ describe('data (owner-approved 2026-11-01)', () => {
   it('ten material recipes: inputs and time double every tier, one common output whose sell price = the inputs', () => {
     const materials = RECIPE_IDS.filter((id) => RECIPES[id].kind === 'material');
     expect(materials).toHaveLength(10);
-    expect(RECIPE_IDS).toHaveLength(40); // + 30 gear recipes (1.14.0, tests/gearCrafting.test.ts)
+    expect(RECIPE_IDS).toHaveLength(55); // + 45 gear recipes (30 in 1.14.0, + greaves / axes / pickaxes in 1.21.0; tests/gearCrafting.test.ts)
     for (const id of materials) {
       const r = RECIPES[id];
       const scale = [1, 2, 4, 8, 16][r.tier - 1];

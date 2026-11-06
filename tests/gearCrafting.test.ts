@@ -46,8 +46,8 @@ type StartCraft = Extract<Input, { type: 'START_CRAFT' }>;
 const gear = (pipe: number, recipeId: string, stamina = 0): StartCraft => ({ type: 'START_CRAFT', pipe, recipeId, maxCost: stamina, stamina });
 
 describe('gear recipes (owner-approved 2026-11-01)', () => {
-  it('30 recipes: tier n uses tier n bricks / ingots + planks, fixed counts, T1 times doubling per tier, one piece', () => {
-    const pieces = { sword: [4, 2, 5], helm: [3, 1, 4], chestplate: [6, 2, 8], shield: [3, 3, 5], gloves: [2, 1, 2], boots: [2, 1, 2] } as const;
+  it('45 recipes: tier n uses tier n bricks / ingots + planks, fixed counts, T1 times doubling per tier, one piece', () => {
+    const pieces = { sword: [4, 2, 5], helm: [3, 1, 4], chestplate: [6, 2, 8], shield: [3, 3, 5], greaves: [4, 2, 5], gloves: [2, 1, 2], boots: [2, 1, 2], axe: [3, 2, 3], pickaxe: [3, 2, 3] } as const;
     const sets = [
       ['stone', 'stone_brick', 'oak_plank'],
       ['copper', 'copper_ingot', 'birch_plank'],
@@ -56,7 +56,7 @@ describe('gear recipes (owner-approved 2026-11-01)', () => {
       ['gold', 'gold_ingot', 'ironwood_plank'],
     ] as const;
     const ids = RECIPE_IDS.filter((id) => RECIPES[id].kind === 'gear');
-    expect(ids).toHaveLength(30);
+    expect(ids).toHaveLength(45);
     sets.forEach(([set, bar, plank], t) => {
       for (const [piece, [bars, planks, min]] of Object.entries(pieces)) {
         const r = RECIPES[`${set}_${piece}` as (typeof RECIPE_IDS)[number]];
