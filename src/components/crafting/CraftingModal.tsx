@@ -114,16 +114,17 @@ export function CraftingModal() {
       const items = amounts(live.refund);
       if (live.kind === 'gear') {
         const lost = live.staminaInvested > 0 ? ` The ${formatNumber(live.staminaInvested)} stamina you invested is lost.` : '';
-        const ok = await dialog.confirm({ title: `Cancel ${live.recipeName}?`, message: `You get back ${items}.${lost}`, confirmLabel: 'Cancel job', destructive: true });
+        const back = live.free ? 'This was a free debug craft: nothing is refunded.' : `You get back ${items}.`;
+        const ok = await dialog.confirm({ title: `Cancel ${live.recipeName}?`, message: `${back}${lost}`, confirmLabel: 'Cancel job', destructive: true });
         if (ok) await send({ type: 'CANCEL_CRAFT', pipe, jobId: live.id });
         return;
       }
       const message =
-        live.refund.length === 0 && live.status !== 'waiting'
-          ? `The craft in progress was a free debug craft, so nothing is refunded for it. The ${formatNumber(live.done)} crafted stay yours.`
+        live.free && live.refund.length === 0
+          ? `This was a free debug craft: nothing is refunded. The ${formatNumber(live.done)} crafted stay yours.`
           : live.refund.length === 0
-          ? `The pipe is waiting for materials; nothing was taken. The ${formatNumber(live.done)} crafted stay yours.`
-          : `You get back ${items} from the craft in progress${live.prepaid > 0 ? ' and the prepaid crafts' : ''}. The ${formatNumber(live.done)} crafted stay yours.${live.x10 ? ' The ×10 stamina is not refunded.' : ''}`;
+            ? `The pipe is waiting for materials; nothing was taken. The ${formatNumber(live.done)} crafted stay yours.`
+            : `You get back ${items} from the craft in progress${live.prepaid > 0 ? ' and the prepaid crafts' : ''}. The ${formatNumber(live.done)} crafted stay yours.${live.x10 ? ' The ×10 stamina is not refunded.' : ''}`;
       const ok = await dialog.confirm({ title: `Stop ${live.recipeName}?`, message, confirmLabel: 'Stop', destructive: true });
       if (ok) await send({ type: 'STOP_CRAFT', pipe, jobId: live.id });
     },
@@ -435,7 +436,7 @@ function GearJobRow({ n, job, paused, stamina, invFull, onInsta, onFinish, onCan
           </View>
           {DEV_TOOLS_ENABLED && !job.ready ? (
             <View style={styles.buttons}>
-          <PixelButton label="Finish now (debug)" repeat={onFinish} stretch accessibilityLabel="Debug: finish this craft now, free" />
+              <PixelButton label="Finish now (debug)" repeat={onFinish} stretch accessibilityLabel="Debug: finish this craft now, free" />
             </View>
           ) : null}
         </>

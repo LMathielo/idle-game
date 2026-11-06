@@ -28,8 +28,7 @@ export type PickerProps = {
   stamina: number;
   /** "Iron Sword started in Pipe 2", shown at the top until the next one replaces it. */
   started: string | null;
-  /** Resolves true when the craft started. */
-  /** `force` (debug only): DEBUG_FORCE_CRAFT, the first craft needs no materials. */
+  /** Resolves true when the craft started. `force` (debug only): DEBUG_FORCE_CRAFT, the first craft needs no materials. */
   onCraft: (pipe: number | null, recipeId: string, stamina?: number, force?: boolean) => Promise<boolean>;
 };
 
