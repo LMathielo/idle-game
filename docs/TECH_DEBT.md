@@ -31,7 +31,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#30, 25] `workers/NodeWorkers.tsx` — a fast second tap on [+] is dropped by the `useCommand` in-flight guard (same as the #19 item); no test covers `nodeWorkersInfo`'s disabled combinations. Add one.
 - [#32, 25] `app/merchant.tsx` — the `/merchant` route has no unbuilt guard; a deep link or dev navigation opens the modal on an unbuilt Merchant (the engine refuses every command with `BUILDING_LOCKED`). Redirect, or show a "Build the Merchant first" state.
 
-- [first boss, note] Boss art is a PLACEHOLDER: `enemies/variants/stone_troll.png` for the Troll Chieftain and `items/troll_hide.png` for the Chieftain's Tusk (`components/art/images.ts`, marked PLACEHOLDER; `tests/art.test.ts` lists them). **Real art pending owner approval** (art pipeline in `tools/art` untouched).
+- [first boss, note] The Chieftain's Tusk icon is a PLACEHOLDER: `items/troll_hide.png` (`components/art/images.ts`, marked PLACEHOLDER; `tests/art.test.ts` lists it). **Real art pending owner approval.** The Troll Chieftain itself has its own sprite since 1.25.0 (`enemies/troll_chieftain.png`, also pending approval); it was the Stone Troll's placeholder before.
 - [PR #34, 55] `src/components/dungeon/DungeonModal.tsx:587`, `src/components/dungeon/LiveFight.tsx:29` — UI recomputes boss regen with hard-coded 10_000. Use `danger.regenPerSec` / `BASIS_POINTS` or an engine helper.
 - [PR #34, 45] `DungeonModal.tsx` BossDetail, `src/engine/danger.ts` bossDangerHint — hard-code `COMBAT_SKILLS.heavy_bash` instead of reading `ENEMIES[...].skills`. Resolve from the enemy's skills.
 - [PR #34, 40] `config/skills.ts` description, BossDetail reward text, `src/components/AwayModal.tsx` boss name — tunables repeated as prose. Build from config or test they match; derive the boss name from BOSS_IDS.
@@ -53,6 +53,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #41, 40] `src/components/dungeon/DifficultySelector.tsx` — the container is a `radiogroup` but the skulls are `button`s with `selected`: mixed screen-reader semantics. Fix: drop the radiogroup role, or unlocked skulls `radio` + `checked`.
 - [PR #41, 35] `src/components/dungeon/LiveFight.tsx` / `PackRows.tsx` — `fight.mobs` gets a new identity every view rebuild, so the memoised `MobRow`s (10 animated bars on Extreme) re-render every tick. Fix: a field comparator on `MobRow` (hp, maxHp, variant) or stable mob identities in the view.
 - [PR #41, 30] `src/components/dungeon/FightReplay.tsx` — leftover `export { AnimatedHpBar }` after it moved to `HpBars.tsx`. Fix: remove the re-export.
+- [PR #42, 25] `src/components/dungeon/FightReplay.tsx:31` — the replay shows the first log line at once, assuming it is the hero's opening strike; a pre-1.25.0 `lastFight` whose first line is a monster strike shows it immediately too. Fix: reveal at once only entries with `atMs === 0`.
+- [PR #42, 20] `src/engine/danger.ts` `bossDangerHint` — `heroHeadStartMs = interval − 0` makes the hint slightly optimistic for slow heroes. Fix: derive the head start from both opening offsets.
 
 ## Engine and data
 
@@ -98,6 +100,9 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #40, 40] `tests/slotHitTest.test.ts` — only the pure helpers are tested. Extract the tap decision (hit vs same item vs miss) into a pure function and test it; add a partly clipped slot case.
 - [PR #40, 40] tests — the `useSlotHitTest` cache (invalidation, generation drop, null fallback, open gating, close) and `InfoPopover`'s close / open branches are untested. Fix: extract the cache behind an injectable measure and test it with fake timers.
 - [PR #41, 15] `tests/replayDebugDisabled.test.ts` — does not list `DEBUG_ADD_BOSS_WINS` (covered in `tests/difficulty.test.ts`). Fix: add it for consistency.
+- [PR #42, 40] `tests/fixtures/save-v22*.json` — no generator or source commit is recorded, so it cannot be checked that the untouched #41 engine wrote them (not the new one). Fix: note the #41 commit SHA and the command in the fixture header or a README line.
+- [PR #42, 30] `tests/migrationV22.test.ts` — the frozen v22 fixtures cover a Hard pack and the boss but no Normal 1v1 fight in progress (the most common save). Fix: add a small frozen Normal mid-fight fixture.
+- [PR #42, 20] `tests/golden.test.ts` — the inline-snapshot re-pins and the `q3 − q4` 500 → 550 gold change carry no "was" note. Fix: annotate them like the other pins.
 
 ## Docs and workflow
 

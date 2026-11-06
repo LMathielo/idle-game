@@ -215,12 +215,45 @@ function v19DungeonOnly<D extends { lastFight: { log: { dealt: number }[] } | nu
   return { ...dungeon, lastFight: { ...dungeon.lastFight, log }, bosses: {} };
 }
 
-/** What the v21 → v22 migration adds to a `dungeon` slice (see migrateV21toV22). */
+/** The opening an old last fight shows in its own log: the time of its first hero / enemy entry, else 1000 (migrateV22toV23). */
+function logOpening(log: any[] | undefined, actor: string): number {
+  return (log ?? []).find((e) => e.actor === actor)?.atMs ?? 1000;
+}
+
+/** What the v21 → v22 → v23 migrations add to a `dungeon` slice (see migrateV21toV22, migrateV22toV23). */
 export function v22Dungeon<D extends { lastFight: any }>(dungeon: D) {
   const harder = { hard: { byDungeon: {}, bosses: {} }, extreme: { byDungeon: {}, bosses: {} } };
   const f = dungeon.lastFight;
-  const lastFight = f ? { ...f, difficulty: 'normal', mobs: [{ variant: 'base', multBp: 10_000, maxHp: f.enemyMaxHp, hpEnd: f.enemyHpEnd }] } : f;
+  const lastFight = f
+    ? {
+        ...f,
+        difficulty: 'normal',
+        mobs: [{ variant: 'base', multBp: 10_000, maxHp: f.enemyMaxHp, hpEnd: f.enemyHpEnd }],
+        heroFirstStrikeMs: logOpening(f.log, 'hero'),
+        enemyFirstStrikeMs: logOpening(f.log, 'enemy'),
+      }
+    : f;
   return { ...dungeon, lastFight, harder, difficulty: { '1': 'normal' } };
+}
+
+/**
+ * A 1.25.0 state seen in the v22 shape: no opening on the fight in progress or the last fight (`heroFirstStrikeMs` / `enemyFirstStrikeMs`,
+ * save v23). Only the SHAPE: a script's outcomes moved with the opening (fights start with the hero's strike and the monster's 300 ms in),
+ * so a hash taken in this shape is still a 1.25.0 pin.
+ */
+export function asV22(s: GameState): GameState {
+  const { lastFight, ...dungeon } = s.dungeon;
+  let last: unknown = lastFight;
+  if (lastFight) {
+    const { heroFirstStrikeMs: _h, enemyFirstStrikeMs: _e, ...rest } = lastFight;
+    last = rest;
+  }
+  let activity: unknown = s.activity;
+  if (s.activity && (s.activity.kind === 'dungeon' || s.activity.kind === 'boss') && s.activity.fight) {
+    const { heroFirstStrikeMs: _fh, enemyFirstStrikeMs: _fe, ...fight } = s.activity.fight;
+    activity = { ...s.activity, fight };
+  }
+  return { ...s, saveVersion: 22, dungeon: { ...dungeon, lastFight: last }, activity } as unknown as GameState;
 }
 
 /**
@@ -228,7 +261,8 @@ export function v22Dungeon<D extends { lastFight: any }>(dungeon: D) {
  * activity and the last fight, its `mobs`), and the fight in progress with its one enemy in the flat v21 fields instead of `mobs[0]`.
  * A script that never leaves Normal plays exactly as 1.23.0 did, so seen like this its hash is the 1.23.0 one.
  */
-export function asV21(s: GameState): GameState {
+export function asV21(state: GameState): GameState {
+  const s = asV22(state);
   const { harder: _hd, difficulty: _sel, lastFight, ...dungeon } = s.dungeon;
   let last: unknown = lastFight;
   if (lastFight) {
@@ -280,6 +314,25 @@ export function v22Doc<D extends Record<string, any>>(doc: D): D {
         mobs: [{ variant: 'base', multBp: 10_000, hp: enemyHp, maxHp: enemyMaxHp, side: enemy, strikes: enemyStrikes, regenBp: enemyRegenBp ?? 0, regenProgress: enemyRegenProgress ?? 0, regenAtMs: enemyRegenAtMs ?? 0, skillReady: enemySkillReady ?? {} }],
       };
     }
+  }
+  return v23Doc(out) as D;
+}
+
+/**
+ * What the v22 -> v23 migration does to a v22-shaped raw document: a fight in progress is stamped with the OLD opening (its first strikes
+ * one interval in: the hero's frozen interval, the mobs' frozen interval) and the last fight with the opening its own log shows (the first
+ * hero / enemy entry, else 1000). Tests that compare a migrated old fixture with its raw document wrap the expected document in
+ * `v23Doc(v22Doc(raw))`.
+ */
+export function v23Doc<D extends Record<string, any>>(doc: D): D {
+  const out: Record<string, any> = { ...doc };
+  const lf = doc.dungeon?.lastFight;
+  if (lf && typeof lf.heroFirstStrikeMs !== 'number') {
+    out.dungeon = { ...doc.dungeon, lastFight: { ...lf, heroFirstStrikeMs: logOpening(lf.log, 'hero'), enemyFirstStrikeMs: logOpening(lf.log, 'enemy') } };
+  }
+  const a = doc.activity;
+  if (a && (a.kind === 'dungeon' || a.kind === 'boss') && a.fight && typeof a.fight.heroFirstStrikeMs !== 'number') {
+    out.activity = { ...a, fight: { ...a.fight, heroFirstStrikeMs: a.fight.hero.attackIntervalMs, enemyFirstStrikeMs: a.fight.mobs[0].side.attackIntervalMs } };
   }
   return out as D;
 }

@@ -2,7 +2,7 @@
 // A run = a search for an opponent, then a fight that plays out in engine time. See docs/ENGINE.md
 // ("Dungeon & combat").
 import { cloneState } from './clone';
-import { DUNGEON_RUN, DUNGEONS, ENEMIES } from './config/dungeons';
+import { COMBAT, DUNGEON_RUN, DUNGEONS, ENEMIES } from './config/dungeons';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { grantHeroXp } from './activities';
 import { finishBossFight } from './boss';
@@ -21,7 +21,7 @@ import {
   packDefeated,
   strike,
 } from './combat';
-import { emitNewUnlocks, isDifficultyUnlocked, isStageUnlocked, plainMob, rollPack, scaleStat, setStageTotals, snapshotUnlocks, stageTotalsAt } from './difficulty';
+import { emitNewUnlocks, isDifficultyUnlocked, isStageUnlocked, plainMob, rollPack, scaledUnlockWins, scaleStat, setStageTotals, snapshotUnlocks, stageTotalsAt } from './difficulty';
 import { regenHeroPools } from './hp';
 import { addStackable } from './inventory';
 import { chance, nextInt } from './rng';
@@ -69,8 +69,9 @@ export function dungeonTotals(state: Pick<GameState, 'dungeon'>, dungeonId: Dung
 }
 
 /**
- * True when every condition of the dungeon's unlock rule is met. On Hard / Extreme the stage is open when that difficulty is unlocked AND
- * the stage is open on Normal (there is no separate chain). Permanent: wins never go down.
+ * True when every condition of the dungeon's unlock rule is met. Each difficulty has its own chain: the first stage opens with the
+ * difficulty, the next ones with the Normal win count x the difficulty's unlockScale in the previous stage on that difficulty.
+ * Permanent: wins never go down.
  */
 export function isDungeonUnlocked(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId, difficulty: Difficulty = 'normal'): boolean {
   return isStageUnlocked(state, dungeonId, difficulty);
@@ -86,13 +87,14 @@ export type DungeonUnlockView = {
   difficultyLocked: boolean;
 };
 
-/** Read-only, for the UI: is it open on the difficulty, what opens it, how far along (the requirement is always the Normal one). */
+/** Read-only, for the UI: is it open on the difficulty, what opens it, how far along (wins in the previous stage on the same difficulty). */
 export function dungeonUnlockView(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId, difficulty: Difficulty = 'normal'): DungeonUnlockView {
   const rule = DUNGEONS[dungeonId].unlock;
   const difficultyLocked = !isDifficultyUnlocked(state, DUNGEONS[dungeonId].tier, difficulty);
   if (!rule) return { unlocked: !difficultyLocked, requirement: null, progress: 0, difficultyLocked };
-  const wins = stageTotalsAt(state, rule.dungeonId, 'normal').wins;
-  return { unlocked: !difficultyLocked && wins >= rule.wins, requirement: { dungeonId: rule.dungeonId, wins: rule.wins }, progress: Math.min(wins, rule.wins), difficultyLocked };
+  const wins = stageTotalsAt(state, rule.dungeonId, difficulty).wins;
+  const need = scaledUnlockWins(rule.wins, difficulty);
+  return { unlocked: !difficultyLocked && wins >= need, requirement: { dungeonId: rule.dungeonId, wins: need }, progress: Math.min(wins, need), difficultyLocked };
 }
 
 /**
@@ -158,6 +160,8 @@ function finishFight(draft: GameState, activity: DungeonActivity, outcome: Fight
     dungeonId,
     difficulty,
     enemyId: outcome.enemyId,
+    heroFirstStrikeMs: outcome.heroFirstStrikeMs,
+    enemyFirstStrikeMs: outcome.enemyFirstStrikeMs,
     won,
     endReason: outcome.endReason,
     durationMs: outcome.durationMs,
@@ -188,6 +192,15 @@ function finishFight(draft: GameState, activity: DungeonActivity, outcome: Fight
     for (const [id, n] of Object.entries(rewards.itemsLost)) bump(summary.itemsLost, id, n);
   }
 
+  // A run on a stage the unlock chain has closed (a Hard / Extreme run from before the per-difficulty chains) ends with this fight: the hero
+  // goes idle instead of repeating, so a closed stage never farms the wins that open the next one. One shared place: live, offline and
+  // any split of time behave the same. A forfeit is already leaving (the caller clears the activity).
+  if (outcome.endReason !== 'forfeit' && !isDungeonUnlocked(draft, dungeonId, difficulty)) {
+    draft.activity = null;
+    events.push({ type: 'ACTIVITY_STOPPED', kind: 'dungeon' });
+    return;
+  }
+
   // Auto-repeat: the next run's search starts at once, whatever the HP.
   activity.phase = 'search';
   activity.progressMs = 0;
@@ -212,6 +225,8 @@ export function beginFight(draft: GameState, activity: DungeonActivity, summary:
       endReason: 'no_hp',
       durationMs: 0,
       enemyId: enemy.id,
+      heroFirstStrikeMs: COMBAT.heroFirstStrikeMs,
+      enemyFirstStrikeMs: COMBAT.enemyFirstStrikeMs,
       heroHpStart: 0,
       heroMaxHp,
       enemyMaxHp: mob.enemy.hp,
@@ -258,7 +273,7 @@ export function forfeitFight(draft: GameState, events: GameEvent[]): boolean {
 /**
  * Applies one fight event at its time: a strike, or the time limit. Ends the fight when a side reaches 0 HP or
  * time is up. A hero whose HP dropped to 0 outside the fight's strikes (debug) loses at the next event.
- * A boss fight ends the activity (the hero is idle); a dungeon fight starts the next search.
+ * A boss fight ends the activity (the hero is idle); a dungeon fight starts the next search (or ends it when the stage is closed).
  */
 function stepFight(draft: GameState, activity: DungeonActivity | BossActivity, fight: ActiveFight, ev: FightEvent, summary: SimulationSummary, events: GameEvent[]): void {
   const end = (reason: 'enemy_defeated' | 'hero_defeated' | 'time_limit', atMs: number) => {
@@ -340,8 +355,9 @@ export function advanceDungeon(
   const walk = (wallBudget: number, fightOnly: boolean): number => {
     let wallLeft = wallBudget;
     while (efficiency > 0 && guard < MAX_ACTIONS_PER_SIMULATION) {
-      // A boss fight ends the activity (the hero is idle): nothing more to walk, the rest of the time is plain regen.
-      if (activity.kind === 'boss' && draft.activity !== activity) break;
+      // A boss fight ends the activity (the hero is idle), and so does a stage fight on a stage the chain has closed: nothing more to walk,
+      // the rest of the time is plain regen.
+      if (draft.activity !== activity) break;
       const fight = activity.kind === 'boss' ? activity.fight : activity.phase === 'fight' ? activity.fight : null;
       if (fightOnly && !fight) break;
       const ev = fight ? nextFightEvent(fight) : null;
@@ -372,8 +388,22 @@ export function advanceDungeon(
   walk(grantedMs, false);
   // The cap fell inside a fight: finish it with the time beyond the cap (bounded by the time that really passed).
   const beyondCap = requestedMs - grantedMs;
-  if (beyondCap > 0 && (activity.kind === 'boss' ? draft.activity === activity : activity.phase === 'fight')) walk(beyondCap, true);
+  if (beyondCap > 0 && draft.activity === activity && (activity.kind === 'boss' || activity.phase === 'fight')) walk(beyondCap, true);
   regen(regenLeft);
+}
+
+/**
+ * Plays the strikes of a fight that are due at its current instant, with no time passing (the hero's opening strike at fight time 0 when a
+ * COMMAND just started the fight: a search skip, ENTER_BOSS, the debug finish; the walk in simulate() plays it by itself). Afterwards no
+ * fight rests in a state with an event already due, so the screen shows the opening hit at once and a later simulate() starts from the
+ * same state however the time is split. A no-op unless a dungeon or boss fight has such an event. Mutates `draft` (a full copy).
+ */
+export function settleFightStart(draft: GameState, summary: SimulationSummary, events: GameEvent[]): void {
+  const a = draft.activity;
+  if (a?.kind !== 'dungeon' && a?.kind !== 'boss') return;
+  const fight = a.kind === 'boss' ? a.fight : a.phase === 'fight' ? a.fight : null;
+  if (!fight || nextFightEvent(fight).atMs > fight.elapsedMs) return;
+  advanceDungeon(draft, a, 0, 0, summary, events);
 }
 
 /**

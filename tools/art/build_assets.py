@@ -9,7 +9,7 @@ Deterministic: same scripts -> same pixels. Requires numpy, scipy, Pillow.
 import sys, os, json
 from PIL import Image
 
-import village_day, village_split, sprites, monsters, icons, equipment, gear_named, materials, drops, gather, variants
+import village_day, village_split, sprites, monsters, icons, equipment, gear_named, materials, drops, gather
 
 ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else '.')
 IMG = os.path.join(ROOT, 'assets', 'images')
@@ -35,15 +35,16 @@ manifest['village/village_layout.json'] = {'kind': 'layout'}
 # hero portrait (option B, Village Squire)
 put('portrait/hero.png', sprites.portrait_squire(), 8)
 
-# enemies: mains keyed by EnemyId, variants saved for later
+# enemies: the base creature of each EnemyId, the Troll Chieftain (the boss), and the creatures the Hard / Extreme variants are
+# (enemies/variants/<creature id>.png; the ids are in src/engine/config/difficulty.ts ENEMY_VARIANTS)
 for eid, fn in (('rat', sprites.rat_sewer), ('bat', monsters.bat_cave), ('wolf', monsters.wolf_grey),
-                ('skeleton', monsters.skeleton_crypt), ('troll', monsters.troll_moss)):
+                ('skeleton', monsters.skeleton_crypt), ('troll', monsters.troll_moss), ('troll_chieftain', monsters.troll_chieftain)):
     put(f'enemies/{eid}.png', fn(), 8)
-    # Hard / Extreme pack variants (1.24.0): the same sprite with a coloured outline, keyed <id>_<variant>
-    for vstyle in variants.STYLES:
-        put(f'enemies/{eid}_{vstyle}.png', variants.outlined(fn(), vstyle), 8)
-for vid, fn in (('giant_rat', sprites.rat_giant), ('blight_rat', sprites.rat_blight), ('vampire_bat', monsters.bat_vampire),
-                ('dire_wolf', monsters.wolf_dire), ('skeleton_knight', monsters.skeleton_knight), ('stone_troll', monsters.troll_stone)):
+for vid, fn in (('giant_rat', sprites.rat_giant), ('blight_rat', sprites.rat_blight),
+                ('vampire_bat', monsters.bat_vampire), ('plague_bat', monsters.bat_plague),
+                ('dire_wolf', monsters.wolf_dire), ('shadow_wolf', monsters.wolf_shadow),
+                ('skeleton_knight', monsters.skeleton_knight), ('bone_champion', monsters.skeleton_champion),
+                ('stone_troll', monsters.troll_stone), ('magma_troll', monsters.troll_magma)):
     put(f'enemies/variants/{vid}.png', fn(), 8)
 
 # common UI symbols + hero skills (16x16)

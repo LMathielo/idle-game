@@ -3,7 +3,7 @@
 // pre-scaled with nearest-neighbour (x8; the village x4), so the device only ever shrinks it. Static require() maps, so
 // Metro bundles every file; tests/art.test.ts checks each id resolves to a file and the sizes match manifest.json.
 import type { ImageSourcePropType } from 'react-native';
-import type { EnemyId, ItemId, RockId, SkillKey, TreeId, WorkerNodeId } from '../../engine';
+import { ENEMY_VARIANTS, type EnemyId, type ItemId, type RockId, type SkillKey, type TreeId, type WorkerNodeId } from '../../engine';
 
 /** Common UI symbols (16x16 art). */
 export const ICONS = {
@@ -128,45 +128,43 @@ export const ITEM_IMAGES: Record<ItemId, ImageSourcePropType> = {
 /** A sprite and its size in art pixels (1x), so different sizes keep the same pixel scale on screen. */
 export type Sprite = { source: ImageSourcePropType; w: number; h: number };
 
-/** Enemies, keyed by EnemyId: 32x32, the troll 48x48 (shown 1.5x as big). */
+/** Enemies, keyed by EnemyId: 32x32, the troll and the Troll Chieftain 48x48 (shown 1.5x as big). */
 export const ENEMY_SPRITES: Record<EnemyId, Sprite> = {
   rat: { source: require('../../../assets/images/enemies/rat.png'), w: 32, h: 32 },
   bat: { source: require('../../../assets/images/enemies/bat.png'), w: 32, h: 32 },
   wolf: { source: require('../../../assets/images/enemies/wolf.png'), w: 32, h: 32 },
   skeleton: { source: require('../../../assets/images/enemies/skeleton.png'), w: 32, h: 32 },
   troll: { source: require('../../../assets/images/enemies/troll.png'), w: 48, h: 48 },
-  // PLACEHOLDER (1.20.0): the Troll Chieftain shows the unused "stone troll" variant (48x48, same pixel scale) until real boss art
-  // is approved (docs/TECH_DEBT.md). tools/art is not touched.
-  troll_chieftain: { source: require('../../../assets/images/enemies/variants/stone_troll.png'), w: 48, h: 48 },
+  // 1.25.0 (pending owner approval): the Chieftain's own sprite, crowned and war-painted (tools/art/monsters.py troll_chieftain).
+  troll_chieftain: { source: require('../../../assets/images/enemies/troll_chieftain.png'), w: 48, h: 48 },
 };
 
 /**
- * Pack variants (1.24.0, pending owner approval): the enemy's sprite with a coloured outline (tools/art/variants.py), padded by 2 art
- * pixels a side, so it is 4 px wider and taller than its base at the same pixel scale. Veteran = amber, Extreme = violet. The boss has
- * no variants (it never comes in a pack).
+ * The variant creatures (1.25.0, pending owner approval), keyed by the creature id of the engine's variant table
+ * (src/engine/config/difficulty.ts ENEMY_VARIANTS). Each is the same size as the enemy it replaces (32x32; the trolls 48x48), so every
+ * sprite keeps the same pixel scale.
  */
-export const ENEMY_VARIANT_SPRITES: Partial<Record<EnemyId, { veteran: Sprite; extreme: Sprite }>> = {
-  rat: {
-    veteran: { source: require('../../../assets/images/enemies/rat_veteran.png'), w: 36, h: 36 },
-    extreme: { source: require('../../../assets/images/enemies/rat_extreme.png'), w: 36, h: 36 },
-  },
-  bat: {
-    veteran: { source: require('../../../assets/images/enemies/bat_veteran.png'), w: 36, h: 36 },
-    extreme: { source: require('../../../assets/images/enemies/bat_extreme.png'), w: 36, h: 36 },
-  },
-  wolf: {
-    veteran: { source: require('../../../assets/images/enemies/wolf_veteran.png'), w: 36, h: 36 },
-    extreme: { source: require('../../../assets/images/enemies/wolf_extreme.png'), w: 36, h: 36 },
-  },
-  skeleton: {
-    veteran: { source: require('../../../assets/images/enemies/skeleton_veteran.png'), w: 36, h: 36 },
-    extreme: { source: require('../../../assets/images/enemies/skeleton_extreme.png'), w: 36, h: 36 },
-  },
-  troll: {
-    veteran: { source: require('../../../assets/images/enemies/troll_veteran.png'), w: 52, h: 52 },
-    extreme: { source: require('../../../assets/images/enemies/troll_extreme.png'), w: 52, h: 52 },
-  },
+const VARIANT_CREATURE_SPRITES: Record<string, Sprite> = {
+  giant_rat: { source: require('../../../assets/images/enemies/variants/giant_rat.png'), w: 32, h: 32 },
+  blight_rat: { source: require('../../../assets/images/enemies/variants/blight_rat.png'), w: 32, h: 32 },
+  vampire_bat: { source: require('../../../assets/images/enemies/variants/vampire_bat.png'), w: 32, h: 32 },
+  plague_bat: { source: require('../../../assets/images/enemies/variants/plague_bat.png'), w: 32, h: 32 },
+  dire_wolf: { source: require('../../../assets/images/enemies/variants/dire_wolf.png'), w: 32, h: 32 },
+  shadow_wolf: { source: require('../../../assets/images/enemies/variants/shadow_wolf.png'), w: 32, h: 32 },
+  skeleton_knight: { source: require('../../../assets/images/enemies/variants/skeleton_knight.png'), w: 32, h: 32 },
+  bone_champion: { source: require('../../../assets/images/enemies/variants/bone_champion.png'), w: 32, h: 32 },
+  stone_troll: { source: require('../../../assets/images/enemies/variants/stone_troll.png'), w: 48, h: 48 },
+  magma_troll: { source: require('../../../assets/images/enemies/variants/magma_troll.png'), w: 48, h: 48 },
 };
+
+/**
+ * The sprite of each pack variant per enemy: the "veteran" variant (Hard 25%, every Extreme mob) is the Hard creature, the "extreme"
+ * variant the Extreme creature. Looked up by the creature id in the engine's table, so the names and the art cannot drift apart
+ * (tests/art.test.ts). The plain Hard mob uses the enemy's own sprite and the boss has no variants.
+ */
+export const ENEMY_VARIANT_SPRITES: Partial<Record<EnemyId, { veteran: Sprite; extreme: Sprite }>> = Object.fromEntries(
+  Object.entries(ENEMY_VARIANTS).map(([enemyId, v]) => [enemyId, { veteran: VARIANT_CREATURE_SPRITES[v.veteran.id], extreme: VARIANT_CREATURE_SPRITES[v.extreme.id] }]),
+);
 
 /** Woodcutting trees (32x32 art). */
 export const TREE_IMAGES: Record<TreeId, ImageSourcePropType> = {

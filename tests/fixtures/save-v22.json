@@ -1,0 +1,720 @@
+{
+ "saveVersion": 22,
+ "rng": {
+  "seed": 3596822490
+ },
+ "time": {
+  "lastSimulatedAt": 1792929977000,
+  "highestSeenAt": 1792929977000
+ },
+ "offline": {
+  "capMs": 28800000,
+  "efficiency": 1
+ },
+ "activity": {
+  "kind": "dungeon",
+  "dungeonId": "forgotten_crypt",
+  "difficulty": "hard",
+  "startedAt": 1792929600000,
+  "phase": "fight",
+  "progressMs": 0,
+  "fight": {
+   "enemyId": "skeleton",
+   "elapsedMs": 2000,
+   "heroHpStart": 1037,
+   "heroMaxHp": 1040,
+   "hero": {
+    "damage": {
+     "min": 128,
+     "max": 131
+    },
+    "armor": 143,
+    "magicDamage": 0,
+    "magicResist": 0,
+    "critChanceBp": 0,
+    "critMultBp": 15000,
+    "attackIntervalMs": 1000,
+    "skills": []
+   },
+   "heroStrikes": 2,
+   "mobs": [
+    {
+     "variant": "base",
+     "multBp": 20000,
+     "hp": 216,
+     "maxHp": 360,
+     "side": {
+      "damage": {
+       "min": 30,
+       "max": 40
+      },
+      "armor": 40,
+      "magicDamage": 0,
+      "magicResist": 40,
+      "critChanceBp": 0,
+      "critMultBp": 10000,
+      "attackIntervalMs": 1000,
+      "skills": []
+     },
+     "strikes": 2,
+     "regenBp": 0,
+     "regenProgress": 0,
+     "regenAtMs": 2000,
+     "skillReady": {}
+    },
+    {
+     "variant": "base",
+     "multBp": 20000,
+     "hp": 360,
+     "maxHp": 360,
+     "side": {
+      "damage": {
+       "min": 30,
+       "max": 40
+      },
+      "armor": 40,
+      "magicDamage": 0,
+      "magicResist": 40,
+      "critChanceBp": 0,
+      "critMultBp": 10000,
+      "attackIntervalMs": 1000,
+      "skills": []
+     },
+     "strikes": 2,
+     "regenBp": 0,
+     "regenProgress": 0,
+     "regenAtMs": 2000,
+     "skillReady": {}
+    },
+    {
+     "variant": "veteran",
+     "multBp": 30000,
+     "hp": 540,
+     "maxHp": 540,
+     "side": {
+      "damage": {
+       "min": 45,
+       "max": 60
+      },
+      "armor": 60,
+      "magicDamage": 0,
+      "magicResist": 60,
+      "critChanceBp": 0,
+      "critMultBp": 10000,
+      "attackIntervalMs": 1000,
+      "skills": []
+     },
+     "strikes": 2,
+     "regenBp": 0,
+     "regenProgress": 0,
+     "regenAtMs": 2000,
+     "skillReady": {}
+    },
+    {
+     "variant": "base",
+     "multBp": 20000,
+     "hp": 360,
+     "maxHp": 360,
+     "side": {
+      "damage": {
+       "min": 30,
+       "max": 40
+      },
+      "armor": 40,
+      "magicDamage": 0,
+      "magicResist": 40,
+      "critChanceBp": 0,
+      "critMultBp": 10000,
+      "attackIntervalMs": 1000,
+      "skills": []
+     },
+     "strikes": 2,
+     "regenBp": 0,
+     "regenProgress": 0,
+     "regenAtMs": 2000,
+     "skillReady": {}
+    }
+   ],
+   "maxFightMs": 60000,
+   "heroStunStrikes": 0,
+   "log": [
+    {
+     "atMs": 1000,
+     "actor": "hero",
+     "strike": 1,
+     "roll": 130,
+     "crit": false,
+     "physical": 72,
+     "magic": 0,
+     "dealt": 72,
+     "targetHpAfter": 288,
+     "mob": 0
+    },
+    {
+     "atMs": 1000,
+     "actor": "enemy",
+     "strike": 1,
+     "roll": 40,
+     "crit": false,
+     "physical": 10,
+     "magic": 0,
+     "dealt": 10,
+     "targetHpAfter": 1028,
+     "mob": 0
+    },
+    {
+     "atMs": 1000,
+     "actor": "enemy",
+     "strike": 1,
+     "roll": 35,
+     "crit": false,
+     "physical": 9,
+     "magic": 0,
+     "dealt": 9,
+     "targetHpAfter": 1019,
+     "mob": 1
+    },
+    {
+     "atMs": 1000,
+     "actor": "enemy",
+     "strike": 1,
+     "roll": 60,
+     "crit": false,
+     "physical": 16,
+     "magic": 0,
+     "dealt": 16,
+     "targetHpAfter": 1003,
+     "mob": 2
+    },
+    {
+     "atMs": 1000,
+     "actor": "enemy",
+     "strike": 1,
+     "roll": 35,
+     "crit": false,
+     "physical": 9,
+     "magic": 0,
+     "dealt": 9,
+     "targetHpAfter": 994,
+     "mob": 3
+    },
+    {
+     "atMs": 2000,
+     "actor": "hero",
+     "strike": 2,
+     "roll": 130,
+     "crit": false,
+     "physical": 72,
+     "magic": 0,
+     "dealt": 72,
+     "targetHpAfter": 216,
+     "mob": 0
+    },
+    {
+     "atMs": 2000,
+     "actor": "enemy",
+     "strike": 2,
+     "roll": 38,
+     "crit": false,
+     "physical": 10,
+     "magic": 0,
+     "dealt": 10,
+     "targetHpAfter": 984,
+     "mob": 0
+    },
+    {
+     "atMs": 2000,
+     "actor": "enemy",
+     "strike": 2,
+     "roll": 33,
+     "crit": false,
+     "physical": 9,
+     "magic": 0,
+     "dealt": 9,
+     "targetHpAfter": 975,
+     "mob": 1
+    },
+    {
+     "atMs": 2000,
+     "actor": "enemy",
+     "strike": 2,
+     "roll": 60,
+     "crit": false,
+     "physical": 16,
+     "magic": 0,
+     "dealt": 16,
+     "targetHpAfter": 959,
+     "mob": 2
+    },
+    {
+     "atMs": 2000,
+     "actor": "enemy",
+     "strike": 2,
+     "roll": 30,
+     "crit": false,
+     "physical": 8,
+     "magic": 0,
+     "dealt": 8,
+     "targetHpAfter": 951,
+     "mob": 3
+    }
+   ]
+  }
+ },
+ "stamina": {
+  "current": 100,
+  "max": 100,
+  "progressMs": 0
+ },
+ "dungeon": {
+  "lastFight": {
+   "dungeonId": "forgotten_crypt",
+   "difficulty": "hard",
+   "enemyId": "skeleton",
+   "won": true,
+   "endReason": "enemy_defeated",
+   "durationMs": 5000,
+   "heroHpStart": 998,
+   "heroHpEnd": 963,
+   "heroMaxHp": 1040,
+   "enemyMaxHp": 360,
+   "enemyHpEnd": 0,
+   "mobs": [
+    {
+     "variant": "base",
+     "multBp": 20000,
+     "maxHp": 360,
+     "hpEnd": 0
+    }
+   ],
+   "rewards": {
+    "heroXp": 600,
+    "gold": 74,
+    "items": {},
+    "itemsLost": {}
+   },
+   "log": [
+    {
+     "atMs": 1000,
+     "actor": "hero",
+     "strike": 1,
+     "roll": 131,
+     "crit": false,
+     "physical": 73,
+     "magic": 0,
+     "dealt": 73,
+     "targetHpAfter": 287
+    },
+    {
+     "atMs": 1000,
+     "actor": "enemy",
+     "strike": 1,
+     "roll": 34,
+     "crit": false,
+     "physical": 9,
+     "magic": 0,
+     "dealt": 9,
+     "targetHpAfter": 990
+    },
+    {
+     "atMs": 2000,
+     "actor": "hero",
+     "strike": 2,
+     "roll": 129,
+     "crit": false,
+     "physical": 72,
+     "magic": 0,
+     "dealt": 72,
+     "targetHpAfter": 215
+    },
+    {
+     "atMs": 2000,
+     "actor": "enemy",
+     "strike": 2,
+     "roll": 35,
+     "crit": false,
+     "physical": 9,
+     "magic": 0,
+     "dealt": 9,
+     "targetHpAfter": 981
+    },
+    {
+     "atMs": 3000,
+     "actor": "hero",
+     "strike": 3,
+     "roll": 130,
+     "crit": false,
+     "physical": 72,
+     "magic": 0,
+     "dealt": 72,
+     "targetHpAfter": 143
+    },
+    {
+     "atMs": 3000,
+     "actor": "enemy",
+     "strike": 3,
+     "roll": 39,
+     "crit": false,
+     "physical": 10,
+     "magic": 0,
+     "dealt": 10,
+     "targetHpAfter": 972
+    },
+    {
+     "atMs": 4000,
+     "actor": "hero",
+     "strike": 4,
+     "roll": 128,
+     "crit": false,
+     "physical": 71,
+     "magic": 0,
+     "dealt": 71,
+     "targetHpAfter": 72
+    },
+    {
+     "atMs": 4000,
+     "actor": "enemy",
+     "strike": 4,
+     "roll": 37,
+     "crit": false,
+     "physical": 10,
+     "magic": 0,
+     "dealt": 10,
+     "targetHpAfter": 963
+    },
+    {
+     "atMs": 5000,
+     "actor": "hero",
+     "strike": 5,
+     "roll": 130,
+     "crit": false,
+     "physical": 72,
+     "magic": 0,
+     "dealt": 72,
+     "targetHpAfter": 0
+    }
+   ]
+  },
+  "totals": {
+   "runs": 408,
+   "wins": 408,
+   "losses": 0
+  },
+  "byDungeon": {
+   "rat_cellar": {
+    "runs": 130,
+    "wins": 130,
+    "losses": 0
+   },
+   "bat_cave": {
+    "runs": 90,
+    "wins": 90,
+    "losses": 0
+   },
+   "wolf_den": {
+    "runs": 70,
+    "wins": 70,
+    "losses": 0
+   },
+   "forgotten_crypt": {
+    "runs": 60,
+    "wins": 60,
+    "losses": 0
+   },
+   "troll_bridge": {
+    "runs": 55,
+    "wins": 55,
+    "losses": 0
+   }
+  },
+  "bosses": {
+   "troll_chieftain": {
+    "runs": 1,
+    "wins": 1,
+    "losses": 0
+   }
+  },
+  "harder": {
+   "hard": {
+    "byDungeon": {
+     "forgotten_crypt": {
+      "runs": 2,
+      "wins": 2,
+      "losses": 0
+     }
+    },
+    "bosses": {}
+   },
+   "extreme": {
+    "byDungeon": {},
+    "bosses": {}
+   }
+  },
+  "difficulty": {
+   "1": "hard"
+  }
+ },
+ "training": {
+  "tier": 1,
+  "attributes": {
+   "strength": {
+    "level": 0,
+    "xp": 0,
+    "progressMs": 0
+   },
+   "dexterity": {
+    "level": 0,
+    "xp": 0,
+    "progressMs": 0
+   },
+   "endurance": {
+    "level": 0,
+    "xp": 0,
+    "progressMs": 0
+   },
+   "intelligence": {
+    "level": 0,
+    "xp": 0,
+    "progressMs": 0
+   }
+  }
+ },
+ "merchant": {
+  "charges": 5,
+  "chargeProgressMs": 0,
+  "stock": [
+   {
+    "defId": "health_potion_t1",
+    "quantity": 10,
+    "unitPrice": 12
+   },
+   {
+    "defId": "iron_axe",
+    "quantity": 1,
+    "unitPrice": 600,
+    "quality": 25,
+    "rarity": "common"
+   },
+   {
+    "defId": "iron_pickaxe",
+    "quantity": 1,
+    "unitPrice": 600,
+    "quality": 25,
+    "rarity": "common"
+   },
+   {
+    "defId": "iron_sword",
+    "quantity": 1,
+    "unitPrice": 500,
+    "quality": 25,
+    "rarity": "common"
+   },
+   {
+    "defId": "iron_helm",
+    "quantity": 1,
+    "unitPrice": 400,
+    "quality": 25,
+    "rarity": "common"
+   }
+  ]
+ },
+ "buildings": {
+  "woodcutting": {
+   "state": "built",
+   "level": 1
+  },
+  "mine_shaft": {
+   "state": "built",
+   "level": 1
+  },
+  "town_hall": {
+   "state": "built",
+   "level": 1
+  },
+  "training_grounds": {
+   "state": "built",
+   "level": 1
+  },
+  "merchant": {
+   "state": "built",
+   "level": 1
+  },
+  "crafting": {
+   "state": "built",
+   "level": 1
+  },
+  "storage": {
+   "state": "built",
+   "level": 1
+  }
+ },
+ "construction": null,
+ "workers": {
+  "list": [],
+  "nextSerial": 1,
+  "crews": {},
+  "paused": false,
+  "minuteLeftMs": 0,
+  "paidPerMin": 0
+ },
+ "crafting": {
+  "pipesUnlocked": 2,
+  "pipes": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null
+  ],
+  "remainders": {},
+  "nextJobSerial": 1
+ },
+ "nextItemSerial": 1,
+ "stats": {
+  "totalActions": 0,
+  "itemsGathered": {}
+ },
+ "flags": {
+  "debugUsed": false
+ },
+ "character": {
+  "name": "Lucius",
+  "title": "Novice Gladiator",
+  "level": 45,
+  "xp": 1800,
+  "xpToNext": 112337,
+  "hp": 951,
+  "hpRegenProgress": 5200000,
+  "mana": 51,
+  "manaRegenProgress": 2500000,
+  "gold": 792,
+  "attributes": {
+   "strength": 0,
+   "dexterity": 0,
+   "endurance": 0,
+   "intelligence": 0
+  },
+  "spentPoints": {
+   "strength": 110,
+   "dexterity": 0,
+   "endurance": 110,
+   "intelligence": 0
+  },
+  "unspentPoints": 0,
+  "equipment": {
+   "weapon": {
+    "id": "iron_sword#hero",
+    "defId": "iron_sword",
+    "name": "Iron Sword",
+    "icon": "⚔️",
+    "slot": "weapon",
+    "rarity": "common",
+    "quality": 50
+   },
+   "armor": {
+    "id": "iron_chestplate#hero",
+    "defId": "iron_chestplate",
+    "name": "Iron Chestplate",
+    "icon": "🦺",
+    "slot": "armor",
+    "rarity": "common",
+    "quality": 50
+   },
+   "boots": {
+    "id": "iron_boots#hero",
+    "defId": "iron_boots",
+    "name": "Iron Boots",
+    "icon": "🥾",
+    "slot": "boots",
+    "rarity": "common",
+    "quality": 50
+   },
+   "axe": {
+    "id": "start-wooden_axe",
+    "defId": "wooden_axe",
+    "name": "Wooden Axe",
+    "icon": "🪓",
+    "slot": "axe",
+    "rarity": "common",
+    "quality": 25
+   },
+   "pickaxe": {
+    "id": "start-wooden_pickaxe",
+    "defId": "wooden_pickaxe",
+    "name": "Wooden Pickaxe",
+    "icon": "⛏️",
+    "slot": "pickaxe",
+    "rarity": "common",
+    "quality": 25
+   },
+   "helmet": {
+    "id": "iron_helm#hero",
+    "defId": "iron_helm",
+    "name": "Iron Helm",
+    "icon": "🪖",
+    "slot": "helmet",
+    "rarity": "common",
+    "quality": 50
+   },
+   "shield": {
+    "id": "iron_shield#hero",
+    "defId": "iron_shield",
+    "name": "Iron Shield",
+    "icon": "🛡️",
+    "slot": "shield",
+    "rarity": "common",
+    "quality": 50
+   },
+   "gloves": {
+    "id": "iron_gloves#hero",
+    "defId": "iron_gloves",
+    "name": "Iron Gloves",
+    "icon": "🧤",
+    "slot": "gloves",
+    "rarity": "common",
+    "quality": 50
+   }
+  },
+  "skills": {
+   "woodcutting": {
+    "level": 1,
+    "xp": 0,
+    "xpToNext": 100
+   },
+   "mining": {
+    "level": 1,
+    "xp": 0,
+    "xpToNext": 100
+   },
+   "fishing": {
+    "level": 1,
+    "xp": 0,
+    "xpToNext": 100
+   }
+  }
+ },
+ "inventory": {
+  "capacity": 20,
+  "items": [
+   {
+    "id": "bread",
+    "defId": "bread",
+    "name": "Bread",
+    "icon": "🍞",
+    "stackable": true,
+    "quantity": 3
+   },
+   {
+    "id": "old_bone",
+    "defId": "old_bone",
+    "name": "Old Bone",
+    "icon": "🦴",
+    "stackable": true,
+    "quantity": 1
+   }
+  ]
+ }
+}

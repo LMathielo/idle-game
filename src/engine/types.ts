@@ -214,7 +214,7 @@ export type FightMob = {
   maxHp: number;
   /** Frozen when the fight starts, like the hero's. */
   side: CombatSide;
-  /** Strikes this mob has made so far (a cast counts). Its next one is due at (strikes + 1) × attackIntervalMs. */
+  /** Strikes this mob has made so far (a cast counts). Its next one is due at the fight's `enemyFirstStrikeMs` + strikes × attackIntervalMs. */
   strikes: number;
   /**
    * Regeneration while it fights: basis points of its max HP per second, 0 = none (bosses only). Applied at each event with exact
@@ -231,7 +231,7 @@ export type FightMob = {
 
 /**
  * The fight in progress (save v9; mobs: save v22). It plays out in engine time inside simulate(): each strike happens at its
- * exact time (strike n of a side at n × its interval; on a tie the hero strikes first, then the mobs in pack order), HP regenerates
+ * exact time (strike n of a side at its first-strike offset + (n - 1) × its interval; on a tie the hero strikes first, then the mobs in pack order), HP regenerates
  * between strikes, and the outcome is applied when it ends. The hero's HP is `character.hp` throughout. The hero strikes the first
  * alive mob; every alive mob strikes the hero on its own timer.
  */
@@ -244,8 +244,15 @@ export type ActiveFight = {
   /** Max HP when the fight started, for the bars. */
   heroMaxHp: number;
   hero: CombatSide;
-  /** Strikes the hero has made so far (a stunned strike counts). The next one is due at (heroStrikes + 1) × attackIntervalMs. */
+  /** Strikes the hero has made so far (a stunned strike counts). The next one is due at `heroFirstStrikeMs` + heroStrikes × attackIntervalMs. */
   heroStrikes: number;
+  /**
+   * The fight's opening (save v23, engine 1.25.0), fight time in ms: the hero's strike n lands at heroFirstStrikeMs + (n - 1) × his interval,
+   * every mob's strike n at enemyFirstStrikeMs + (n - 1) × its interval. A new fight copies COMBAT.heroFirstStrikeMs (0) and
+   * COMBAT.enemyFirstStrikeMs (300); a fight already in progress at the update was stamped with the old timing (first strike one interval in).
+   */
+  heroFirstStrikeMs: number;
+  enemyFirstStrikeMs: number;
   /** The pack, in pack order (at least one mob). */
   mobs: FightMob[];
   /** The fight's time limit, ms (frozen when it starts: 60 000 for a stage fight on any difficulty, the boss's own for a boss; save v20). */
@@ -377,6 +384,9 @@ export type FightRecord = {
   enemyHpEnd: number;
   /** The pack in pack order (save v22): what each mob was and how much HP it had left. */
   mobs: FightRecordMob[];
+  /** The opening this fight was fought with (save v23): when the hero's and the mobs' first strikes landed, fight ms. */
+  heroFirstStrikeMs: number;
+  enemyFirstStrikeMs: number;
   rewards: FightRewards;
   log: FightLogEntry[];
 };
@@ -575,7 +585,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 22;
+  saveVersion: 23;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -667,8 +677,9 @@ export type GameEvent =
   | { type: 'CRAFT_JOB_CANCELLED'; pipe: number; jobId: number }
   | { type: 'PIPE_UNLOCKED'; pipes: number };
 
-/** A harder difficulty opened, or a boss opened on one (1.24.0). */
-export type HarderUnlock = { kind: 'difficulty'; tier: number; difficulty: Difficulty } | { kind: 'boss'; bossId: BossId; difficulty: Difficulty };
+/** A harder difficulty opened, or a stage or boss opened on one (1.24.0). */
+export type HarderUnlock = { kind: 'difficulty'; tier: number; difficulty: Difficulty } | { kind: 'boss'; bossId: BossId; difficulty: Difficulty }
+  | { kind: 'stage'; dungeonId: DungeonId; difficulty: Difficulty };
 
 /** What happened during one simulate() call. Shown in the "While you were away" modal. */
 export type SimulationSummary = {

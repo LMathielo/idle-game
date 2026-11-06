@@ -29,6 +29,15 @@ export const COMBAT = {
   armorK: 50,
   minDamage: 1,
   /**
+   * The fight's opening (1.25.0, owner decision 2026-11-06). Strike n (1-based) of a side lands at
+   *   firstStrikeMs + (n - 1) x its attackIntervalMs        (fight time, ms from the fight's start)
+   * The hero opens at 0 (his first strike is the fight's first tick); every monster of a pack opens at 300 ms. Before 1.25.0 a side's
+   * first strike landed one interval in (offset = its interval): a fight already in progress at the update keeps that, stored on the
+   * fight itself (ActiveFight.heroFirstStrikeMs / enemyFirstStrikeMs, save v23). On a tie the hero strikes first, then the mobs in pack order.
+   */
+  heroFirstStrikeMs: 0,
+  enemyFirstStrikeMs: 300,
+  /**
    * Fight time limit (engine time from the fight's start). Strikes due at exactly this time still land;
    * a fight with both sides alive after them is a loss (`time_limit`), with the usual loss rules.
    */
@@ -44,7 +53,7 @@ export type EnemyDef = {
   armor: number;
   /** Reduces the hero's magic damage (1.19.0). Equal to the armor for now; no enemy deals magic damage yet. */
   magicResist: number;
-  /** Time between two of its strikes; the first lands this long after the fight starts. */
+  /** Time between two of its strikes. Its first strike lands at COMBAT.enemyFirstStrikeMs (1.25.0; before that, one interval in). */
   attackIntervalMs: number;
   /** Bosses (1.20.0): HP regenerated per second while it fights, in basis points of its max HP (50 = 0.5% per second). Missing = none. */
   regenBpPerSec?: number;

@@ -270,6 +270,8 @@ export function finishBossFight(draft: GameState, activity: BossActivity, outcom
     dungeonId: bossId,
     difficulty,
     enemyId: outcome.enemyId,
+    heroFirstStrikeMs: outcome.heroFirstStrikeMs,
+    enemyFirstStrikeMs: outcome.enemyFirstStrikeMs,
     won,
     endReason: outcome.endReason,
     durationMs: outcome.durationMs,

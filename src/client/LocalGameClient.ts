@@ -19,6 +19,7 @@ import {
   type DungeonOrBossId,
   type HarderUnlock,
   isBossId,
+  isDungeonId,
   ENGINE_VERSION,
   type GameEvent,
   type GameState,
@@ -398,7 +399,9 @@ export class LocalGameClient implements GameClient {
         ? [{ kind: 'difficulty', tier: e.tier, difficulty: e.difficulty }]
         : e.type === 'DUNGEON_UNLOCKED' && e.difficulty && isBossId(e.dungeonId)
           ? [{ kind: 'boss', bossId: e.dungeonId, difficulty: e.difficulty }]
-          : [],
+          : e.type === 'DUNGEON_UNLOCKED' && e.difficulty && isDungeonId(e.dungeonId)
+            ? [{ kind: 'stage', dungeonId: e.dungeonId, difficulty: e.difficulty }]
+            : [],
     );
     if (harder.length > 0) this.unlockedHarder = [...this.unlockedHarder, ...harder];
   }

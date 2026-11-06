@@ -12,7 +12,7 @@ import { SKILL_XP_CURVE } from './config/xpCurve';
 import { xpToNext } from './progression';
 import { DEV_TOOLS_ENABLED } from './config/dev';
 import { BOSSES, DUNGEONS, isBossId, isDungeonId } from './config/dungeons';
-import { beginFight, forfeitFight, isDungeonUnlocked, recordDungeonResults, searchMsFor, skipCost } from './dungeon';
+import { beginFight, forfeitFight, isDungeonUnlocked, recordDungeonResults, searchMsFor, settleFightStart, skipCost } from './dungeon';
 import { checkDifficulty, type DifficultyErrorCode, selectedDifficulty } from './difficulty';
 import { equipItem, unequipItem, useItem } from './equipment';
 import { markDebugUsed } from './flags';
@@ -795,6 +795,8 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
     }
   }
 
+  // A fight this command started (search skip, ENTER_BOSS, debug finish) opens with the hero's strike at fight time 0: play it now.
+  settleFightStart(draft, sim.summary, events);
   // The workforce follows the command at once: crews go idle / active with the hero's power (an equip change), a
   // crew that starts working pays its first minute, and paused crews resume when gold now covers the upkeep.
   settleWorkers(draft, events, null);

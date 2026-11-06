@@ -94,7 +94,7 @@ function play(until: number = Infinity): GameState {
 
 describe('golden 1.19.0: a whole game from newGame', () => {
   it('starts with 500 gold and nothing built; the first two real BUILD commands cost 50 gold each', () => {
-    expect(ENGINE_VERSION).toBe('1.24.0');
+    expect(ENGINE_VERSION).toBe('1.25.0');
     const s0 = newGame(SEED, T0);
     expect(s0.character.gold).toBe(500);
     expect(Object.values(s0.buildings).every((b) => b.state === 'locked')).toBe(true);
@@ -151,7 +151,7 @@ describe('golden 1.19.0: a whole game from newGame', () => {
     // 1.22.0: the whole-state hash moved only because saveVersion is 21 now (this game never holds a rare or epic piece): in the v20 shape
     // it is still the 1.20.0 pin, so no outcome of the game changed.
     // 1.24.0: and seen in the v21 shape (asV21: no difficulty fields) the whole-state hash of the game is the 1.22.0 one.
-    expect(hashState({ ...asV21(s), saveVersion: 20 } as unknown as GameState)).toBe('2e1282a3');
+    expect(hashState({ ...asV21(s), saveVersion: 20 } as unknown as GameState)).toBe('2adc197d'); // 1.25.0: re-pinned (was 2e1282a3): the combat opening shifts every fight
     expect({
       level: s.character.level,
       gold: s.character.gold,
@@ -167,24 +167,24 @@ describe('golden 1.19.0: a whole game from newGame', () => {
         "dungeon": {
           "bat_cave": {
             "losses": 0,
-            "runs": 58,
-            "wins": 58,
+            "runs": 59,
+            "wins": 59,
           },
           "rat_cellar": {
             "losses": 0,
-            "runs": 146,
-            "wins": 146,
+            "runs": 147,
+            "wins": 147,
           },
         },
-        "gold": 1221,
-        "hash": "0c02855a",
+        "gold": 1211,
+        "hash": "13541eac",
         "hp": [
-          145,
-          0,
+          135,
+          4212000,
         ],
         "lastFight": {
           "dungeonId": "bat_cave",
-          "ms": 3000,
+          "ms": 2000,
           "strikes": 5,
           "won": true,
         },
@@ -194,7 +194,7 @@ describe('golden 1.19.0: a whole game from newGame', () => {
           0,
         ],
         "rng": {
-          "seed": 3860702386,
+          "seed": 1837312982,
         },
         "spent": {
           "dexterity": 6,

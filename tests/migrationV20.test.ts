@@ -71,12 +71,12 @@ describe('v20 → v21', () => {
   const s = loadSave(V20);
 
   it('loads as the current save; the main RNG, the clock and everything else are untouched', () => {
-    expect(CURRENT_SAVE_VERSION).toBe(22);
-    expect(s.saveVersion).toBe(22);
+    expect(CURRENT_SAVE_VERSION).toBe(23);
+    expect(s.saveVersion).toBe(23);
     expect(s.rng).toEqual(V20.rng);
     expect(s.time).toEqual(V20.time);
     // Nothing lost or changed but the affixes: with them stripped and the version put back, the document is the fixture byte for byte.
-    // (The v21 -> v22 step on top only adds difficulty fields, which asV21 takes off again.)
+    // (The v21 -> v22 -> v23 steps on top only add difficulty and opening fields, which asV21 takes off again.)
     expect(withoutAffixes({ ...asV21(s), saveVersion: 20 })).toEqual(V20);
   });
 

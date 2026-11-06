@@ -53,8 +53,8 @@ describe('v21 -> v22', () => {
   const s = loadSave(V21);
 
   it('loads as the current save; the main RNG, the clock and everything else are untouched', () => {
-    expect(CURRENT_SAVE_VERSION).toBe(22);
-    expect(s.saveVersion).toBe(22);
+    expect(CURRENT_SAVE_VERSION).toBe(23);
+    expect(s.saveVersion).toBe(23);
     expect(s.rng).toEqual(V21.rng);
     expect(s.time).toEqual(V21.time);
     // Taking the new shape off again gives the fixture byte for byte.
@@ -97,7 +97,9 @@ describe('v21 -> v22', () => {
   });
 
   it('plays on exactly as the untouched v21 engine played it: the same fight end, the same stream, the same rewards, the same log', () => {
-    for (const [key, ms] of [['fightEnd', 60_000], ['after30min', 30 * MIN]] as const) {
+    // Only up to the end of the fight in progress: the fights after it open the 1.25.0 way (hero at 0, monsters at 300 ms), so the
+    // `after30min` reference of the untouched 1.23.x engine no longer applies to them (tests/migrationV22.test.ts covers that hand-over).
+    for (const [key, ms] of [['fightEnd', 60_000]] as const) {
       const r = simulate(s, s.time.lastSimulatedAt + ms).state;
       const f = r.dungeon.lastFight!;
       const want = REF[key];

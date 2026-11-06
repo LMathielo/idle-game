@@ -46,10 +46,10 @@ export function NodeIcon({ node, size = 32, style }: ImageProps & { node: Worker
 
 /**
  * An enemy, `pixel` points per art pixel: every enemy keeps the same pixel scale, so the 48x48 troll shows 1.5x the
- * size of a 32x32 rat. `variant` (1.24.0): the Veteran / Extreme outline of a Hard / Extreme pack mob.
+ * size of a 32x32 rat. `variant` (1.25.0): a Hard / Extreme pack mob is its own creature (Giant Rat, Blight Rat ...), same size as the base.
  */
 export function EnemySprite({ enemyId, pixel = 1, variant = 'base', style }: ImageProps & { enemyId: EnemyId; pixel?: number; variant?: MobVariant }) {
-  // A pack variant (Veteran / Extreme) is the same sprite with a coloured outline; the plain one when an enemy has none (the boss).
+  // A pack variant is the creature of the engine's variant table; the enemy's own sprite for the plain mob and for an enemy without variants (the boss).
   const s = (variant !== 'base' ? ENEMY_VARIANT_SPRITES[enemyId]?.[variant] : undefined) ?? ENEMY_SPRITES[enemyId];
   return <PixelImage source={s.source} width={s.w * pixel} height={s.h * pixel} style={style} />;
 }

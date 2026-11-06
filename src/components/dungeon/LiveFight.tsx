@@ -1,7 +1,7 @@
 // The fight in progress, as the engine has played it up to now. Strikes appear when engine time reaches them
 // (the client ticks every second); nothing here times or decides anything. The outcome is applied by the
 // engine when the fight ends, and the panel then shows the next search.
-import { memo } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { type DungeonFightView, type EnemyId, mobName } from '../../engine';
@@ -10,6 +10,7 @@ import { EnemySprite } from '../art/Sprites';
 import { LogLine, StunNotice, strikeTime } from './FightReplay';
 import { AnimatedHpBar } from './HpBars';
 import { PackRows } from './PackRows';
+import { displayClockMs, displayedFight, isCatchingUp, isFreshFight } from './fightDisplay';
 import { mobLabel, packText } from './outcome';
 
 /** Lines kept on screen; older strikes scroll out (the last fight's replay has them all). */
@@ -18,23 +19,48 @@ const VISIBLE_LINES = 8;
 type Props = {
   fight: DungeonFightView;
   heroName: string;
-  enemyName: string;
   enemyId: EnemyId;
   paused: boolean;
 };
 
-export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, enemyId, paused }: Props) {
+/** Redraw rate of the display clock while it is catching up to the engine. */
+const DISPLAY_STEP_MS = 50;
+
+/**
+ * The fight as the display clock has it (fightDisplay.ts): a view opened on a fresh fight starts 100 ms behind fight time 0, so the first
+ * hit lands on screen after the screen opens. Not delayed for a fight already well underway or with reduce-motion on.
+ */
+function useDisplayedFight(fight: DungeonFightView, reducedMotion: boolean): DungeonFightView {
+  const open = useRef<{ at: number; engineMs: number; fresh: boolean; last: number } | null>(null);
+  const [, redraw] = useState(0);
+  const now = Date.now();
+  // A new fight replaces the one on screen (engine time went back): its lead-in plays again.
+  if (!open.current || fight.elapsedMs < open.current.last) open.current = { at: now, engineMs: fight.elapsedMs, fresh: isFreshFight(fight.elapsedMs), last: fight.elapsedMs };
+  open.current.last = fight.elapsedMs;
+  const fresh = open.current.fresh && !reducedMotion;
+  const displayMs = displayClockMs(fight.elapsedMs, open.current.engineMs, now - open.current.at, fresh);
+  const behind = isCatchingUp(displayMs, fight.elapsedMs);
+  useEffect(() => {
+    if (!behind) return;
+    const id = setInterval(() => redraw((n) => n + 1), DISPLAY_STEP_MS);
+    return () => clearInterval(id);
+  }, [behind]);
+  return displayedFight(fight, displayMs);
+}
+
+export const LiveFight = memo(function LiveFight({ fight: engineFight, heroName, enemyId, paused }: Props) {
   const reducedMotion = useReducedMotion();
+  const fight = useDisplayedFight(engineFight, reducedMotion);
   const lines = fight.log.slice(-VISIBLE_LINES);
   const hidden = fight.log.length - lines.length;
   const clock = `${strikeTime(fight.elapsedMs)} / ${strikeTime(fight.maxFightMs)}`;
   // A regenerating enemy (a boss): whole HP a second, from its basis points of max HP (display only, the engine heals it).
   const regenPerSec = Math.floor((fight.enemyMaxHp * fight.enemyRegenBp) / 10_000);
-  // A pack (Hard / Extreme, 1.24.0): the mobs as rows, the log naming the mob ("Veteran Troll #3 hits ..."). One mob keeps the two bars.
+  // A pack (Hard / Extreme, 1.24.0): the mobs as rows, the log naming the creature ("Blight Rat #3 hits ..."). One mob keeps the two bars.
   const size = fight.mobs.length;
   const packed = size > 1;
-  const soloName = mobName(enemyName, fight.mobs[0]?.variant ?? 'base');
-  const nameOf = (mob: number | undefined) => mobLabel(enemyName, fight.mobs[mob ?? 0]?.variant ?? 'base', mob ?? 0, size);
+  const soloName = mobName(enemyId, fight.mobs[0]?.variant ?? 'base');
+  const nameOf = (mob: number | undefined) => mobLabel(enemyId, fight.mobs[mob ?? 0]?.variant ?? 'base', mob ?? 0, size);
   const title = packed ? `Fighting a pack: ${packText(size)}` : `Fighting ${soloName}`;
   const down = fight.mobs.filter((m) => !m.alive).length;
   return (
@@ -45,7 +71,7 @@ export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, e
         accessibilityLabel={`${title}${packed ? `, ${down} down` : ''}. ${heroName} HP ${fight.heroHp} of ${fight.heroMaxHp}, ${packed ? 'pack' : soloName} HP ${fight.enemyHp} of ${fight.enemyMaxHp}. ${clock}${paused ? ', paused' : ''}`}
       >
         <View style={styles.who}>
-          <EnemySprite enemyId={enemyId} />
+          <EnemySprite enemyId={enemyId} variant={packed ? 'base' : (fight.mobs[0]?.variant ?? 'base')} />
           <Text style={styles.title}>{title}</Text>
         </View>
         <Text style={styles.clock}>{paused ? `Paused · ${clock}` : clock}</Text>
@@ -54,7 +80,7 @@ export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, e
         <AnimatedHpBar label={heroName} value={fight.heroHp} max={fight.heroMaxHp} color={colors.skill} instant={reducedMotion} />
         {packed ? null : <AnimatedHpBar label={soloName} value={fight.enemyHp} max={fight.enemyMaxHp} color={colors.hp} instant={reducedMotion} />}
       </View>
-      {packed ? <PackRows enemyId={enemyId} enemyName={enemyName} mobs={fight.mobs} instant={reducedMotion} /> : null}
+      {packed ? <PackRows enemyId={enemyId} mobs={fight.mobs} instant={reducedMotion} /> : null}
       {regenPerSec > 0 ? <Text style={styles.note}>{soloName} heals {regenPerSec} HP a second.</Text> : null}
       {fight.heroStunStrikes > 0 ? <StunNotice name={heroName} strikes={fight.heroStunStrikes} /> : null}
       <View style={styles.log}>

@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 import { AccessibilityInfo, Pressable, type StyleProp, StyleSheet, Text, type ViewStyle } from 'react-native';
 import Animated, { FadeInDown, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
-import { BOSSES, DIFFICULTY, type DungeonOrBossId, dungeonOrBossName, type HarderUnlock, isBossId } from '../engine';
+import { BOSSES, DIFFICULTY, DUNGEONS, type DungeonOrBossId, dungeonOrBossName, type HarderUnlock, isBossId } from '../engine';
 import { colors, fonts } from '../theme';
 import { GameIcon } from './art/Sprites';
 
@@ -21,7 +21,9 @@ const AUTO_HIDE_MS = 5000;
 let lastAnnounced: { dungeons: readonly DungeonOrBossId[]; harder: readonly HarderUnlock[] } | null = null;
 
 function harderText(u: HarderUnlock): string {
-  return u.kind === 'difficulty' ? `${DIFFICULTY[u.difficulty].name} unlocked for Tier ${u.tier}` : `${BOSSES[u.bossId].name} unlocked on ${DIFFICULTY[u.difficulty].name}`;
+  if (u.kind === 'difficulty') return `${DIFFICULTY[u.difficulty].name} unlocked for Tier ${u.tier}`;
+  if (u.kind === 'stage') return `${DIFFICULTY[u.difficulty].name} ${DUNGEONS[u.dungeonId].name} unlocked`;
+  return `${BOSSES[u.bossId].name} unlocked on ${DIFFICULTY[u.difficulty].name}`;
 }
 
 function texts(ids: readonly DungeonOrBossId[], harder: readonly HarderUnlock[]) {

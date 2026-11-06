@@ -5,8 +5,9 @@
 //              physical part (after the enemy's armor) with the EXPECTED crit  (1 − chance) × hit + chance × crit hit
 //              + the magic part (magic damage after the enemy's magic resist, no roll, no crit); at least COMBAT.minDamage
 //   enemyAvg = mean dealt per enemy strike (after the hero's armor)
-//   heroHits = ceil(enemy HP / heroAvg);  killAt = heroHits × hero attack interval
-//   enemyHits = enemy strikes landing before killAt = ceil(killAt / enemy interval) − 1   (ties go to the hero)
+//   heroHits = ceil(enemy HP / heroAvg);  killAt = the time of the hero's heroHits-th strike = H0 + (heroHits − 1) × hero interval
+//   enemyHits = enemy strikes landing before killAt = ceil((killAt − E0) / enemy interval), at least 0   (ties go to the hero)
+//   (1.25.0: H0 = COMBAT.heroFirstStrikeMs = 0 and E0 = COMBAT.enemyFirstStrikeMs = 300; before, both were one interval)
 //   expectedHpLoss = enemyHits × enemyAvg   (regen during the fight is ignored: a hint, not a sim)
 //   percent  = expectedHpLoss / max HP
 //   Easy < toughAtPercent ≤ Tough < deadlyAtPercent ≤ Deadly; killAt > COMBAT.maxFightMs is always Deadly.
@@ -14,8 +15,9 @@
 // Packs (1.24.0, Hard / Extreme): the same estimate for the AVERAGE pack. Every mob has the stats of the average multiplier
 // (base × (1 − p) + upgrade × p, in bp), the pack size is each whole size of the uniform range in turn (the mean of the results is the
 // expectation), and the hero kills the mobs front to back while every alive mob keeps striking on its own timer:
-//   mob j (0-based) dies at (j + 1) × heroHits × hero interval;  it lands ceil(that / its interval) − 1 strikes before (ties go to the hero)
-//   loss(k) = enemyAvg × the sum of those over the k mobs;  fightMs(k) = k × heroHits × hero interval
+//   mob j (0-based) dies at H0 + ((j + 1) × heroHits − 1) × hero interval;  it lands ceil((that − E0) / its interval) strikes before, at
+//   least 0 (ties go to the hero)
+//   loss(k) = enemyAvg × the sum of those over the k mobs;  fightMs(k) = H0 + (k × heroHits − 1) × hero interval
 //   expected loss and fight time = the mean over k = min..max;  Deadly also when the expected fight time passes the limit (60 s).
 // Normal is the pack of one at x1, which is exactly the formula above.
 import { DIFFICULTY } from './config/difficulty';
@@ -23,7 +25,7 @@ import { BOSSES, COMBAT, DANGER, DUNGEONS, ENEMIES } from './config/dungeons';
 import { scaledEnemy } from './difficulty';
 import { COMBAT_SKILLS } from './config/skills';
 import { BASIS_POINTS } from './config/stats';
-import { critDamage, dealtDamage, reducedDamage } from './combat';
+import { critDamage, dealtDamage, reducedDamage, strikeTimeMs } from './combat';
 import { getDerivedStats, type StatsInput } from './stats';
 import type { BossId, Difficulty, DungeonId } from './types';
 
@@ -111,10 +113,13 @@ export function dangerHint(state: StatsInput, dungeonId: DungeonId, difficulty: 
   const heroHits = Math.ceil(enemy.hp / heroAvg);
   const heroInterval = Math.max(1, stats.attackIntervalMs.value);
   const enemyInterval = Math.max(1, enemy.attackIntervalMs);
-  // Enemy strikes landing while the hero works through k mobs front to back (every alive mob strikes on its own timer).
+  // When the hero's n-th strike lands (the opening offsets are COMBAT's: the hint is for a fight that starts now).
+  const heroStrikeAt = (n: number) => strikeTimeMs(COMBAT.heroFirstStrikeMs, heroInterval, n);
+  // Enemy strikes landing while the hero works through k mobs front to back (every alive mob strikes on its own timer until it dies;
+  // a strike due at the very instant it dies does not land, the hero goes first).
   const strikesFor = (k: number) => {
     let n = 0;
-    for (let j = 0; j < k; j++) n += Math.max(0, Math.ceil(((j + 1) * heroHits * heroInterval) / enemyInterval) - 1);
+    for (let j = 0; j < k; j++) n += Math.max(0, Math.ceil((heroStrikeAt((j + 1) * heroHits) - COMBAT.enemyFirstStrikeMs) / enemyInterval));
     return n;
   };
   let hitsSum = 0;
@@ -122,7 +127,7 @@ export function dangerHint(state: StatsInput, dungeonId: DungeonId, difficulty: 
   let sizes = 0;
   for (let k = packMin; k <= packMax; k++) {
     hitsSum += strikesFor(k);
-    fightSum += k * heroHits * heroInterval;
+    fightSum += heroStrikeAt(k * heroHits);
     sizes += 1;
   }
   const enemyHits = hitsSum / sizes;
@@ -161,7 +166,9 @@ export function dangerHint(state: StatsInput, dungeonId: DungeonId, difficulty: 
  *   Heavy Bash  one enemy strike in `cooldownStrikes` is the skill (roll × multiplier, then armor); each cast stuns with its chance for
  *             `strikes` hero strikes, which removes that many hero strikes (rate: chance × strikes per cooldown window)
  *   limit     the boss's time limit (BossDef enemy maxFightMs): killing it takes longer than that = Deadly
- *   fightMs   boss HP ÷ net rate; expectedHpLoss = enemy damage per second × fightMs; percent of max HP; same Tough/Deadly thresholds as stages.
+ *   fightMs   boss HP ÷ net rate, less the hero's head start (1.25.0: his first strike lands at COMBAT.heroFirstStrikeMs, not one interval in);
+ *             expectedHpLoss = enemy damage per second × the time the boss is striking (fightMs − its first strike + one interval, at least 0);
+ *             percent of max HP; same Tough/Deadly thresholds as stages.
  * The hero's own regen and potions are ignored (a hint).
  */
 export type BossDangerHint = {
@@ -217,7 +224,10 @@ export function bossDangerHint(state: StatsInput, bossId: BossId, difficulty: Di
   const regenExact = (enemy.hp * (enemy.regenBpPerSec ?? 0)) / BASIS_POINTS;
   const netDps = heroDps - regenExact;
   const canKill = netDps > 0;
-  const fightMs = canKill ? Math.ceil((enemy.hp / netDps) * 1000) : Infinity;
+  // The rate model assumes strikes at n × interval; the opening offsets move the hero earlier by (interval − first strike) and start the boss's strikes at its
+  // own first strike instead of one interval in.
+  const heroHeadStartMs = Math.max(0, heroInterval - COMBAT.heroFirstStrikeMs);
+  const fightMs = canKill ? Math.max(0, Math.ceil((enemy.hp / netDps) * 1000) - heroHeadStartMs) : Infinity;
 
   const enemyAvg = averageDealt(enemy.damage, stats.armor.value);
   const bashRange = { min: Math.floor(enemy.damage.min), max: Math.floor(enemy.damage.max) };
@@ -228,7 +238,8 @@ export function bossDangerHint(state: StatsInput, bossId: BossId, difficulty: Di
   const enemyDps = (perWindow * 1000) / enemyInterval;
 
   const lossMs = Number.isFinite(fightMs) ? fightMs : limitMs;
-  const expectedHpLoss = Math.round((enemyDps * Math.min(lossMs, limitMs)) / 1000);
+  const enemyActiveMs = Math.max(0, Math.min(lossMs, limitMs) - COMBAT.enemyFirstStrikeMs + enemyInterval);
+  const expectedHpLoss = Math.round((enemyDps * enemyActiveMs) / 1000);
   const percent = maxHp > 0 ? Math.round((expectedHpLoss * 100) / maxHp) : 100;
   const overLimit = !canKill || fightMs > limitMs;
   let level: DangerLevel = 'easy';

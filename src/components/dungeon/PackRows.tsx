@@ -1,5 +1,5 @@
-// The mobs of a pack fight as compact rows (1.24.0): a small sprite (Veteran / Extreme mobs with their coloured outline), the name with
-// its variant and number, and an HP bar. The mob the hero strikes next is marked (gold frame and a leading ›, never colour alone);
+// The mobs of a pack fight as compact rows (1.24.0): a small sprite (a Hard / Extreme variant is its own creature, 1.25.0), the name
+// of the creature and its number, and an HP bar. The mob the hero strikes next is marked (gold frame and a leading ›, never colour alone);
 // dead mobs are greyed and say "down". Two columns (pack order runs down the left column, then the right), so ten mobs fit a 375x667
 // screen without scrolling the HP area. Display only: the engine decides who is hit and who dies.
 import { memo } from 'react';
@@ -12,7 +12,7 @@ import { mobLabel } from './outcome';
 
 export type PackRowMob = { variant: MobVariant; hp: number; maxHp: number };
 
-/** Art pixels per point in a row: a 32x32 enemy is 24 pt, the 48x48 troll 36 pt (the outline variants are 4 art px larger). */
+/** Art pixels per point in a row: a 32x32 enemy (and every variant creature) is 24 pt, the 48x48 troll 36 pt. */
 const ROW_PIXEL = 0.75;
 const SPRITE_BOX = 40;
 
@@ -39,13 +39,13 @@ const MobRow = memo(function MobRow({ enemyId, label, mob, target, instant }: { 
   );
 });
 
-export const PackRows = memo(function PackRows({ enemyId, enemyName, mobs, instant }: { enemyId: EnemyId; enemyName: string; mobs: readonly PackRowMob[]; instant: boolean }) {
+export const PackRows = memo(function PackRows({ enemyId, mobs, instant }: { enemyId: EnemyId; mobs: readonly PackRowMob[]; instant: boolean }) {
   const target = mobs.findIndex((m) => m.hp > 0);
   const split = Math.ceil(mobs.length / 2);
   const column = (from: number, to: number) => (
     <View style={styles.column}>
       {mobs.slice(from, to).map((m, k) => (
-        <MobRow key={from + k} enemyId={enemyId} label={mobLabel(enemyName, m.variant, from + k, mobs.length)} mob={m} target={from + k === target} instant={instant} />
+        <MobRow key={from + k} enemyId={enemyId} label={mobLabel(enemyId, m.variant, from + k, mobs.length)} mob={m} target={from + k === target} instant={instant} />
       ))}
     </View>
   );

@@ -19,7 +19,7 @@ import {
   VILLAGE_PIECES,
 } from '../src/components/art/images';
 import { LAYOUT, PIECES, SIGNS } from '../src/components/village/villageMap';
-import { ENEMIES, ITEMS, ROCKS, STARTING_HERO, TREES } from '../src/engine';
+import { ENEMIES, ENEMY_VARIANTS, ITEMS, ROCKS, STARTING_HERO, TREES } from '../src/engine';
 
 const ROOT = join(__dirname, '..');
 const IMAGES = join(ROOT, 'assets', 'images');
@@ -43,7 +43,6 @@ const sorted = (a: Iterable<string>) => [...a].sort();
 
 /** Placeholder art (1.20.0): ids that show another id's generated image until real art is approved (docs/TECH_DEBT.md). */
 const ITEM_PLACEHOLDERS: Record<string, string> = { chieftains_tusk: 'items/troll_hide.png' };
-const ENEMY_PLACEHOLDERS: Record<string, string> = { troll_chieftain: 'enemies/variants/stone_troll.png' };
 
 describe('art registry', () => {
   it('every catalog item has its own image (items/<itemId>.png), no extra entries', () => {
@@ -65,26 +64,47 @@ describe('art registry', () => {
     expect(sorted(Object.keys(ENEMY_SPRITES))).toEqual(sorted(Object.keys(ENEMIES)));
     for (const [id, s] of Object.entries(ENEMY_SPRITES)) {
       const m = manifest[rel(s.source)];
-      expect(rel(s.source)).toBe(ENEMY_PLACEHOLDERS[id] ?? `enemies/${id}.png`);
+      expect(rel(s.source)).toBe(`enemies/${id}.png`); // the boss included: the Troll Chieftain has its own sprite (1.25.0)
       expect({ w: s.w, h: s.h }).toEqual({ w: m.w, h: m.h });
       expect(pngSize(s.source as unknown as string)).toEqual({ w: m.w * m.scale, h: m.h * m.scale });
     }
     expect(ENEMY_SPRITES.troll.w / ENEMY_SPRITES.rat.w).toBe(1.5);
   });
 
-  it('every pack enemy has a Veteran and an Extreme outline sprite, 4 art px larger than its base at the same scale (the boss has none)', () => {
-    expect(sorted(Object.keys(ENEMY_VARIANT_SPRITES))).toEqual(sorted(Object.keys(ENEMIES).filter((id) => id !== 'troll_chieftain')));
-    for (const [id, v] of Object.entries(ENEMY_VARIANT_SPRITES)) {
+  it('every (enemy, variant) pair has its own creature sprite, the size of its base at the same pixel scale; the boss has none and its own sprite', () => {
+    const packEnemies = Object.keys(ENEMIES).filter((id) => id !== 'troll_chieftain');
+    expect(sorted(Object.keys(ENEMY_VARIANT_SPRITES))).toEqual(sorted(packEnemies));
+    expect(sorted(Object.keys(ENEMY_VARIANTS))).toEqual(sorted(packEnemies));
+    for (const id of packEnemies) {
       const base = ENEMY_SPRITES[id as keyof typeof ENEMY_SPRITES];
       for (const kind of ['veteran', 'extreme'] as const) {
-        const s = v![kind];
-        expect(rel(s.source)).toBe(`enemies/${id}_${kind}.png`);
-        const m = manifest[`enemies/${id}_${kind}.png`];
+        const creature = ENEMY_VARIANTS[id as keyof typeof ENEMY_VARIANTS]![kind];
+        const s = ENEMY_VARIANT_SPRITES[id as keyof typeof ENEMY_VARIANT_SPRITES]![kind];
+        const file = `enemies/variants/${creature.id}.png`;
+        expect(rel(s.source), `${id} ${kind}`).toBe(file);
+        const m = manifest[file];
         expect(m.scale).toBe(8);
         expect({ w: s.w, h: s.h }).toEqual({ w: m.w, h: m.h });
-        expect({ w: s.w, h: s.h }).toEqual({ w: base.w + 4, h: base.h + 4 });
+        expect({ w: s.w, h: s.h }, `${id} ${kind} is the base's size`).toEqual({ w: base.w, h: base.h });
         expect(pngSize(s.source as unknown as string)).toEqual({ w: m.w * m.scale, h: m.h * m.scale });
       }
+    }
+    // The boss: not a pack mob, no variant, its own sprite (not a variant creature's).
+    expect(ENEMY_VARIANT_SPRITES).not.toHaveProperty('troll_chieftain');
+    expect(rel(ENEMY_SPRITES.troll_chieftain.source)).toBe('enemies/troll_chieftain.png');
+    expect(manifest['enemies/troll_chieftain.png']).toMatchObject({ w: 48, h: 48, scale: 8 });
+  });
+
+  it('no two enemy or variant sprites are the same picture (a recolour-by-copy or a placeholder would be caught here)', () => {
+    const files = Object.keys(manifest).filter((k) => k.startsWith('enemies/') && k.endsWith('.png'));
+    // 6 enemies (5 + the boss) and 10 variant creatures; nothing else, in particular none of the old outline files
+    expect(files.length).toBe(Object.keys(ENEMIES).length + 2 * (Object.keys(ENEMIES).length - 1));
+    expect(files.filter((f) => /_(veteran|extreme)\.png$/.test(f))).toEqual([]);
+    const seen = new Map<string, string>();
+    for (const f of files) {
+      const bytes = readFileSync(join(IMAGES, f)).toString('base64');
+      expect(seen.get(bytes), `${f} equals ${seen.get(bytes)}`).toBeUndefined();
+      seen.set(bytes, f);
     }
   });
 
