@@ -27,10 +27,10 @@ const SKILL_LABELS: Record<SkillKey, string> = {
 
 // Paper-doll layouts (1.21.0): 3 columns, null = empty cell. Combat is the paper doll, Tools the gathering tools.
 const COMBAT_GRID: (EquipmentSlot | null)[][] = [
-  ['ring1', 'helmet', 'amulet'],
+  [null, 'helmet', 'amulet'],
   ['weapon', 'armor', 'shield'],
-  ['gloves', 'legs', 'ring2'],
-  [null, 'boots', null],
+  ['ring1', 'legs', 'ring2'],
+  ['gloves', 'boots', null],
 ];
 const TOOLS_GRID: (EquipmentSlot | null)[][] = [['axe', 'pickaxe']];
 type EquipmentTab = 'combat' | 'tools';
