@@ -49,6 +49,10 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #39, 40] `src/components/ui/popoverLayout.ts` placePopover — the unmeasured fallback (150 ms timeout, h null) placed above uses boxH 0, so the box can cover the anchor or run off the bottom. Fix: when h is null use boxH = maxHeight (or force below) and add a test.
 - [PR #40, 30] `src/components/ui/useSlotHitTest.ts` — a layout shift without a registration change (text wrap, a row appearing on level-up, a tile growing) leaves stale cached rects; a backdrop tap could switch to a neighbouring item. Fix: re-measure on content layout changes, or cap the cache age.
 - [PR #40, 20] `src/app/(tabs)/hero.tsx` / `src/components/merchant/MerchantModal.tsx` — the hit-test cache is nulled only when `openToken` becomes null, not when it changes, so it can be stale for a few ms after the next open. Fix: null the cache on token change.
+- [PR #41, 45] `src/components/dungeon/DungeonModal.tsx` — the stage detail computes the per-mob rewards itself (`scaleStat` / `mobTypes` on `d.rewards`), so it can drift from what the engine pays. Fix: an engine selector `mobRewardsAt(dungeonId, difficulty)` built from the reward code, like `bossRewardsAt`.
+- [PR #41, 40] `src/components/dungeon/DifficultySelector.tsx` — the container is a `radiogroup` but the skulls are `button`s with `selected`: mixed screen-reader semantics. Fix: drop the radiogroup role, or unlocked skulls `radio` + `checked`.
+- [PR #41, 35] `src/components/dungeon/LiveFight.tsx` / `PackRows.tsx` — `fight.mobs` gets a new identity every view rebuild, so the memoised `MobRow`s (10 animated bars on Extreme) re-render every tick. Fix: a field comparator on `MobRow` (hp, maxHp, variant) or stable mob identities in the view.
+- [PR #41, 30] `src/components/dungeon/FightReplay.tsx` — leftover `export { AnimatedHpBar }` after it moved to `HpBars.tsx`. Fix: remove the re-export.
 
 ## Engine and data
 
@@ -69,6 +73,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #36, 35] `src/engine/equipment.ts` `clampPools` — runs only on equip / unequip. Fix: any future path that removes equipped gear (destroy, sell) must clamp too.
 - [PR #36, 30] `src/engine/migrations.ts` `v21Slot` — infers the tool slot from the defId suffix when `slot` is missing (corrupt saves only). Fix: read the catalog slot.
 - [PR #36, 25] `src/engine/gear.ts` `perkOf` — no check of the perk kind against the slot (save tampering only). Fix: validate on load once a server exists.
+- [PR #41, 20] `src/engine/migrations.ts` `migrateV21toV22` — hardcodes `{ '1': 'normal' }` while `newGame` builds it from `DUNGEON_TIERS`; a future tier relies on the Normal fallback. Fix: fine for a frozen migration; keep the fallback tested when Tier 2 lands.
 
 ## Tests
 
@@ -92,6 +97,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #39, 30] `tests/popoverLayout.test.ts` — the "new anchor never reuses the old height" test duplicates the measuredFor test; hook ordering is verified on device only. Fix: drop or annotate.
 - [PR #40, 40] `tests/slotHitTest.test.ts` — only the pure helpers are tested. Extract the tap decision (hit vs same item vs miss) into a pure function and test it; add a partly clipped slot case.
 - [PR #40, 40] tests — the `useSlotHitTest` cache (invalidation, generation drop, null fallback, open gating, close) and `InfoPopover`'s close / open branches are untested. Fix: extract the cache behind an injectable measure and test it with fake timers.
+- [PR #41, 15] `tests/replayDebugDisabled.test.ts` — does not list `DEBUG_ADD_BOSS_WINS` (covered in `tests/difficulty.test.ts`). Fix: add it for consistency.
 
 ## Docs and workflow
 
