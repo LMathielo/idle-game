@@ -22,6 +22,7 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
 
 ### Engine 1.23.0 · save v21 (unchanged)
+- **InfoPopover never invisible** (`fix/popover-invisible`; owner bug 2026-11-06; UI only, engine and save unchanged): the box was hidden (opacity 0) until onLayout, and a passive effect reset the height after commit, so a layout event delivered first (or an unchanged layout that never re-fires) left it hidden under a live full-screen backdrop. The measured height is now tagged with the presentation (anchor + visible) it belongs to (no reset effect), the box remounts per presentation, and a 150 ms safety timeout shows it anyway. Pure helpers in `ui/popoverLayout.ts`, tests `tests/popoverLayout.test.ts`.
 - **Crafting debug buttons** (`feat/crafting-debug`; owner-approved 2026-11-06; dev tools only):
   - **Force craft (debug)** in the recipe popover (under Craft): starts the craft with no materials needed or taken. Material pipe: only the first craft is free (then it takes materials or waits as normal); gear: one free piece, rolled like a normal craft, invested stamina still paid. Enabled when materials are short; still greyed for "All pipes busy" and "Not enough stamina". Confirmation line "X started in Pipe N (debug)".
   - **Finish now (debug)** on running material and gear pipes: finishes the current craft free (one craft per tap on a material pipe; gear turns Ready), hold to repeat.

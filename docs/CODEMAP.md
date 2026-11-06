@@ -26,7 +26,7 @@ src/app/              routes: _layout.tsx (fonts, GameProvider, root Stack: tabs
 src/components/       UI building blocks (PixelButton, Panel/Bar, LiveBar, VillageScene (pan + pinch map), ActivityStrip, AwayModal, UnlockBanner, ModalScreen, DebugPanel, StatusPanel (incl. spending level-up points))
 src/components/art/   the art registry (images.ts: require() maps by game id, unknown item → icons/unknown) and the image components (Sprites.tsx)
 src/components/hud/   HeroHud (top-left hero HUD on the Village tab only: portrait, level, HP / mana / stamina / XP bars, "+N" points badge; the Hero tab has no HUD and shows the level in its Header panel), hudLayout.ts (its fixed size; the Village map's top reserve)
-src/components/ui/    UI kit: GameDialog (provider + hosts + useDialog), InfoPopover (+ rows, actions, measureAnchor), useHoldRepeat, useCommand, insets
+src/components/ui/    UI kit: GameDialog (provider + hosts + useDialog), InfoPopover (+ rows, actions, measureAnchor; pure placement/measurement helpers in popoverLayout.ts), useHoldRepeat, useCommand, insets
 src/components/village/ villageMap.ts: world size, start framing (CORE), building pieces + sign anchors (from village_layout.json), empty plots, camera limits / clamp (pure, tested)
 src/components/dungeon/  Dungeon modal (the list by tier: stages then the boss row; in-modal detail for a stage and for a boss), LiveFight (the fight in progress, boss regen note and stun notice), FightReplay (+ LogLine, StunNotice), outcome (labels, per-fight time limit), run-cancel / flee confirmation (confirmCancelRun, confirmLeaveRun)
 src/components/training/ Training modal (tier panel + one row per attribute, stamina speed-up on the active row)

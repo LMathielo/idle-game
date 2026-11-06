@@ -14,7 +14,6 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#19, 40] `ui/InfoPopover.tsx` + `ui/GameDialog.tsx` — a popover's Modal is hidden and a dialog's shown in the same commit; iOS may drop the second one (promise never resolves). Check on device; if it fails, show the dialog after the popover's `onDismiss`.
 - [#19, 35] `ui/useHoldRepeat.ts` — the second tap of a fast double-tap is dropped silently by the `useCommand` in-flight guard. Decide: accept as designed or queue it.
 - [#19, 30] `ui/GameDialog.tsx` `close` — resolves the promise inside the `setQueue` updater (impure; StrictMode double-invokes). Resolve outside, then set state.
-- [#19, 25] `ui/InfoPopover.tsx` — when the anchor changes, the box shows one frame with the old height. Key the state by anchor or reset during render.
 - [#19, <80] `PixelButton.tsx` `repeat` — an action returning `void` counts as success, so it would repeat forever. Require a `boolean` return.
 - [#19, <80] `buildings/UpgradeSheet.tsx`, `BuildSheet.tsx` — hand-rolled in-flight guards duplicate `useCommand`. Switch to it.
 - [#6, 45] `dungeon/FightReplay.tsx:58,73` — on Android the result may be read twice (announcement + live region). Keep one mechanism.
