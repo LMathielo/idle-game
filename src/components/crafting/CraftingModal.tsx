@@ -19,6 +19,7 @@ import {
   freeSlots,
   type GameState,
   gearQualityFloor,
+  type GearRarityDetail,
   type GearStats,
   type PipeView,
   type RecipeView,
@@ -27,7 +28,7 @@ import { colors, fonts, rarityColors } from '../../theme';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
 import { IconText, ItemIcon } from '../art/Sprites';
 import { formatClock, formatNumber, formatPercentBp, itemName } from '../format';
-import { RARITY_COLOR_NAMES } from '../items/itemInfo';
+import { PERK_NAMES, RARITY_COLOR_NAMES } from '../items/itemInfo';
 import { RevealSheet } from '../items/RevealSheet';
 import { LiveBar } from '../LiveBar';
 import { closeVillageModal, ModalScreen } from '../ModalScreen';
@@ -526,6 +527,55 @@ function statText(st: GearStats): string {
   return out.join(', ');
 }
 
+/** "×1.25" / "×1" for a main-stat multiplier given in percent. */
+const multiplierText = (pct: number) => `×${Number((pct / 100).toFixed(2))}`;
+
+/** "max damage, max armor, HP regen or mana regen" / "max woodcutting strength". */
+const perkKindsText = (kinds: GearRarityDetail['perk'] & object) => {
+  const names = kinds.kinds.map((k) => PERK_NAMES[k]);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names.join('');
+};
+
+/** The lines of one colour's details; every number comes from the engine (recipeView().gear.rarityDetails). */
+function detailLines(d: GearRarityDetail): string[] {
+  const lines = [
+    `Chance: ${d.chancePct}%`,
+    `Main stat, quality 0 to 100: ${statText(d.atQuality0)} to ${statText(d.atQuality100)} (${multiplierText(d.statPct)})`,
+  ];
+  if (!d.attributes) lines.push('Attribute bonuses: none');
+  else if (d.attributes.count === 1) lines.push(`Attribute bonus: 1 random attribute, +${d.attributes.min} to +${d.attributes.max}`);
+  else lines.push(`Attribute bonuses: ${d.attributes.count} different random attributes, +${d.attributes.min} to +${d.attributes.max} each`);
+  if (d.perk) {
+    lines.push(
+      d.perk.kinds.length > 1
+        ? `Perk: 1 random perk, +${d.perk.min}% to +${d.perk.max}%: ${perkKindsText(d.perk)}`
+        : `Perk: +${d.perk.min}% to +${d.perk.max}% ${perkKindsText(d.perk)}`,
+    );
+  } else lines.push('Perk: none');
+  return lines;
+}
+
+/** The Details body of a gear recipe: a Green | Blue | Purple toggle (default Green) and the chosen colour's lines. */
+function GearDetails({ details }: { details: GearRarityDetail[] }) {
+  const [pick, setPick] = useState(0);
+  const d = details[Math.min(pick, details.length - 1)];
+  if (!d) return null;
+  return (
+    <View style={styles.rarityDetails}>
+      <View style={styles.buttons}>
+        {details.map((o, k) => (
+          <PixelButton key={o.rarity} label={RARITY_COLOR_NAMES[o.rarity]} active={k === pick} onPress={() => setPick(k)} stretch />
+        ))}
+      </View>
+      {detailLines(d).map((line) => (
+        <Text key={line} style={styles.detail}>
+          {line}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 type GearCardProps = {
   recipe: RecipeView;
   /** For the engine's quality floor (gearQualityFloor); keeps its identity until a build. */
@@ -545,6 +595,7 @@ type GearCardProps = {
 const GearCard = memo(function GearCard({ recipe, buildings, selected, stamina, target, onPress, onStart, onBack }: GearCardProps) {
   const g = recipe.gear!;
   const [invest, setInvest] = useState(0);
+  const [showDetails, setShowDetails] = useState(false);
   const enough = recipe.enough;
   const floor = gearQualityFloor({ buildings }, invest);
   const odds = g.rarityOdds.map((o) => `${RARITY_COLOR_NAMES[o.rarity]} ${o.pct}%`).join(' · ');
@@ -573,6 +624,14 @@ const GearCard = memo(function GearCard({ recipe, buildings, selected, stamina, 
           Time {formatCraftTime(recipe.craftMs)} · at 100%: {statText(g.maxStats)}
         </Text>
       </Pressable>
+      <View style={styles.detailsToggle}>
+        <PixelButton
+          label={showDetails ? 'Hide details' : 'Details'}
+          onPress={() => setShowDetails((v) => !v)}
+          accessibilityLabel={`${recipe.name} details, ${showDetails ? 'expanded' : 'collapsed'}`}
+        />
+      </View>
+      {showDetails ? <GearDetails details={g.rarityDetails} /> : null}
       {selected ? (
         <View style={styles.gearDetail}>
           <Text style={styles.detailLabel}>Stamina to invest (+1% min quality each, not refunded)</Text>
@@ -682,6 +741,8 @@ const styles = StyleSheet.create({
   pipeReady: { borderColor: colors.skill },
   ready: { fontFamily: fonts.bodyBold, fontSize: 14, color: rarityColors.uncommon }, // readable green on woodDark (≥ 4.5:1)
   gearDetail: { marginTop: 8, gap: 2 },
+  detailsToggle: { marginTop: 6, alignItems: 'flex-start' },
+  rarityDetails: { marginTop: 6, gap: 2 },
   detailLabel: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink, marginBottom: 4 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepValueBox: { flex: 1, alignItems: 'center' },
