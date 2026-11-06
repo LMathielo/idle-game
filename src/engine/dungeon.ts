@@ -21,7 +21,7 @@ import {
   packDefeated,
   strike,
 } from './combat';
-import { emitNewUnlocks, isDifficultyUnlocked, isStageUnlocked, plainMob, rollPack, scaleStat, setStageTotals, snapshotUnlocks, stageTotalsAt } from './difficulty';
+import { emitNewUnlocks, isDifficultyUnlocked, isStageUnlocked, plainMob, rollPack, scaledUnlockWins, scaleStat, setStageTotals, snapshotUnlocks, stageTotalsAt } from './difficulty';
 import { regenHeroPools } from './hp';
 import { addStackable } from './inventory';
 import { chance, nextInt } from './rng';
@@ -69,8 +69,9 @@ export function dungeonTotals(state: Pick<GameState, 'dungeon'>, dungeonId: Dung
 }
 
 /**
- * True when every condition of the dungeon's unlock rule is met. On Hard / Extreme the stage is open when that difficulty is unlocked AND
- * the stage is open on Normal (there is no separate chain). Permanent: wins never go down.
+ * True when every condition of the dungeon's unlock rule is met. Each difficulty has its own chain: the first stage opens with the
+ * difficulty, the next ones with the Normal win count x the difficulty's unlockScale in the previous stage on that difficulty.
+ * Permanent: wins never go down.
  */
 export function isDungeonUnlocked(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId, difficulty: Difficulty = 'normal'): boolean {
   return isStageUnlocked(state, dungeonId, difficulty);
@@ -86,13 +87,14 @@ export type DungeonUnlockView = {
   difficultyLocked: boolean;
 };
 
-/** Read-only, for the UI: is it open on the difficulty, what opens it, how far along (the requirement is always the Normal one). */
+/** Read-only, for the UI: is it open on the difficulty, what opens it, how far along (wins in the previous stage on the same difficulty). */
 export function dungeonUnlockView(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId, difficulty: Difficulty = 'normal'): DungeonUnlockView {
   const rule = DUNGEONS[dungeonId].unlock;
   const difficultyLocked = !isDifficultyUnlocked(state, DUNGEONS[dungeonId].tier, difficulty);
   if (!rule) return { unlocked: !difficultyLocked, requirement: null, progress: 0, difficultyLocked };
-  const wins = stageTotalsAt(state, rule.dungeonId, 'normal').wins;
-  return { unlocked: !difficultyLocked && wins >= rule.wins, requirement: { dungeonId: rule.dungeonId, wins: rule.wins }, progress: Math.min(wins, rule.wins), difficultyLocked };
+  const wins = stageTotalsAt(state, rule.dungeonId, difficulty).wins;
+  const need = scaledUnlockWins(rule.wins, difficulty);
+  return { unlocked: !difficultyLocked && wins >= need, requirement: { dungeonId: rule.dungeonId, wins: need }, progress: Math.min(wins, need), difficultyLocked };
 }
 
 /**

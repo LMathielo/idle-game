@@ -342,7 +342,9 @@ describe('live = offline = any time split, with the opening', () => {
   /** [label, state at the run's start, the instant the search ends] for a Normal stage, a Hard pack and a boss. */
   const cases: [string, GameState, number][] = (() => {
     const normal = startRun(openGame(25, 101), 'forgotten_crypt', 'normal');
-    const hard = startRun(openGame(25, 102), 'wolf_den', 'hard');
+    const hardGame = openGame(25, 102);
+    hardGame.dungeon.harder.hard.byDungeon.bat_cave = tb(30); // Hard has its own chain: 15 Normal x 2
+    const hard = startRun(hardGame, 'wolf_den', 'hard');
     return [
       ['Normal stage', normal, T0 + searchMsFor('forgotten_crypt', normal)],
       ['Hard pack', hard, T0 + searchMsFor('wolf_den', hard)],

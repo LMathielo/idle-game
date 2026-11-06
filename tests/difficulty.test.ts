@@ -11,6 +11,7 @@ import {
   BOSSES,
   bossEnemyAt,
   COMBAT,
+  bossUnlockWins,
   type Difficulty,
   DIFFICULTIES,
   DIFFICULTY,
@@ -83,13 +84,18 @@ function atFightStart(s: GameState, id: keyof typeof DUNGEONS, difficulty: Diffi
 describe('difficulty data (config/difficulty.ts)', () => {
   it('the three difficulties, the owner-approved numbers (2026-11-06)', () => {
     expect(DIFFICULTIES).toEqual(['normal', 'hard', 'extreme']);
-    expect(DIFFICULTY.normal).toMatchObject({ unlockedBy: null, pack: null, boss: { statBp: 10_000, rewardBp: 10_000, unlockWins: null, rarityWeights: null } });
+    expect(DIFFICULTY.normal).toMatchObject({ unlockedBy: null, pack: null, unlockScale: 1, boss: { statBp: 10_000, rewardBp: 10_000, rarityWeights: null } });
     expect(DIFFICULTY.hard.pack).toEqual({ size: { min: 1, max: 4 }, base: { variant: 'base', bp: 20_000 }, upgrade: { variant: 'veteran', bp: 30_000, chanceBp: 2500 } });
     expect(DIFFICULTY.extreme.pack).toEqual({ size: { min: 7, max: 10 }, base: { variant: 'veteran', bp: 120_000 }, upgrade: { variant: 'extreme', bp: 160_000, chanceBp: 2500 } });
     expect(DIFFICULTY.hard.unlockedBy).toBe('normal');
     expect(DIFFICULTY.extreme.unlockedBy).toBe('hard');
-    expect(DIFFICULTY.hard.boss).toMatchObject({ statBp: 20_000, rewardBp: 20_000, unlockWins: 100 });
-    expect(DIFFICULTY.extreme.boss).toMatchObject({ statBp: 80_000, rewardBp: 80_000, unlockWins: 400 });
+    expect(DIFFICULTY.hard.boss).toMatchObject({ statBp: 20_000, rewardBp: 20_000 });
+    expect(DIFFICULTY.hard.unlockScale).toBe(2);
+    expect(bossUnlockWins('troll_chieftain', 'hard')).toBe(100); // 50 x 2, from the one scale
+    expect(DIFFICULTY.extreme.boss).toMatchObject({ statBp: 80_000, rewardBp: 80_000 });
+    expect(DIFFICULTY.extreme.unlockScale).toBe(8);
+    expect(bossUnlockWins('troll_chieftain', 'extreme')).toBe(400); // 50 x 8
+    expect(bossUnlockWins('troll_chieftain', 'normal')).toBe(50);
     expect(DIFFICULTY.hard.boss.rarityWeights).toEqual([{ value: 'rare', weight: 75 }, { value: 'epic', weight: 25 }]); // blue 75 / purple 25
     expect(DIFFICULTY.extreme.boss.rarityWeights).toEqual([{ value: 'rare', weight: 25 }, { value: 'epic', weight: 75 }]); // blue 25 / purple 75
     // Normal keeps the boss's own table (green 75 / blue 25) and its 50 Troll Bridge wins.
@@ -281,33 +287,107 @@ describe('unlocking Hard and Extreme', () => {
 });
 
 describe('stages inside Hard / Extreme', () => {
-  it('open when the difficulty is unlocked AND the stage is open on Normal; no separate chain', () => {
-    // Hard is open, but only Rat Cellar and Bat Cave are open on Normal.
-    const s = structuredClone(heroGame('hard'));
-    s.dungeon.byDungeon = { rat_cellar: tb(10), bat_cave: tb(14) };
-    s.dungeon.totals = { runs: 24, wins: 24, losses: 0 };
-    expect(['rat_cellar', 'bat_cave', 'wolf_den', 'forgotten_crypt', 'troll_bridge'].map((id) => isDungeonUnlocked(s, id as never, 'hard'))).toEqual([true, true, false, false, false]);
-    // Hard wins do not open anything on Hard: the Hard chain does not exist.
-    s.dungeon.harder.hard.byDungeon = { bat_cave: tb(99), wolf_den: tb(99) };
-    expect(isDungeonUnlocked(s, 'wolf_den', 'hard')).toBe(false);
-    // Normal wins open the stage on Normal and on Hard at once.
-    s.dungeon.byDungeon = { rat_cellar: tb(10), bat_cave: tb(15) };
-    expect(isDungeonUnlocked(s, 'wolf_den', 'normal')).toBe(true);
-    expect(isDungeonUnlocked(s, 'wolf_den', 'hard')).toBe(true);
-    // A locked difficulty opens nothing, even for a stage open on Normal.
-    expect(isDungeonUnlocked(heroGame('normal'), 'rat_cellar', 'hard')).toBe(false);
-    expect(isDungeonUnlocked(heroGame('hard'), 'rat_cellar', 'extreme')).toBe(false);
-    expect(isDungeonUnlocked(heroGame('extreme'), 'troll_bridge', 'extreme')).toBe(true);
+  const IDS = ['rat_cellar', 'bat_cave', 'wolf_den', 'forgotten_crypt', 'troll_bridge'] as const;
+  const open = (s: GameState, d: Difficulty) => IDS.map((id) => isDungeonUnlocked(s, id, d));
+  /** The previous stage's wins on a harder difficulty. */
+  const setWins = (s: GameState, d: 'hard' | 'extreme', wins: Partial<Record<(typeof IDS)[number], number>>) => {
+    const c = structuredClone(s);
+    c.dungeon.harder[d].byDungeon = Object.fromEntries(Object.entries(wins).map(([id, w]) => [id, tb(w)]));
+    return c;
+  };
+
+  it('each difficulty has its own chain: the first stage opens with the difficulty, nothing else does (Normal wins never count)', () => {
+    // Normal is fully open (CHAIN), yet on Hard only Rat Cellar is.
+    expect(open(heroGame('hard'), 'hard')).toEqual([true, false, false, false, false]);
+    expect(open(heroGame('extreme'), 'extreme')).toEqual([true, false, false, false, false]);
+    expect(open(heroGame('hard'), 'normal')).toEqual([true, true, true, true, true]);
+    // A locked difficulty opens nothing, not even its first stage.
+    expect(open(heroGame('normal'), 'hard')).toEqual([false, false, false, false, false]);
+    expect(open(heroGame('hard'), 'extreme')).toEqual([false, false, false, false, false]);
   });
 
-  it('START_ACTIVITY on a stage that is closed on Normal fails DUNGEON_LOCKED on Hard too; the unlock view says why', () => {
-    const s = structuredClone(heroGame('hard'));
-    s.dungeon.byDungeon = { rat_cellar: tb(10) };
-    s.dungeon.totals = { runs: 10, wins: 10, losses: 0 };
-    expect(errorOf(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den', difficulty: 'hard' }).code).toBe('DUNGEON_LOCKED');
-    expect(dungeonUnlockView(s, 'wolf_den', 'hard')).toEqual({ unlocked: false, requirement: { dungeonId: 'bat_cave', wins: 15 }, progress: 0, difficultyLocked: false });
+  it('Hard thresholds are the Normal count x2: 20 / 30 / 50 / 80, one below stays locked, the line opens', () => {
+    const base = heroGame('hard');
+    const needs = [['rat_cellar', 20], ['bat_cave', 30], ['wolf_den', 50], ['forgotten_crypt', 80]] as const;
+    needs.forEach(([prev, need], i) => {
+      const next = IDS[i + 1];
+      expect(isDungeonUnlocked(setWins(base, 'hard', { [prev]: need - 1 }), next, 'hard')).toBe(false);
+      expect(isDungeonUnlocked(setWins(base, 'hard', { [prev]: need }), next, 'hard')).toBe(true);
+    });
+    // Only the previous stage counts, and only wins (losses do not).
+    expect(isDungeonUnlocked(setWins(base, 'hard', { rat_cellar: 19, wolf_den: 99 }), 'bat_cave', 'hard')).toBe(false);
+    const lossy = setWins(base, 'hard', {});
+    lossy.dungeon.harder.hard.byDungeon.rat_cellar = { runs: 40, wins: 19, losses: 21 };
+    expect(isDungeonUnlocked(lossy, 'bat_cave', 'hard')).toBe(false);
+  });
+
+  it('Extreme thresholds are x8: 80 / 120 / 200 / 320; Hard wins do not count on Extreme', () => {
+    const base = heroGame('extreme');
+    const needs = [['rat_cellar', 80], ['bat_cave', 120], ['wolf_den', 200], ['forgotten_crypt', 320]] as const;
+    needs.forEach(([prev, need], i) => {
+      const next = IDS[i + 1];
+      expect(isDungeonUnlocked(setWins(base, 'extreme', { [prev]: need - 1 }), next, 'extreme')).toBe(false);
+      expect(isDungeonUnlocked(setWins(base, 'extreme', { [prev]: need }), next, 'extreme')).toBe(true);
+    });
+    const hardOnly = setWins(base, 'hard', { rat_cellar: 500, bat_cave: 500, wolf_den: 500, forgotten_crypt: 500 });
+    expect(open(hardOnly, 'extreme')).toEqual([true, false, false, false, false]);
+    expect(open(hardOnly, 'hard')).toEqual([true, true, true, true, true]);
+    // And Extreme wins do not open Hard stages.
+    expect(open(setWins(base, 'extreme', { rat_cellar: 500, bat_cave: 500 }), 'hard')).toEqual([true, false, false, false, false]);
+  });
+
+  it('the boss keeps its numbers (50 / 100 / 400) and follows the same scale', () => {
+    expect(['normal', 'hard', 'extreme'].map((d) => bossUnlockWins('troll_chieftain', d as Difficulty))).toEqual([50, 100, 400]);
+    // Every stage count is Normal x scale.
+    for (const id of IDS.slice(1)) {
+      const normal = DUNGEONS[id].unlock!.wins;
+      expect(dungeonUnlockView(heroGame('extreme'), id, 'hard').requirement?.wins).toBe(normal * 2);
+      expect(dungeonUnlockView(heroGame('extreme'), id, 'extreme').requirement?.wins).toBe(normal * 8);
+    }
+  });
+
+  it('START_ACTIVITY on a locked Hard stage fails DUNGEON_LOCKED even when it is open on Normal; the unlock view shows its own progress', () => {
+    const s = setWins(heroGame('hard'), 'hard', { rat_cellar: 3 });
+    const err = errorOf(s, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'bat_cave', difficulty: 'hard' });
+    expect(err.code).toBe('DUNGEON_LOCKED');
+    expect(isDungeonUnlocked(s, 'bat_cave', 'normal')).toBe(true);
+    expect(dungeonUnlockView(s, 'bat_cave', 'hard')).toEqual({ unlocked: false, requirement: { dungeonId: 'rat_cellar', wins: 20 }, progress: 3, difficultyLocked: false });
+    expect(dungeonUnlockView(s, 'bat_cave', 'normal')).toMatchObject({ unlocked: true });
     expect(dungeonUnlockView(heroGame('normal'), 'rat_cellar', 'hard')).toEqual({ unlocked: false, requirement: null, progress: 0, difficultyLocked: true });
     expect(dungeonUnlockView(heroGame('hard'), 'rat_cellar', 'hard')).toMatchObject({ unlocked: true, difficultyLocked: false });
+    // The first stage starts at once; the selected tier difficulty (no explicit one) is checked the same way.
+    expect(ok(heroGame('hard'), { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar', difficulty: 'hard' }).activity).toMatchObject({ kind: 'dungeon', difficulty: 'hard' });
+    const sel = ok(s, { type: 'SET_DUNGEON_DIFFICULTY', tier: 1, difficulty: 'hard' });
+    expect(errorOf(sel, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den' }).code).toBe('DUNGEON_LOCKED');
+  });
+
+  it('crossing a Hard stage line emits DUNGEON_UNLOCKED with the difficulty, once; Normal wins emit nothing for Hard', () => {
+    const base = setWins(heroGame('hard'), 'hard', { rat_cellar: 19 });
+    const r = applyCommand(base, cmd({ type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId: 'rat_cellar', amount: 1, difficulty: 'hard' }), T0);
+    if (!r.ok) throw new Error(r.error.message);
+    expect(r.events.filter((e) => e.type === 'DUNGEON_UNLOCKED')).toEqual([{ type: 'DUNGEON_UNLOCKED', dungeonId: 'bat_cave', difficulty: 'hard' }]);
+    const again = applyCommand(r.state, cmd({ type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId: 'rat_cellar', amount: 1, difficulty: 'hard' }), T0);
+    if (!again.ok) throw new Error(again.error.message);
+    expect(again.events.filter((e) => e.type === 'DUNGEON_UNLOCKED')).toEqual([]);
+    // Normal wins: no event for the harder chain.
+    const n = applyCommand(base, cmd({ type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId: 'rat_cellar', amount: 50 }), T0);
+    if (!n.ok) throw new Error(n.error.message);
+    expect(n.events.filter((e) => e.type === 'DUNGEON_UNLOCKED')).toEqual([]);
+  });
+
+  it('a Hard run on a stage the chain now closes (an old save) finishes; new starts are refused', () => {
+    // A save from before the per-difficulty chain: Hard Wolf Den running, no Hard Bat Cave wins.
+    const run = ok(setWins(heroGame('hard'), 'hard', { bat_cave: 30 }), { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den', difficulty: 'hard' });
+    const old = structuredClone(run);
+    old.dungeon.harder.hard.byDungeon = {};
+    expect(isDungeonUnlocked(old, 'wolf_den', 'hard')).toBe(false);
+    const after = simulate(old, T0 + 12 * MIN).state;
+    expect(after.activity).toMatchObject({ kind: 'dungeon', dungeonId: 'wolf_den', difficulty: 'hard' });
+    expect(after.dungeon.harder.hard.byDungeon.wolf_den!.runs).toBeGreaterThan(0); // it kept running
+    // Starting it again (even the same run) and picking it from Normal's idle state are refused.
+    expect(errorOf(after, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den', difficulty: 'hard' }, T0 + 12 * MIN).code).toBe('DUNGEON_LOCKED');
+    const stopped = ok(after, { type: 'STOP_ACTIVITY' }, T0 + 12 * MIN);
+    expect(errorOf(stopped, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den', difficulty: 'hard' }, T0 + 12 * MIN).code).toBe('DUNGEON_LOCKED');
   });
 
   it('counters are kept per difficulty (stages and boss); existing counters are the Normal ones', () => {
@@ -356,6 +436,7 @@ describe('boss unlock inside a difficulty (data, not code): Normal 50, Hard 100,
 
   it('crossing the requirement emits DUNGEON_UNLOCKED for the boss on that difficulty', () => {
     const base = withStageWins(heroGame('hard'), 'hard', 99);
+    base.dungeon.harder.hard.byDungeon.forgotten_crypt = tb(80); // Troll Bridge is open on Hard
     const r = applyCommand(base, cmd({ type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId: 'troll_bridge', amount: 1, difficulty: 'hard' }), T0);
     if (!r.ok) throw new Error(r.error.message);
     expect(r.events).toContainEqual({ type: 'DUNGEON_UNLOCKED', dungeonId: 'troll_chieftain', difficulty: 'hard' });

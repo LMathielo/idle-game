@@ -8,7 +8,7 @@ import { ATTRIBUTE_NAMES, formatAwayDuration, formatNumber, itemName } from './f
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
 import { colors, fonts } from '../theme';
-import { type AttributeKey, BOSSES, BUILDINGS, DIFFICULTY, dungeonOrBossName, type SimulationSummary, type SkillKey, TRAINING, trainingXpTotal } from '../engine';
+import { type AttributeKey, BOSSES, BUILDINGS, DIFFICULTY, DUNGEONS, dungeonOrBossName, type SimulationSummary, type SkillKey, TRAINING, trainingXpTotal } from '../engine';
 
 const SKILL_NAMES: Record<SkillKey, string> = {
   woodcutting: 'Woodcutting',
@@ -105,10 +105,16 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       })}
       {(summary.harderUnlocks ?? []).map((u) => (
         <Line
-          key={`${u.kind}-${u.difficulty}-${u.kind === 'boss' ? u.bossId : u.tier}`}
+          key={`${u.kind}-${u.difficulty}-${u.kind === 'boss' ? u.bossId : u.kind === 'stage' ? u.dungeonId : u.tier}`}
           icon={<GameIcon name="unlocked" />}
           label="Unlocked"
-          value={u.kind === 'difficulty' ? `${DIFFICULTY[u.difficulty].name} for Tier ${u.tier}` : `${BOSSES[u.bossId].name} on ${DIFFICULTY[u.difficulty].name}`}
+          value={
+            u.kind === 'difficulty'
+              ? `${DIFFICULTY[u.difficulty].name} for Tier ${u.tier}`
+              : u.kind === 'stage'
+                ? `${DUNGEONS[u.dungeonId].name} on ${DIFFICULTY[u.difficulty].name}`
+                : `${BOSSES[u.bossId].name} on ${DIFFICULTY[u.difficulty].name}`
+          }
         />
       ))}
       {summary.dungeonsUnlocked.length > 0 ? (

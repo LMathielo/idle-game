@@ -4,10 +4,14 @@
 //   Normal   the original content: one mob per stage run, x1, the boss as is.
 //   Hard     opens with the first win against the tier's boss on Normal.
 //            Stage runs: a pack of 1-4 mobs, each x2 (x3 as a Veteran, 25%).
-//            Boss: x2 stats, x2 XP and gold, better gear rarity, 100 Hard Troll Bridge wins to open it.
+//            Boss: x2 stats, x2 XP and gold, better gear rarity.
 //   Extreme  opens with the first win against the tier's boss on Hard.
 //            Stage runs: a pack of 7-10 mobs, each at least a Veteran (x12), 25% an Extreme (x16, replaces Veteran).
-//            Boss: x8 stats, x8 XP and gold, better gear rarity, 400 Extreme Troll Bridge wins to open it.
+//            Boss: x8 stats, x8 XP and gold, better gear rarity.
+//
+// Unlock chain (owner decision 2026-11-06): every difficulty has its OWN chain. The first stage opens with the difficulty; each next stage
+// (and the boss) opens with wins on the previous stage ON THAT DIFFICULTY: the Normal count (DungeonDef.unlock / BossDef.unlock) x `unlockScale`
+// (Hard x2: 20 / 30 / 50 / 80, boss 100; Extreme x8: 80 / 120 / 200 / 320, boss 400).
 //
 // Every multiplier is in basis points of the Normal enemy (10 000 = x1) and applies to HP, damage min / max, armor and magic resist.
 // Attack interval and the fight time limit are never scaled. ONE rounding rule everywhere: half up, integers only
@@ -40,6 +44,11 @@ export type DifficultyDef = {
    * The difficulty whose boss must be killed once to open this one (null = open from the start). Permanent: boss wins never go down.
    */
   unlockedBy: Difficulty | null;
+  /**
+   * Multiplier of every stage and boss unlock count on this difficulty (whole number; Normal 1). The wins needed are the Normal count
+   * (DungeonDef.unlock.wins / BossDef.unlock.wins) x this, counted in the previous stage on THIS difficulty.
+   */
+  unlockScale: number;
   /** Stage runs: null = one plain mob (exactly the Normal behaviour, no extra RNG draws). */
   pack: PackRule | null;
   boss: {
@@ -47,11 +56,6 @@ export type DifficultyDef = {
     statBp: number;
     /** Hero XP and gold of a boss win, bp of the Normal reward. The gear chance and the Tusk chance are unchanged. */
     rewardBp: number;
-    /**
-     * Wins in the boss's unlock stage dungeon (BossDef.unlock.dungeonId) on THIS difficulty that open the boss on it.
-     * null = use BossDef.unlock.wins (Normal: 50).
-     */
-    unlockWins: number | null;
     /** The gear drop's colour table on this difficulty. null = the boss's own (BossGearDrop.rarityWeights). */
     rarityWeights: readonly RarityWeight[] | null;
   };
@@ -62,13 +66,15 @@ export const DIFFICULTY: Record<Difficulty, DifficultyDef> = {
     id: 'normal',
     name: 'Normal',
     unlockedBy: null,
+    unlockScale: 1,
     pack: null,
-    boss: { statBp: 10_000, rewardBp: 10_000, unlockWins: null, rarityWeights: null },
+    boss: { statBp: 10_000, rewardBp: 10_000, rarityWeights: null },
   },
   hard: {
     id: 'hard',
     name: 'Hard',
     unlockedBy: 'normal',
+    unlockScale: 2,
     pack: {
       size: { min: 1, max: 4 },
       base: { variant: 'base', bp: 20_000 }, // x2
@@ -77,7 +83,6 @@ export const DIFFICULTY: Record<Difficulty, DifficultyDef> = {
     boss: {
       statBp: 20_000,
       rewardBp: 20_000,
-      unlockWins: 100,
       rarityWeights: [
         { value: 'rare', weight: 75 }, // blue
         { value: 'epic', weight: 25 }, // purple
@@ -88,6 +93,7 @@ export const DIFFICULTY: Record<Difficulty, DifficultyDef> = {
     id: 'extreme',
     name: 'Extreme',
     unlockedBy: 'hard',
+    unlockScale: 8,
     pack: {
       size: { min: 7, max: 10 },
       base: { variant: 'veteran', bp: 120_000 }, // x12 (= 8 x 1.5): every mob is at least a Veteran
@@ -96,7 +102,6 @@ export const DIFFICULTY: Record<Difficulty, DifficultyDef> = {
     boss: {
       statBp: 80_000,
       rewardBp: 80_000,
-      unlockWins: 400,
       rarityWeights: [
         { value: 'rare', weight: 25 }, // blue
         { value: 'epic', weight: 75 }, // purple

@@ -677,8 +677,9 @@ export type GameEvent =
   | { type: 'CRAFT_JOB_CANCELLED'; pipe: number; jobId: number }
   | { type: 'PIPE_UNLOCKED'; pipes: number };
 
-/** A harder difficulty opened, or a boss opened on one (1.24.0). */
-export type HarderUnlock = { kind: 'difficulty'; tier: number; difficulty: Difficulty } | { kind: 'boss'; bossId: BossId; difficulty: Difficulty };
+/** A harder difficulty opened, or a stage or boss opened on one (1.24.0). */
+export type HarderUnlock = { kind: 'difficulty'; tier: number; difficulty: Difficulty } | { kind: 'boss'; bossId: BossId; difficulty: Difficulty }
+  | { kind: 'stage'; dungeonId: DungeonId; difficulty: Difficulty };
 
 /** What happened during one simulate() call. Shown in the "While you were away" modal. */
 export type SimulationSummary = {

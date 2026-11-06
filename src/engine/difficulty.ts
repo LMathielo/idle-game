@@ -173,16 +173,24 @@ export function selectedDifficulty(state: { dungeon: Pick<DungeonState, 'difficu
   return isDifficulty(d) ? d : 'normal';
 }
 
-/** True when every condition of the stage's unlock rule is met on `difficulty`: the difficulty is open AND the stage is open on Normal. */
+/** The wins that open a stage or boss on `difficulty`: its Normal count x the difficulty's `unlockScale` (Normal x1, Hard x2, Extreme x8). */
+export function scaledUnlockWins(normalWins: number, difficulty: Difficulty): number {
+  return normalWins * DIFFICULTY[difficulty].unlockScale;
+}
+
+/**
+ * True when the stage is open on `difficulty`: the difficulty is open AND, for every stage after the first, the previous stage (its unlock rule)
+ * has the scaled number of wins ON THAT DIFFICULTY. Each difficulty has its own chain; Normal wins never count toward Hard / Extreme.
+ */
 export function isStageUnlocked(state: { dungeon: Pick<DungeonState, 'byDungeon' | 'bosses' | 'harder'> }, dungeonId: DungeonId, difficulty: Difficulty = 'normal'): boolean {
   if (!isDifficultyUnlocked(state, DUNGEONS[dungeonId].tier, difficulty)) return false;
   const rule = DUNGEONS[dungeonId].unlock;
-  return !rule || stageTotalsAt(state, rule.dungeonId, 'normal').wins >= rule.wins;
+  return !rule || stageTotalsAt(state, rule.dungeonId, difficulty).wins >= scaledUnlockWins(rule.wins, difficulty);
 }
 
-/** Wins in the boss's unlock stage dungeon, on the same difficulty, that open the boss there (Normal: BossDef.unlock.wins). */
+/** Wins in the boss's unlock stage dungeon, on the same difficulty, that open the boss there (Normal 50, Hard 100, Extreme 400). */
 export function bossUnlockWins(bossId: BossId, difficulty: Difficulty): number {
-  return DIFFICULTY[difficulty].boss.unlockWins ?? BOSSES[bossId].unlock.wins;
+  return scaledUnlockWins(BOSSES[bossId].unlock.wins, difficulty);
 }
 
 /** True once the boss is open on `difficulty`: the difficulty is open AND enough wins in its unlock stage on that difficulty. */
@@ -195,10 +203,18 @@ export function isBossUnlockedAt(state: { dungeon: Pick<DungeonState, 'byDungeon
 
 type UnlockState = { dungeon: Pick<DungeonState, 'byDungeon' | 'bosses' | 'harder'> };
 
-/** Every thing that can unlock, in the order its events are emitted: stages (Normal), bosses (per difficulty), harder difficulties. */
+/**
+ * Every thing that can unlock, in the order its events are emitted: stages (per difficulty), bosses (per difficulty), harder difficulties.
+ * A first stage (no rule) on Hard / Extreme opens with the difficulty, whose own event covers it, so it has no key of its own.
+ */
 function unlockKeys(state: UnlockState): string[] {
   const keys: string[] = [];
-  for (const id of DUNGEON_IDS) if (isStageUnlocked(state, id)) keys.push(`stage:${id}`);
+  for (const id of DUNGEON_IDS) {
+    for (const d of DIFFICULTIES) {
+      if (d !== 'normal' && !DUNGEONS[id].unlock) continue;
+      if (isStageUnlocked(state, id, d)) keys.push(d === 'normal' ? `stage:${id}` : `stage:${id}:${d}`);
+    }
+  }
   for (const id of BOSS_IDS) for (const d of DIFFICULTIES) if (isBossUnlockedAt(state, id, d)) keys.push(`boss:${id}:${d}`);
   for (const t of DUNGEON_TIERS) for (const d of DIFFICULTIES) if (d !== 'normal' && isDifficultyUnlocked(state, t.tier, d)) keys.push(`difficulty:${t.tier}:${d}`);
   return keys;
@@ -217,7 +233,10 @@ export function emitNewUnlocks(before: ReadonlySet<string>, state: UnlockState, 
   for (const key of unlockKeys(state)) {
     if (before.has(key)) continue;
     const [kind, a, b] = key.split(':');
-    if (kind === 'stage') {
+    if (kind === 'stage' && b) {
+      events.push({ type: 'DUNGEON_UNLOCKED', dungeonId: a as DungeonId, difficulty: b as Difficulty });
+      summary?.harderUnlocks.push({ kind: 'stage', dungeonId: a as DungeonId, difficulty: b as Difficulty });
+    } else if (kind === 'stage') {
       events.push({ type: 'DUNGEON_UNLOCKED', dungeonId: a as DungeonId });
       summary?.dungeonsUnlocked.push(a as DungeonId);
     } else if (kind === 'boss' && b === 'normal') {

@@ -45,6 +45,7 @@ export {
 } from './combat';
 export {
   bossOfTier,
+  bossUnlockWins,
   checkDifficulty,
   countersOf,
   difficultyLockReason,
@@ -54,6 +55,7 @@ export {
   isDifficultyUnlocked,
   isStageUnlocked,
   isTier,
+  scaledUnlockWins,
   mobName,
   plainMob,
   rollPack,

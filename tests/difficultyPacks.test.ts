@@ -49,6 +49,12 @@ function openGame(level = 25, seed?: number): GameState {
   return s;
 }
 
+/** Wolf Den's Bat Cave wins on a harder difficulty (15 x the unlock scale: Hard 30, Extreme 120): its own chain, Normal wins do not count. */
+function withWolfDenOpen(s: GameState, d: 'hard' | 'extreme'): GameState {
+  s.dungeon.harder[d].byDungeon.bat_cave = tb(d === 'hard' ? 30 : 120);
+  return s;
+}
+
 /** A hero no pack can stop: huge STR and END (kills a mob per strike, soaks anything), full HP. */
 function godGame(seed: number): GameState {
   const s = openGame(30, seed);
@@ -604,7 +610,7 @@ describe('live, offline and any split give the same state', () => {
     ['extreme', 25],
     ['extreme', 6],
   ] as const)('%s at Lv %i: one simulate == many small steps == splits at awkward points (inside the search, inside a pack fight)', (d, level) => {
-    const s = start(openGame(level, 321), 'wolf_den', d);
+    const s = start(withWolfDenOpen(openGame(level, 321), d), 'wolf_den', d);
     const once = simulate(s, T0 + RUN).state;
     const f = once.dungeon.harder[d].byDungeon.wolf_den;
     expect(f && f.runs).toBeGreaterThan(0);
@@ -693,7 +699,7 @@ function fightFingerprint(s: GameState) {
 
 describe('golden pack fights (fixed seed, fixed hero: any change of the pack rules moves these)', () => {
   const play = (s: GameState, id: keyof typeof DUNGEONS, d: Difficulty) => {
-    const run = start(s, id, d);
+    const run = start(d === 'normal' ? s : id === 'wolf_den' ? withWolfDenOpen(s, d) : s, id, d);
     return simulate(run, T0 + searchMsFor(id, run) + 60 * SEC).state;
   };
 

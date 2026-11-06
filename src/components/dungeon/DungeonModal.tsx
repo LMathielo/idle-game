@@ -137,9 +137,10 @@ const HpRow = memo(function HpRow({ hp, maxHp, regenPerMin }: { hp: number; maxH
 
 const DANGER_LABELS: Record<DangerLevel, string> = { easy: 'Easy', tough: 'Tough', deadly: 'Deadly' };
 
-/** "Win 10× in Rat Cellar · 7/10" (a stage on Hard / Extreme opens with the Normal one: "on Normal"). */
+/** Normal: "Win 10× in Rat Cellar · 7/10". Hard / Extreme (own chain, scaled count): "Hard Rat Cellar wins 3/20". */
 function requirementText(req: { dungeonId: DungeonId; wins: number }, progress: number, difficulty: Difficulty = 'normal'): string {
-  return `Win ${req.wins}× in ${DUNGEONS[req.dungeonId].name}${difficulty === 'normal' ? '' : ' on Normal'} · ${formatNumber(progress)}/${formatNumber(req.wins)}`;
+  if (difficulty !== 'normal') return bossRequirementText(req, progress, difficulty); // "Hard Rat Cellar wins 3/20"
+  return `Win ${req.wins}× in ${DUNGEONS[req.dungeonId].name} · ${formatNumber(progress)}/${formatNumber(req.wins)}`;
 }
 
 /** The boss's locked line: "Troll Bridge wins 12/50" (on Hard: "Hard Troll Bridge wins 12/100"). */
