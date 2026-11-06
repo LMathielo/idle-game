@@ -1,11 +1,13 @@
 // Derived combat stats. Computed from the save on demand, never stored (pure, read-only).
 //
-// Plain (TOTAL attribute) points are flat; core (training) points are a capped percent multiplier on the FINAL value, rounded once.
+// Plain (TOTAL attribute) points are flat (the total includes the equipped gear's attribute bonuses, 1.22.0); core (training) points are
+// a capped percent multiplier on the FINAL value, rounded once. Gear PERKS (epic, 1.22.0) come last: each kind's percent (added across
+// the equipped pieces) is one more separate multiplier on the final number, after the core one, rounded once, half up.
 //
-//   damage   = round((round(weapon × (1 + Σ percent)) + 10 base + STR × 1) × (1 + core STR))      (each of min and max)
-//   magic    = round((0 base + INT × 1) × (1 + core INT))
-//   armor    = round((round(Σ armor × (1 + Σ percent)) + 10 base + END × 1) × (1 + core END))
-//   resist   = round((0 base + INT × 1) × (1 + core END))                                          (the same core END factor)
+//   damage   = round(round((round(weapon × (1 + Σ percent)) + 10 base + STR × 1) × (1 + core STR)) × (1 + perk max_damage))   (each of min and max)
+//   magic    = round(round((0 base + INT × 1) × (1 + core INT)) × (1 + perk max_damage))
+//   armor    = round(round((round(Σ armor × (1 + Σ percent)) + 10 base + END × 1) × (1 + core END)) × (1 + perk max_armor))
+//   resist   = round((0 base + INT × 1) × (1 + core END))                                          (the same core END factor; no perk)
 //   critChance bp = diminishing(core DEX);  critMultiplier bp = 15 000 + 100 × total DEX
 //   maxHp    = hp.base   + hp.perLevel   × (level − 1) + 5 × total END
 //   maxMana  = mana.base + mana.perLevel × (level − 1) + 5 × total INT
@@ -22,9 +24,9 @@ import {
   strDamageBonusBp,
   type TrainingLevels,
 } from './attributes';
-import { gearStats } from './gear';
+import { applyPerk, gearPerkTotals, gearStats } from './gear';
 import { BASIS_POINTS, STATS } from './config/stats';
-import type { AttributeKey, Character, EquipmentSlot } from './types';
+import { type AttributeKey, type Character, EQUIPMENT_SLOTS, type EquipmentSlot } from './types';
 
 /** A percent bonus from one source. `bp` is basis points: 1000 = +10%. */
 export type PercentBonus = { source: string; bp: number };
@@ -41,6 +43,7 @@ export type StatSource =
   | 'endurance'
   | 'intelligence'
   | 'core'
+  | 'perk'
   | 'base'
   | 'level'
   | 'gear'
@@ -84,8 +87,8 @@ export type StatsInput = { character: Pick<Character, 'level' | 'attributes' | '
 /** Fixed order so breakdowns are stable. */
 const SLOT_ORDER: readonly EquipmentSlot[] = ['weapon', 'shield', 'helmet', 'armor', 'legs', 'gloves', 'boots', 'amulet', 'ring1', 'ring2'];
 
-/** Every slot, for stats any equipped item may carry (attack interval). Same order as SLOT_ORDER, then the axe. */
-const ALL_SLOTS_ORDER: readonly EquipmentSlot[] = [...SLOT_ORDER, 'axe'];
+/** Every slot, for stats any equipped item may carry (attack interval). Same order as SLOT_ORDER, then the rest of EQUIPMENT_SLOTS (axe, pickaxe). */
+export const ALL_SLOTS_ORDER: readonly EquipmentSlot[] = [...SLOT_ORDER, ...EQUIPMENT_SLOTS.filter((s) => !SLOT_ORDER.includes(s))];
 
 /**
  * Percent bonuses that apply to this hero. None exist yet: future upgrades (buffs, item affixes,
@@ -139,10 +142,17 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
   const strBp = strDamageBonusBp(state);
   const preMin = scaledMin + flatDamage;
   const preMax = scaledMax + flatDamage;
-  const finalMin = applyCore(preMin, strBp);
-  const finalMax = applyCore(preMax, strBp);
-  if (finalMin !== preMin || finalMax !== preMax) {
-    damageParts.push({ source: 'core', attribute: 'strength', min: finalMin - preMin, max: finalMax - preMax });
+  const coreMin = applyCore(preMin, strBp);
+  const coreMax = applyCore(preMax, strBp);
+  if (coreMin !== preMin || coreMax !== preMax) {
+    damageParts.push({ source: 'core', attribute: 'strength', min: coreMin - preMin, max: coreMax - preMax });
+  }
+  // Gear perk "max damage" (1.22.0): one more separate multiplier on the final range, after the core one.
+  const perks = gearPerkTotals(equipment);
+  const finalMin = applyPerk(coreMin, perks.max_damage);
+  const finalMax = applyPerk(coreMax, perks.max_damage);
+  if (finalMin !== coreMin || finalMax !== coreMax) {
+    damageParts.push({ source: 'perk', min: finalMin - coreMin, max: finalMax - coreMax });
   }
 
   // ---- magic damage ----
@@ -150,8 +160,10 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
   const intMagic = attributes.intelligence * STATS.magicDamagePerIntelligence;
   magicParts.push({ source: 'intelligence', value: intMagic });
   const magicPre = STATS.baseMagicDamage + intMagic;
-  const magicFinal = applyCore(magicPre, intMagicDamageBonusBp(state));
-  if (magicFinal !== magicPre) magicParts.push({ source: 'core', attribute: 'intelligence', value: magicFinal - magicPre });
+  const magicCore = applyCore(magicPre, intMagicDamageBonusBp(state));
+  if (magicCore !== magicPre) magicParts.push({ source: 'core', attribute: 'intelligence', value: magicCore - magicPre });
+  const magicFinal = applyPerk(magicCore, perks.max_damage); // the "max damage" perk lifts magic damage too
+  if (magicFinal !== magicCore) magicParts.push({ source: 'perk', value: magicFinal - magicCore });
 
   // ---- armor ----
   const armorParts: ValuePart[] = [];
@@ -174,8 +186,11 @@ export function getDerivedStats(state: StatsInput, bonuses: PercentBonuses = per
   // Core END (1.19.0): one factor for armor AND magic resist, a separate multiplier on each FINAL value.
   const endBp = endArmorBonusBp(state);
   const armorPre = scaledArmor + STATS.baseArmor + endArmor;
-  const armorFinal = applyCore(armorPre, endBp);
-  if (armorFinal !== armorPre) armorParts.push({ source: 'core', attribute: 'endurance', value: armorFinal - armorPre });
+  const armorCore = applyCore(armorPre, endBp);
+  if (armorCore !== armorPre) armorParts.push({ source: 'core', attribute: 'endurance', value: armorCore - armorPre });
+  // Gear perk "max armor" (1.22.0): a final separate multiplier on armor only (not magic resist).
+  const armorFinal = applyPerk(armorCore, perks.max_armor);
+  if (armorFinal !== armorCore) armorParts.push({ source: 'perk', value: armorFinal - armorCore });
 
   // ---- magic resist ----
   const resistParts: ValuePart[] = [{ source: 'base', value: STATS.baseMagicResist }];

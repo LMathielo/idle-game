@@ -1,7 +1,9 @@
 // Current mana and its regen (pure, 1.17.0, owner-approved 2026-11-03). Mirrors current HP (src/engine/hp.ts).
 // Max mana is derived (getDerivedStats: 20 + 5 per level above 1); current mana is stored on the character.
 //
-//   regen per minute = manaRegen.basePerMin + manaRegen.perIntelligence × total INT     (INT 0 → 5/min; 0.2 per INT point since 1.19.0)
+//   regen per minute = (manaRegen.basePerMin + manaRegen.perIntelligence × total INT) × (1 + gear perk mana_regen)     (INT 0 → 5/min; 0.2 per INT point since 1.19.0)
+//
+// The gear perk (epic, 1.22.0) multiplies the whole rate once, in rate units (hundredths per minute), half up.
 //
 // The remainder is banked in character.manaRegenProgress with the same integer banking as HP (hundredths of a point per minute,
 // src/engine/regen.ts), so it is exact across resumes and rate changes. Mana regenerates wherever HP does (regenHeroPools
@@ -9,13 +11,15 @@
 // mana, not current mana (as HP). Nothing spends mana yet.
 import { type AttributeInput, effectiveAttributes, type TrainingLevels } from './attributes';
 import { STATS } from './config/stats';
+import { applyPerk, gearPerkTotals } from './gear';
 import { msUntilFull, REGEN_RATE_SCALE, regenAmount, regenRateUnits } from './regen';
 import { getDerivedStats, type StatsInput } from './stats';
 import type { Character } from './types';
 
-/** The regen rate in hundredths of a mana per minute (an integer): 5.4/min = 540. Uses the TOTAL intelligence (normal + core). */
+/** The regen rate in hundredths of a mana per minute (an integer): 5.4/min = 540. Uses the TOTAL intelligence (normal + core, gear included); the gear perk multiplies it last. */
 export function manaRegenRate(state: AttributeInput): number {
-  return regenRateUnits(STATS.manaRegen.basePerMin) + regenRateUnits(STATS.manaRegen.perIntelligence) * effectiveAttributes(state).intelligence;
+  const base = regenRateUnits(STATS.manaRegen.basePerMin) + regenRateUnits(STATS.manaRegen.perIntelligence) * effectiveAttributes(state).intelligence;
+  return applyPerk(base, gearPerkTotals(state.character.equipment).mana_regen);
 }
 
 /** Mana per minute for display (5.4): the rate units ÷ 100, exact to two decimals. Uses the TOTAL intelligence. */

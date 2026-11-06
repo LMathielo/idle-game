@@ -2,13 +2,13 @@
 // and read-only views. Mirrors woodcutting.ts rule for rule, but reads only config/mining.ts, so the two skills
 // can diverge later. See docs/ENGINE.md ("Mining").
 //
-//   MS            = msPerLevel × mining level + msBase + TOTAL STR + pickaxe bonus (item catalog)   (1.17.0)
+//   MS            = (msPerLevel × mining level + msBase + TOTAL STR + pickaxe bonus (item catalog)) × (1 + gear perk mining_strength)   (1.17.0; perk 1.22.0, half up)
 //   time / ore    = max(minOreMs, ceil(rock base × (1 − core DEX reduction)))                   (1.16.0)
 //   unlocked      ⇔ mining level ≥ rock reqLevel AND MS ≥ rock reqMs
 //   skip cost     = ceil(remaining min) stamina, at least 1
 import { activityTimeMs, dexActivityReductionBp, effectiveAttributes, type CoreInput, type TrainingLevels } from './attributes';
 import { cloneState } from './clone';
-import { gearStats } from './gear';
+import { applyPerk, gearPerkTotals, gearStats } from './gear';
 import { MINING, ROCK_IDS, ROCKS } from './config/mining';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { SKILL_XP_CURVE } from './config/xpCurve';
@@ -26,7 +26,7 @@ export type MsInput = { character: Pick<Character, 'equipment' | 'skills' | 'att
 
 export type MiningStrength = {
   value: number;
-  /** The four parts add up to `value`. */
+  /** The five parts add up to `value`. */
   breakdown: {
     /** msPerLevel × mining level. */
     level: number;
@@ -38,6 +38,8 @@ export type MiningStrength = {
     pickaxe: number;
     /** The equipped pickaxe's definition id, if any. */
     pickaxeDefId: string | null;
+    /** The gear perk "mining strength" (epic pickaxe, 1.22.0): the final multiplier's share, 0 without one. */
+    perk: number;
   };
 };
 
@@ -54,7 +56,10 @@ export function miningStrength(state: MsInput): MiningStrength {
   const base = MINING.msBase;
   const strength = effectiveAttributes(state).strength;
   const pickaxe = pickaxeBonus(state.character.equipment);
-  return { value: level + base + strength + pickaxe, breakdown: { level, base, strength, pickaxe, pickaxeDefId: state.character.equipment.pickaxe?.defId ?? null } };
+  const pre = level + base + strength + pickaxe;
+  // The perk is one final multiplier on the hero's MS; crews take their share of this number, so they inherit it.
+  const value = applyPerk(pre, gearPerkTotals(state.character.equipment).mining_strength);
+  return { value, breakdown: { level, base, strength, pickaxe, pickaxeDefId: state.character.equipment.pickaxe?.defId ?? null, perk: value - pre } };
 }
 
 // ---------- rocks ----------

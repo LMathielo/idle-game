@@ -1,5 +1,5 @@
 /** Engine rules version, stored on every action_log row. Bump when rules change outcomes. */
-export const ENGINE_VERSION = '1.20.0';
+export const ENGINE_VERSION = '1.22.0';
 
 /**
  * Every engine version that ever shipped, oldest first, with the save version it wrote. Append a row on
@@ -29,6 +29,8 @@ export const RELEASED_ENGINES: readonly { engine: string; save: number }[] = [
   { engine: '1.18.0', save: 18 }, // locked start: Merchant + Storage unbuilt on a new save (Storage is a building), 500 starting gold, every search 2:00
   { engine: '1.19.0', save: 19 }, // stats rework: STR damage, DEX crits, END toughness, INT magic; core multipliers; 0.2 regen per point (exact), defense renamed armor
   { engine: '1.20.0', save: 20 }, // first boss: dungeon tiers, ENTER_BOSS (stamina entry), enemy regen + skills (Heavy Bash, stun), boss rewards, Chieftain's Tusk
+  { engine: '1.21.0', save: 20 }, // engine-only bump (PR #35): the Legs slot, greaves / axe / pickaxe recipes; the row was added with 1.22.0, which is the first to bump the code
+  { engine: '1.22.0', save: 21 }, // gear rarity tiers: rarity multiplier on the main stat, attribute-bonus affixes (rare / epic), perks (epic), gear level
 ];
 
 /** Position of a released engine version in RELEASED_ENGINES, or -1 when it never shipped. */

@@ -136,6 +136,27 @@ export function withoutGearRolls<T>(s: T): T {
 }
 
 /**
+ * A state (or save document) without the v20 → v21 additions: no `affixes` on any equipped item, inventory item, Merchant listing or
+ * crafting job (`gear`), and the save version is the caller's to set. Tests written before 1.22.0 compare in this shape: the
+ * affixes live on rare / epic gear only and do not change an outcome that does not read them.
+ */
+export function withoutAffixes<T>(s: T): T {
+  const strip = (x: unknown) => {
+    if (!x || typeof x !== 'object') return x;
+    const { affixes: _a, ...rest } = x as Record<string, unknown>;
+    return rest;
+  };
+  const d = JSON.parse(JSON.stringify(s)) as Record<string, any>;
+  if (d.character?.equipment) for (const k of Object.keys(d.character.equipment)) d.character.equipment[k] = strip(d.character.equipment[k]);
+  if (Array.isArray(d.inventory?.items)) d.inventory.items = d.inventory.items.map(strip);
+  if (Array.isArray(d.merchant?.stock)) d.merchant.stock = d.merchant.stock.map(strip);
+  if (Array.isArray(d.crafting?.pipes)) {
+    d.crafting.pipes = d.crafting.pipes.map((j: any) => (j && j.gear ? { ...j, gear: strip(j.gear) } : j));
+  }
+  return d as T;
+}
+
+/**
  * The state with these CORE points (training levels; xp and progress 0). Since 1.16.0 core points drive WS / MS (STR) and
  * the DEX / INT time curves; stored extra points (character.attributes) only add to the totals.
  */

@@ -34,7 +34,7 @@ export type Item = {
   /**
    * Item definition id (key of ITEMS in config/items.ts). Max combat stats (damage, armor, WS, MS at 100% quality)
    * are read from the catalog by this id and never copied onto the instance, so balance changes need no save
-   * migration. Description and base prices are catalog-only too. Rolled affixes (later) will be stored on the instance.
+   * migration. Description and base prices are catalog-only too. Rolled affixes (1.22.0) are stored on the instance (`affixes`).
    */
   defId: string;
   name: string;
@@ -46,10 +46,25 @@ export type Item = {
   rarity?: ItemRarity;
   /** Gear only (save v14; every equippable instance has it): quality, an integer percent 0..100. */
   quality?: number;
+  /**
+   * Gear only, rare and epic pieces only (save v21): the random affixes it rolled (which attributes, which perk). The VALUES are not
+   * stored: they come from quality, rarity and the catalog gear level (src/engine/gear.ts), like the main stat.
+   */
+  affixes?: GearAffixes;
 };
 
-/** A gear roll: what a crafted piece or a Merchant gear listing got. */
-export type GearRoll = { quality: number; rarity: ItemRarity };
+/**
+ * A perk (epic gear, 1.22.0): a percent bonus applied once, as a final separate multiplier, to the hero's final damage,
+ * armor, regen rate, or woodcutting / mining strength. Combat gear rolls one of the first four, an axe has
+ * `woodcutting_strength` and a pickaxe `mining_strength`.
+ */
+export type GearPerkKind = 'max_damage' | 'max_armor' | 'hp_regen' | 'mana_regen' | 'woodcutting_strength' | 'mining_strength';
+
+/** The random affixes of a rare (1 attribute) or epic (2 different attributes + 1 perk) piece. Missing on common and uncommon gear. */
+export type GearAffixes = { attributes: AttributeKey[]; perk?: GearPerkKind };
+
+/** A gear roll: what a crafted piece, a Merchant gear listing or a boss drop got. `affixes` only for rare and epic. */
+export type GearRoll = { quality: number; rarity: ItemRarity; affixes?: GearAffixes };
 
 /** Skills on the Hero tab. `smithing` was removed in save v13 (crafting has no skill). */
 export type SkillKey = 'woodcutting' | 'mining' | 'fishing';
@@ -481,7 +496,7 @@ export type CraftingState = {
  * One merchant stock slot: `quantity` left of `defId` at `unitPrice` gold each (fixed when the stock was rolled).
  * Gear listings (save v14) hold one piece with its rolled `quality` and `rarity` (the price already scaled by it).
  */
-export type MerchantListing = { defId: string; quantity: number; unitPrice: number; quality?: number; rarity?: ItemRarity };
+export type MerchantListing = { defId: string; quantity: number; unitPrice: number; quality?: number; rarity?: ItemRarity; affixes?: GearAffixes };
 
 export type MerchantState = {
   /** Stored refresh charges, 0..MERCHANT.maxCharges. */
@@ -493,7 +508,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 20;
+  saveVersion: 21;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */

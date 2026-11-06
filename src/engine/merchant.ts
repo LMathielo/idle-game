@@ -13,7 +13,7 @@ import { isBuilt } from './buildings';
 import { getItemDef } from './config/items';
 import { GEAR } from './config/gear';
 import { MERCHANT, type MerchantPoolEntry } from './config/merchant';
-import { defaultGearRoll, gearPrice, isGearDef, rollQuality, rollRarity } from './gear';
+import { affixStream, copyAffixes, defaultGearRoll, gearPrice, isGearDef, rollAffixes, rollQuality, rollRarity } from './gear';
 import { addStackable, freeSlots, makeItem } from './inventory';
 import { nextInt } from './rng';
 import type { GameState, GearRoll, MerchantListing, MerchantState, RngState } from './types';
@@ -56,22 +56,31 @@ function listingOf(entry: MerchantPoolEntry, roll: GearRoll = defaultGearRoll())
   const def = getItemDef(entry.defId);
   if (!def || def.buyPrice === undefined) throw new Error(`Merchant pool item ${entry.defId} has no buyPrice`);
   if (!isGearDef(def)) return { defId: entry.defId, quantity: entry.quantity, unitPrice: def.buyPrice };
-  return { defId: entry.defId, quantity: 1, unitPrice: gearPrice(def.buyPrice, roll.rarity), quality: roll.quality, rarity: roll.rarity };
+  const listing: MerchantListing = { defId: entry.defId, quantity: 1, unitPrice: gearPrice(def.buyPrice, roll.rarity), quality: roll.quality, rarity: roll.rarity };
+  const affixes = copyAffixes(roll.affixes);
+  if (affixes) listing.affixes = affixes;
+  return listing;
 }
 
 /**
  * Rolls the gear listings of a restock: per gear listing in stock order, quality a uniform integer in 0..50 and then rarity
  * (common 70 / uncommon 25 / rare 5). They draw from their own stream, seeded from the main RNG (after the stock was
  * picked) XOR GEAR.merchant.rollSalt, so the main stream is not advanced: drops, yields and combat stay where they were.
+ * A rare piece then rolls its affixes (1.22.0) from a second salted stream (XOR GEAR.merchant.affixSalt), apart from the first so
+ * the quality and rarity rolls are exactly what they were; it too leaves the main stream alone.
  */
 function rollGearListings(rng: RngState, entries: readonly MerchantPoolEntry[]): MerchantListing[] {
   let sub: RngState = { seed: (rng.seed ^ GEAR.merchant.rollSalt) >>> 0 };
+  let affixSub: RngState = affixStream(rng, GEAR.merchant.affixSalt);
   return entries.map((entry) => {
-    if (!isGearDef(getItemDef(entry.defId))) return listingOf(entry);
+    const def = getItemDef(entry.defId);
+    if (!isGearDef(def)) return listingOf(entry);
     const q = rollQuality(sub, 0, GEAR.merchant.maxQuality);
     const r = rollRarity(q.rng, GEAR.merchant.rarityWeights);
     sub = r.rng;
-    return listingOf(entry, { quality: q.value, rarity: r.value });
+    const a = rollAffixes(affixSub, def?.slot, r.value);
+    affixSub = a.rng;
+    return listingOf(entry, { quality: q.value, rarity: r.value, affixes: a.value });
   });
 }
 
@@ -241,7 +250,7 @@ export function buyItem(draft: GameState, slot: unknown, defId: unknown, quantit
     addStackable(draft.inventory, def.id, quantity);
   } else {
     for (let n = 0; n < quantity; n += 1) {
-      const roll = listing.quality !== undefined && listing.rarity !== undefined ? { quality: listing.quality, rarity: listing.rarity } : undefined;
+      const roll = listing.quality !== undefined && listing.rarity !== undefined ? { quality: listing.quality, rarity: listing.rarity, affixes: listing.affixes } : undefined;
       draft.inventory.items.push(makeItem(def.id, 1, `${def.id}#${draft.nextItemSerial}`, roll));
       draft.nextItemSerial += 1;
     }

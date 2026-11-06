@@ -71,6 +71,7 @@ describe('normal, core and total', () => {
       normal: 8,
       spent: 5,
       extra: 3,
+      gear: 0,
       core: 2,
       linear: [
         { kind: 'damage', amount: 10 },

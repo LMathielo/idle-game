@@ -16,6 +16,8 @@ import {
   type AttributeView,
   attributeViews,
   type Character,
+  type GearPerkKind,
+  gearPerkTotals,
   getDerivedStats,
   hpView,
   manaView,
@@ -30,6 +32,7 @@ import {
 import { colors, fonts } from '../theme';
 import { ATTRIBUTE_NAMES, bpPercent, critMultText, formatClock, formatHoursMinutes, formatNumber, formatRate, itemName } from './format';
 import { Bar, Panel } from './Panel';
+import { PERK_NAMES } from './items/itemInfo';
 import { PixelButton } from './PixelButton';
 import { type AnchorRect, InfoPopover, measureAnchor, PopoverRow, PopoverText } from './ui/InfoPopover';
 import { useCommand } from './ui/useCommand';
@@ -115,6 +118,8 @@ function partLabel(p: RangePart | ValuePart): string {
       return 'INT';
     case 'core':
       return p.attribute ? `core ${ATTRIBUTE_NAMES[p.attribute].short}` : 'core';
+    case 'perk':
+      return 'gear perk';
     case 'base':
       return 'base';
     case 'level':
@@ -165,10 +170,14 @@ export const StatusPanel = memo(function StatusPanel({
     () => getDerivedStats({ character: { level, attributes, spentPoints, equipment }, training }),
     [level, attributes, spentPoints, equipment, training],
   );
-  const attrs = useMemo(() => attributeViews({ character: { attributes, spentPoints }, training }), [attributes, spentPoints, training]);
+  const attrs = useMemo(() => attributeViews({ character: { attributes, spentPoints, equipment }, training }), [attributes, spentPoints, equipment, training]);
   const hpNow = hpView({ character: { level, attributes, spentPoints, equipment, hp, hpRegenProgress }, training });
   const manaNow = manaView({ character: { level, attributes, spentPoints, equipment, mana, manaRegenProgress }, training });
   const spend = useSpending(unspentPoints);
+  // Gear perks (epic pieces): percents added per kind across the equipment, shown as one line; the numbers come from the engine.
+  const perks = useMemo(() => gearPerkTotals(equipment), [equipment]);
+  const perkText = (Object.keys(perks) as GearPerkKind[]).filter((k) => perks[k] > 0).map((k) => `+${perks[k]}% ${PERK_NAMES[k]}`).join(' · ');
+  const regenNote = (kind: 'hp_regen' | 'mana_regen') => (perks[kind] > 0 ? `, then × ${(100 + perks[kind]) / 100} from gear perks (+${perks[kind]}%)` : '');
   /** The info box: a stat or an attribute, anchored on its row. */
   const [info, setInfo] = useState<{ key: StatKey | AttributeKey; anchor: AnchorRect } | null>(null);
   const openInfo = useCallback((key: StatKey | AttributeKey, node: HostInstance | null) => {
@@ -223,7 +232,7 @@ export const StatusPanel = memo(function StatusPanel({
       note: `+${formatRate(hpNow.regenPerMin)}/min${hpNow.full ? '' : ` · full in ${formatHoursMinutes(hpNow.fullInMs)}`}`,
       detail:
         `Max HP ${formatNumber(stats.maxHp.value)} = ${describeValue(stats.maxHp.breakdown)}. ` +
-        `Regen ${formatRate(hpNow.regenPerMin)}/min = ${STATS.hpRegen.basePerMin} base + ${STATS.hpRegen.perEndurance} × total END.`,
+        `Regen ${formatRate(hpNow.regenPerMin)}/min = ${STATS.hpRegen.basePerMin} base + ${STATS.hpRegen.perEndurance} × total END${regenNote('hp_regen')}.`,
     },
     {
       key: 'maxMana',
@@ -232,7 +241,7 @@ export const StatusPanel = memo(function StatusPanel({
       note: `+${formatRate(manaNow.regenPerMin)}/min${manaNow.full ? '' : ` · full in ${formatHoursMinutes(manaNow.fullInMs)}`}`,
       detail:
         `Max mana ${formatNumber(stats.maxMana.value)} = ${describeValue(stats.maxMana.breakdown)}. ` +
-        `Regen ${formatRate(manaNow.regenPerMin)}/min = ${STATS.manaRegen.basePerMin} base + ${STATS.manaRegen.perIntelligence} × total INT. Nothing uses mana yet.`,
+        `Regen ${formatRate(manaNow.regenPerMin)}/min = ${STATS.manaRegen.basePerMin} base + ${STATS.manaRegen.perIntelligence} × total INT${regenNote('mana_regen')}. Nothing uses mana yet.`,
     },
   ];
   const statInfo = info && !attrInfo ? rows.find((r) => r.key === info.key) : undefined;
@@ -267,6 +276,12 @@ export const StatusPanel = memo(function StatusPanel({
         ))}
       </View>
 
+      {perkText ? (
+        <Text style={styles.perkLine} accessibilityLabel={`Gear perks: ${perkText}`}>
+          Gear perks: {perkText}
+        </Text>
+      ) : null}
+
       <StaminaBar stamina={stamina} />
       {info && attrInfo && attrNames ? (
         <InfoPopover
@@ -277,6 +292,7 @@ export const StatusPanel = memo(function StatusPanel({
         >
           <PopoverRow label="Spent (level-ups)" value={formatNumber(attrInfo.spent)} />
           {attrInfo.extra !== 0 ? <PopoverRow label="Extra" value={formatNumber(attrInfo.extra)} /> : null}
+          {attrInfo.gear > 0 ? <PopoverRow label="Gear" value={formatNumber(attrInfo.gear)} /> : null}
           <PopoverRow label="Core (training)" value={formatNumber(attrInfo.core)} />
           <PopoverText>
             {`All ${attrNames.short} points (flat): ${effectsText(attrInfo.linear)}`}
@@ -519,6 +535,8 @@ const styles = StyleSheet.create({
   statLabel: { fontFamily: fonts.body, fontSize: 16, color: colors.ink },
   statValue: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.ink },
   statNote: { fontFamily: fonts.body, fontSize: 13, color: colors.skill, textAlign: 'right' },
+
+  perkLine: { marginTop: 8, fontFamily: fonts.body, fontSize: 13, color: colors.skill },
 
   stamina: { marginTop: 12, gap: 4 },
   staminaCaption: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.inkSoft },

@@ -82,6 +82,20 @@ describe('gear recipes (owner-approved 2026-11-01)', () => {
         { rarity: 'epic', pct: 5 },
       ],
       maxStamina: 50,
+      // 1.22.0: what each colour can give (Stone Sword = gear level 5, damage 4–6 at 100%).
+      rarityDetails: [
+        { rarity: 'uncommon', chancePct: 75, statPct: 110, atQuality0: { damage: { min: 2, max: 3 } }, atQuality100: { damage: { min: 4, max: 7 } }, attributes: null, perk: null },
+        { rarity: 'rare', chancePct: 20, statPct: 125, atQuality0: { damage: { min: 3, max: 4 } }, atQuality100: { damage: { min: 5, max: 8 } }, attributes: { count: 1, min: 1, max: 5 }, perk: null },
+        {
+          rarity: 'epic',
+          chancePct: 5,
+          statPct: 150,
+          atQuality0: { damage: { min: 3, max: 5 } },
+          atQuality100: { damage: { min: 6, max: 9 } },
+          attributes: { count: 2, min: 1, max: 7 },
+          perk: { kinds: ['max_damage', 'max_armor', 'hp_regen', 'mana_regen'], min: 1, max: 5 },
+        },
+      ],
     });
     expect(v.enough).toBe(true);
     expect(v.craftMs).toBe(craftMs(s, 'stone_sword')); // house × INT, like materials

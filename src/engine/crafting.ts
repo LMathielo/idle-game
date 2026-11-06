@@ -31,7 +31,7 @@ import { CRAFTING, isRecipeId, RECIPE_IDS, RECIPES, type RecipeDef, type RecipeI
 import { GEAR } from './config/gear';
 import { getItemDef } from './config/items';
 import { BASIS_POINTS } from './config/stats';
-import { gearStatsAt, type GearStats, rarityOdds, rollQuality, rollRarity } from './gear';
+import { affixStream, gearRarityDetail, type GearRarityDetail, gearStatsAt, type GearStats, rarityOdds, rollAffixes, rollQuality, rollRarity } from './gear';
 import { addStackable, freeSlots, makeItem } from './inventory';
 import { itemQuantity } from './selectors';
 import type { CraftingState, CraftJob, GameEvent, GameState, Inventory, ItemRarity, SimulationSummary } from './types';
@@ -378,10 +378,12 @@ export function startCraft(
   if (invest > draft.stamina.current) return err('NOT_ENOUGH_STAMINA', `Needs ${invest} stamina, has ${draft.stamina.current}`);
   for (const i of recipe.inputs) consumeItem(draft, i.defId, i.quantity);
   if (invest > 0) draft.stamina = { ...draft.stamina, current: draft.stamina.current - invest };
-  // The piece is rolled now, the moment it is paid for: quality, then rarity (two draws of the main stream).
+  // The piece is rolled now, the moment it is paid for: quality, then rarity (two draws of the main stream). A rare or epic piece
+  // then rolls its affixes (1.22.0) from a salted sub-stream, so the main stream is exactly what it was.
   const q = rollQuality(draft.rng, gearQualityFloor(draft, invest), GEAR.maxQuality);
   const r = rollRarity(q.rng, gearRarityWeights(recipe));
   draft.rng = r.rng;
+  const affixes = rollAffixes(affixStream(r.rng, GEAR.craft.affixSalt), getItemDef(recipe.output.defId)?.slot, r.value).value;
   const job: CraftJob = {
     id: c.nextJobSerial,
     recipeId,
@@ -391,7 +393,7 @@ export function startCraft(
     x10: false,
     status: 'running',
     startedAt: now,
-    gear: { staminaInvested: invest, quality: q.value, rarity: r.value },
+    gear: { staminaInvested: invest, quality: q.value, rarity: r.value, ...(affixes ? { affixes } : {}) },
   };
   c.pipes[index] = job;
   c.nextJobSerial += 1;
@@ -540,7 +542,7 @@ export function collectCraft(draft: GameState, pipe: unknown, jobId: unknown, ev
   if (freeSlots(draft.inventory) < 1) return err('INVENTORY_FULL', 'Free an inventory slot first: the piece waits in the pipe');
   const defId = RECIPES[job.recipeId].output.defId;
   const itemId = collectedItemId(draft, defId);
-  draft.inventory.items.push(makeItem(defId, 1, itemId, { quality: job.gear.quality, rarity: job.gear.rarity }));
+  draft.inventory.items.push(makeItem(defId, 1, itemId, { quality: job.gear.quality, rarity: job.gear.rarity, affixes: job.gear.affixes }));
   draft.nextItemSerial += 1;
   draft.crafting.pipes[index] = null;
   events.push({ type: 'CRAFT_COLLECTED', pipe: index, jobId: job.id, itemId, defId });
@@ -572,6 +574,11 @@ export type GearRecipeView = {
   rarityOdds: { rarity: ItemRarity; pct: number }[];
   /** Stamina investable at start (0..maxStamina); the floor it gives comes from gearQualityFloor(). */
   maxStamina: number;
+  /**
+   * What each colour of this recipe can give (1.22.0), in table order (green, blue, purple): its chance, the main stat at quality 0 and
+   * 100 with the rarity multiplier, the attribute bonuses and the perk. The Details toggle reads this; the screen computes nothing.
+   */
+  rarityDetails: GearRarityDetail[];
 };
 
 export type RecipeView = {
@@ -609,6 +616,7 @@ export function recipeView(state: GameState, recipeId: RecipeId): RecipeView {
             maxStats: gearStatsAt(outDef, GEAR.maxQuality),
             rarityOdds: rarityOdds(gearRarityWeights(r)),
             maxStamina: GEAR.craft.maxStamina,
+            rarityDetails: rarityOdds(gearRarityWeights(r)).map((o) => gearRarityDetail(outDef, o.rarity, o.pct)),
           }
         : null,
   };

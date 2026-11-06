@@ -662,7 +662,9 @@ describe('golden fight (pins the RNG draw order, Bash and a stun)', () => {
     expect(events.map((e) => e.type)).toEqual(['FIGHT_RESOLVED', 'ACTIVITY_STOPPED']);
     expect(summary.boss).toEqual({ fights: 1, wins: 1, losses: 0 });
     expect(state.rng).toEqual({ seed: 2072178003 });
-    expect(hashState(state)).toBe('df20ce2e');
+    // 1.22.0: d611449f is the 1.20.0 hash df20ce2e in the v21 shape (only saveVersion moved: no gear dropped here, so no affixes).
+    expect(hashState(state)).toBe('d611449f');
+    expect(hashState({ ...state, saveVersion: 20 } as unknown as GameState)).toBe('df20ce2e');
   });
 
   it('seed 1: a loss with five stuns (12 strikes lost): the hero falls at 38 s', () => {
@@ -846,7 +848,7 @@ describe('save v20', () => {
     expect('maxFightMs' in doc.activity.fight).toBe(false);
     const s = loadSave(V19);
     expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
-    expect(CURRENT_SAVE_VERSION).toBe(20);
+    expect(CURRENT_SAVE_VERSION).toBe(21);
     expect(s.dungeon.bosses).toEqual({});
     const f = s.activity?.kind === 'dungeon' ? s.activity.fight! : null;
     expect(f).toMatchObject({ maxFightMs: 60_000, enemyRegenBp: 0, enemyRegenProgress: 0, enemySkillReady: {}, heroStunStrikes: 0 });

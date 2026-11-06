@@ -94,7 +94,7 @@ function play(until: number = Infinity): GameState {
 
 describe('golden 1.19.0: a whole game from newGame', () => {
   it('starts with 500 gold and nothing built; the first two real BUILD commands cost 50 gold each', () => {
-    expect(ENGINE_VERSION).toBe('1.20.0');
+    expect(ENGINE_VERSION).toBe('1.22.0');
     const s0 = newGame(SEED, T0);
     expect(s0.character.gold).toBe(500);
     expect(Object.values(s0.buildings).every((b) => b.state === 'locked')).toBe(true);
@@ -148,6 +148,9 @@ describe('golden 1.19.0: a whole game from newGame', () => {
 
   it('pins', () => {
     const s = play();
+    // 1.22.0: the whole-state hash moved only because saveVersion is 21 now (this game never holds a rare or epic piece): in the v20 shape
+    // it is still the 1.20.0 pin, so no outcome of the game changed.
+    expect(hashState({ ...s, saveVersion: 20 } as unknown as GameState)).toBe('2e1282a3');
     expect({
       level: s.character.level,
       gold: s.character.gold,
@@ -173,7 +176,7 @@ describe('golden 1.19.0: a whole game from newGame', () => {
           },
         },
         "gold": 1221,
-        "hash": "2e1282a3",
+        "hash": "0c02855a",
         "hp": [
           145,
           0,
