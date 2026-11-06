@@ -1,0 +1,68 @@
+{
+ "fightEnd": {
+  "won": true,
+  "endReason": "enemy_defeated",
+  "durationMs": 8000,
+  "heroHpEnd": 2,
+  "rewards": {
+   "heroXp": 650,
+   "gold": 124,
+   "items": {},
+   "itemsLost": {}
+  },
+  "logLen": 15,
+  "enemyHpEnd": 0,
+  "rng": 4016473609,
+  "gold": 1003,
+  "xp": 2650,
+  "level": 20,
+  "hp": 24,
+  "troll_bridge": {
+   "runs": 51,
+   "wins": 51,
+   "losses": 0
+  },
+  "totals": {
+   "runs": 141,
+   "wins": 141,
+   "losses": 0
+  },
+  "logHash": "555674ef",
+  "lastDungeon": "troll_bridge"
+ },
+ "after30min": {
+  "won": false,
+  "endReason": "hero_defeated",
+  "durationMs": 6000,
+  "heroHpEnd": 0,
+  "rewards": {
+   "heroXp": 0,
+   "gold": 0,
+   "items": {},
+   "itemsLost": {}
+  },
+  "logLen": 12,
+  "enemyHpEnd": 46,
+  "rng": 1906414108,
+  "gold": 1003,
+  "xp": 2650,
+  "level": 20,
+  "hp": 16,
+  "troll_bridge": {
+   "runs": 65,
+   "wins": 51,
+   "losses": 14
+  },
+  "totals": {
+   "runs": 155,
+   "wins": 141,
+   "losses": 14
+  },
+  "logHash": "b30bd293",
+  "lastDungeon": "troll_bridge"
+ },
+ "start": {
+  "fightEnemyHp": 175,
+  "rng": 481224377
+ }
+}
