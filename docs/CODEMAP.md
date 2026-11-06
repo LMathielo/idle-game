@@ -38,10 +38,12 @@ src/components/workers/ NodeWorkers (the "Workers: X free / Y hired" line and th
 src/components/items/  ItemSlot (rarity-framed slot: the instance's colour, reports its anchor), ItemSheet (item InfoPopover + actions: rarity-coloured name,
                       "Green · Quality 73%", quality-scaled stats and equip deltas, rarity-scaled prices), QuantityStepper, RevealSheet (a won / collected gear piece's popover with Equip: Crafting's Done and a boss win), itemInfo (labels, subtitle, stat lines, `affixLines`: "Bonus +4 END" / "Perk +5% max damage")
 src/components/merchant/ Merchant modal (Buy | Sell tabs, stock grid, refresh charges, buy/sell sheets)
-src/components/crafting/ Crafting modal (8 pipe rows: a continuous material pipe shows "Crafted N", the craft's progress with a live "xx.yy%",
-                      Insta, ×10 and Stop, or why it waits; a gear pipe Insta / Cancel, "✓ Ready — Done" and the reveal popover; the header's
-                      Recipes button and an idle pipe's "Craft…" open the recipe list sub-view: Materials tab, Equipment tab with gear cards
-                      (a Details button: Green | Blue | Purple toggle from `recipeView().gear.rarityDetails`) and the stamina stepper; Recipes starts go into the first free pipe)
+src/components/crafting/ Crafting modal: CraftingModal.tsx (8 pipe rows: a continuous material pipe shows "Crafted N", the craft's progress with a live "xx.yy%",
+                      Insta, ×10 and Stop, or why it waits; a gear pipe Insta / Cancel, "✓ Ready — Done" and the reveal popover, whose item id comes from the
+                      CRAFT_COLLECTED event of the dispatch result via `src/client/dispatchEvents.ts`; the "Started in Pipe N" line), RecipePicker.tsx (the recipe list
+                      sub-view of the header's Recipes and an idle pipe's "Craft…": Materials | Equipment tabs, collapsible tier headers, icon-only tiles of
+                      `INVENTORY_SLOT_SIZE` (ItemSlot.tsx), "Free pipes N/M", and the InfoPopover with inputs, time, stamina stepper, odds, Details and Craft),
+                      recipeParts.tsx (formatCraftTime, statText, GearDetails from `recipeView().gear.rarityDetails`, StaminaStepper)
 src/engine/           pure TS game rules: types, rng, progression, simulate, commands, stats (derived stats), stamina, hp (current HP + regen; regenHeroPools = HP + mana), mana (current mana + regen), regen (shared integer banking),
                       dungeon (runs = search + live fight, skip, per-dungeon counters, unlocks; also the shared fight loop a boss uses), combat (strike timing, damage, log, enemy regen, combat skills and the stun), boss (boss unlock, ENTER_BOSS check, rewards, views), danger (danger hint + bossDangerHint), hash, migrations,
                       replay (spans + MIGRATE anchors), training (tiers, timed training, views),

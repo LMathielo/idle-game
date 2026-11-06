@@ -4,13 +4,13 @@ The "where we are" page. Read its top ("Current version") and the two "Roadmap" 
 
 Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.md), engine rules in [`ENGINE.md`](ENGINE.md), deferred review findings in [`TECH_DEBT.md`](TECH_DEBT.md), workflow in [`../AGENTS.md`](../AGENTS.md).
 
-## Current version (2026-11-05)
+## Current version (2026-11-06)
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
 | Engine | **1.22.0** | 1.1.0 |
 | Save | **v21** | v2 |
-| Contents | Everything below, up to gear rarity tiers and affixes (this PR, stacked on the equipment tabs PR #35), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
+| Contents | Everything below, up to the compact Crafting recipe list and the Done reveal fix (UI only), gear rarity tiers and affixes (#36), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is behind `dev` by PRs #3–#25. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
 - **Open PRs:** Expo Go previews by label plus per-branch saves (`feat/expo-test-previews`).
@@ -20,6 +20,13 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.22.0 · save v21 (unchanged)
+- **Compact Crafting recipe list and Done reveal fix** (`feat/crafting-compact`; owner-approved 2026-11-06; UI only, engine and save unchanged):
+  - **Recipe list** (header Recipes and an idle pipe's "Craft…"): Materials | Equipment tabs, collapsed tier headers (all closed on open, any number open, remembered per tab), icon-only tiles the size of the Hero inventory slots (dimmed when materials are short, gold frame while a pipe crafts it). A tile opens an InfoPopover with the full craft info, the stamina stepper, quality floor, odds, Details and one **Craft** button (was Start).
+  - **Flow:** an idle pipe's first Craft goes into that pipe, then the list behaves like Recipes (first free open pipe). After Craft the player stays on the list: "Iron Sword started in Pipe 2" and "Free pipes N/M". Back returns to the pipes.
+  - **Fix:** Done sometimes showed no reveal popover. Cause: the UI guessed the new item id (`collectedItemId` on the screen's state) before COLLECT_CRAFT, but the dispatch first simulates up to now, which can move `nextItemSerial` (a boss gear drop in that span), so the guess named an item that did not exist. Also, a failed anchor measure skipped the reveal. Now the id comes from the CRAFT_COLLECTED event in the dispatch result (`DispatchResult.events`, client type only), the anchor falls back to the screen centre, and a reveal waits out the previous popover's dismiss animation.
+  - **Tests:** `tests/collectReveal.test.ts`.
 
 ### Engine 1.22.0 · save v21
 - **Gear rarity tiers and affixes** (`feat/gear-affixes`, stacked on #35; owner-approved 2026-11-05):

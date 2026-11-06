@@ -8,6 +8,9 @@ import { colors, fonts, rarityColors } from '../../theme';
 import { ItemIcon } from '../art/Sprites';
 import { formatQty } from '../format';
 
+/** The Hero tab's inventory slot size; the Crafting recipe tiles use it too. */
+export const INVENTORY_SLOT_SIZE = 52;
+
 /** Gear carries its own rarity (the frame colour); anything else takes the catalog's. The art comes from `defId`. */
 export type SlotItem = { defId: string; name: string; quantity?: number; stackable?: boolean; rarity?: ItemRarity };
 

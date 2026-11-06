@@ -1,5 +1,5 @@
 // Contracts between the UI, the client and storage. No React, no Expo.
-import type { AttributeKey, BuildingId, Command, CommandError, DungeonId, DungeonOrBossId, GameState, LogType, SimulationSummary } from '../engine';
+import type { AttributeKey, BuildingId, Command, CommandError, DungeonId, DungeonOrBossId, GameEvent, GameState, LogType, SimulationSummary } from '../engine';
 
 /** Wall clock. The app uses SystemClock; tests use a fake. */
 export interface Clock {
@@ -67,7 +67,8 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 export type CommandInput = DistributiveOmit<Command, 'id'> & { id?: string };
 
 export type DispatchResult =
-  | { ok: true; duplicate: boolean; state: GameState }
+  /** `events` are what the engine did for this command, including the time it simulated first (empty for a duplicate). */
+  | { ok: true; duplicate: boolean; state: GameState; events: readonly GameEvent[] }
   | { ok: false; error: CommandError };
 
 export interface GameClient {
