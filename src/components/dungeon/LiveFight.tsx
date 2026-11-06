@@ -1,7 +1,7 @@
 // The fight in progress, as the engine has played it up to now. Strikes appear when engine time reaches them
 // (the client ticks every second); nothing here times or decides anything. The outcome is applied by the
 // engine when the fight ends, and the panel then shows the next search.
-import { memo } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { type DungeonFightView, type EnemyId, mobName } from '../../engine';
@@ -10,6 +10,7 @@ import { EnemySprite } from '../art/Sprites';
 import { LogLine, StunNotice, strikeTime } from './FightReplay';
 import { AnimatedHpBar } from './HpBars';
 import { PackRows } from './PackRows';
+import { displayClockMs, displayedFight, isFreshFight } from './fightDisplay';
 import { mobLabel, packText } from './outcome';
 
 /** Lines kept on screen; older strikes scroll out (the last fight's replay has them all). */
@@ -22,8 +23,34 @@ type Props = {
   paused: boolean;
 };
 
-export const LiveFight = memo(function LiveFight({ fight, heroName, enemyId, paused }: Props) {
+/** Redraw rate of the display clock while it is catching up to the engine. */
+const DISPLAY_STEP_MS = 50;
+
+/**
+ * The fight as the display clock has it (fightDisplay.ts): a view opened on a fresh fight starts 100 ms behind fight time 0, so the first
+ * hit lands on screen after the screen opens. Not delayed for a fight already well underway or with reduce-motion on.
+ */
+function useDisplayedFight(fight: DungeonFightView, reducedMotion: boolean): DungeonFightView {
+  const open = useRef<{ at: number; fresh: boolean; last: number } | null>(null);
+  const [, redraw] = useState(0);
+  const now = Date.now();
+  // A new fight replaces the one on screen (engine time went back): its lead-in plays again.
+  if (!open.current || fight.elapsedMs < open.current.last) open.current = { at: now, fresh: isFreshFight(fight.elapsedMs), last: fight.elapsedMs };
+  open.current.last = fight.elapsedMs;
+  const fresh = open.current.fresh && !reducedMotion;
+  const displayMs = displayClockMs(fight.elapsedMs, now - open.current.at, fresh);
+  const behind = displayMs < fight.elapsedMs || (fresh && displayMs < 0);
+  useEffect(() => {
+    if (!behind) return;
+    const id = setInterval(() => redraw((n) => n + 1), DISPLAY_STEP_MS);
+    return () => clearInterval(id);
+  }, [behind]);
+  return displayedFight(fight, displayMs);
+}
+
+export const LiveFight = memo(function LiveFight({ fight: engineFight, heroName, enemyId, paused }: Props) {
   const reducedMotion = useReducedMotion();
+  const fight = useDisplayedFight(engineFight, reducedMotion);
   const lines = fight.log.slice(-VISIBLE_LINES);
   const hidden = fight.log.length - lines.length;
   const clock = `${strikeTime(fight.elapsedMs)} / ${strikeTime(fight.maxFightMs)}`;

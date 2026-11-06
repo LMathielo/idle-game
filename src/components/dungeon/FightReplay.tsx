@@ -7,6 +7,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { COMBAT_SKILLS, type FightLogEntry, type FightRecord, mobName } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { PixelButton } from '../PixelButton';
+import { FIGHT_VIEW_LEAD_MS } from './fightDisplay';
 import { AnimatedHpBar } from './HpBars';
 import { PackRows } from './PackRows';
 import { mobLabel, outcomeLabel } from './outcome';
@@ -27,8 +28,8 @@ type Props = {
 export function FightReplay({ fight, heroName, onClose }: Props) {
   const reducedMotion = useReducedMotion();
   const total = fight.log.length;
-  // The hero's opening strike (fight time 0) is on screen at once; the monster's answer (300 ms in) follows with the next step.
-  const [shown, setShown] = useState(reducedMotion ? total : Math.min(1, total));
+  // The replay opens empty: the first line (the hero's opening hit) shows FIGHT_VIEW_LEAD_MS after the screen opens, then one line per step.
+  const [shown, setShown] = useState(reducedMotion ? total : 0);
 
   // One line per step; the parent remounts this component (new key) for a new replay.
   useEffect(() => {
@@ -37,7 +38,7 @@ export function FightReplay({ fight, heroName, onClose }: Props) {
       return;
     }
     if (shown >= total) return;
-    const id = setTimeout(() => setShown((n) => Math.min(total, n + 1)), replayStepMs(total));
+    const id = setTimeout(() => setShown((n) => Math.min(total, n + 1)), shown === 0 ? FIGHT_VIEW_LEAD_MS : replayStepMs(total));
     return () => clearTimeout(id);
   }, [shown, total, reducedMotion]);
 
