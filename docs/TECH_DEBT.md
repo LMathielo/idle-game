@@ -42,6 +42,11 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #35, 40] `src/app/(tabs)/hero.tsx` EquipmentPanel — switching Combat/Tools leaves an open slot popover anchored to a slot no longer drawn; panel height jumps. Fix: clear the selection on tab change, give the grid a minHeight.
 - [PR #36, 30] `src/components/StatusPanel.tsx` `regenNote` — computes (100 + perk) / 100 in the UI. Fix: take the multiplier from a selector, or word it "+P% from gear perks".
 - [PR #36, 15] `src/components/items/ItemSheet.tsx:52` — row key `${label}-${value}`. Fix: include the index.
+- [PR #37, 60] `src/components/crafting/RecipePicker.tsx` RecipeTile — memo never hits (craftingView builds new recipe objects each tick), so open tiles re-render every second. Add a comparator like samePipeRow.
+- [PR #37, 40] `src/components/crafting/RecipePicker.tsx` RecipeInfo — on 375x667 the gear Craft button can sit below the fold of the scrolling popover. Pin Craft in a footer or move Details after it.
+- [PR #37, 35] `src/components/crafting/RecipePicker.tsx` onTile — a null measureAnchor drops the tap. Use the centred fallback anchor.
+- [PR #37, 20] `src/components/crafting/CraftingModal.tsx` onCraft label — "X started" can omit the pipe when no CRAFT_STARTED matches. Cosmetic.
+- [PR #37, 15] `src/components/crafting/CraftingModal.tsx` onDone — measure runs before the in-flight guard; a double tap is harmless. Check the guard first if touched.
 
 ## Engine and data
 
@@ -77,6 +82,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 
 - [PR #34, 50] `tests/golden119.test.ts:176` — 1.19 hash re-pinned (fff9656e → 2e1282a3) without proof. Hash `asV19(s)` against the old pin like the 1.13–1.17 pins (move the helper to tests/helpers.ts).
 - [PR #35, 30] `tests/crafting.test.ts`, `tests/gear.test.ts` — hard-coded catalog counts and iron skip list. Fix: derive from GEAR_SETS × GEAR_PIECE_IDS.
+- [PR #37, 40] `src/components/crafting/CraftingModal.tsx` presentReveal — the 400 ms gap before a new reveal is untested. Extract a pure `revealDelayMs` and unit-test it.
 
 ## Docs and workflow
 
@@ -86,3 +92,4 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#4, 70] `.claude/agents/game-engineer.md:53`, `pr-review-council/SKILL.md:18` — `$(cat pr.md)` / `$(cat review.md)` use relative paths; use `-F body=@/abs/path` so a missing file fails loudly.
 - [#4, 45] `pr-review-council/SKILL.md:13-18` — `R=`/`$N` shell variables don't survive between agent tool calls; inline the repo and PR number.
 - [#32, 25] `config/dungeons.ts`, `docs/PRODUCT.md`, `docs/ENGINE.md` — the locked-start decision is dated 2026-11-05 in some places and 2026-11-04 in others (same owner message, 2026-11-04 local). Use one date.
+- [PR #37, 55] `src/client/types.ts` (DispatchResult.events doc) — says events include the time simulated before the command; only applyCommand's events are returned (pre-command advance() events go to rows / the away summary). Reword the comment.
