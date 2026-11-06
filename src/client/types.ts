@@ -122,6 +122,10 @@ export interface GameClient {
     finishConstruction(): Promise<DispatchResult>;
     /** Opens the next crafting pipe (up to 8). Logged as DEBUG_UNLOCK_PIPE. */
     unlockPipe(): Promise<DispatchResult>;
+    /** START_CRAFT with the first craft free (no materials taken or needed). Logged as DEBUG_FORCE_CRAFT. */
+    forceCraft(input: { pipe?: number; recipeId: string; stamina?: number; maxCost?: number }): Promise<DispatchResult>;
+    /** Finishes a pipe's current craft now, free (INSTA_CRAFT's effect). Logged as DEBUG_FINISH_CRAFT. */
+    finishCraft(input: { pipe: number; jobId: number; craft?: number }): Promise<DispatchResult>;
     /** New game with a new seed and a real clock (offset 0). Logged, never deletes the log. */
     resetSave(): Promise<void>;
   };

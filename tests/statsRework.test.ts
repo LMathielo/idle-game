@@ -586,8 +586,8 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
 });
 
 describe('a new game is a v21 game', () => {
-  it('saveVersion 21, engine 1.22.0 (the stats rework shipped as 1.19.0 / v19)', () => {
+  it('saveVersion 21, engine 1.23.0 (the stats rework shipped as 1.19.0 / v19)', () => {
     expect(newGame(1, T0).saveVersion).toBe(21);
-    expect(ENGINE_VERSION).toBe('1.22.0');
+    expect(ENGINE_VERSION).toBe('1.23.0');
   });
 });

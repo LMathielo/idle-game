@@ -5,7 +5,7 @@
 // everything about the craft and the one Craft button. Rules stay in the engine; this reads craftingView().
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { type HostInstance, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { type CraftingView, gearQualityFloor, type GameState, type RecipeView } from '../../engine';
+import { type CraftingView, DEV_TOOLS_ENABLED, gearQualityFloor, type GameState, type RecipeView } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { ItemIcon } from '../art/Sprites';
 import { formatNumber, formatPercentBp, itemName } from '../format';
@@ -29,7 +29,8 @@ export type PickerProps = {
   /** "Iron Sword started in Pipe 2", shown at the top until the next one replaces it. */
   started: string | null;
   /** Resolves true when the craft started. */
-  onCraft: (pipe: number | null, recipeId: string, stamina?: number) => Promise<boolean>;
+  /** `force` (debug only): DEBUG_FORCE_CRAFT, the first craft needs no materials. */
+  onCraft: (pipe: number | null, recipeId: string, stamina?: number, force?: boolean) => Promise<boolean>;
 };
 
 type Selected = { recipeId: string; anchor: AnchorRect };
@@ -65,8 +66,8 @@ export function RecipePicker({ pipe, view, buildings, stamina, started, onCraft 
   const recipe = selected ? (view.recipes.find((r) => r.recipeId === selected.recipeId) ?? null) : null;
 
   const craft = useCallback(
-    async (recipeId: string, invest?: number) => {
-      if (await onCraft(target.pipe, recipeId, invest)) setSelected(null);
+    async (recipeId: string, invest?: number, force?: boolean) => {
+      if (await onCraft(target.pipe, recipeId, invest, force)) setSelected(null);
     },
     [onCraft, target.pipe],
   );
@@ -169,7 +170,7 @@ type InfoProps = {
   buildings: GameState['buildings'];
   stamina: number;
   target: Target;
-  onCraft: (recipeId: string, invest?: number) => Promise<void>;
+  onCraft: (recipeId: string, invest?: number, force?: boolean) => Promise<void>;
 };
 
 function RecipeInfo({ recipe, view, buildings, stamina, target, onCraft }: InfoProps) {
@@ -192,6 +193,9 @@ function RecipeInfo({ recipe, view, buildings, stamina, target, onCraft }: InfoP
   const disabled = reason !== null;
   const sublabel = reason ?? (!gear && !enough ? `${target.label} · waits for materials` : target.label);
   const press = () => void onCraft(recipe.recipeId, gear ? invest : undefined);
+  // Debug: Force craft ignores the materials (the first craft is free) but not the pipes or the stamina a gear piece invests.
+  const forceReason = target.blocked ?? (gear && invest > stamina ? 'Not enough stamina' : null);
+  const forcePress = () => void onCraft(recipe.recipeId, gear ? invest : undefined, true);
 
   return (
     <>
@@ -233,6 +237,16 @@ function RecipeInfo({ recipe, view, buildings, stamina, target, onCraft }: InfoP
           disabled={disabled}
           stretch
         />
+        {DEV_TOOLS_ENABLED ? (
+          <PixelButton
+            label="Force craft (debug)"
+            sublabel={forceReason ?? `${target.label} · first craft free`}
+            onPress={forcePress}
+            disabled={forceReason !== null}
+            stretch
+            accessibilityHint="Debug: starts the craft without needing or taking the materials"
+          />
+        ) : null}
       </PopoverActions>
     </>
   );

@@ -264,6 +264,12 @@ export class LocalGameClient implements GameClient {
     finishConstruction: (): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_FINISH_CONSTRUCTION' }),
     /** Opens the next crafting pipe (up to 8). Logged as DEBUG_UNLOCK_PIPE. */
     unlockPipe: (): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_UNLOCK_PIPE' }),
+    /** START_CRAFT with the first craft free (no materials taken or needed). Logged as DEBUG_FORCE_CRAFT. */
+    forceCraft: (input: { pipe?: number; recipeId: string; stamina?: number; maxCost?: number }): Promise<DispatchResult> =>
+      this.dispatch({ type: 'DEBUG_FORCE_CRAFT', ...input }),
+    /** Finishes a pipe's current craft now, free (INSTA_CRAFT's effect). Logged as DEBUG_FINISH_CRAFT. */
+    finishCraft: (input: { pipe: number; jobId: number; craft?: number }): Promise<DispatchResult> =>
+      this.dispatch({ type: 'DEBUG_FINISH_CRAFT', ...input }),
 
     resetSave: (): Promise<void> =>
       this.serial(async () => {

@@ -4,7 +4,7 @@ import { type BossErrorCode, checkBossEntry, newBossActivity } from './boss';
 import { build, buildingForActivity, completeBuilding, completeConstruction, isBuilt, startUpgrade, type UpgradeErrorCode } from './buildings';
 import { onUpgraded } from './upgradeEffects';
 import { cloneState } from './clone';
-import { cancelCraft, collectCraft, type CraftErrorCode, instaCraft, settleCrafting, startCraft, stopCraft, unlockPipe, x10Craft } from './crafting';
+import { cancelCraft, collectCraft, type CraftErrorCode, finishCraftDebug, instaCraft, settleCrafting, startCraft, stopCraft, unlockPipe, x10Craft } from './crafting';
 import { BUILDINGS, isBuildingId } from './config/buildings';
 import { isRockId, ROCKS } from './config/mining';
 import { isGatheringKind, isTreeId, TREES } from './config/woodcutting';
@@ -177,7 +177,11 @@ export type Command =
   /** Done: the finished gear piece of pipe `pipe` (`jobId`) goes into the inventory; INVENTORY_FULL keeps it in the pipe. */
   | { id: string; type: 'COLLECT_CRAFT'; pipe: number; jobId: number }
   /** Opens the next crafting pipe (up to 8). */
-  | { id: string; type: 'DEBUG_UNLOCK_PIPE' };
+  | { id: string; type: 'DEBUG_UNLOCK_PIPE' }
+  /** START_CRAFT whose first craft needs and takes no materials (see startCraft `free`). Debug only. */
+  | { id: string; type: 'DEBUG_FORCE_CRAFT'; pipe?: number; recipeId: string; maxCost?: number; stamina?: number }
+  /** INSTA_CRAFT's effect at no cost, on the pipe's current craft; `craft` (optional) binds it to the craft shown. Debug only. */
+  | { id: string; type: 'DEBUG_FINISH_CRAFT'; pipe: number; jobId: number; craft?: number };
 
 export type CommandType = Command['type'];
 
@@ -726,6 +730,20 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
     case 'DEBUG_UNLOCK_PIPE': {
       if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
       const e = unlockPipe(draft, events);
+      if (e) return fail(e.code, e.message);
+      draft = markDebugUsed(draft);
+      break;
+    }
+    case 'DEBUG_FORCE_CRAFT': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const e = startCraft(draft, cmd, now, events, true);
+      if (e) return fail(e.code, e.message);
+      draft = markDebugUsed(draft);
+      break;
+    }
+    case 'DEBUG_FINISH_CRAFT': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const e = finishCraftDebug(draft, cmd, events);
       if (e) return fail(e.code, e.message);
       draft = markDebugUsed(draft);
       break;
