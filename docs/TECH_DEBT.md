@@ -46,6 +46,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #37, 35] `src/components/crafting/RecipePicker.tsx` onTile — a null measureAnchor drops the tap. Use the centred fallback anchor.
 - [PR #37, 20] `src/components/crafting/CraftingModal.tsx` onCraft label — "X started" can omit the pipe when no CRAFT_STARTED matches. Cosmetic.
 - [PR #37, 15] `src/components/crafting/CraftingModal.tsx` onDone — measure runs before the in-flight guard; a double tap is harmless. Check the guard first if touched.
+- [PR #39, 40] `src/components/ui/popoverLayout.ts` placePopover — the unmeasured fallback (150 ms timeout, h null) placed above uses boxH 0, so the box can cover the anchor or run off the bottom. Fix: when h is null use boxH = maxHeight (or force below) and add a test.
 
 ## Engine and data
 
@@ -83,6 +84,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #35, 30] `tests/crafting.test.ts`, `tests/gear.test.ts` — hard-coded catalog counts and iron skip list. Fix: derive from GEAR_SETS × GEAR_PIECE_IDS.
 - [PR #38, 55] `tests/craftingDebug.test.ts` — no split-invariance test for a forced material job (a→b→c vs a→c, including held then released). Add one.
 - [PR #37, 40] `src/components/crafting/CraftingModal.tsx` presentReveal — the 400 ms gap before a new reveal is untested. Extract a pure `revealDelayMs` and unit-test it.
+- [PR #39, 30] `tests/popoverLayout.test.ts` — the "new anchor never reuses the old height" test duplicates the measuredFor test; hook ordering is verified on device only. Fix: drop or annotate.
 
 ## Docs and workflow
 
