@@ -40,6 +40,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #34, 25] BossDetail reveal effect — skipped when the replay panel is open (`lastBoxRef` null); View recovers. Clear replay on a new fight or fall back to the Fight panel anchor.
 - [first boss, 30] `AwayModal.tsx` — the boss line names the only boss (`BOSSES.troll_chieftain`) because `summary.boss` is one aggregate `{fights, wins, losses}`. With a second boss the summary needs counters per boss.
 - [PR #35, 40] `src/app/(tabs)/hero.tsx` EquipmentPanel — switching Combat/Tools leaves an open slot popover anchored to a slot no longer drawn; panel height jumps. Fix: clear the selection on tab change, give the grid a minHeight.
+- [PR #36, 30] `src/components/StatusPanel.tsx` `regenNote` — computes (100 + perk) / 100 in the UI. Fix: take the multiplier from a selector, or word it "+P% from gear perks".
+- [PR #36, 15] `src/components/items/ItemSheet.tsx:52` — row key `${label}-${value}`. Fix: include the index.
 
 ## Engine and data
 
@@ -54,6 +56,9 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#21, 40] `engine/crafting.ts` `advancePipes` — `progressMs += ms × efficiency` is float; could be off by 1 ms at a split boundary with fractional efficiency. Use integer math like the workers.
 - [#25, 20] `engine/replay.ts` — replay applies every command with `allowDebug: true`, so `DEBUG_ADD_UNSPENT_POINTS` replays as valid (pre-existing for all debug commands; `markDebugUsed` flags the save). Server-side replay should reject debug commands.
 - [PR #35, 45] `src/engine/config/items.ts` iron_axe / iron_pickaxe — keep sell 180 (existing-item precedent) while the crafted-piece rule would give ~80; craft-and-sell is close to break-even with the Town Hall bonus. Fix: revisit in an economy pass.
+- [PR #36, 35] `src/engine/equipment.ts` `clampPools` — runs only on equip / unequip. Fix: any future path that removes equipped gear (destroy, sell) must clamp too.
+- [PR #36, 30] `src/engine/migrations.ts` `v21Slot` — infers the tool slot from the defId suffix when `slot` is missing (corrupt saves only). Fix: read the catalog slot.
+- [PR #36, 25] `src/engine/gear.ts` `perkOf` — no check of the perk kind against the slot (save tampering only). Fix: validate on load once a server exists.
 
 ## Tests
 
