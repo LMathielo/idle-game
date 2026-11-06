@@ -1,5 +1,5 @@
 // Contracts between the UI, the client and storage. No React, no Expo.
-import type { AttributeKey, BuildingId, Command, CommandError, DungeonId, DungeonOrBossId, GameEvent, GameState, LogType, SimulationSummary } from '../engine';
+import type { AttributeKey, BossId, BuildingId, Command, CommandError, Difficulty, DungeonId, DungeonOrBossId, GameEvent, GameState, HarderUnlock, LogType, SimulationSummary } from '../engine';
 
 /** Wall clock. The app uses SystemClock; tests use a fake. */
 export interface Clock {
@@ -57,6 +57,8 @@ export type GameSnapshot = {
   awaySummary: SimulationSummary | null;
   /** Dungeons unlocked since the banner was last dismissed (dismissUnlocks()), in unlock order. */
   unlockedDungeons: readonly DungeonOrBossId[];
+  /** Harder difficulties (and bosses on Hard / Extreme) unlocked since the banner was last dismissed, in unlock order (1.24.0). */
+  unlockedHarder: readonly HarderUnlock[];
   /** Debug clock offset in ms (0 in normal play). */
   clockOffsetMs: number;
 };
@@ -104,8 +106,10 @@ export interface GameClient {
     setHeroHp(hp: number): Promise<DispatchResult>;
     /** Resolves the current dungeon run's fight now, for free. Logged as DEBUG_FINISH_DUNGEON_RUN. */
     finishDungeonRun(): Promise<DispatchResult>;
-    /** Adds wins to an unlocked dungeon's counters (default 10). Logged as DEBUG_ADD_DUNGEON_WINS. */
-    addDungeonWins(dungeonId: DungeonId, amount?: number): Promise<DispatchResult>;
+    /** Adds wins to an unlocked dungeon's counters on a difficulty (default 10, Normal). Logged as DEBUG_ADD_DUNGEON_WINS. */
+    addDungeonWins(dungeonId: DungeonId, amount?: number, difficulty?: Difficulty): Promise<DispatchResult>;
+    /** Adds boss wins on a difficulty (default 1, Normal): a Normal win opens Hard, a Hard win opens Extreme. Logged as DEBUG_ADD_BOSS_WINS. */
+    addBossWins(bossId: BossId, amount?: number, difficulty?: Difficulty): Promise<DispatchResult>;
     /** Adds training XP (default 60 = 60 trained minutes) to the attribute being trained. Logged as DEBUG_ADD_TRAINING_XP. */
     addTrainingXp(xp?: number): Promise<DispatchResult>;
     /** Adds gold (default 1,000). Logged as DEBUG_ADD_GOLD. */

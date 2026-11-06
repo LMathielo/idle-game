@@ -54,7 +54,7 @@ import {
 } from '../src/engine';
 import { critMultiplierBp } from '../src/engine/attributes';
 import { newFight, strike } from '../src/engine/combat';
-import { apply, builtGame, fightSide, HOUR, makeClient, MIN, SEC, T0, withCore } from './helpers';
+import { apply, builtGame, fightSide, HOUR, makeClient, MIN, SEC, T0, v22Dungeon, withCore } from './helpers';
 
 type Attrs = Partial<Record<'strength' | 'dexterity' | 'endurance' | 'intelligence', number>>;
 
@@ -520,12 +520,15 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
     const f = (s.activity as { fight: ActiveFight }).fight;
     // (and the v20 step on top: no skills on either side)
     expect(f.hero).toEqual({ damage: { min: 15, max: 17 }, armor: 17, magicDamage: 0, magicResist: 0, critChanceBp: 0, critMultBp: 15_000, attackIntervalMs: 1000, skills: [] });
-    expect(f.enemy).toEqual({ damage: { min: 6, max: 9 }, armor: 6, magicDamage: 0, magicResist: 6, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000, skills: [] });
+    expect(f.mobs[0].side).toEqual({ damage: { min: 6, max: 9 }, armor: 6, magicDamage: 0, magicResist: 6, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000, skills: [] });
     expect(f.log).toEqual(V18_SAVE.activity.fight.log.map((e: { dealt: number }) => ({ ...e, crit: false, physical: e.dealt, magic: 0 })));
-    const { hero: _h, enemy: _e, log: _l, ...fightRest } = f;
-    const { hero: _rh, enemy: _re, log: _rl, ...rawFightRest } = V18_SAVE.activity.fight;
+    const { hero: _h, mobs: _m, log: _l, ...fightRest } = f;
+    const { hero: _rh, enemy: _re, enemyHp: rawHp, enemyMaxHp: rawMax, enemyStrikes: rawStrikes, log: _rl, ...rawFightRest } = V18_SAVE.activity.fight;
     // v20: the frozen 60 s limit, no enemy regen, no skills ready, no stun (tests/firstBoss.test.ts covers the v19 → v20 step)
-    expect(fightRest).toEqual({ ...rawFightRest, maxFightMs: 60_000, enemyRegenBp: 0, enemyRegenProgress: 0, enemyRegenAtMs: rawFightRest.elapsedMs, enemySkillReady: {}, heroStunStrikes: 0 });
+    expect(fightRest).toEqual({ ...rawFightRest, maxFightMs: 60_000, heroStunStrikes: 0 });
+    // v22: the one enemy is mob 0 of the pack, unchanged
+    expect(f.mobs).toHaveLength(1);
+    expect(f.mobs[0]).toMatchObject({ variant: 'base', multBp: 10_000, hp: rawHp, maxHp: rawMax, strikes: rawStrikes, regenBp: 0, regenProgress: 0, regenAtMs: rawFightRest.elapsedMs, skillReady: {} });
     expect(s.dungeon.lastFight!.log).toHaveLength(9);
     expect(s.dungeon.lastFight!.log).toEqual(V18_SAVE.dungeon.lastFight.log.map((e: { dealt: number }) => ({ ...e, crit: false, physical: e.dealt, magic: 0 })));
   });
@@ -540,7 +543,7 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
     const { hpRegenProgress: _p, manaRegenProgress: _q, ...c } = character;
     const { hpRegenProgress: _rp, manaRegenProgress: _rq, ...rc } = rawCharacter;
     expect(c).toEqual(rc);
-    expect({ ...dungeon, lastFight: null }).toEqual({ ...rawDungeon, lastFight: null, bosses: {} }); // v20: boss counters
+    expect({ ...dungeon, lastFight: null }).toEqual({ ...v22Dungeon({ ...rawDungeon, lastFight: null }), bosses: {} }); // v20: boss counters; v22: difficulty fields
     expect(hashState(loadSave(V18_SAVE))).toBe(hashState(s));
   });
 
@@ -585,9 +588,9 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
   });
 });
 
-describe('a new game is a v21 game', () => {
-  it('saveVersion 21, engine 1.23.0 (the stats rework shipped as 1.19.0 / v19)', () => {
-    expect(newGame(1, T0).saveVersion).toBe(21);
-    expect(ENGINE_VERSION).toBe('1.23.0');
+describe('a new game is a v22 game', () => {
+  it('saveVersion 22, engine 1.24.0 (the stats rework shipped as 1.19.0 / v19)', () => {
+    expect(newGame(1, T0).saveVersion).toBe(22);
+    expect(ENGINE_VERSION).toBe('1.24.0');
   });
 });

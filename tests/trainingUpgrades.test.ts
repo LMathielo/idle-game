@@ -25,7 +25,7 @@ import {
   upgradeView,
 } from '../src/engine';
 import type { CommandInput } from '../src/client/types';
-import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, V13_ADDED, V18_ADDED, v12Skills, withoutGearRolls, v16Attributes, v17Added } from './helpers';
+import { apply, builtGame, cmd, HOUR, makeClient, MIN, SEC, T0, V13_ADDED, V18_ADDED, v12Skills, withoutGearRolls, v16Attributes, v17Added, v22Doc } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v11 save + its action log, written by the 1.10.0 engine before Training Grounds upgrades (tests/fixtures). */
@@ -263,7 +263,7 @@ describe('frozen v11 save (tests/fixtures/save-v11.json), 1.10.0 → 1.11.0 (eng
     // the Crafting house (locked) and the idle pipes are added, and smithing is dropped.
     const { character, saveVersion: _v, buildings, crafting, ...rest } = withoutGearRolls(loadSave(V11_SAVE)); // v14 gear rolls: tests/migrationV14.test.ts
     const { character: rc, saveVersion: _rv, buildings: rb, ...rawRest } = V11_SAVE;
-    expect(rest).toEqual({ ...rawRest, dungeon: { ...rawRest.dungeon, bosses: {} } }); // v20: boss counters;
+    expect(rest).toEqual(v22Doc({ ...rawRest, dungeon: { ...rawRest.dungeon, bosses: {} } })); // v20: boss counters;
     expect(buildings).toEqual({ ...rb, crafting: V13_ADDED.craftingBuilding, storage: V18_ADDED.storageBuilding });
     expect(crafting).toEqual(V13_ADDED.crafting);
     expect(character).toEqual({ ...rc, ...v17Added(rc.level), attributes: v16Attributes(rc.attributes), skills: v12Skills(rc.skills) });

@@ -23,7 +23,7 @@ import {
   type ReplayEntry,
   simulate,
 } from '../src/engine';
-import { cmd, HOUR, makeClient, MIN, qty, SEC, v16Attributes, v17Added, V18_ADDED } from './helpers';
+import { cmd, HOUR, makeClient, MIN, qty, SEC, v16Attributes, v17Added, V18_ADDED, v22Doc } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /**
@@ -147,7 +147,7 @@ describe('frozen v14 save (tests/fixtures/save-v14.json), engine 1.14.0 → 1.15
     expect([qty(s, 'oak_logs'), qty(s, 'oak_plank'), s.stamina]).toEqual([41 + 36 + 20, 11, { current: 98, max: 100, progressMs: 7000 }]);
     const { crafting: _c, inventory: _i, stamina: _s, saveVersion: _v, ...rest } = s;
     const { crafting: _c2, inventory: _i2, stamina: _s2, saveVersion: _v2, ...rest14 } = V14_SAVE;
-    expect(rest).toEqual({ ...rest14, dungeon: { ...rest14.dungeon, bosses: {} }, buildings: { ...rest14.buildings, storage: V18_ADDED.storageBuilding }, character: { ...rest14.character, ...v17Added(rest14.character.level), attributes: v16Attributes(rest14.character.attributes) } }); // nothing else moves (v16: extra points; v17: points to spend, mana)
+    expect(rest).toEqual(v22Doc({ ...rest14, dungeon: { ...rest14.dungeon, bosses: {} }, buildings: { ...rest14.buildings, storage: V18_ADDED.storageBuilding }, character: { ...rest14.character, ...v17Added(rest14.character.level), attributes: v16Attributes(rest14.character.attributes) } })); // nothing else moves (v16: extra points; v17: points to spend, mana)
     expect(hashState(loadSave(V14_SAVE))).toBe(hashState(s));
   });
 

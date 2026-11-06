@@ -13,8 +13,12 @@ import {
   type BuildingId,
   type Command,
   CURRENT_SAVE_VERSION,
+  type BossId,
+  type Difficulty,
   type DungeonId,
   type DungeonOrBossId,
+  type HarderUnlock,
+  isBossId,
   ENGINE_VERSION,
   type GameEvent,
   type GameState,
@@ -73,6 +77,8 @@ export class LocalGameClient implements GameClient {
   private awaySummary: SimulationSummary | null = null;
   /** Dungeons unlocked since the player last dismissed the banner (from DUNGEON_UNLOCKED events). */
   private unlockedDungeons: readonly DungeonOrBossId[] = [];
+  /** Harder difficulties (and bosses on Hard / Extreme) unlocked since the banner was last dismissed (from DIFFICULTY_UNLOCKED and DUNGEON_UNLOCKED events with a difficulty). */
+  private unlockedHarder: readonly HarderUnlock[] = [];
   private snapshot: GameSnapshot | null = null;
   private listeners = new Set<() => void>();
   private queue: Promise<unknown> = Promise.resolve();
@@ -181,8 +187,9 @@ export class LocalGameClient implements GameClient {
   }
 
   dismissUnlocks(): void {
-    if (this.unlockedDungeons.length === 0) return;
+    if (this.unlockedDungeons.length === 0 && this.unlockedHarder.length === 0) return;
     this.unlockedDungeons = [];
+    this.unlockedHarder = [];
     this.publish();
   }
 
@@ -249,8 +256,10 @@ export class LocalGameClient implements GameClient {
 
     finishDungeonRun: (): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_FINISH_DUNGEON_RUN' }),
 
-    addDungeonWins: (dungeonId: DungeonId, amount = 10): Promise<DispatchResult> =>
-      this.dispatch({ type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId, amount }),
+    addDungeonWins: (dungeonId: DungeonId, amount = 10, difficulty: Difficulty = 'normal'): Promise<DispatchResult> =>
+      this.dispatch({ type: 'DEBUG_ADD_DUNGEON_WINS', dungeonId, amount, difficulty }),
+    addBossWins: (bossId: BossId, amount = 1, difficulty: Difficulty = 'normal'): Promise<DispatchResult> =>
+      this.dispatch({ type: 'DEBUG_ADD_BOSS_WINS', bossId, amount, difficulty }),
 
     addTrainingXp: (xp = 60): Promise<DispatchResult> => this.dispatch({ type: 'DEBUG_ADD_TRAINING_XP', xp }),
 
@@ -296,6 +305,7 @@ export class LocalGameClient implements GameClient {
         this.paused = false;
         this.awaySummary = null;
         this.unlockedDungeons = [];
+        this.unlockedHarder = [];
         this.publish();
       }),
   };
@@ -381,8 +391,16 @@ export class LocalGameClient implements GameClient {
   }
 
   private noteUnlocks(events: readonly GameEvent[]) {
-    const ids = events.flatMap((e) => (e.type === 'DUNGEON_UNLOCKED' ? [e.dungeonId] : []));
+    const ids = events.flatMap((e) => (e.type === 'DUNGEON_UNLOCKED' && !e.difficulty ? [e.dungeonId] : []));
     if (ids.length > 0) this.unlockedDungeons = [...this.unlockedDungeons, ...ids.filter((id) => !this.unlockedDungeons.includes(id))];
+    const harder = events.flatMap((e): HarderUnlock[] =>
+      e.type === 'DIFFICULTY_UNLOCKED'
+        ? [{ kind: 'difficulty', tier: e.tier, difficulty: e.difficulty }]
+        : e.type === 'DUNGEON_UNLOCKED' && e.difficulty && isBossId(e.dungeonId)
+          ? [{ kind: 'boss', bossId: e.dungeonId, difficulty: e.difficulty }]
+          : [],
+    );
+    if (harder.length > 0) this.unlockedHarder = [...this.unlockedHarder, ...harder];
   }
 
   /**
@@ -459,6 +477,7 @@ export class LocalGameClient implements GameClient {
       prev.clockPaused === this.paused &&
       prev.awaySummary === this.awaySummary &&
       prev.unlockedDungeons === this.unlockedDungeons &&
+      prev.unlockedHarder === this.unlockedHarder &&
       prev.clockOffsetMs === this.clock.offsetMs
     ) {
       return;
@@ -468,6 +487,7 @@ export class LocalGameClient implements GameClient {
       clockPaused: this.paused,
       awaySummary: this.awaySummary,
       unlockedDungeons: this.unlockedDungeons,
+      unlockedHarder: this.unlockedHarder,
       clockOffsetMs: this.clock.offsetMs,
     };
     for (const l of this.listeners) l();

@@ -40,7 +40,7 @@ import {
   STAT_EFFECTS,
   woodcuttingStrength,
 } from '../src/engine';
-import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, v17Added, V18_ADDED, v19Regen, withCore } from './helpers';
+import { apply, builtGame, HOUR, makeClient, MIN, SEC, T0, v17Added, V18_ADDED, v19Regen, v22Doc, withCore } from './helpers';
 
 const withLevel = (s: GameState, level: number, extra: Partial<GameState['character']['attributes']> = {}, spent: Partial<GameState['character']['attributes']> = {}): GameState => ({
   ...s,
@@ -225,7 +225,7 @@ describe('save v16 migration (v15 → v16)', () => {
     expect(s.character.unspentPoints).toBe(10);
     const { character, saveVersion: _v, ...rest } = s;
     const { character: rc, saveVersion: _rv, ...raw } = V15_SAVE;
-    expect(rest).toEqual({ ...raw, dungeon: { ...raw.dungeon, bosses: {} }, buildings: { ...raw.buildings, storage: V18_ADDED.storageBuilding } }); // v18: Storage, unbuilt
+    expect(rest).toEqual(v22Doc({ ...raw, dungeon: { ...raw.dungeon, bosses: {} }, buildings: { ...raw.buildings, storage: V18_ADDED.storageBuilding } })); // v18: Storage, unbuilt
     expect({ ...character, attributes: rc.attributes }).toEqual({ ...v19Regen(rc), ...v17Added(3) }); // v19: banked HP regen ×100
     // The search in progress keeps its 47 s; it now ends at 114,552 ms (core DEX 5: −4.54%).
     expect(dungeonRunView(s)).toMatchObject({ phase: 'search', searchMs: 114_552, remainingMs: 114_552 - 47_000 });

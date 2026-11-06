@@ -1,6 +1,7 @@
 import { merchantStockSlots } from './bonuses';
 import { newBuildingsState } from './buildings';
 import { newCraftingState } from './crafting';
+import { DUNGEON_TIERS } from './config/dungeons';
 import { STARTING_HERO } from './config/newGame';
 import { INVENTORY_CAPACITY } from './config/items';
 import { STAMINA } from './config/stamina';
@@ -48,7 +49,14 @@ export function newGame(seed: number, now: number): GameState {
     offline: { capMs: DEFAULT_OFFLINE_CAP_MS, efficiency: DEFAULT_OFFLINE_EFFICIENCY },
     activity: null,
     stamina: { current: STAMINA.startMax, max: STAMINA.startMax, progressMs: 0 },
-    dungeon: { lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {}, bosses: {} },
+    dungeon: {
+      lastFight: null,
+      totals: { runs: 0, wins: 0, losses: 0 },
+      byDungeon: {},
+      bosses: {},
+      harder: { hard: { byDungeon: {}, bosses: {} }, extreme: { byDungeon: {}, bosses: {} } },
+      difficulty: Object.fromEntries(DUNGEON_TIERS.map((t) => [String(t.tier), 'normal' as const])),
+    },
     training,
     merchant: newMerchantState(merchantStockSlots({ buildings })),
     buildings,

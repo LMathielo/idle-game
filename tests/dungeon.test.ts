@@ -91,7 +91,7 @@ describe('search time', () => {
     expect(before.activity).toMatchObject({ phase: 'search', progressMs: SEARCH_MS - 1, fight: null });
     const atEnd = simulate(s, T0 + SEARCH_MS).state;
     expect(atEnd.activity).toMatchObject({ phase: 'fight', progressMs: 0 });
-    expect(atEnd.activity?.kind === 'dungeon' && atEnd.activity.fight).toMatchObject({ elapsedMs: 0, log: [], heroStrikes: 0, enemyStrikes: 0 });
+    expect(atEnd.activity?.kind === 'dungeon' && atEnd.activity.fight).toMatchObject({ elapsedMs: 0, log: [], heroStrikes: 0, mobs: [{ strikes: 0 }] });
     expect(atEnd.dungeon.totals.runs).toBe(0);
     const { state, endsAt, fight } = firstRun(s);
     expect(fight.durationMs).toBeGreaterThan(0);
@@ -330,7 +330,7 @@ describe('rewards', () => {
   it('only the last fight is stored', () => {
     const s = simulate(dungeonGame(), T0 + 10 * (SEARCH_MS + 10 * SEC)).state;
     expect(s.dungeon.totals.runs).toBe(10);
-    expect(Object.keys(s.dungeon).sort()).toEqual(['bosses', 'byDungeon', 'lastFight', 'totals']);
+    expect(Object.keys(s.dungeon).sort()).toEqual(['bosses', 'byDungeon', 'difficulty', 'harder', 'lastFight', 'totals']);
     expect(s.dungeon.byDungeon).toEqual({ rat_cellar: s.dungeon.totals }); // counters only, no per-run log
     expect(s.dungeon.lastFight?.log.length).toBeLessThanOrEqual(2 * (COMBAT.maxFightMs / 1000));
   });
@@ -504,7 +504,7 @@ describe('one activity at a time', () => {
     const wood = apply(builtGame(1, T0), { type: 'START_ACTIVITY', kind: 'woodcutting', treeId: 'oak' }, T0);
     const r = applyCommand(wood, { id: 'd', ...RAT_CELLAR }, T0 + 370 * SEC);
     if (!r.ok) throw new Error(r.error.message);
-    expect(r.state.activity).toEqual({ kind: 'dungeon', dungeonId: 'rat_cellar', startedAt: T0 + 370 * SEC, phase: 'search', progressMs: 0, fight: null });
+    expect(r.state.activity).toEqual({ kind: 'dungeon', dungeonId: 'rat_cellar', difficulty: 'normal', startedAt: T0 + 370 * SEC, phase: 'search', progressMs: 0, fight: null });
     expect(r.state.stats.totalActions).toBe(3);
   });
 

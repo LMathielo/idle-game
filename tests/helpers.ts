@@ -200,14 +200,88 @@ export function v19Regen<C extends { hpRegenProgress?: number; manaRegenProgress
 }
 
 /**
- * What the v18 → v19 and v19 → v20 migrations do to a raw older `dungeon` slice: every strike of the last fight's log gets
- * `crit: false`, `physical` = the damage dealt and `magic: 0` (exactly what a 1.18.0 strike was), and the boss kill counters start
- * empty (`bosses: {}`, v20; the logs need nothing more, the v20 log fields only exist when they apply).
+ * What the v18 → v19, v19 → v20 and v21 → v22 migrations do to a raw older `dungeon` slice: every strike of the last fight's log gets
+ * `crit: false`, `physical` = the damage dealt and `magic: 0` (exactly what a 1.18.0 strike was), the boss kill counters start empty
+ * (`bosses: {}`, v20; the logs need nothing more, the v20 log fields only exist when they apply), and (v22) the Hard / Extreme counters
+ * start empty, tier 1 is on Normal and the last fight is a Normal fight of one plain mob.
  */
-export function v19Dungeon<D extends { lastFight: { log: { dealt: number }[] } | null }>(dungeon: D): D & { bosses: Record<string, never> } {
+export function v19Dungeon<D extends { lastFight: { log: { dealt: number }[]; enemyMaxHp?: number; enemyHpEnd?: number } | null }>(dungeon: D): D & { bosses: Record<string, never> } {
+  return v22Dungeon(v19DungeonOnly(dungeon)) as never;
+}
+
+function v19DungeonOnly<D extends { lastFight: { log: { dealt: number }[] } | null }>(dungeon: D) {
   if (!dungeon.lastFight) return { ...dungeon, bosses: {} };
   const log = dungeon.lastFight.log.map((e) => ({ ...e, crit: false, physical: e.dealt, magic: 0 }));
   return { ...dungeon, lastFight: { ...dungeon.lastFight, log }, bosses: {} };
+}
+
+/** What the v21 → v22 migration adds to a `dungeon` slice (see migrateV21toV22). */
+export function v22Dungeon<D extends { lastFight: any }>(dungeon: D) {
+  const harder = { hard: { byDungeon: {}, bosses: {} }, extreme: { byDungeon: {}, bosses: {} } };
+  const f = dungeon.lastFight;
+  const lastFight = f ? { ...f, difficulty: 'normal', mobs: [{ variant: 'base', multBp: 10_000, maxHp: f.enemyMaxHp, hpEnd: f.enemyHpEnd }] } : f;
+  return { ...dungeon, lastFight, harder, difficulty: { '1': 'normal' } };
+}
+
+/**
+ * A 1.24.0 state seen in the v21 shape: no difficulty fields (the selected difficulty, the Hard / Extreme counters, `difficulty` on the
+ * activity and the last fight, its `mobs`), and the fight in progress with its one enemy in the flat v21 fields instead of `mobs[0]`.
+ * A script that never leaves Normal plays exactly as 1.23.0 did, so seen like this its hash is the 1.23.0 one.
+ */
+export function asV21(s: GameState): GameState {
+  const { harder: _hd, difficulty: _sel, lastFight, ...dungeon } = s.dungeon;
+  let last: unknown = lastFight;
+  if (lastFight) {
+    const { difficulty: _d, mobs: _m, ...rest } = lastFight;
+    last = rest;
+  }
+  let activity: unknown = s.activity;
+  if (s.activity && (s.activity.kind === 'dungeon' || s.activity.kind === 'boss')) {
+    const { difficulty: _ad, ...a } = s.activity;
+    activity = a;
+    if (s.activity.fight) {
+      const { mobs, ...fight } = s.activity.fight;
+      const m = mobs[0];
+      activity = {
+        ...a,
+        fight: {
+          ...fight,
+          enemy: m.side,
+          enemyHp: m.hp,
+          enemyMaxHp: m.maxHp,
+          enemyStrikes: m.strikes,
+          enemyRegenBp: m.regenBp,
+          enemyRegenProgress: m.regenProgress,
+          enemyRegenAtMs: m.regenAtMs,
+          enemySkillReady: m.skillReady,
+        },
+      };
+    }
+  }
+  return { ...s, saveVersion: 21, dungeon: { ...dungeon, lastFight: last }, activity } as unknown as GameState;
+}
+
+/**
+ * What the v21 → v22 migration does to a whole raw document: the `dungeon` slice (v22Dungeon), a dungeon / boss activity gets
+ * `difficulty: 'normal'`, and its fight's one enemy moves into `mobs[0]`. Tests that compare a migrated old fixture with its raw
+ * document wrap the expected document in this.
+ */
+export function v22Doc<D extends Record<string, any>>(doc: D): D {
+  const out: Record<string, any> = { ...doc };
+  if (doc.dungeon) out.dungeon = v22Dungeon(doc.dungeon);
+  const a = doc.activity;
+  if (a && (a.kind === 'dungeon' || a.kind === 'boss')) {
+    out.activity = { ...a, difficulty: 'normal' };
+    const f = a.fight;
+    if (f && !f.mobs) {
+      const { enemyHp, enemyMaxHp, enemy, enemyStrikes, enemyRegenBp, enemyRegenProgress, enemyRegenAtMs, enemySkillReady, ...rest } = f;
+      out.activity.fight = {
+        ...rest,
+        mobs: [{ variant: 'base', multBp: 10_000, hp: enemyHp, maxHp: enemyMaxHp, side: enemy, strikes: enemyStrikes, regenBp: enemyRegenBp ?? 0, regenProgress: enemyRegenProgress ?? 0, regenAtMs: enemyRegenAtMs ?? 0, skillReady: enemySkillReady ?? {} }],
+      };
+    }
+  }
+  return out as D;
 }
 
 // ---------- first boss (1.20.0) ----------

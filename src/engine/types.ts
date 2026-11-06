@@ -145,6 +145,15 @@ export type BossId = 'troll_chieftain';
 /** A stage dungeon or a boss: what a fight record, an unlock event and a summary name. */
 export type DungeonOrBossId = DungeonId | BossId;
 
+/**
+ * Difficulty of a dungeon tier (1.24.0, save v22). Normal is the original content (one mob, x1); Hard and Extreme replay the tier's stages as
+ * packs of stronger mobs and its boss with scaled stats. Data lives in config/difficulty.ts.
+ */
+export type Difficulty = 'normal' | 'hard' | 'extreme';
+
+/** What a pack mob is: the plain enemy of the difficulty, a Veteran, or an Extreme (1.24.0). */
+export type MobVariant = 'base' | 'veteran' | 'extreme';
+
 export type EnemyId = 'rat' | 'bat' | 'wolf' | 'skeleton' | 'troll' | 'troll_chieftain';
 
 /** An enemy (later hero) combat skill, by id. Data lives in config/skills.ts. */
@@ -193,40 +202,54 @@ export type CombatSide = {
 };
 
 /**
- * The fight in progress (save v9). It plays out in engine time inside simulate(): each strike happens at its
- * exact time (strike n of a side at n × its interval; on a tie the hero strikes first), HP regenerates
- * between strikes, and the outcome is applied when it ends. The hero's HP is `character.hp` throughout.
+ * One mob of the fight (save v22; before it a fight had exactly one enemy, held in flat `enemy*` fields). A Normal fight and a boss fight
+ * have one mob; a Hard / Extreme stage fight has the pack, in pack order (the hero strikes the first alive one).
+ */
+export type FightMob = {
+  variant: MobVariant;
+  /** Stat multiplier this mob was made with, basis points of the Normal enemy (10 000 = x1). It is also the mob's reward multiplier. */
+  multBp: number;
+  hp: number;
+  /** Max HP when the fight started, for the bars. */
+  maxHp: number;
+  /** Frozen when the fight starts, like the hero's. */
+  side: CombatSide;
+  /** Strikes this mob has made so far (a cast counts). Its next one is due at (strikes + 1) × attackIntervalMs. */
+  strikes: number;
+  /**
+   * Regeneration while it fights: basis points of its max HP per second, 0 = none (bosses only). Applied at each event with exact
+   * integer banking (src/engine/combat.ts regenMobTo); never above max, nothing once it is at 0.
+   */
+  regenBp: number;
+  /** Regen banked towards the next HP, in bp·max-HP·ms units (10 000 000 per HP). 0 while at max. */
+  regenProgress: number;
+  /** Fight time up to which this mob's regen has been applied, ms. */
+  regenAtMs: number;
+  /** Per skill: the mob's strike number at which it is ready again (starts at the skill's firstReadyStrike). */
+  skillReady: Partial<Record<CombatSkillId, number>>;
+};
+
+/**
+ * The fight in progress (save v9; mobs: save v22). It plays out in engine time inside simulate(): each strike happens at its
+ * exact time (strike n of a side at n × its interval; on a tie the hero strikes first, then the mobs in pack order), HP regenerates
+ * between strikes, and the outcome is applied when it ends. The hero's HP is `character.hp` throughout. The hero strikes the first
+ * alive mob; every alive mob strikes the hero on its own timer.
  */
 export type ActiveFight = {
+  /** The enemy type every mob is made from. */
   enemyId: EnemyId;
   /** Engine time into the fight, ms. Never lost between resumes. */
   elapsedMs: number;
   heroHpStart: number;
   /** Max HP when the fight started, for the bars. */
   heroMaxHp: number;
-  enemyHp: number;
-  enemyMaxHp: number;
   hero: CombatSide;
-  enemy: CombatSide;
-  /**
-   * Strikes each side has made so far (a stunned hero strike and a cast count). The next one is due at
-   * (strikes + 1) × attackIntervalMs.
-   */
+  /** Strikes the hero has made so far (a stunned strike counts). The next one is due at (heroStrikes + 1) × attackIntervalMs. */
   heroStrikes: number;
-  enemyStrikes: number;
-  /** The fight's time limit, ms (frozen when it starts: 60 000 for a dungeon, the boss's own for a boss; save v20). */
+  /** The pack, in pack order (at least one mob). */
+  mobs: FightMob[];
+  /** The fight's time limit, ms (frozen when it starts: 60 000 for a stage fight on any difficulty, the boss's own for a boss; save v20). */
   maxFightMs: number;
-  /**
-   * Enemy HP regeneration while it fights (save v20): basis points of its max HP per second, 0 = none. Applied at each event
-   * with exact integer banking (src/engine/combat.ts regenEnemyTo); never above max, nothing once the enemy is at 0.
-   */
-  enemyRegenBp: number;
-  /** Regen banked towards the next enemy HP, in bp·max-HP·ms units (10 000 000 per HP). 0 while at max. */
-  enemyRegenProgress: number;
-  /** Fight time up to which the enemy's regen has been applied, ms. */
-  enemyRegenAtMs: number;
-  /** Per enemy skill: the enemy strike number at which it is ready again (starts at the skill's firstReadyStrike). */
-  enemySkillReady: Partial<Record<CombatSkillId, number>>;
   /** The hero's next strikes that are lost to a stun (save v20). Counts down on each lost strike. */
   heroStunStrikes: number;
   /** Strikes that have landed so far, in time order. */
@@ -237,13 +260,20 @@ export type ActiveFight = {
  * One boss fight (1.20.0): paid for at entry, no search, one fight, no repeat. It plays out like a dungeon fight (same events,
  * same simulate path); when it ends the activity is cleared and the hero is idle. `progressMs` is always 0.
  */
-export type BossActivity = ActivityBase & { kind: 'boss'; bossId: BossId; fight: ActiveFight };
+export type BossActivity = ActivityBase & { kind: 'boss'; bossId: BossId; difficulty: Difficulty; fight: ActiveFight };
 
 /**
  * Auto-repeat: runs follow each other back-to-back until stopped. Stopping loses the current run (in either
  * phase). `fight` is set exactly when `phase` is 'fight'.
  */
-export type DungeonActivity = ActivityBase & { kind: 'dungeon'; dungeonId: DungeonId; phase: DungeonPhase; fight: ActiveFight | null };
+export type DungeonActivity = ActivityBase & {
+  kind: 'dungeon';
+  dungeonId: DungeonId;
+  /** The difficulty this run (and every repeat of it) plays on (save v22). Changing the tier's selected difficulty does not change it. */
+  difficulty: Difficulty;
+  phase: DungeonPhase;
+  fight: ActiveFight | null;
+};
 
 /**
  * Trains one attribute. Its progress lives in `state.training.attributes[attribute]`, not here, so pausing
@@ -302,6 +332,11 @@ export type FightLogEntry = {
   stun?: number;
   stunned?: true;
   enemyHpAfter?: number;
+  /**
+   * Pack fights (save v22), only when the fight has more than one mob: the 0-based pack position of the mob that struck (an enemy
+   * entry) or was struck (a hero entry). Absent = mob 0, so a fight of one mob logs exactly as before.
+   */
+  mob?: number;
 };
 
 export type FightRewards = {
@@ -326,6 +361,8 @@ export type FightEndReason = 'enemy_defeated' | 'hero_defeated' | 'time_limit' |
 export type FightRecord = {
   /** The stage dungeon, or (1.20.0) the boss, this fight was in. */
   dungeonId: DungeonOrBossId;
+  /** The difficulty it was fought on (save v22). */
+  difficulty: Difficulty;
   enemyId: EnemyId;
   won: boolean;
   endReason: FightEndReason;
@@ -335,13 +372,25 @@ export type FightRecord = {
   heroHpEnd: number;
   /** Max HP at the moment of the fight, for the replay bars. */
   heroMaxHp: number;
+  /** The whole pack's max HP and the HP it had left (sums over `mobs`; for a fight of one mob, that mob's). */
   enemyMaxHp: number;
   enemyHpEnd: number;
+  /** The pack in pack order (save v22): what each mob was and how much HP it had left. */
+  mobs: FightRecordMob[];
   rewards: FightRewards;
   log: FightLogEntry[];
 };
 
+/** One mob of a finished fight, for the replay and the result line. */
+export type FightRecordMob = { variant: MobVariant; multBp: number; maxHp: number; hpEnd: number };
+
 export type DungeonTotals = { runs: number; wins: number; losses: number };
+
+/** The counters of one harder difficulty (save v22). Normal keeps its counters in `DungeonState.byDungeon` / `bosses`, where they always were. */
+export type DifficultyCounters = {
+  byDungeon: Partial<Record<DungeonId, DungeonTotals>>;
+  bosses: Partial<Record<BossId, DungeonTotals>>;
+};
 
 export type DungeonState = {
   lastFight: FightRecord | null;
@@ -360,6 +409,16 @@ export type DungeonState = {
    * counting stage runs only. A missing entry means 0/0/0. Wins only go up, so an unlock based on them is permanent.
    */
   bosses: Partial<Record<BossId, DungeonTotals>>;
+  /**
+   * Hard and Extreme counters (save v22), same shapes as `byDungeon` / `bosses` above, which are the Normal ones (existing counters
+   * became Normal). `totals` still counts every stage run of every difficulty. A missing entry means 0/0/0.
+   */
+  harder: Record<Exclude<Difficulty, 'normal'>, DifficultyCounters>;
+  /**
+   * The difficulty selected per dungeon tier (save v22), keyed by the tier number as a string ("1"). The UI shows and starts runs on
+   * it; a missing tier means Normal. Only a difficulty that is unlocked can be selected (SET_DUNGEON_DIFFICULTY).
+   */
+  difficulty: Record<string, Difficulty>;
 };
 
 export type GameStats = {
@@ -513,7 +572,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 21;
+  saveVersion: 22;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -563,7 +622,9 @@ export type GameEvent =
   | { type: 'DUNGEON_RUN_CANCELLED'; dungeonId: DungeonId }
   | { type: 'FIGHT_RESOLVED'; dungeonId: DungeonOrBossId; won: boolean }
   /** A dungeon's (or boss's) unlock requirement was just met (a win, or the debug win grant). */
-  | { type: 'DUNGEON_UNLOCKED'; dungeonId: DungeonOrBossId }
+  | { type: 'DUNGEON_UNLOCKED'; dungeonId: DungeonOrBossId; /** Set for a boss unlocked on Hard / Extreme (1.24.0); absent = Normal. */ difficulty?: Difficulty }
+  /** A harder difficulty of a dungeon tier was just unlocked by its first boss win on the one below (1.24.0). */
+  | { type: 'DIFFICULTY_UNLOCKED'; tier: number; difficulty: Difficulty }
   | { type: 'TRAINING_TIER_UNLOCKED'; tier: number }
   /** One per level gained, also when several levels come in one simulate() call. */
   | { type: 'TRAINING_LEVEL_UP'; attribute: AttributeKey; level: number }
@@ -603,6 +664,9 @@ export type GameEvent =
   | { type: 'CRAFT_JOB_CANCELLED'; pipe: number; jobId: number }
   | { type: 'PIPE_UNLOCKED'; pipes: number };
 
+/** A harder difficulty opened, or a boss opened on one (1.24.0). */
+export type HarderUnlock = { kind: 'difficulty'; tier: number; difficulty: Difficulty } | { kind: 'boss'; bossId: BossId; difficulty: Difficulty };
+
 /** What happened during one simulate() call. Shown in the "While you were away" modal. */
 export type SimulationSummary = {
   /** Time the clock says passed (0 when the clock moved backwards). */
@@ -627,6 +691,8 @@ export type SimulationSummary = {
   boss: { fights: number; wins: number; losses: number };
   /** Dungeons (and bosses) unlocked during this period, in the order they unlocked. */
   dungeonsUnlocked: DungeonOrBossId[];
+  /** Difficulties (and bosses on Hard / Extreme) unlocked during this period, in order (1.24.0). */
+  harderUnlocks: HarderUnlock[];
   /** Training XP (whole points) earned per attribute. */
   trainingXpGained: Partial<Record<AttributeKey, number>>;
   /** Training levels gained per attribute. */
