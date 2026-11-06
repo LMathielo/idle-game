@@ -8,10 +8,17 @@
 // steps aside while the "While you were away" summary or a GameDialog is up (two RN modals never present at once);
 // errors inside it are shown inline, not as dialogs.
 //
+// Switching: item grids move an open popover onto another item (anchor changes while the Modal stays visible) with a
+// quick crossfade, not a close / reopen: the old box (a snapshot of its content and placement) fades out (FADE_OUT_MS)
+// while the new one mounts hidden and is measured; once measured it fades in (FADE_IN_MS). State machine:
+// popoverCrossfade.ts. Reduce-motion: the old box stays until the new one is measured, then swaps at once.
+//
 // Usage: keep `{ key, anchor } | null` in state; on press, `measureAnchor(ref.current)` then set it.
-import { type ReactNode, type RefObject, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
+  Animated,
+  Easing,
   type GestureResponderEvent,
   type HostInstance,
   type LayoutChangeEvent,
@@ -27,7 +34,8 @@ import { useGameSnapshot } from '../../client/GameProvider';
 import { colors, fonts } from '../../theme';
 import { overlayFrame, useDialogShowing } from './GameDialog';
 import { useScreenInsets } from './insets';
-import { type AnchorBox, type Measured, boxShown, CARET, MEASURE_TIMEOUT_MS, measuredFor, placePopover } from './popoverLayout';
+import { type Crossfade, type CrossfadeEvent, IDLE, crossfade, fadeInProgress } from './popoverCrossfade';
+import { type AnchorBox, type Measured, boxShown, CARET, FADE_IN_MS, FADE_OUT_MS, MEASURE_TIMEOUT_MS, measuredFor, placePopover } from './popoverLayout';
 
 let presentationSeq = 0;
 
@@ -50,14 +58,59 @@ export function anchorOf(ref: RefObject<HostInstance | null>): Promise<AnchorRec
   return measureAnchor(ref.current);
 }
 
+/** What one box shows (and where): kept as a snapshot while that box fades out. */
+type BoxData = {
+  anchor: AnchorRect;
+  title: string;
+  icon?: ReactNode;
+  titleColor?: string;
+  iconBorder?: string;
+  subtitle?: ReactNode;
+  children?: ReactNode;
+};
+
+/** The old box during a switch: its content + measured height, and its own opacity. */
+type Snapshot = { data: BoxData; h: number | null; anim: Animated.Value };
+
+type Xf = {
+  presentation: number;
+  visible: boolean;
+  m: Crossfade;
+  prev: Snapshot | null;
+  /** Opacity of the new box while the machine is not idle (null in idle: it is then 1 once shown, else 0). */
+  live: Animated.Value | null;
+  /** When the new box started fading in (to resume from its opacity if another switch interrupts). */
+  inStart: number | null;
+};
+
+function step(x: Xf, e: CrossfadeEvent): Xf {
+  const m = crossfade(x.m, e);
+  if (m === x.m) return x;
+  return { ...x, m, prev: m.hasPrev ? x.prev : null, live: m.phase === 'idle' ? null : x.live };
+}
+
+function useReduceMotion(): boolean {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => alive && setReduce(v), () => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
+    return () => {
+      alive = false;
+      sub.remove();
+    };
+  }, []);
+  return reduce;
+}
+
 type Props = {
   /** null = closed. */
   anchor: AnchorRect | null;
   onClose: () => void;
   /**
    * Item grids: called with the window point of a tap on the backdrop. Resolve true when the tap landed on another
-   * slot and the caller already pointed `anchor` (and the content) at it: the popover then stays up and just moves,
-   * with no close / fade. Resolve false to close as usual.
+   * slot and the caller already pointed `anchor` (and the content) at it: the popover then stays up and crossfades
+   * onto it (old box out, new box in), with no Modal close / open. Resolve false to close as usual.
    */
   onOutsidePress?: (point: { x: number; y: number }) => Promise<boolean>;
   title: string;
@@ -109,19 +162,107 @@ export function InfoPopover({ anchor, onClose, onOutsidePress, title, icon, titl
     onOutsidePress({ x: pageX, y: pageY }).then((handled) => !handled && onClose(), onClose);
   };
 
-  if (!anchor) return null;
+  const reduce = useReduceMotion();
+  const data: BoxData | null = anchor ? { anchor, title, icon, titleColor, iconBorder, subtitle, children } : null;
 
-  const { left, top, width, maxHeight, boxH, below, caretLeft, caretFits } = placePopover(anchor, h, win, insets);
+  // Crossfade state, derived during render when the presentation changes (so the very first frame of a switch already
+  // shows the old box's snapshot at full opacity and the new box hidden: no frame with the new content in the old place).
+  const [xf, setXf] = useState<Xf>(() => ({ presentation, visible, m: IDLE, prev: null, live: null, inStart: null }));
+  const displayed = useRef<{ presentation: number; data: BoxData; h: number | null } | null>(null);
+  if (xf.presentation !== presentation) {
+    let next: Xf = { presentation, visible, m: IDLE, prev: null, live: null, inStart: null };
+    if (xf.visible && visible) {
+      const prevShown = displayed.current?.presentation === xf.presentation;
+      const m = crossfade(xf.m, { t: 'switch', prevShown, reduce });
+      let prev = m.hasPrev ? xf.prev : null;
+      if (m.hasPrev && !xf.m.hasPrev && displayed.current) {
+        const start = xf.m.phase === 'fadingIn' ? fadeInProgress(Date.now() - (xf.inStart ?? Date.now())) : 1;
+        prev = { data: displayed.current.data, h: displayed.current.h, anim: new Animated.Value(start) };
+      }
+      next = { presentation, visible, m, prev, live: m.phase === 'idle' ? null : new Animated.Value(0), inStart: null };
+    }
+    setXf(next);
+  }
+  const phase = xf.m.phase;
 
+  // The box on screen, for the next switch's snapshot (committed values only).
+  useLayoutEffect(() => {
+    if (!data || !visible) {
+      displayed.current = null;
+      return;
+    }
+    if (xf.presentation === presentation && (phase === 'idle' ? shown : phase === 'fadingIn')) displayed.current = { presentation, data, h };
+  });
+
+  // The new box is measured (or timed out): the machine may fade it in.
+  useEffect(() => {
+    if (visible && shown) setXf((x) => (x.presentation === presentation ? step(x, { t: 'ready', reduce }) : x));
+  }, [visible, shown, presentation, reduce]);
+
+  const outAnim = phase === 'fadingOut' ? (xf.prev?.anim ?? null) : null;
+  useEffect(() => {
+    if (!outAnim) return;
+    const done = () => setXf((x) => step(x, { t: 'outDone' }));
+    const a = Animated.timing(outAnim, { toValue: 0, duration: FADE_OUT_MS, easing: Easing.linear, useNativeDriver: true });
+    a.start(({ finished }) => finished && done());
+    const t = setTimeout(done, FADE_OUT_MS + 100); // if the native callback is ever lost, never stay in fadingOut
+    return () => {
+      a.stop();
+      clearTimeout(t);
+    };
+  }, [outAnim]);
+
+  const inAnim = phase === 'fadingIn' ? xf.live : null;
+  useEffect(() => {
+    if (!inAnim) return;
+    const done = () => setXf((x) => (x.live === inAnim ? step(x, { t: 'inDone' }) : x));
+    setXf((x) => (x.live === inAnim ? { ...x, inStart: Date.now() } : x));
+    const a = Animated.timing(inAnim, { toValue: 1, duration: FADE_IN_MS, easing: Easing.linear, useNativeDriver: true });
+    a.start(({ finished }) => finished && done());
+    const t = setTimeout(done, FADE_IN_MS + 100);
+    return () => {
+      a.stop();
+      clearTimeout(t);
+    };
+  }, [inAnim]);
+
+  if (!data) return null;
+
+  const liveOpacity = phase === 'idle' || !xf.live ? (shown ? 1 : 0) : xf.live;
+  // Reduce-motion holds the old box until the new one is ready; it is never touchable (its buttons act on the old item).
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <Pressable style={StyleSheet.absoluteFill} onPress={onBackdrop} accessibilityRole="button" accessibilityLabel="Close info" />
-      <View
-        key={presentation}
-        style={[styles.box, { left, top, width, maxHeight, opacity: shown ? 1 : 0 }]}
-        onLayout={onLayout}
-        accessibilityViewIsModal
-      >
+      {xf.prev ? <PopoverBox data={xf.prev.data} h={xf.prev.h} win={win} insets={insets} opacity={xf.prev.anim} live={false} onClose={onClose} /> : null}
+      <PopoverBox key={presentation} data={data} h={h} win={win} insets={insets} opacity={liveOpacity} live onClose={onClose} onLayout={onLayout} />
+    </Modal>
+  );
+}
+
+type BoxProps = {
+  data: BoxData;
+  h: number | null;
+  win: { width: number; height: number };
+  insets: { top: number; bottom: number; left: number; right: number };
+  opacity: number | Animated.Value;
+  /** false = the fading-out snapshot: inert and hidden from accessibility. */
+  live: boolean;
+  onClose: () => void;
+  onLayout?: (e: LayoutChangeEvent) => void;
+};
+
+/** One popover box with its caret; `opacity` fades both. */
+function PopoverBox({ data, h, win, insets, opacity, live, onClose, onLayout }: BoxProps) {
+  const { anchor, title, icon, titleColor, iconBorder, subtitle, children } = data;
+  const { left, top, width, maxHeight, boxH, below, caretLeft, caretFits } = placePopover(anchor, h, win, insets);
+  return (
+    <Animated.View
+      style={[StyleSheet.absoluteFill, { opacity }]}
+      pointerEvents={live ? 'box-none' : 'none'}
+      accessibilityElementsHidden={!live}
+      importantForAccessibility={live ? 'auto' : 'no-hide-descendants'}
+    >
+      <View style={[styles.box, { left, top, width, maxHeight }]} onLayout={onLayout} accessibilityViewIsModal={live}>
         <View style={[overlayFrame.frame, styles.shrink]}>
           <View style={[overlayFrame.box, styles.inner]}>
             <View style={styles.head}>
@@ -144,7 +285,7 @@ export function InfoPopover({ anchor, onClose, onOutsidePress, title, icon, titl
           </View>
         </View>
       </View>
-      {shown && caretFits ? (
+      {caretFits ? (
         <View
           pointerEvents="none"
           style={[
@@ -154,7 +295,7 @@ export function InfoPopover({ anchor, onClose, onOutsidePress, title, icon, titl
           ]}
         />
       ) : null}
-    </Modal>
+    </Animated.View>
   );
 }
 

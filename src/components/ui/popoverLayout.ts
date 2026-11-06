@@ -24,6 +24,9 @@ export const CARET = 8;
 export const MIN_H = 140;
 /** If the box has not reported its layout within this long of becoming visible, it is shown anyway. */
 export const MEASURE_TIMEOUT_MS = 150;
+/** Item switch crossfade: the old box fades out, then the new one fades in once measured (reduce-motion: instant). */
+export const FADE_OUT_MS = 80;
+export const FADE_IN_MS = 120;
 
 export type Placement = {
   left: number;

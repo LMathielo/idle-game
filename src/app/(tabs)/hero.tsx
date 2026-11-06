@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameClient, useGameState } from '../../client/GameProvider';
@@ -185,7 +185,12 @@ function HeroItemSheet({ selection, onClose, onOutsidePress }: { selection: Sele
   const [errorState, setErrorState] = useState<{ scope: string; message: string } | null>(null);
   const error = errorState && errorState.scope === scope ? errorState.message : null;
   const setError = (message: string | null) => setErrorState(message === null ? null : { scope, message });
-  const [busy, setBusy] = useState(false);
+  // Busy and the result's close belong to the item the command was sent for: if the player switched items meanwhile,
+  // the result neither closes the new item's popover nor disables its buttons.
+  const [busyScope, setBusyScope] = useState<string | null>(null);
+  const busy = busyScope === scope;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
 
   const item: Item | undefined =
     selection?.kind === 'inventory'
@@ -202,16 +207,17 @@ function HeroItemSheet({ selection, onClose, onOutsidePress }: { selection: Sele
 
   const send = (cmd: CommandInput, closeAfter: boolean) => {
     if (busy) return;
-    setBusy(true);
+    const at = scope;
+    setBusyScope(at);
     setError(null);
     client
       .dispatch(cmd)
       .then((res) => {
-        if (!res.ok) setError(res.error.message);
-        else if (closeAfter) close();
+        if (!res.ok) setErrorState({ scope: at, message: res.error.message });
+        else if (closeAfter && scopeRef.current === at) close();
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setBusy(false));
+      .catch((err: unknown) => setErrorState({ scope: at, message: err instanceof Error ? err.message : String(err) }))
+      .finally(() => setBusyScope((b) => (b === at ? null : b)));
   };
 
   const actions: SheetAction[] = [];

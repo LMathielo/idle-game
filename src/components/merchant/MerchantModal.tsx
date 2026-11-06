@@ -1,7 +1,7 @@
 // Village → Merchant. Buy | Sell tabs over a stock grid styled like the inventory. Reads merchantView() and
 // the inventory; dispatches BUY_ITEM / SELL_ITEM / REFRESH_MERCHANT. The merchant is not an activity, so
 // nothing here stops what the hero is doing.
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameState } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
@@ -52,31 +52,41 @@ export function MerchantModal() {
   );
 }
 
-/** Dispatch with a busy flag and an inline error; stale-screen errors just close the sheet. */
+/**
+ * Dispatch with a busy flag and an inline error; stale-screen errors just close the sheet. Busy, errors and the
+ * close-after-done belong to the item the command was sent for (`scope`): if the player switched items meanwhile, the
+ * result neither closes the new item's popover nor disables its buttons.
+ */
 function useSend(onDone: () => void, scope: string) {
   const client = useGameClient();
-  const [busy, setBusy] = useState(false);
+  const [busyScope, setBusyScope] = useState<string | null>(null);
+  const busy = busyScope === scope;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
   // The sheet stays mounted while the player moves between items, so an error belongs to the item it came from.
   const [errorState, setErrorState] = useState<{ scope: string; message: string } | null>(null);
   const error = errorState && errorState.scope === scope ? errorState.message : null;
-  const setError = useCallback((message: string | null) => setErrorState(message === null ? null : { scope, message }), [scope]);
+  const setError = useCallback((message: string | null) => setErrorState(message === null ? null : { scope: scopeRef.current, message }), []);
   const send = useCallback(
     (cmd: CommandInput, closeAfter = true) => {
       if (busy) return;
-      setBusy(true);
-      setError(null);
+      const at = scope;
+      const current = () => scopeRef.current === at;
+      setBusyScope(at);
+      setErrorState(null);
       client
         .dispatch(cmd)
         .then((res) => {
           if (res.ok) {
-            if (closeAfter) onDone();
-          } else if (STALE.has(res.error.code)) onDone();
-          else setError(res.error.message);
+            if (closeAfter && current()) onDone();
+          } else if (STALE.has(res.error.code)) {
+            if (current()) onDone();
+          } else setErrorState({ scope: at, message: res.error.message });
         })
-        .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-        .finally(() => setBusy(false));
+        .catch((err: unknown) => setErrorState({ scope: at, message: err instanceof Error ? err.message : String(err) }))
+        .finally(() => setBusyScope((b) => (b === at ? null : b)));
     },
-    [busy, client, onDone, setError],
+    [busy, client, onDone, scope],
   );
   return { busy, error, setError, send };
 }
