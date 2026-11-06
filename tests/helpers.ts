@@ -2,7 +2,9 @@ import { FakeClock } from '../src/client/clock';
 import { LocalGameClient } from '../src/client/LocalGameClient';
 import { MemoryGameRepository } from '../src/client/memoryRepository';
 import type { CommandInput } from '../src/client/types';
+import { rollAffixes } from '../src/engine/gear';
 import { makeItem } from '../src/engine/inventory';
+import { createRng } from '../src/engine/rng';
 import { ATTRIBUTE_POINTS, applyCommand, type AttributeKey, BUILDING_IDS, BUILDINGS, type BuildingId, type Command, type CombatSide, ENGINE_VERSION, type GameState, getDerivedStats, type EquipmentSlot, newGame, type ReplayEntry, v12SkillProgress } from '../src/engine';
 
 export const T0 = Date.UTC(2026, 9, 25, 12, 0, 0); // fixed epoch for deterministic tests
@@ -226,7 +228,7 @@ const IRON_SET: [EquipmentSlot, string][] = [
  * `quality`, at full HP. `STR+END` splits the points evenly between STR and END (the remainder to STR). The tests and the balance
  * sim (tests/balanceSimBoss.test.ts) use the same hero.
  */
-export function bossHero(level: number, build: BossBuild, quality = 25, rarity: 'common' | 'uncommon' | 'rare' = 'common'): GameState {
+export function bossHero(level: number, build: BossBuild, quality = 25, rarity: 'common' | 'uncommon' | 'rare' | 'epic' = 'common', affixSeed?: number): GameState {
   const points = ATTRIBUTE_POINTS.unspentPerLevel * (level - 1);
   const spent = { strength: 0, dexterity: 0, endurance: 0, intelligence: 0 };
   if (build === 'balanced') {
@@ -241,7 +243,13 @@ export function bossHero(level: number, build: BossBuild, quality = 25, rarity: 
   }
   const s = builtGame(1, T0);
   const equipment = { ...s.character.equipment };
-  for (const [slot, defId] of IRON_SET) equipment[slot] = makeItem(defId, 1, `${defId}#hero`, { quality, rarity });
+  // With an `affixSeed`, a rare / epic piece rolls its affixes (1.22.0) from a stream seeded by it, piece by piece; without, none.
+  let affixRng = createRng(affixSeed ?? 0);
+  for (const [slot, defId] of IRON_SET) {
+    const a = affixSeed === undefined ? { value: undefined, rng: affixRng } : rollAffixes(affixRng, slot, rarity);
+    affixRng = a.rng;
+    equipment[slot] = makeItem(defId, 1, `${defId}#hero`, { quality, rarity, affixes: a.value });
+  }
   const withGear: GameState = { ...s, character: { ...s.character, level, unspentPoints: 0, spentPoints: spent, equipment } };
   return { ...withGear, character: { ...withGear.character, hp: getDerivedStats(withGear).maxHp.value } };
 }
