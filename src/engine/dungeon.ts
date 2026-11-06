@@ -6,6 +6,7 @@ import { DUNGEON_RUN, DUNGEONS, ENEMIES } from './config/dungeons';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { grantHeroXp } from './activities';
 import { finishBossFight } from './boss';
+import { harderTally } from './summary';
 import {
   type DungeonFightView,
   enemyCombatSide,
@@ -176,6 +177,12 @@ function finishFight(draft: GameState, activity: DungeonActivity, outcome: Fight
     summary.dungeon.runs += 1;
     if (won) summary.dungeon.wins += 1;
     else summary.dungeon.losses += 1;
+    const tally = harderTally(summary, difficulty);
+    if (tally) {
+      tally.runs += 1;
+      if (won) tally.wins += 1;
+      else tally.losses += 1;
+    }
     summary.goldGained += rewards.gold;
     for (const [id, n] of Object.entries(rewards.items)) bump(summary.itemsGained, id, n);
     for (const [id, n] of Object.entries(rewards.itemsLost)) bump(summary.itemsLost, id, n);

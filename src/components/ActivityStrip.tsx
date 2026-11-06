@@ -3,7 +3,7 @@
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useGameSnapshot } from '../client/GameProvider';
-import { activityView, BOSSES, constructionView, DUNGEONS, ENEMIES, hpView, itemQuantity, ROCKS, TREES } from '../engine';
+import { activityView, BOSSES, constructionView, DIFFICULTY, DUNGEONS, ENEMIES, hpView, itemQuantity, ROCKS, TREES } from '../engine';
 import { colors, fonts } from '../theme';
 import { GameIcon, ItemIcon, SkillIcon } from './art/Sprites';
 import { ATTRIBUTE_NAMES, formatClock, formatCountdown, formatNumber, formatTrainingLeft } from './format';
@@ -43,12 +43,17 @@ export function ActivityStrip() {
       // Fight phase: the bar shows the enemy's HP lost (snapped on every engine tick, never animated ahead).
       const enemy = ENEMIES[fight.enemyId];
       const lost = fight.enemyMaxHp > 0 ? 1 - fight.enemyHp / fight.enemyMaxHp : 1;
+      // Hard / Extreme (1.24.0): the difficulty and how many mobs of the pack are still up.
+      const harder = view.difficulty !== 'normal';
+      const left = fight.mobs.filter((m) => m.alive).length;
+      const tag = DIFFICULTY[view.difficulty].name;
+      const pack = fight.mobs.length > 1 ? `${left}/${fight.mobs.length} mobs left` : `${enemy.name} ${formatNumber(fight.enemyHp)}/${formatNumber(fight.enemyMaxHp)}`;
       return (
         <StripView
           icon={<GameIcon name="fight" />}
-          title={`${dungeon.name} · ${enemy.name} ${formatNumber(fight.enemyHp)}/${formatNumber(fight.enemyMaxHp)}`}
+          title={harder ? `${dungeon.name} · ${tag} · ${pack}` : `${dungeon.name} · ${enemy.name} ${formatNumber(fight.enemyHp)}/${formatNumber(fight.enemyMaxHp)}`}
           right={`HP ${formatNumber(hp.hp)}/${formatNumber(hp.maxHp)}`}
-          a11y={`${dungeon.name}, fighting ${enemy.name}, ${enemy.name} HP ${fight.enemyHp} of ${fight.enemyMaxHp}, your HP ${hp.hp} of ${hp.maxHp}${clockPaused ? PAUSED_A11Y : ''}`}
+          a11y={`${dungeon.name}${harder ? ` on ${tag}` : ''}, fighting ${fight.mobs.length > 1 ? `a pack of ${fight.mobs.length}, ${left} still standing` : enemy.name}, ${fight.mobs.length > 1 ? 'pack' : enemy.name} HP ${fight.enemyHp} of ${fight.enemyMaxHp}, your HP ${hp.hp} of ${hp.maxHp}${clockPaused ? PAUSED_A11Y : ''}`}
           fraction={lost}
           remainingMs={0}
           paused
@@ -59,9 +64,9 @@ export function ActivityStrip() {
     return (
       <StripView
         icon={<GameIcon name="fight" />}
-        title={`${dungeon.name} · searching ${formatClock(view.remainingMs)}`}
+        title={`${dungeon.name}${view.difficulty === 'normal' ? '' : ` · ${DIFFICULTY[view.difficulty].name}`} · searching ${formatClock(view.remainingMs)}`}
         right={`HP ${formatNumber(hp.hp)}/${formatNumber(hp.maxHp)}`}
-        a11y={`${dungeon.name}, searching for an opponent, ${formatClock(view.remainingMs)} left, HP ${hp.hp} of ${hp.maxHp}${clockPaused ? PAUSED_A11Y : ''}`}
+        a11y={`${dungeon.name}${view.difficulty === 'normal' ? '' : ` on ${DIFFICULTY[view.difficulty].name}`}, searching for an opponent, ${formatClock(view.remainingMs)} left, HP ${hp.hp} of ${hp.maxHp}${clockPaused ? PAUSED_A11Y : ''}`}
         fraction={view.fraction}
         remainingMs={view.remainingMs}
         paused={clockPaused}
@@ -80,9 +85,9 @@ export function ActivityStrip() {
     return (
       <StripView
         icon={<GameIcon name="fight" />}
-        title={`${boss.name} ${formatNumber(fight.enemyHp)}/${formatNumber(fight.enemyMaxHp)}${stunned ? ' · Stunned' : ''}`}
+        title={`${boss.name}${view.difficulty === 'normal' ? '' : ` (${DIFFICULTY[view.difficulty].name})`} ${formatNumber(fight.enemyHp)}/${formatNumber(fight.enemyMaxHp)}${stunned ? ' · Stunned' : ''}`}
         right={`HP ${formatNumber(hp.hp)}/${formatNumber(hp.maxHp)}`}
-        a11y={`Boss fight against ${boss.name}, its HP ${fight.enemyHp} of ${fight.enemyMaxHp}, your HP ${hp.hp} of ${hp.maxHp}${stunned ? `, you are stunned for ${fight.heroStunStrikes} more strikes` : ''}${clockPaused ? PAUSED_A11Y : ''}`}
+        a11y={`Boss fight against ${boss.name}${view.difficulty === 'normal' ? '' : ` on ${DIFFICULTY[view.difficulty].name}`}, its HP ${fight.enemyHp} of ${fight.enemyMaxHp}, your HP ${hp.hp} of ${hp.maxHp}${stunned ? `, you are stunned for ${fight.heroStunStrikes} more strikes` : ''}${clockPaused ? PAUSED_A11Y : ''}`}
         fraction={lost}
         remainingMs={0}
         paused

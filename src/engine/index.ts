@@ -63,6 +63,9 @@ export {
   type DifficultyErrorCode,
   type DifficultyView,
   type PackMobSpec,
+  mobTypes,
+  packSizeRange,
+  type MobTypeView,
 } from './difficulty';
 export { DIFFICULTIES, DIFFICULTY, MOB_VARIANT_LABEL, type DifficultyDef, type PackRule } from './config/difficulty';
 export {
@@ -71,6 +74,8 @@ export {
   bossTotals,
   bossUnlockView,
   bossEnemyAt,
+  bossRewardsAt,
+  type BossRewardsView,
   checkBossEntry,
   fightIsOn,
   recordBossResults,

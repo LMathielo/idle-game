@@ -65,6 +65,29 @@ export function rollPack(rng: RngState, enemy: EnemyDef, difficulty: Difficulty)
   return { mobs, rng: r };
 }
 
+/** The pack size range of a difficulty (1-1 on Normal). Read-only, for the UI. */
+export function packSizeRange(difficulty: Difficulty): { min: number; max: number } {
+  const rule = DIFFICULTY[difficulty].pack;
+  return rule ? { ...rule.size } : { min: 1, max: 1 };
+}
+
+/** One kind of mob a difficulty can send: its variant, name, multiplier, chance (bp per mob) and scaled stats. */
+export type MobTypeView = { variant: MobVariant; name: string; multBp: number; chanceBp: number; enemy: EnemyDef };
+
+/**
+ * The mob kinds of a stage on a difficulty, base first (Normal: one, 100%; Hard: plain x2 at 75% and Veteran x3 at 25%; Extreme: Veteran
+ * x12 at 75% and Extreme x16 at 25%). Read-only, for the stage detail.
+ */
+export function mobTypes(enemy: EnemyDef, difficulty: Difficulty): MobTypeView[] {
+  const rule = DIFFICULTY[difficulty].pack;
+  if (!rule) return [{ variant: 'base', name: enemy.name, multBp: BASIS_POINTS, chanceBp: BASIS_POINTS, enemy }];
+  const up = rule.upgrade;
+  return [
+    { variant: rule.base.variant, name: mobName(enemy.name, rule.base.variant), multBp: rule.base.bp, chanceBp: BASIS_POINTS - up.chanceBp, enemy: scaledEnemy(enemy, rule.base.bp) },
+    { variant: up.variant, name: mobName(enemy.name, up.variant), multBp: up.bp, chanceBp: up.chanceBp, enemy: scaledEnemy(enemy, up.bp) },
+  ];
+}
+
 /** The plain mob of a difficulty, no roll: what a fight that starts at 0 HP (an immediate loss, no rolls) records. */
 export function plainMob(enemy: EnemyDef, difficulty: Difficulty): PackMobSpec {
   const tier = DIFFICULTY[difficulty].pack?.base ?? { variant: 'base' as const, bp: BASIS_POINTS };

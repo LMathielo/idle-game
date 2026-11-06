@@ -21,6 +21,10 @@ export const ICONS = {
   training: require('../../../assets/images/icons/training.png'),
   fight: require('../../../assets/images/icons/fight.png'),
   unknown: require('../../../assets/images/icons/unknown.png'),
+  // Difficulty skulls (1.24.0, pending owner approval): white Normal, red Hard, black Extreme with flaming eyes.
+  skull_normal: require('../../../assets/images/icons/skull_normal.png'),
+  skull_hard: require('../../../assets/images/icons/skull_hard.png'),
+  skull_extreme: require('../../../assets/images/icons/skull_extreme.png'),
 } as const satisfies Record<string, ImageSourcePropType>;
 
 export type IconName = keyof typeof ICONS;
@@ -134,6 +138,34 @@ export const ENEMY_SPRITES: Record<EnemyId, Sprite> = {
   // PLACEHOLDER (1.20.0): the Troll Chieftain shows the unused "stone troll" variant (48x48, same pixel scale) until real boss art
   // is approved (docs/TECH_DEBT.md). tools/art is not touched.
   troll_chieftain: { source: require('../../../assets/images/enemies/variants/stone_troll.png'), w: 48, h: 48 },
+};
+
+/**
+ * Pack variants (1.24.0, pending owner approval): the enemy's sprite with a coloured outline (tools/art/variants.py), padded by 2 art
+ * pixels a side, so it is 4 px wider and taller than its base at the same pixel scale. Veteran = amber, Extreme = violet. The boss has
+ * no variants (it never comes in a pack).
+ */
+export const ENEMY_VARIANT_SPRITES: Partial<Record<EnemyId, { veteran: Sprite; extreme: Sprite }>> = {
+  rat: {
+    veteran: { source: require('../../../assets/images/enemies/rat_veteran.png'), w: 36, h: 36 },
+    extreme: { source: require('../../../assets/images/enemies/rat_extreme.png'), w: 36, h: 36 },
+  },
+  bat: {
+    veteran: { source: require('../../../assets/images/enemies/bat_veteran.png'), w: 36, h: 36 },
+    extreme: { source: require('../../../assets/images/enemies/bat_extreme.png'), w: 36, h: 36 },
+  },
+  wolf: {
+    veteran: { source: require('../../../assets/images/enemies/wolf_veteran.png'), w: 36, h: 36 },
+    extreme: { source: require('../../../assets/images/enemies/wolf_extreme.png'), w: 36, h: 36 },
+  },
+  skeleton: {
+    veteran: { source: require('../../../assets/images/enemies/skeleton_veteran.png'), w: 36, h: 36 },
+    extreme: { source: require('../../../assets/images/enemies/skeleton_extreme.png'), w: 36, h: 36 },
+  },
+  troll: {
+    veteran: { source: require('../../../assets/images/enemies/troll_veteran.png'), w: 52, h: 52 },
+    extreme: { source: require('../../../assets/images/enemies/troll_extreme.png'), w: 52, h: 52 },
+  },
 };
 
 /** Woodcutting trees (32x32 art). */

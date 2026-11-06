@@ -15,6 +15,7 @@
 // Difficulty (1.24.0): the same boss on Hard / Extreme has x2 / x8 HP, damage, armor and magic resist (regen keeps its % of max HP; Heavy
 // Bash, the 120 s limit and the 10 stamina entry are unchanged), x2 / x8 XP and gold, and a better gear colour table. The draws are the same.
 import { grantHeroXp } from './activities';
+import { harderTally } from './summary';
 import { enemyCombatSide, enemyFightOptions, type DungeonFightView, fightView, type FightOutcome, heroCombatSide, newFight } from './combat';
 import { DIFFICULTY } from './config/difficulty';
 import { BOSSES, DUNGEONS, ENEMIES, isBossId } from './config/dungeons';
@@ -47,6 +48,7 @@ import type {
   FightRewards,
   GameEvent,
   GameState,
+  ItemRarity,
   SimulationSummary,
 } from './types';
 
@@ -152,6 +154,24 @@ export function checkBossEntry(state: GameState, bossId: unknown, maxCost: unkno
 /** The boss as it is on a difficulty: HP, damage, armor and magic resist scaled; regen %, skills and limit unchanged. */
 export function bossEnemyAt(bossId: BossId, difficulty: Difficulty) {
   return scaledEnemy(ENEMIES[BOSSES[bossId].enemyId], DIFFICULTY[difficulty].boss.statBp);
+}
+
+export type BossRewardsView = {
+  heroXp: number;
+  gold: { min: number; max: number };
+  /** The gear rarity weights that apply on the difficulty (Normal: the boss's own table). */
+  rarityWeights: readonly { value: ItemRarity; weight: number }[];
+};
+
+/** The boss's rewards on a difficulty (XP and gold scaled, the difficulty's rarity table). Gear chance and the Tusk are unchanged. Read-only. */
+export function bossRewardsAt(bossId: BossId, difficulty: Difficulty): BossRewardsView {
+  const r = BOSSES[bossId].rewards;
+  const rule = DIFFICULTY[difficulty].boss;
+  return {
+    heroXp: scaleStat(r.heroXp, rule.rewardBp),
+    gold: { min: scaleStat(r.gold.min, rule.rewardBp), max: scaleStat(r.gold.max, rule.rewardBp) },
+    rarityWeights: rule.rarityWeights ?? r.gear.rarityWeights,
+  };
 }
 
 /**
@@ -269,6 +289,12 @@ export function finishBossFight(draft: GameState, activity: BossActivity, outcom
     summary.boss.fights += 1;
     if (won) summary.boss.wins += 1;
     else summary.boss.losses += 1;
+    const tally = harderTally(summary, difficulty);
+    if (tally) {
+      tally.bossFights += 1;
+      if (won) tally.bossWins += 1;
+      else tally.bossLosses += 1;
+    }
     summary.goldGained += rewards.gold;
     for (const [id, n] of Object.entries(rewards.items)) bump(summary.itemsGained, id, n);
     for (const [id, n] of Object.entries(rewards.itemsLost)) bump(summary.itemsLost, id, n);

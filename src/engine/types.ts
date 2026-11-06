@@ -384,6 +384,9 @@ export type FightRecord = {
 /** One mob of a finished fight, for the replay and the result line. */
 export type FightRecordMob = { variant: MobVariant; multBp: number; maxHp: number; hpEnd: number };
 
+/** Stage runs and boss fights played on one harder difficulty, for the away summary. */
+export type DifficultyTally = { runs: number; wins: number; losses: number; bossFights: number; bossWins: number; bossLosses: number };
+
 export type DungeonTotals = { runs: number; wins: number; losses: number };
 
 /** The counters of one harder difficulty (save v22). Normal keeps its counters in `DungeonState.byDungeon` / `bosses`, where they always were. */
@@ -693,6 +696,11 @@ export type SimulationSummary = {
   dungeonsUnlocked: DungeonOrBossId[];
   /** Difficulties (and bosses on Hard / Extreme) unlocked during this period, in order (1.24.0). */
   harderUnlocks: HarderUnlock[];
+  /**
+   * The part of `dungeon` and `boss` that was played on Hard / Extreme (1.24.0): what is left of the totals is Normal. Older summaries
+   * (before 1.24.0) have none.
+   */
+  harder: Record<'hard' | 'extreme', DifficultyTally>;
   /** Training XP (whole points) earned per attribute. */
   trainingXpGained: Partial<Record<AttributeKey, number>>;
   /** Training levels gained per attribute. */

@@ -10,8 +10,10 @@ import { useGameSnapshot } from '../../client/GameProvider';
 import {
   BOSSES,
   bossDangerHint,
+  bossEnemyAt,
   bossEntryView,
   type BossId,
+  bossRewardsAt,
   bossRunView,
   type BossRunView,
   bossTotals,
@@ -21,6 +23,8 @@ import {
   type DangerLevel,
   dangerHint,
   DEV_TOOLS_ENABLED,
+  type Difficulty,
+  difficultyViews,
   type DungeonId,
   type DungeonOrBossId,
   DUNGEON_TIERS,
@@ -30,14 +34,19 @@ import {
   dungeonTotals,
   dungeonUnlockView,
   ENEMIES,
+  type EnemyDef,
   type EnemyId,
   type FightRecord,
   type GameState,
   getDerivedStats,
   hpView,
   isBossId,
+  mobTypes,
+  packSizeRange,
   rarityOf,
+  scaleStat,
   searchMsFor,
+  selectedDifficulty,
   staminaView,
   strikeRange,
 } from '../../engine';
@@ -53,12 +62,18 @@ import { useCommand } from '../ui/useCommand';
 import { confirmCancelRun, confirmLeaveRun } from './confirmCancelRun';
 import { FightReplay } from './FightReplay';
 import { LiveFight } from './LiveFight';
-import { fightLimitMs, outcomeLabel } from './outcome';
+import { DifficultySelector } from './DifficultySelector';
+import { difficultyName, fightLimitMs, outcomeLabel, packText } from './outcome';
 import { RevealSheet } from '../items/RevealSheet';
 import { RARITY_COLOR_NAMES } from '../items/itemInfo';
 
 const range = (min: number, max: number) => (min === max ? `${min}` : `${min}–${max}`);
 const percent = (p: number) => `${Math.round(p * 100)}%`;
+/** A danger percent of max HP, capped for display: a hopeless pack can cost thousands of times your HP. */
+const dangerPercent = (n: number) => (n > 999 ? '999%+' : `${n}%`);
+const basisPercent = (bp: number) => `${Math.round(bp / 100)}%`;
+/** "x2" / "x1.5" / "x12": a multiplier in basis points. */
+const multText = (bp: number) => `x${Math.round(bp / 100) / 100}`;
 
 
 export function DungeonModal() {
@@ -121,115 +136,179 @@ const HpRow = memo(function HpRow({ hp, maxHp, regenPerMin }: { hp: number; maxH
 
 const DANGER_LABELS: Record<DangerLevel, string> = { easy: 'Easy', tough: 'Tough', deadly: 'Deadly' };
 
-/** "Win 10× in Rat Cellar · 7/10" */
-function requirementText(req: { dungeonId: DungeonId; wins: number }, progress: number): string {
-  return `Win ${req.wins}× in ${DUNGEONS[req.dungeonId].name} · ${formatNumber(progress)}/${formatNumber(req.wins)}`;
+/** "Win 10× in Rat Cellar · 7/10" (a stage on Hard / Extreme opens with the Normal one: "on Normal"). */
+function requirementText(req: { dungeonId: DungeonId; wins: number }, progress: number, difficulty: Difficulty = 'normal'): string {
+  return `Win ${req.wins}× in ${DUNGEONS[req.dungeonId].name}${difficulty === 'normal' ? '' : ' on Normal'} · ${formatNumber(progress)}/${formatNumber(req.wins)}`;
 }
 
-/** The boss's locked line: "Troll Bridge wins 12/50". */
-function bossRequirementText(req: { dungeonId: DungeonId; wins: number }, progress: number): string {
-  return `${DUNGEONS[req.dungeonId].name} wins ${formatNumber(progress)}/${formatNumber(req.wins)}`;
+/** The boss's locked line: "Troll Bridge wins 12/50" (on Hard: "Hard Troll Bridge wins 12/100"). */
+function bossRequirementText(req: { dungeonId: DungeonId; wins: number }, progress: number, difficulty: Difficulty = 'normal'): string {
+  return `${difficulty === 'normal' ? '' : `${difficultyName(difficulty)} `}${DUNGEONS[req.dungeonId].name} wins ${formatNumber(progress)}/${formatNumber(req.wins)}`;
+}
+
+/** "Pack of 1-4" on Hard / Extreme, nothing on Normal. */
+function packRangeText(difficulty: Difficulty): string | null {
+  if (difficulty === 'normal') return null;
+  const { min, max } = packSizeRange(difficulty);
+  return `Pack of ${min}-${max}`;
 }
 
 /** The locked row whose info box is open, anchored on its card. */
 type LockedInfoTarget = { id: DungeonOrBossId; anchor: AnchorRect };
+/** The locked skull whose info box is open. */
+type DifficultyInfoTarget = { tier: number; difficulty: Difficulty; anchor: AnchorRect };
 
 function DungeonList({ state, running, onPick }: { state: GameState; running: DungeonOrBossId | null; onPick: (id: DungeonOrBossId) => void }) {
   const [info, setInfo] = useState<LockedInfoTarget | null>(null);
+  const [diffInfo, setDiffInfo] = useState<DifficultyInfoTarget | null>(null);
+  const { send, run: runCall, client } = useCommand();
   const explain = useCallback((id: DungeonOrBossId, node: HostInstance | null) => {
     void measureAnchor(node).then((anchor) => anchor && setInfo({ id, anchor }));
   }, []);
   const closeInfo = useCallback(() => setInfo(null), []);
+  const closeDiffInfo = useCallback(() => setDiffInfo(null), []);
+  const select = useCallback((tier: number, difficulty: Difficulty) => send({ type: 'SET_DUNGEON_DIFFICULTY', tier, difficulty }), [send]);
+  const explainDifficulty = useCallback((tier: number, difficulty: Difficulty, node: HostInstance | null) => {
+    void measureAnchor(node).then((anchor) => anchor && setDiffInfo({ tier, difficulty, anchor }));
+  }, []);
   const infoBoss = info && isBossId(info.id) ? info.id : null;
   const infoStage = info && !isBossId(info.id) ? info.id : null;
-  const infoUnlock = infoStage ? dungeonUnlockView(state, infoStage) : null;
-  const infoBossUnlock = infoBoss ? bossUnlockView(state, infoBoss) : null;
+  // The info boxes follow the difficulty of the tier they belong to.
+  const infoTier = infoBoss ? BOSSES[infoBoss].tier : infoStage ? DUNGEONS[infoStage].tier : 1;
+  const infoDifficulty = selectedDifficulty(state, infoTier);
+  const infoUnlock = infoStage ? dungeonUnlockView(state, infoStage, infoDifficulty) : null;
+  const infoBossUnlock = infoBoss ? bossUnlockView(state, infoBoss, infoDifficulty) : null;
+  const diffViews = diffInfo ? difficultyViews(state, diffInfo.tier).find((v) => v.difficulty === diffInfo.difficulty) : null;
   return (
     <View>
-      {DUNGEON_TIERS.map((tier) => (
-        <View key={tier.tier}>
-          <Text style={styles.tierHeader} accessibilityRole="header">
-            {tier.name}
-          </Text>
-          {tier.stages.map((id) => {
-            const unlock = dungeonUnlockView(state, id);
-            if (!unlock.unlocked && unlock.requirement) {
-              const d = DUNGEONS[id];
+      {DUNGEON_TIERS.map((tier) => {
+        const difficulty = selectedDifficulty(state, tier.tier);
+        return (
+          <View key={tier.tier}>
+            <Text style={styles.tierHeader} accessibilityRole="header">
+              {tier.name}
+            </Text>
+            <DifficultySelector
+              views={difficultyViews(state, tier.tier)}
+              onSelect={(d) => void select(tier.tier, d)}
+              onExplain={(d, node) => explainDifficulty(tier.tier, d, node)}
+            />
+            {tier.stages.map((id) => {
+              const unlock = dungeonUnlockView(state, id, difficulty);
+              if (!unlock.unlocked && unlock.requirement) {
+                const d = DUNGEONS[id];
+                return (
+                  <LockedCard
+                    key={id}
+                    id={id}
+                    title={`Stage ${d.stage} · ${d.name}`}
+                    subtitle={ENEMIES[d.enemyId].name}
+                    requirement={requirementText(unlock.requirement, unlock.progress, difficulty)}
+                    onExplain={explain}
+                  />
+                );
+              }
               return (
-                <LockedCard
+                <DungeonCard
                   key={id}
                   id={id}
-                  title={`Stage ${d.stage} · ${d.name}`}
-                  subtitle={ENEMIES[d.enemyId].name}
-                  requirement={requirementText(unlock.requirement, unlock.progress)}
-                  onExplain={explain}
+                  difficulty={difficulty}
+                  searchMs={searchMsFor(id, state)}
+                  wins={dungeonTotals(state, id, difficulty).wins}
+                  running={running === id}
+                  onPick={onPick}
                 />
               );
-            }
-            return (
-              <DungeonCard
-                key={id}
-                id={id}
-                searchMs={searchMsFor(id, state)}
-                wins={dungeonTotals(state, id).wins}
-                running={running === id}
-                onPick={onPick}
-              />
-            );
-          })}
-          {tier.boss ? <BossRow key={tier.boss} bossId={tier.boss} state={state} running={running === tier.boss} onPick={onPick} onExplain={explain} /> : null}
-        </View>
-      ))}
+            })}
+            {tier.boss ? <BossRow key={tier.boss} bossId={tier.boss} difficulty={difficulty} state={state} running={running === tier.boss} onPick={onPick} onExplain={explain} /> : null}
+            {DEV_TOOLS_ENABLED && tier.boss ? (
+              <View style={styles.debugRow}>
+                <PixelButton
+                  label={`+1 ${difficultyName(difficulty)} boss win (debug)`}
+                  onPress={() => void runCall(() => client.debug.addBossWins(tier.boss!, 1, difficulty))}
+                  accessibilityHint="Debug: adds one boss win on the selected difficulty. A Normal win opens Hard, a Hard win opens Extreme"
+                />
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
       {info && infoStage && infoUnlock && !infoUnlock.unlocked && infoUnlock.requirement ? (
-        <LockedInfo id={infoStage} anchor={info.anchor} requirement={requirementText(infoUnlock.requirement, infoUnlock.progress)} onClose={closeInfo} />
+        <LockedInfo id={infoStage} difficulty={infoDifficulty} anchor={info.anchor} requirement={requirementText(infoUnlock.requirement, infoUnlock.progress, infoDifficulty)} onClose={closeInfo} />
       ) : null}
       {info && infoBoss && infoBossUnlock && !infoBossUnlock.unlocked ? (
-        <BossLockedInfo bossId={infoBoss} anchor={info.anchor} requirement={bossRequirementText(infoBossUnlock.requirement, infoBossUnlock.progress)} onClose={closeInfo} />
+        <BossLockedInfo
+          bossId={infoBoss}
+          difficulty={infoDifficulty}
+          anchor={info.anchor}
+          requirement={bossRequirementText(infoBossUnlock.requirement, infoBossUnlock.progress, infoDifficulty)}
+          onClose={closeInfo}
+        />
+      ) : null}
+      {diffInfo && diffViews && !diffViews.unlocked ? (
+        <InfoPopover
+          anchor={diffInfo.anchor}
+          onClose={closeDiffInfo}
+          title={`${diffViews.name} is locked`}
+          icon={<GameIcon name="locked" size={32} />}
+          subtitle={`${DUNGEON_TIERS.find((t) => t.tier === diffInfo.tier)?.name ?? 'Tier'} difficulty`}
+        >
+          <PopoverText tone="gold">{diffViews.lockReason ?? ''}</PopoverText>
+          <PopoverText tone="note">The kill is permanent: once it counts, {diffViews.name} stays open.</PopoverText>
+        </InfoPopover>
       ) : null}
     </View>
   );
 }
 
-/** What a locked dungeon holds and what opens it (InfoPopover, anchored on its card). */
-function LockedInfo({ id, anchor, requirement, onClose }: { id: DungeonId; anchor: AnchorRect; requirement: string; onClose: () => void }) {
+/** What a locked dungeon holds and what opens it (InfoPopover, anchored on its card). Stats are the stage's Normal enemy; a pack on Hard / Extreme is the same enemy scaled. */
+function LockedInfo({ id, difficulty, anchor, requirement, onClose }: { id: DungeonId; difficulty: Difficulty; anchor: AnchorRect; requirement: string; onClose: () => void }) {
   const d = DUNGEONS[id];
   const enemy = ENEMIES[d.enemyId];
+  const pack = packRangeText(difficulty);
   return (
     <InfoPopover anchor={anchor} onClose={onClose} title={d.name} icon={<GameIcon name="locked" size={32} />} subtitle={`Tier ${d.tier} · Stage ${d.stage} · locked`}>
       <PopoverText tone="gold">{requirement}</PopoverText>
       <PopoverRow label="Enemy" value={enemy.name} />
-      <PopoverRow label="Enemy HP / damage" value={`${enemy.hp} / ${range(enemy.damage.min, enemy.damage.max)}`} />
-      <PopoverRow icon={<GameIcon name="hero_xp" />} label="Hero XP per win" value={`+${d.rewards.heroXp}`} />
-      <PopoverRow icon={<GameIcon name="gold" />} label="Gold per win" value={range(d.rewards.gold.min, d.rewards.gold.max)} />
-      <PopoverText tone="note">Only wins count toward the unlock; it is permanent once reached.</PopoverText>
+      <PopoverRow label="Enemy HP / damage (Normal)" value={`${enemy.hp} / ${range(enemy.damage.min, enemy.damage.max)}`} />
+      <PopoverRow icon={<GameIcon name="hero_xp" />} label="Hero XP per win (Normal)" value={`+${d.rewards.heroXp}`} />
+      <PopoverRow icon={<GameIcon name="gold" />} label="Gold per win (Normal)" value={range(d.rewards.gold.min, d.rewards.gold.max)} />
+      <PopoverText tone="note">
+        {pack ? `On ${difficultyName(difficulty)} it opens with its Normal stage and sends a ${pack.toLowerCase()}. ` : ''}Only wins on Normal count toward the unlock; it is permanent once reached.
+      </PopoverText>
     </InfoPopover>
   );
 }
 
-/** What the locked boss is and what opens it. */
-function BossLockedInfo({ bossId, anchor, requirement, onClose }: { bossId: BossId; anchor: AnchorRect; requirement: string; onClose: () => void }) {
+/** What the locked boss is and what opens it, as it is on the selected difficulty. */
+function BossLockedInfo({ bossId, difficulty, anchor, requirement, onClose }: { bossId: BossId; difficulty: Difficulty; anchor: AnchorRect; requirement: string; onClose: () => void }) {
   const boss = BOSSES[bossId];
-  const enemy = ENEMIES[boss.enemyId];
+  const enemy = bossEnemyAt(bossId, difficulty);
+  const rewards = bossRewardsAt(bossId, difficulty);
   return (
-    <InfoPopover anchor={anchor} onClose={onClose} title={boss.name} icon={<GameIcon name="locked" size={32} />} subtitle={`Tier ${boss.tier} boss · locked`}>
+    <InfoPopover anchor={anchor} onClose={onClose} title={boss.name} icon={<GameIcon name="locked" size={32} />} subtitle={`Tier ${boss.tier} boss · ${difficultyName(difficulty)} · locked`}>
       <PopoverText tone="gold">{requirement}</PopoverText>
       <PopoverRow label="Boss HP / damage" value={`${formatNumber(enemy.hp)} / ${range(enemy.damage.min, enemy.damage.max)}`} />
       <PopoverRow icon={<GameIcon name="stamina" />} label="Entry cost" value={`${boss.entryStamina} stamina`} />
-      <PopoverRow icon={<GameIcon name="hero_xp" />} label="Hero XP per win" value={`+${formatNumber(boss.rewards.heroXp)}`} />
-      <PopoverRow icon={<GameIcon name="gold" />} label="Gold per win" value={range(boss.rewards.gold.min, boss.rewards.gold.max)} />
-      <PopoverText tone="note">Only Troll Bridge wins count toward the unlock; it is permanent once reached.</PopoverText>
+      <PopoverRow icon={<GameIcon name="hero_xp" />} label="Hero XP per win" value={`+${formatNumber(rewards.heroXp)}`} />
+      <PopoverRow icon={<GameIcon name="gold" />} label="Gold per win" value={range(rewards.gold.min, rewards.gold.max)} />
+      <PopoverText tone="note">
+        Only Troll Bridge wins{difficulty === 'normal' ? '' : ` on ${difficultyName(difficulty)}`} count toward the unlock; it is permanent once reached.
+      </PopoverText>
     </InfoPopover>
   );
 }
 
 const DungeonCard = memo(function DungeonCard({
   id,
+  difficulty,
   searchMs,
   wins,
   running,
   onPick,
 }: {
   id: DungeonId;
+  difficulty: Difficulty;
   searchMs: number;
   wins: number;
   running: boolean;
@@ -237,13 +316,15 @@ const DungeonCard = memo(function DungeonCard({
 }) {
   const d = DUNGEONS[id];
   const enemy = ENEMIES[d.enemyId];
-  const line = `${enemy.name} · ${formatClock(searchMs)} search`;
+  const pack = packRangeText(difficulty);
+  const line = `${enemy.name}${pack ? ` · ${pack}` : ''} · ${formatClock(searchMs)} search`;
   const title = `Stage ${d.stage} · ${d.name}`;
+  const level = difficulty === 'normal' ? '' : `${difficultyName(difficulty)} `;
   return (
     <Pressable
       onPress={() => onPick(id)}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${line}, ${wins} wins${running ? ', running' : ''}`}
+      accessibilityLabel={`${title}, ${level}${line}, ${wins} ${level}wins${running ? ', running' : ''}`}
       accessibilityHint="Opens the dungeon"
     >
       {({ pressed }) => (
@@ -254,7 +335,9 @@ const DungeonCard = memo(function DungeonCard({
           <View style={styles.flex}>
             <Text style={styles.cardTitle}>{title}</Text>
             <Text style={styles.cardLine}>{line}</Text>
-            <Text style={styles.cardLine}>Wins: {formatNumber(wins)}</Text>
+            <Text style={styles.cardLine}>
+              {level}Wins: {formatNumber(wins)}
+            </Text>
           </View>
           {running ? <Text style={styles.badge}>Running</Text> : <Text style={styles.chevron}>›</Text>}
         </View>
@@ -263,33 +346,45 @@ const DungeonCard = memo(function DungeonCard({
   );
 });
 
-/** The tier's boss row: locked ("Troll Bridge wins 12/50", a tap explains) or a card that opens the boss. */
+/** The tier's boss row (on the selected difficulty): locked ("Troll Bridge wins 12/50", a tap explains) or a card that opens the boss. */
 const BossRow = memo(function BossRow({
   bossId,
+  difficulty,
   state,
   running,
   onPick,
   onExplain,
 }: {
   bossId: BossId;
+  difficulty: Difficulty;
   state: GameState;
   running: boolean;
   onPick: (id: DungeonOrBossId) => void;
   onExplain: (id: DungeonOrBossId, node: HostInstance | null) => void;
 }) {
   const boss = BOSSES[bossId];
-  const unlock = bossUnlockView(state, bossId);
+  const unlock = bossUnlockView(state, bossId, difficulty);
   const title = `Boss · ${boss.name}`;
   if (!unlock.unlocked) {
-    return <LockedCard id={bossId} title={title} subtitle={`${boss.entryStamina} stamina`} requirement={bossRequirementText(unlock.requirement, unlock.progress)} onExplain={onExplain} boss />;
+    return (
+      <LockedCard
+        id={bossId}
+        title={title}
+        subtitle={`${boss.entryStamina} stamina`}
+        requirement={bossRequirementText(unlock.requirement, unlock.progress, difficulty)}
+        onExplain={onExplain}
+        boss
+      />
+    );
   }
-  const totals = bossTotals(state, bossId);
+  const totals = bossTotals(state, bossId, difficulty);
   const line = `${boss.entryStamina} stamina · one live fight`;
+  const level = difficulty === 'normal' ? '' : `${difficultyName(difficulty)} `;
   return (
     <Pressable
       onPress={() => onPick(bossId)}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${line}, ${totals.wins} wins${running ? ', fighting' : ''}`}
+      accessibilityLabel={`${title}, ${level}${line}, ${totals.wins} ${level}wins${running ? ', fighting' : ''}`}
       accessibilityHint="Opens the boss"
     >
       {({ pressed }) => (
@@ -300,7 +395,9 @@ const BossRow = memo(function BossRow({
           <View style={styles.flex}>
             <Text style={styles.cardTitle}>{title}</Text>
             <Text style={styles.cardLine}>{line}</Text>
-            <Text style={styles.cardLine}>Wins: {formatNumber(totals.wins)}</Text>
+            <Text style={styles.cardLine}>
+              {level}Wins: {formatNumber(totals.wins)}
+            </Text>
           </View>
           {running ? <Text style={styles.badge}>Fighting</Text> : <Text style={styles.chevron}>›</Text>}
         </View>
@@ -351,41 +448,76 @@ const LockedCard = memo(function LockedCard({
   );
 });
 
-/** The enemy's stats beside the hero's current ones (shared by a stage's and a boss's detail). */
-function Versus({ enemyId, state, stats, hp }: { enemyId: EnemyId; state: GameState; stats: ReturnType<typeof getDerivedStats>; hp: { hp: number; maxHp: number } }) {
-  const enemy = ENEMIES[enemyId];
+/** The enemy's stats beside the hero's current ones (shared by a stage's and a boss's detail). `enemy` is the mob as it is on the difficulty. */
+function Versus({
+  enemyId,
+  enemy,
+  name,
+  state,
+  stats,
+  hp,
+}: {
+  enemyId: EnemyId;
+  enemy: EnemyDef;
+  name: string;
+  state: GameState;
+  stats: ReturnType<typeof getDerivedStats>;
+  hp: { hp: number; maxHp: number };
+}) {
   return (
-        <View style={styles.versus}>
-          <View
-            style={styles.side}
-            accessible
-            accessibilityLabel={`${enemy.name}: HP ${enemy.hp}, damage ${range(enemy.damage.min, enemy.damage.max)}, armor ${enemy.armor}, magic resist ${enemy.magicResist}`}
-          >
-            <IconText image={<EnemySprite enemyId={enemyId} />} style={styles.sideTitle} rowStyle={styles.sideHead}>
-              {enemy.name}
-            </IconText>
-            <StatLine label="HP" value={`${enemy.hp}`} />
-            <StatLine label="Damage" value={range(enemy.damage.min, enemy.damage.max)} />
-            <StatLine label="Armor" value={`${enemy.armor}`} />
-            <StatLine label="Magic resist" value={`${enemy.magicResist}`} />
-          </View>
-          <Text style={styles.vs}>vs</Text>
-          <View
-            style={styles.side}
-            accessible
-            accessibilityLabel={`${state.character.name}: HP ${hp.hp} of ${hp.maxHp}, damage ${range(stats.damage.min, stats.damage.max)}, magic damage ${stats.magicDamage.value}, armor ${stats.armor.value}, magic resist ${stats.magicResist.value}, crit chance ${bpPercent(stats.critChanceBp.value)}`}
-          >
-            <IconText image={<HeroPortrait size={32} />} style={styles.sideTitle} rowStyle={styles.sideHead}>
-              {state.character.name}
-            </IconText>
-            <StatLine label="HP" value={`${hp.hp}/${hp.maxHp}`} />
-            <StatLine label="Damage" value={range(stats.damage.min, stats.damage.max)} />
-            <StatLine label="Magic damage" value={`${stats.magicDamage.value}`} />
-            <StatLine label="Armor" value={`${stats.armor.value}`} />
-            <StatLine label="Magic resist" value={`${stats.magicResist.value}`} />
-            <StatLine label="Crit" value={`${bpPercent(stats.critChanceBp.value)} · ${critMultText(stats.critMultiplierBp.value)}`} />
-          </View>
-        </View>
+    <View style={styles.versus}>
+      <View
+        style={styles.side}
+        accessible
+        accessibilityLabel={`${name}: HP ${enemy.hp}, damage ${range(enemy.damage.min, enemy.damage.max)}, armor ${enemy.armor}, magic resist ${enemy.magicResist}`}
+      >
+        <IconText image={<EnemySprite enemyId={enemyId} />} style={styles.sideTitle} rowStyle={styles.sideHead}>
+          {name}
+        </IconText>
+        <StatLine label="HP" value={formatNumber(enemy.hp)} />
+        <StatLine label="Damage" value={range(enemy.damage.min, enemy.damage.max)} />
+        <StatLine label="Armor" value={formatNumber(enemy.armor)} />
+        <StatLine label="Magic resist" value={formatNumber(enemy.magicResist)} />
+      </View>
+      <Text style={styles.vs}>vs</Text>
+      <View
+        style={styles.side}
+        accessible
+        accessibilityLabel={`${state.character.name}: HP ${hp.hp} of ${hp.maxHp}, damage ${range(stats.damage.min, stats.damage.max)}, magic damage ${stats.magicDamage.value}, armor ${stats.armor.value}, magic resist ${stats.magicResist.value}, crit chance ${bpPercent(stats.critChanceBp.value)}`}
+      >
+        <IconText image={<HeroPortrait size={32} />} style={styles.sideTitle} rowStyle={styles.sideHead}>
+          {state.character.name}
+        </IconText>
+        <StatLine label="HP" value={`${hp.hp}/${hp.maxHp}`} />
+        <StatLine label="Damage" value={range(stats.damage.min, stats.damage.max)} />
+        <StatLine label="Magic damage" value={`${stats.magicDamage.value}`} />
+        <StatLine label="Armor" value={`${stats.armor.value}`} />
+        <StatLine label="Magic resist" value={`${stats.magicResist.value}`} />
+        <StatLine label="Crit" value={`${bpPercent(stats.critChanceBp.value)} · ${critMultText(stats.critMultiplierBp.value)}`} />
+      </View>
+    </View>
+  );
+}
+
+/** Hard / Extreme: how a pack is made, and the stats of every kind of mob in it (the first one is shown beside the hero above). */
+function PackInfo({ enemy, difficulty }: { enemy: EnemyDef; difficulty: Difficulty }) {
+  const { min, max } = packSizeRange(difficulty);
+  const kinds = mobTypes(enemy, difficulty);
+  const [base, upgrade] = kinds;
+  return (
+    <View
+      accessible
+      accessibilityLabel={`Pack of ${min} to ${max}. Each mob is ${upgrade.name} ${basisPercent(upgrade.chanceBp)} of the time, otherwise ${base.name}.`}
+    >
+      <Text style={styles.subTitle}>Pack</Text>
+      <StatLine label="Pack of" value={`${min}-${max} mobs`} />
+      <StatLine label={`${base.name} (${multText(base.multBp)})`} value={`${basisPercent(base.chanceBp)} per mob`} />
+      <StatLine label={`${upgrade.name} (${multText(upgrade.multBp)})`} value={`${basisPercent(upgrade.chanceBp)} per mob`} />
+      <Text style={styles.abilityNote}>
+        {upgrade.name}: HP {formatNumber(upgrade.enemy.hp)}, damage {range(upgrade.enemy.damage.min, upgrade.enemy.damage.max)}, armor {formatNumber(upgrade.enemy.armor)}, magic resist{' '}
+        {formatNumber(upgrade.enemy.magicResist)}. Every mob fights at once and you strike the first one standing; each wins you its own loot, but only when you clear the whole pack.
+      </Text>
+    </View>
   );
 }
 
@@ -406,18 +538,23 @@ function DungeonDetail({
 }) {
   const d = DUNGEONS[id];
   const enemy = ENEMIES[d.enemyId];
+  const difficulty = selectedDifficulty(state, d.tier);
+  const kinds = mobTypes(enemy, difficulty);
+  const packed = difficulty !== 'normal';
   const { level, attributes, spentPoints, equipment } = state.character;
   const { training } = state;
   const stats = useMemo(() => getDerivedStats({ character: { level, attributes, spentPoints, equipment }, training }), [level, attributes, spentPoints, equipment, training]);
   const danger = useMemo(
-    () => dangerHint({ character: { level, attributes, spentPoints, equipment }, training }, id),
-    [level, attributes, spentPoints, equipment, training, id],
+    () => dangerHint({ character: { level, attributes, spentPoints, equipment }, training }, id, difficulty),
+    [level, attributes, spentPoints, equipment, training, id, difficulty],
   );
   const searchMs = searchMsFor(id, state);
-  const unlock = dungeonUnlockView(state, id);
-  const totals = dungeonTotals(state, id);
+  const unlock = dungeonUnlockView(state, id, difficulty);
+  const totals = dungeonTotals(state, id, difficulty);
   const hp = hpView(state);
   const run = running ? dungeonRunView(state) : null;
+  // A run keeps the difficulty it started on, whatever is selected now.
+  const otherDifficultyRun = run && run.difficulty !== difficulty ? run.difficulty : null;
   const [replay, setReplay] = useState<FightRecord | null>(null);
   const [replayKey, setReplayKey] = useState(0);
   const lastFight = state.dungeon.lastFight?.dungeonId === id ? state.dungeon.lastFight : null;
@@ -430,10 +567,12 @@ function DungeonDetail({
   const { send, run: runCall, dialog, client } = useCommand({ silentCodes: ['RUN_CHANGED', 'FIGHT_IN_PROGRESS'] });
 
   const start = useCallback(async () => {
-    // A boss fight in progress is fled by starting anything else (a loss, HP to 0): ask first.
-    if (!(await confirmLeaveRun(dialog, `Start ${d.name}`, client.getState().activity?.kind === 'boss' ? client.getState().activity : null))) return;
-    await send({ type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: id });
-  }, [client, d.name, dialog, id, send]);
+    // A boss fight in progress is fled by starting anything else (a loss, HP to 0): ask first. So is a run of this stage on another difficulty.
+    const live = client.getState().activity;
+    const leaving = live?.kind === 'boss' || (live?.kind === 'dungeon' && live.dungeonId === id && live.difficulty !== difficulty) ? live : null;
+    if (!(await confirmLeaveRun(dialog, `Start ${d.name}`, leaving))) return;
+    await send({ type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: id, difficulty });
+  }, [client, d.name, dialog, difficulty, id, send]);
   /**
    * Hold-to-repeat search skip. Each tick names the run and the cost on screen right now (live state), so the engine
    * never charges more or skips a later run; the repeat ends by itself when the fight starts (no skip in a fight) or
@@ -447,7 +586,9 @@ function DungeonDetail({
     },
     [client, send],
   );
-  const hits = strikeRange(enemy.damage, stats.armor.value);
+  // What one strike of the mob in the run deals to the hero (the run's own difficulty, its plain mob: the weakest kind).
+  const runKinds = mobTypes(enemy, run?.difficulty ?? difficulty);
+  const hits = strikeRange(runKinds[0].enemy.damage, stats.armor.value);
   const stop = useCallback(async () => {
     if (await confirmCancelRun(dialog, 'Stop')) await send({ type: 'STOP_ACTIVITY' });
   }, [dialog, send]);
@@ -456,7 +597,15 @@ function DungeonDetail({
   }, [dialog, send]);
   const otherActivity = state.activity && !running ? state.activity.kind : null;
   /** Debug, hold to repeat. */
-  const addWins = useCallback(({ repeat }: { repeat: boolean }) => runCall(() => client.debug.addDungeonWins(id, 10), { quiet: repeat }), [client, id, runCall]);
+  const addWins = useCallback(({ repeat }: { repeat: boolean }) => runCall(() => client.debug.addDungeonWins(id, 10, difficulty), { quiet: repeat }), [client, difficulty, id, runCall]);
+  const selectDifficulty = useCallback((to: Difficulty) => send({ type: 'SET_DUNGEON_DIFFICULTY', tier: d.tier, difficulty: to }), [d.tier, send]);
+  const [diffInfo, setDiffInfo] = useState<{ difficulty: Difficulty; anchor: AnchorRect } | null>(null);
+  const explainDifficulty = useCallback((to: Difficulty, node: HostInstance | null) => {
+    void measureAnchor(node).then((anchor) => anchor && setDiffInfo({ difficulty: to, anchor }));
+  }, []);
+  const diffViews = difficultyViews(state, d.tier);
+  const infoView = diffInfo ? diffViews.find((v) => v.difficulty === diffInfo.difficulty) : null;
+  const level2 = difficulty === 'normal' ? '' : `${difficultyName(difficulty)} `;
 
   return (
     <View>
@@ -464,18 +613,25 @@ function DungeonDetail({
         <Text style={styles.backText}>‹ All dungeons</Text>
       </Pressable>
 
-      <Panel title={`Stage ${d.stage} · ${d.name} · Tier ${d.tier}`}>
-        <Versus enemyId={d.enemyId} state={state} stats={stats} hp={hp} />
+      <DifficultySelector views={diffViews} onSelect={(to) => void selectDifficulty(to)} onExplain={explainDifficulty} />
+
+      <Panel title={`Stage ${d.stage} · ${d.name} · Tier ${d.tier}${packed ? ` · ${difficultyName(difficulty)}` : ''}`}>
+        <Versus enemyId={d.enemyId} enemy={kinds[0].enemy} name={kinds[0].name} state={state} stats={stats} hp={hp} />
+        {packed ? <PackInfo enemy={enemy} difficulty={difficulty} /> : null}
 
         <View
           style={styles.dangerRow}
           accessible
-          accessibilityLabel={`Danger: ${DANGER_LABELS[danger.level]}. About ${danger.expectedHpLoss} HP lost per fight, ${danger.percent}% of your max HP`}
+          accessibilityLabel={`Danger: ${DANGER_LABELS[danger.level]}. About ${danger.expectedHpLoss} HP lost per fight${packed ? ' against an average pack' : ''}, ${danger.percent}% of your max HP`}
         >
           <Text style={[styles.dangerLabel, DANGER_STYLES[danger.level]]}>Danger: {DANGER_LABELS[danger.level]}</Text>
           <Text style={styles.note}>
-            ~{formatNumber(danger.expectedHpLoss)} HP lost per fight ({danger.percent}% of max)
+            ~{formatNumber(danger.expectedHpLoss)} HP lost per fight ({dangerPercent(danger.percent)} of max)
+            {packed ? `, average pack of ${danger.packMin}-${danger.packMax}` : ''}
           </Text>
+          {danger.fightMs > COMBAT.maxFightMs ? (
+            <Text style={styles.note}>Too slow: about {Math.round(danger.fightMs / 1000)}s to clear it, the limit is {COMBAT.maxFightMs / 1000}s.</Text>
+          ) : null}
           <Text style={styles.note}>
             Your average strike: {formatNumber(Math.round(danger.heroAvg * 10) / 10)}
             {danger.heroMagicAvg > 0 ? ` (${formatNumber(danger.heroMagicAvg)} magic)` : ''}
@@ -483,17 +639,22 @@ function DungeonDetail({
           </Text>
         </View>
 
-        <Text style={styles.subTitle}>Loot (win only)</Text>
+        <Text style={styles.subTitle}>{packed ? 'Loot per mob, on a full clear' : 'Loot (win only)'}</Text>
         <View
           accessible
-          accessibilityLabel={`Loot on a win: ${d.rewards.heroXp} hero XP, ${range(d.rewards.gold.min, d.rewards.gold.max)} gold, ${d.rewards.drops
-            .map((x) => `${itemName(x.itemId)} ${percent(x.chance)} chance`)
-            .join(', ')}`}
+          accessibilityLabel={`Loot ${packed ? 'per mob, on a full clear' : 'on a win'}: ${kinds
+            .map((k) => `${k.name} ${scaleStat(d.rewards.heroXp, k.multBp)} hero XP, gold ${range(scaleStat(d.rewards.gold.min, k.multBp), scaleStat(d.rewards.gold.max, k.multBp))}`)
+            .join('; ')}; ${d.rewards.drops.map((x) => `${itemName(x.itemId)} ${percent(x.chance)} chance`).join(', ')}`}
         >
-          <StatLine icon={<GameIcon name="hero_xp" />} label="Hero XP" value={`+${d.rewards.heroXp}`} />
-          <StatLine icon={<GameIcon name="gold" />} label="Gold" value={range(d.rewards.gold.min, d.rewards.gold.max)} />
+          {kinds.map((k) => (
+            <View key={k.variant}>
+              {packed ? <Text style={styles.kindTitle}>{k.name}</Text> : null}
+              <StatLine icon={<GameIcon name="hero_xp" />} label="Hero XP" value={`+${formatNumber(scaleStat(d.rewards.heroXp, k.multBp))}`} />
+              <StatLine icon={<GameIcon name="gold" />} label="Gold" value={range(scaleStat(d.rewards.gold.min, k.multBp), scaleStat(d.rewards.gold.max, k.multBp))} />
+            </View>
+          ))}
           {d.rewards.drops.map((x) => (
-            <StatLine key={x.itemId} icon={<ItemIcon defId={x.itemId} size={20} />} label={itemName(x.itemId)} value={percent(x.chance)} />
+            <StatLine key={x.itemId} icon={<ItemIcon defId={x.itemId} size={20} />} label={itemName(x.itemId)} value={`${percent(x.chance)}${packed ? ' per mob' : ''}`} />
           ))}
         </View>
       </Panel>
@@ -507,6 +668,7 @@ function DungeonDetail({
             hp={hp.hp}
             heroName={state.character.name}
             enemyName={enemy.name}
+            hitName={runKinds[0].name}
             enemyId={d.enemyId}
             hitMin={hits.min}
             hitMax={hits.max}
@@ -516,39 +678,46 @@ function DungeonDetail({
           />
         ) : !unlock.unlocked && unlock.requirement ? (
           <IconText icon="locked" style={styles.note} rowStyle={styles.centerRow}>
-            Locked. {requirementText(unlock.requirement, unlock.progress)}.
+            Locked. {requirementText(unlock.requirement, unlock.progress, difficulty)}.
           </IconText>
         ) : (
           <View style={styles.startBox}>
             <Text style={styles.note}>
               Runs repeat on their own, also while the app is closed (up to {formatNumber(state.offline.capMs / 3_600_000)}h). Each run is a{' '}
               {formatClock(searchMs)} search for an opponent, then a live fight (up to {formatNumber(COMBAT.maxFightMs / 1000)}s). Waiting is free.
+              {packed ? ` On ${difficultyName(difficulty)} the opponent is a pack: you must clear every mob inside the limit to win, and a loss pays nothing.` : ''}
             </Text>
             {otherActivity === 'woodcutting' ? <Text style={styles.note}>Starting stops woodcutting (your logs are kept).</Text> : null}
             {otherActivity === 'training' ? <Text style={styles.note}>Starting pauses training (your training XP is kept).</Text> : null}
             {otherActivity === 'boss' ? <Text style={styles.note}>Starting flees the boss fight: it counts as a loss.</Text> : null}
-            <PixelButton label="Start" icon="fight" onPress={start} accessibilityLabel={`Start ${d.name} runs`} />
+            <PixelButton label="Start" icon="fight" onPress={start} accessibilityLabel={`Start ${d.name} runs${packed ? ` on ${difficultyName(difficulty)}` : ''}`} />
           </View>
         )}
+        {otherDifficultyRun ? (
+          <View style={styles.startBox}>
+            <Text style={styles.note}>This run plays on {difficultyName(otherDifficultyRun)} and keeps repeating on it. You selected {difficultyName(difficulty)}.</Text>
+            {unlock.unlocked ? (
+              <PixelButton label={`Start on ${difficultyName(difficulty)}`} onPress={start} accessibilityHint="Asks first: it replaces the current run, which gives no rewards if it is still searching" />
+            ) : null}
+          </View>
+        ) : null}
         <Text style={styles.totals}>
-          Lifetime here: {formatNumber(totals.runs)} runs · {formatNumber(totals.wins)} wins · {formatNumber(totals.losses)} losses
+          Lifetime {level2 ? `${level2.trim()} ` : ''}here: {formatNumber(totals.runs)} runs · {formatNumber(totals.wins)} wins · {formatNumber(totals.losses)} losses
         </Text>
         {DEV_TOOLS_ENABLED && unlock.unlocked ? (
           <View style={styles.debugRow}>
-            <PixelButton label="+10 wins (debug)" repeat={addWins} accessibilityHint="Debug: adds 10 wins here, to test unlocks. Hold to repeat" />
+            <PixelButton
+              label={`+10 ${level2}wins (debug)`}
+              repeat={addWins}
+              accessibilityHint={`Debug: adds 10 wins here on ${difficultyName(difficulty)}, to test unlocks. Hold to repeat`}
+            />
           </View>
         ) : null}
       </Panel>
 
       <Panel title="Last fight">
         {replay ? (
-          <FightReplay
-            key={replayKey}
-            fight={replay}
-            heroName={state.character.name}
-            enemyName={enemy.name}
-            onClose={() => setReplay(null)}
-          />
+          <FightReplay key={replayKey} fight={replay} heroName={state.character.name} enemyName={enemy.name} onClose={() => setReplay(null)} />
         ) : lastFight ? (
           <LastFight
             fight={lastFight}
@@ -561,21 +730,28 @@ function DungeonDetail({
           <Text style={styles.note}>No fight yet. Start a run, or skip one with stamina.</Text>
         )}
       </Panel>
+      {diffInfo && infoView && !infoView.unlocked ? (
+        <InfoPopover anchor={diffInfo.anchor} onClose={() => setDiffInfo(null)} title={`${infoView.name} is locked`} icon={<GameIcon name="locked" size={32} />} subtitle={`Tier ${d.tier} difficulty`}>
+          <PopoverText tone="gold">{infoView.lockReason ?? ''}</PopoverText>
+          <PopoverText tone="note">The kill is permanent: once it counts, {infoView.name} stays open.</PopoverText>
+        </InfoPopover>
+      ) : null}
     </View>
   );
 }
 
 function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state: GameState; running: boolean; paused: boolean; onBack: () => void }) {
   const boss = BOSSES[id];
-  const enemy = ENEMIES[boss.enemyId];
+  const difficulty = selectedDifficulty(state, boss.tier);
+  const enemy = bossEnemyAt(id, difficulty);
   const skill = COMBAT_SKILLS.heavy_bash;
   const { level, attributes, spentPoints, equipment } = state.character;
   const { training } = state;
   const input = useMemo(() => ({ character: { level, attributes, spentPoints, equipment }, training }), [level, attributes, spentPoints, equipment, training]);
   const stats = useMemo(() => getDerivedStats(input), [input]);
-  const danger = useMemo(() => bossDangerHint(input, id), [input, id]);
-  const entry = bossEntryView(state, id);
-  const totals = bossTotals(state, id);
+  const danger = useMemo(() => bossDangerHint(input, id, difficulty), [input, id, difficulty]);
+  const entry = bossEntryView(state, id, difficulty);
+  const totals = bossTotals(state, id, difficulty);
   const hp = hpView(state);
   const run: BossRunView | null = running ? bossRunView(state) : null;
   const [replay, setReplay] = useState<FightRecord | null>(null);
@@ -586,12 +762,14 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
   const limitS = fightLimitMs(id) / 1000;
   const regenPerSec = Math.floor((enemy.hp * (enemy.regenBpPerSec ?? 0)) / 10_000);
   const regenPct = (enemy.regenBpPerSec ?? 0) / 100;
+  const dName = difficultyName(difficulty);
+  const onLevel = difficulty === 'normal' ? '' : ` on ${dName}`;
 
   // Entering and fleeing: one command at a time. FIGHT_IN_PROGRESS only means the screen was stale (a second tap).
   const { send, dialog, client } = useCommand({ silentCodes: ['FIGHT_IN_PROGRESS'] });
   const enter = useCallback(async () => {
     const live = client.getState();
-    const view = bossEntryView(live, id);
+    const view = bossEntryView(live, id, difficulty);
     if (view.block) return;
     const a = live.activity;
     const lines = [`It costs ${view.cost} stamina, not refunded if you lose or flee. One fight, no repeat: it plays out live (also while the app is closed) and you are idle after it.`];
@@ -602,17 +780,24 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
     const max = getDerivedStats(live).maxHp.value;
     if (view.hpBelowHalf) lines.unshift(`Your HP is below half (${live.character.hp}/${max}). A loss costs all of it.`);
     const ok = await dialog.confirm({
-      title: view.hpBelowHalf ? 'Enter at low HP?' : `Enter the ${boss.name}?`,
+      title: view.hpBelowHalf ? 'Enter at low HP?' : `Enter the ${boss.name}${difficulty === 'normal' ? '' : ` on ${difficultyName(difficulty)}`}?`,
       message: lines.join('\n\n'),
       confirmLabel: 'Enter',
       cancelLabel: 'Not now',
       destructive: view.hpBelowHalf,
     });
-    if (ok) await send({ type: 'ENTER_BOSS', bossId: id, maxCost: view.cost });
-  }, [boss.name, client, dialog, id, send]);
+    if (ok) await send({ type: 'ENTER_BOSS', bossId: id, maxCost: view.cost, difficulty });
+  }, [boss.name, client, dialog, difficulty, id, send]);
   const flee = useCallback(async () => {
     if (await confirmCancelRun(dialog, 'Flee', true, id)) await send({ type: 'STOP_ACTIVITY' });
   }, [dialog, id, send]);
+  const selectDifficulty = useCallback((to: Difficulty) => send({ type: 'SET_DUNGEON_DIFFICULTY', tier: boss.tier, difficulty: to }), [boss.tier, send]);
+  const [diffInfo, setDiffInfo] = useState<{ difficulty: Difficulty; anchor: AnchorRect } | null>(null);
+  const explainDifficulty = useCallback((to: Difficulty, node: HostInstance | null) => {
+    void measureAnchor(node).then((anchor) => anchor && setDiffInfo({ difficulty: to, anchor }));
+  }, []);
+  const diffViews = difficultyViews(state, boss.tier);
+  const infoView = diffInfo ? diffViews.find((v) => v.difficulty === diffInfo.difficulty) : null;
 
   // The reveal: a win that dropped gear, seen as it happens, opens the piece's popover with Equip (like crafting's Done).
   const [reveal, setReveal] = useState<{ itemId: string; anchor: AnchorRect } | null>(null);
@@ -649,7 +834,9 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
       ? `Too slow: about ${Math.round(danger.fightMs / 1000)}s to kill, the limit is ${limitS}s.`
       : `Killing it takes about ${Math.round(danger.fightMs / 1000)}s (limit ${limitS}s).`;
   const rewards = boss.rewards;
-  const gearOdds = rewards.gear.rarityWeights.map((w) => `${RARITY_COLOR_NAMES[w.value]} ${Math.round((w.weight * 100) / rewards.gear.rarityWeights.reduce((n, x) => n + x.weight, 0))}%`).join(', ');
+  const scaled = bossRewardsAt(id, difficulty);
+  const weightTotal = scaled.rarityWeights.reduce((n, x) => n + x.weight, 0);
+  const gearOdds = scaled.rarityWeights.map((w) => `${RARITY_COLOR_NAMES[w.value]} ${Math.round((w.weight * 100) / weightTotal)}%`).join(', ');
 
   return (
     <View>
@@ -657,8 +844,10 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
         <Text style={styles.backText}>‹ All dungeons</Text>
       </Pressable>
 
-      <Panel title={`${boss.name} · Tier ${boss.tier} boss`}>
-        <Versus enemyId={boss.enemyId} state={state} stats={stats} hp={hp} />
+      <DifficultySelector views={diffViews} onSelect={(to) => void selectDifficulty(to)} onExplain={explainDifficulty} />
+
+      <Panel title={`${boss.name} · Tier ${boss.tier} boss${difficulty === 'normal' ? '' : ` · ${dName}`}`}>
+        <Versus enemyId={boss.enemyId} enemy={enemy} name={boss.name} state={state} stats={stats} hp={hp} />
 
         <Text style={styles.subTitle}>Boss abilities</Text>
         <View accessible accessibilityLabel={`Regenerates ${regenPct} percent of its max HP a second, ${regenPerSec} HP. ${skill.name}: ${skill.description}. Time limit ${limitS} seconds.`}>
@@ -676,20 +865,20 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
           <Text style={[styles.dangerLabel, DANGER_STYLES[danger.level]]}>Danger: {DANGER_LABELS[danger.level]}</Text>
           <Text style={styles.note}>{killText}</Text>
           <Text style={styles.note}>
-            ~{formatNumber(danger.expectedHpLoss)} HP lost ({danger.percent}% of max), {skill.name} included
+            ~{formatNumber(danger.expectedHpLoss)} HP lost ({dangerPercent(danger.percent)} of max), {skill.name} included
           </Text>
           <Text style={styles.note}>
-            Your average strike: {formatNumber(Math.round(danger.heroAvg * 10) / 10)}. It heals {regenPerSec} HP a second and {skill.name} stuns you {danger.stunChancePercent}% of the time for {danger.stunStrikes} strikes.
+            Your average strike: {formatNumber(Math.round(danger.heroAvg * 10) / 10)}. It heals {formatNumber(regenPerSec)} HP a second and {skill.name} stuns you {danger.stunChancePercent}% of the time for {danger.stunStrikes} strikes.
           </Text>
         </View>
 
         <Text style={styles.subTitle}>Rewards (win only)</Text>
         <View
           accessible
-          accessibilityLabel={`Rewards on a win: ${rewards.heroXp} hero XP, ${range(rewards.gold.min, rewards.gold.max)} gold, ${percent(rewards.gear.chance)} chance of an Iron gear piece, ${rewards.drops.map((x) => `${itemName(x.itemId)} ${percent(x.chance)} chance`).join(', ')}`}
+          accessibilityLabel={`Rewards on a win${onLevel}: ${scaled.heroXp} hero XP, ${range(scaled.gold.min, scaled.gold.max)} gold, ${percent(rewards.gear.chance)} chance of an Iron gear piece, ${rewards.drops.map((x) => `${itemName(x.itemId)} ${percent(x.chance)} chance`).join(', ')}`}
         >
-          <StatLine icon={<GameIcon name="hero_xp" />} label="Hero XP" value={`+${formatNumber(rewards.heroXp)}`} />
-          <StatLine icon={<GameIcon name="gold" />} label="Gold" value={range(rewards.gold.min, rewards.gold.max)} />
+          <StatLine icon={<GameIcon name="hero_xp" />} label="Hero XP" value={`+${formatNumber(scaled.heroXp)}`} />
+          <StatLine icon={<GameIcon name="gold" />} label="Gold" value={range(scaled.gold.min, scaled.gold.max)} />
           <StatLine label="Iron gear piece" value={percent(rewards.gear.chance)} />
           <Text style={styles.abilityNote}>
             Sword, helm, chestplate, shield, gloves or boots, equal odds. {gearOdds}; quality 0–{rewards.gear.quality.max}%.
@@ -700,17 +889,17 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
         </View>
       </Panel>
 
-      <Panel title="Fight">
+      <Panel title={run ? `Fight · ${difficultyName(run.difficulty)}` : 'Fight'}>
         {run ? (
           <View style={styles.runBox}>
-            <LiveFight fight={run.fight} heroName={state.character.name} enemyName={enemy.name} enemyId={boss.enemyId} paused={paused} />
+            <LiveFight fight={run.fight} heroName={state.character.name} enemyName={boss.name} enemyId={boss.enemyId} paused={paused} />
             <View style={styles.buttons}>
               <PixelButton label="Flee (counts as loss)" onPress={flee} accessibilityHint={`Asks first: fleeing counts as a loss, drops your HP to 0 and the ${boss.entryStamina} stamina is not refunded`} />
             </View>
           </View>
         ) : !entry.unlock.unlocked ? (
           <IconText icon="locked" style={styles.note} rowStyle={styles.centerRow}>
-            Locked. {bossRequirementText(entry.unlock.requirement, entry.unlock.progress)}.
+            Locked. {bossRequirementText(entry.unlock.requirement, entry.unlock.progress, difficulty)}.
           </IconText>
         ) : (
           <View style={styles.startBox}>
@@ -732,20 +921,20 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
               sublabelIcon="stamina"
               onPress={enter}
               disabled={entry.block !== null}
-              accessibilityLabel={`Enter the ${boss.name} for ${entry.cost} stamina`}
+              accessibilityLabel={`Enter the ${boss.name}${onLevel} for ${entry.cost} stamina`}
               accessibilityHint={blockText ?? `Asks first. ${entry.cost} stamina, not refunded if you lose or flee`}
             />
             {blockText ? <Text style={styles.note}>{blockText}</Text> : null}
           </View>
         )}
         <Text style={styles.totals}>
-          Lifetime here: {formatNumber(totals.runs)} fights · {formatNumber(totals.wins)} wins · {formatNumber(totals.losses)} losses
+          Lifetime{onLevel} here: {formatNumber(totals.runs)} fights · {formatNumber(totals.wins)} wins · {formatNumber(totals.losses)} losses
         </Text>
       </Panel>
 
       <Panel title="Last fight">
         {replay ? (
-          <FightReplay key={replayKey} fight={replay} heroName={state.character.name} enemyName={enemy.name} onClose={() => setReplay(null)} />
+          <FightReplay key={replayKey} fight={replay} heroName={state.character.name} enemyName={boss.name} onClose={() => setReplay(null)} />
         ) : lastFight ? (
           <View ref={lastBoxRef} collapsable={false}>
             <LastFight
@@ -763,6 +952,12 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
         )}
       </Panel>
       {reveal ? <RevealSheet key={reveal.itemId} itemId={reveal.itemId} anchor={reveal.anchor} onClose={closeReveal} /> : null}
+      {diffInfo && infoView && !infoView.unlocked ? (
+        <InfoPopover anchor={diffInfo.anchor} onClose={() => setDiffInfo(null)} title={`${infoView.name} is locked`} icon={<GameIcon name="locked" size={32} />} subtitle={`Tier ${boss.tier} difficulty`}>
+          <PopoverText tone="gold">{infoView.lockReason ?? ''}</PopoverText>
+          <PopoverText tone="note">The kill is permanent: once it counts, {infoView.name} stays open.</PopoverText>
+        </InfoPopover>
+      ) : null}
     </View>
   );
 }
@@ -774,6 +969,7 @@ const RunControls = memo(function RunControls({
   hp,
   heroName,
   enemyName,
+  hitName,
   enemyId,
   hitMin,
   hitMax,
@@ -787,6 +983,8 @@ const RunControls = memo(function RunControls({
   hp: number;
   heroName: string;
   enemyName: string;
+  /** The run's plain mob, named for the hit line ("Veteran Troll" on Extreme). */
+  hitName: string;
   enemyId: EnemyId;
   /** What one enemy strike deals to the hero after armor (engine strikeRange). */
   hitMin: number;
@@ -813,8 +1011,8 @@ const RunControls = memo(function RunControls({
   const noHp = hp <= 0;
   return (
     <View style={styles.runBox}>
-      <View style={styles.runLine} accessible accessibilityLabel={`Searching for an opponent, ${formatClock(run.remainingMs)} left`}>
-        <Text style={styles.runLabel}>Searching for opponent…</Text>
+      <View style={styles.runLine} accessible accessibilityLabel={`Searching for an opponent on ${difficultyName(run.difficulty)}, ${formatClock(run.remainingMs)} left`}>
+        <Text style={styles.runLabel}>Searching for opponent…{run.difficulty === 'normal' ? '' : ` (${difficultyName(run.difficulty)})`}</Text>
         <Text style={styles.runTime}>{formatClock(run.remainingMs)}</Text>
       </View>
       <LiveBar fraction={run.fraction} remainingMs={run.remainingMs} paused={paused} color={colors.hp} style={styles.runBar} />
@@ -835,7 +1033,7 @@ const RunControls = memo(function RunControls({
         </Text>
       ) : null}
       <Text style={styles.note}>
-        Your HP {hp} · {enemyName} hits for {range(hitMin, hitMax)}
+        Your HP {hp} · {run.difficulty === 'normal' ? enemyName : `each ${hitName}`} hits for {range(hitMin, hitMax)}
       </Text>
       <Text style={styles.note}>Skipping the search gives no HP regen for the skipped time.</Text>
       {!canSkip ? <Text style={styles.note}>Not enough stamina to skip ({stamina}/{cost}).</Text> : null}
@@ -862,6 +1060,9 @@ const LastFight = memo(function LastFight({
   const items = Object.entries(r.items);
   const lost = Object.entries(r.itemsLost);
   const outcome = outcomeLabel(fight.endReason, fight.dungeonId);
+  const packSize = fight.mobs.length;
+  const downCount = fight.mobs.filter((m) => m.hpEnd <= 0).length;
+  const where = fight.difficulty === 'normal' ? '' : `${difficultyName(fight.difficulty)} · `;
   const seconds = Math.floor(fight.durationMs / 1000);
   const gearRef = useRef<HostInstance>(null);
   const rewardText = fight.won
@@ -871,11 +1072,11 @@ const LastFight = memo(function LastFight({
     <View style={styles.lastBox}>
       <View
         accessible
-        accessibilityLabel={`${outcome} after ${seconds} seconds. HP ${fight.heroHpStart} to ${fight.heroHpEnd}. ${rewardText}`}
+        accessibilityLabel={`${outcome}${fight.difficulty === 'normal' ? '' : ` on ${difficultyName(fight.difficulty)}`}${packSize > 1 ? `, a pack of ${packSize}, ${downCount} defeated` : ''} after ${seconds} seconds. HP ${fight.heroHpStart} to ${fight.heroHpEnd}. ${rewardText}`}
       >
         <Text style={[styles.outcome, fight.won ? styles.win : styles.loss]}>{outcome}</Text>
         <Text style={styles.note}>
-          {seconds}s · {fight.log.length} {fight.log.length === 1 ? 'strike' : 'strikes'} · HP {fight.heroHpStart} → {fight.heroHpEnd}
+          {where}{packSize > 1 ? `${packText(packSize)}, ${downCount} down · ` : ''}{seconds}s · {fight.log.length} {fight.log.length === 1 ? 'strike' : 'strikes'} · HP {fight.heroHpStart} → {fight.heroHpEnd}
         </Text>
         <Text style={styles.rewards}>{rewardText}</Text>
         {lost.map(([id, n]) => (
@@ -939,6 +1140,7 @@ const styles = StyleSheet.create({
   cardLocked: { backgroundColor: colors.parchmentDark, borderColor: colors.inkSoft, opacity: 0.75 },
   cardBoss: { borderColor: colors.hp },
   tierHeader: { fontFamily: fonts.title, fontSize: 22, color: colors.ink, marginTop: 4, marginBottom: 8 },
+  kindTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.inkSoft, marginTop: 6 },
   dimmed: { color: colors.inkSoft },
   lockLine: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink },
   /** Fits the 48 pt troll; 32 pt enemies are centred, so every title lines up. */

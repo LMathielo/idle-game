@@ -72,9 +72,29 @@
   "h": 32,
   "scale": 8
  },
+ "enemies/rat_veteran.png": {
+  "w": 36,
+  "h": 36,
+  "scale": 8
+ },
+ "enemies/rat_extreme.png": {
+  "w": 36,
+  "h": 36,
+  "scale": 8
+ },
  "enemies/bat.png": {
   "w": 32,
   "h": 32,
+  "scale": 8
+ },
+ "enemies/bat_veteran.png": {
+  "w": 36,
+  "h": 36,
+  "scale": 8
+ },
+ "enemies/bat_extreme.png": {
+  "w": 36,
+  "h": 36,
   "scale": 8
  },
  "enemies/wolf.png": {
@@ -82,14 +102,44 @@
   "h": 32,
   "scale": 8
  },
+ "enemies/wolf_veteran.png": {
+  "w": 36,
+  "h": 36,
+  "scale": 8
+ },
+ "enemies/wolf_extreme.png": {
+  "w": 36,
+  "h": 36,
+  "scale": 8
+ },
  "enemies/skeleton.png": {
   "w": 32,
   "h": 32,
   "scale": 8
  },
+ "enemies/skeleton_veteran.png": {
+  "w": 36,
+  "h": 36,
+  "scale": 8
+ },
+ "enemies/skeleton_extreme.png": {
+  "w": 36,
+  "h": 36,
+  "scale": 8
+ },
  "enemies/troll.png": {
   "w": 48,
   "h": 48,
+  "scale": 8
+ },
+ "enemies/troll_veteran.png": {
+  "w": 52,
+  "h": 52,
+  "scale": 8
+ },
+ "enemies/troll_extreme.png": {
+  "w": 52,
+  "h": 52,
   "scale": 8
  },
  "enemies/variants/giant_rat.png": {
@@ -188,6 +238,21 @@
   "scale": 8
  },
  "icons/unknown.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/skull_normal.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/skull_hard.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/skull_extreme.png": {
   "w": 16,
   "h": 16,
   "scale": 8

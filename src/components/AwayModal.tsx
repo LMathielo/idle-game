@@ -8,7 +8,7 @@ import { ATTRIBUTE_NAMES, formatAwayDuration, formatNumber, itemName } from './f
 import { Panel } from './Panel';
 import { PixelButton } from './PixelButton';
 import { colors, fonts } from '../theme';
-import { type AttributeKey, BOSSES, BUILDINGS, dungeonOrBossName, type SimulationSummary, type SkillKey, TRAINING, trainingXpTotal } from '../engine';
+import { type AttributeKey, BOSSES, BUILDINGS, DIFFICULTY, dungeonOrBossName, type SimulationSummary, type SkillKey, TRAINING, trainingXpTotal } from '../engine';
 
 const SKILL_NAMES: Record<SkillKey, string> = {
   woodcutting: 'Woodcutting',
@@ -65,6 +65,10 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
   const skills = Object.entries(summary.skillXpGained) as [SkillKey, number][];
   const trained = Object.entries(summary.trainingXpGained) as [AttributeKey, number][];
   const maxed = summary.trainingMaxed;
+  // Normal is what is left of the totals once the Hard / Extreme part (1.24.0) is taken off (older summaries have no harder part).
+  const harderRuns = (['hard', 'extreme'] as const).reduce((n, d) => ({ runs: n.runs + (summary.harder?.[d]?.runs ?? 0), wins: n.wins + (summary.harder?.[d]?.wins ?? 0), losses: n.losses + (summary.harder?.[d]?.losses ?? 0), fights: n.fights + (summary.harder?.[d]?.bossFights ?? 0), bossWins: n.bossWins + (summary.harder?.[d]?.bossWins ?? 0), bossLosses: n.bossLosses + (summary.harder?.[d]?.bossLosses ?? 0) }), { runs: 0, wins: 0, losses: 0, fights: 0, bossWins: 0, bossLosses: 0 });
+  const normalRuns = { runs: summary.dungeon.runs - harderRuns.runs, wins: summary.dungeon.wins - harderRuns.wins, losses: summary.dungeon.losses - harderRuns.losses };
+  const normalBoss = { fights: (summary.boss?.fights ?? 0) - harderRuns.fights, wins: (summary.boss?.wins ?? 0) - harderRuns.bossWins, losses: (summary.boss?.losses ?? 0) - harderRuns.bossLosses };
   const nextTierText = tier < TRAINING.maxTier ? `unlock Tier ${tier + 1}` : 'max tier';
 
   return (
@@ -74,19 +78,39 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       ) : null}
       {backward ? <Text style={styles.warn}>Your device clock moved back — progress is paused until it catches up.</Text> : null}
 
-      {summary.dungeon.runs > 0 ? (
+      {normalRuns.runs > 0 ? (
         <Line
           label="Dungeon runs"
-          value={`${formatNumber(summary.dungeon.runs)} (${formatNumber(summary.dungeon.wins)} won, ${formatNumber(summary.dungeon.losses)} lost)`}
+          value={`${formatNumber(normalRuns.runs)} (${formatNumber(normalRuns.wins)} won, ${formatNumber(normalRuns.losses)} lost)`}
         />
       ) : null}
-      {summary.boss && summary.boss.fights > 0 ? (
+      {normalBoss.fights > 0 ? <Line icon={<GameIcon name="fight" />} label={BOSSES.troll_chieftain.name} value={bossResultText(normalBoss)} /> : null}
+      {(['hard', 'extreme'] as const).map((d) => {
+        const h = summary.harder?.[d];
+        if (!h) return null;
+        return (
+          <View key={d}>
+            {h.runs > 0 ? (
+              <Line label={`${DIFFICULTY[d].name} dungeon runs`} value={`${formatNumber(h.runs)} (${formatNumber(h.wins)} won, ${formatNumber(h.losses)} lost)`} />
+            ) : null}
+            {h.bossFights > 0 ? (
+              <Line
+                icon={<GameIcon name="fight" />}
+                label={`${BOSSES.troll_chieftain.name} (${DIFFICULTY[d].name})`}
+                value={bossResultText({ fights: h.bossFights, wins: h.bossWins, losses: h.bossLosses })}
+              />
+            ) : null}
+          </View>
+        );
+      })}
+      {(summary.harderUnlocks ?? []).map((u) => (
         <Line
-          icon={<GameIcon name="fight" />}
-          label={BOSSES.troll_chieftain.name}
-          value={bossResultText(summary.boss)}
+          key={`${u.kind}-${u.difficulty}-${u.kind === 'boss' ? u.bossId : u.tier}`}
+          icon={<GameIcon name="unlocked" />}
+          label="Unlocked"
+          value={u.kind === 'difficulty' ? `${DIFFICULTY[u.difficulty].name} for Tier ${u.tier}` : `${BOSSES[u.bossId].name} on ${DIFFICULTY[u.difficulty].name}`}
         />
-      ) : null}
+      ))}
       {summary.dungeonsUnlocked.length > 0 ? (
         <Line icon={<GameIcon name="unlocked" />} label="Unlocked" value={summary.dungeonsUnlocked.map(dungeonOrBossName).join(', ')} />
       ) : null}

@@ -24,6 +24,9 @@ import {
   getDerivedStats,
   isDungeonUnlocked,
   mobName,
+  mobTypes,
+  packSizeRange,
+  bossRewardsAt,
   scaledEnemy,
   scaleStat,
   searchMsFor,
@@ -150,6 +153,25 @@ describe('scaling and the one rounding rule (half up, integers)', () => {
     expect(mobName('Troll', 'base')).toBe('Troll');
     expect(mobName('Troll', 'veteran')).toBe('Veteran Troll');
     expect(mobName('Troll', 'extreme')).toBe('Extreme Troll');
+  });
+});
+
+describe('read-only views for the stage and boss detail', () => {
+  it('packSizeRange and mobTypes: what a difficulty sends and how often', () => {
+    expect(packSizeRange('normal')).toEqual({ min: 1, max: 1 });
+    expect(packSizeRange('hard')).toEqual({ min: 1, max: 4 });
+    expect(packSizeRange('extreme')).toEqual({ min: 7, max: 10 });
+    const names = (d: Difficulty) => mobTypes(ENEMIES.troll, d).map((m) => [m.name, m.multBp, m.chanceBp]);
+    expect(names('normal')).toEqual([['Troll', 10_000, 10_000]]);
+    expect(names('hard')).toEqual([['Troll', 20_000, 7500], ['Veteran Troll', 30_000, 2500]]);
+    expect(names('extreme')).toEqual([['Veteran Troll', 120_000, 7500], ['Extreme Troll', 160_000, 2500]]);
+    expect(mobTypes(ENEMIES.troll, 'hard')[1].enemy).toEqual(scaledEnemy(ENEMIES.troll, 30_000));
+  });
+
+  it('bossRewardsAt: XP and gold scaled (x2 / x8), the difficulty rarity table', () => {
+    expect(bossRewardsAt('troll_chieftain', 'normal')).toEqual({ heroXp: 2000, gold: { min: 300, max: 450 }, rarityWeights: BOSSES.troll_chieftain.rewards.gear.rarityWeights });
+    expect(bossRewardsAt('troll_chieftain', 'hard')).toMatchObject({ heroXp: 4000, gold: { min: 600, max: 900 } });
+    expect(bossRewardsAt('troll_chieftain', 'extreme')).toMatchObject({ heroXp: 16_000, gold: { min: 2400, max: 3600 }, rarityWeights: DIFFICULTY.extreme.boss.rarityWeights });
   });
 });
 

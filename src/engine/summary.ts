@@ -1,5 +1,25 @@
 import { AWAY_SUMMARY_MIN_MS } from './config/time';
-import type { SimulationSummary } from './types';
+import type { DifficultyTally, Difficulty, SimulationSummary } from './types';
+
+const emptyTally = (): DifficultyTally => ({ runs: 0, wins: 0, losses: 0, bossFights: 0, bossWins: 0, bossLosses: 0 });
+
+function addTally(a: DifficultyTally | undefined, b: DifficultyTally | undefined): DifficultyTally {
+  return {
+    runs: (a?.runs ?? 0) + (b?.runs ?? 0),
+    wins: (a?.wins ?? 0) + (b?.wins ?? 0),
+    losses: (a?.losses ?? 0) + (b?.losses ?? 0),
+    bossFights: (a?.bossFights ?? 0) + (b?.bossFights ?? 0),
+    bossWins: (a?.bossWins ?? 0) + (b?.bossWins ?? 0),
+    bossLosses: (a?.bossLosses ?? 0) + (b?.bossLosses ?? 0),
+  };
+}
+
+/** The tally a stage run or boss fight on `difficulty` goes into; Normal has none (it is the totals minus the harder ones). */
+export function harderTally(summary: SimulationSummary, difficulty: Difficulty): DifficultyTally | null {
+  if (difficulty === 'normal') return null;
+  summary.harder ??= { hard: emptyTally(), extreme: emptyTally() };
+  return summary.harder[difficulty];
+}
 
 export function emptySummary(): SimulationSummary {
   return {
@@ -18,6 +38,7 @@ export function emptySummary(): SimulationSummary {
     boss: { fights: 0, wins: 0, losses: 0 },
     dungeonsUnlocked: [],
     harderUnlocks: [],
+    harder: { hard: emptyTally(), extreme: emptyTally() },
     trainingXpGained: {},
     trainingLevelsGained: {},
     trainingMaxed: [],
@@ -73,6 +94,7 @@ export function mergeSummaries(a: SimulationSummary, b: SimulationSummary): Simu
     },
     dungeonsUnlocked: [...a.dungeonsUnlocked, ...b.dungeonsUnlocked],
     harderUnlocks: [...a.harderUnlocks, ...b.harderUnlocks],
+    harder: { hard: addTally(a.harder?.hard, b.harder?.hard), extreme: addTally(a.harder?.extreme, b.harder?.extreme) },
     trainingXpGained: addMaps(a.trainingXpGained, b.trainingXpGained),
     trainingLevelsGained: addMaps(a.trainingLevelsGained, b.trainingLevelsGained),
     trainingMaxed: [...a.trainingMaxed, ...b.trainingMaxed],

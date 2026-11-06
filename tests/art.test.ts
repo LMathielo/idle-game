@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   ENEMY_SPRITES,
+  ENEMY_VARIANT_SPRITES,
   HERO_PORTRAIT,
   ICONS,
   ITEM_IMAGES,
@@ -69,6 +70,22 @@ describe('art registry', () => {
       expect(pngSize(s.source as unknown as string)).toEqual({ w: m.w * m.scale, h: m.h * m.scale });
     }
     expect(ENEMY_SPRITES.troll.w / ENEMY_SPRITES.rat.w).toBe(1.5);
+  });
+
+  it('every pack enemy has a Veteran and an Extreme outline sprite, 4 art px larger than its base at the same scale (the boss has none)', () => {
+    expect(sorted(Object.keys(ENEMY_VARIANT_SPRITES))).toEqual(sorted(Object.keys(ENEMIES).filter((id) => id !== 'troll_chieftain')));
+    for (const [id, v] of Object.entries(ENEMY_VARIANT_SPRITES)) {
+      const base = ENEMY_SPRITES[id as keyof typeof ENEMY_SPRITES];
+      for (const kind of ['veteran', 'extreme'] as const) {
+        const s = v![kind];
+        expect(rel(s.source)).toBe(`enemies/${id}_${kind}.png`);
+        const m = manifest[`enemies/${id}_${kind}.png`];
+        expect(m.scale).toBe(8);
+        expect({ w: s.w, h: s.h }).toEqual({ w: m.w, h: m.h });
+        expect({ w: s.w, h: s.h }).toEqual({ w: base.w + 4, h: base.h + 4 });
+        expect(pngSize(s.source as unknown as string)).toEqual({ w: m.w * m.scale, h: m.h * m.scale });
+      }
+    }
   });
 
   it('every tree, rock and skill resolves; rocks reuse the item art listed in manifest._rocks', () => {

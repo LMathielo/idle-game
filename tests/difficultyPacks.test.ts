@@ -625,6 +625,26 @@ describe('live, offline and any split give the same state', () => {
   });
 });
 
+describe('the away summary says what was played on Hard / Extreme', () => {
+  it('stage runs and boss fights are tallied per harder difficulty; Normal is the totals minus those', () => {
+    const run = simulate(start(godGame(31), 'rat_cellar', 'hard'), T0 + 12 * MIN);
+    const hard = run.summary.harder.hard;
+    expect(hard.runs).toBeGreaterThan(2);
+    expect(hard.wins + hard.losses).toBe(hard.runs);
+    expect(run.summary.dungeon.runs).toBe(hard.runs); // every run of this absence was on Hard
+    expect(run.summary.harder.extreme).toEqual({ runs: 0, wins: 0, losses: 0, bossFights: 0, bossWins: 0, bossLosses: 0 });
+    const s = godGame(32);
+    s.dungeon.harder.hard.byDungeon = { troll_bridge: tb(100) };
+    const boss = simulate(ok(s, { type: 'ENTER_BOSS', bossId: 'troll_chieftain', maxCost: 10, difficulty: 'hard' }), T0 + 30 * SEC);
+    expect(boss.summary.harder.hard).toMatchObject({ bossFights: 1, bossWins: 1, bossLosses: 0, runs: 0 });
+    expect(boss.summary.boss.fights).toBe(1);
+    // Normal play leaves both tallies empty.
+    const normal = simulate(start(godGame(33), 'rat_cellar', 'normal'), T0 + 6 * MIN);
+    expect(normal.summary.harder.hard.runs + normal.summary.harder.extreme.runs).toBe(0);
+    expect(normal.summary.dungeon.runs).toBeGreaterThan(0);
+  });
+});
+
 // ---------- goldens ----------
 
 /** A short, stable text of a finished fight: the pack, how it ended, and the log (every strike) hashed. */

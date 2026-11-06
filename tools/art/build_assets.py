@@ -9,7 +9,7 @@ Deterministic: same scripts -> same pixels. Requires numpy, scipy, Pillow.
 import sys, os, json
 from PIL import Image
 
-import village_day, village_split, sprites, monsters, icons, equipment, gear_named, materials, drops, gather
+import village_day, village_split, sprites, monsters, icons, equipment, gear_named, materials, drops, gather, variants
 
 ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else '.')
 IMG = os.path.join(ROOT, 'assets', 'images')
@@ -39,6 +39,9 @@ put('portrait/hero.png', sprites.portrait_squire(), 8)
 for eid, fn in (('rat', sprites.rat_sewer), ('bat', monsters.bat_cave), ('wolf', monsters.wolf_grey),
                 ('skeleton', monsters.skeleton_crypt), ('troll', monsters.troll_moss)):
     put(f'enemies/{eid}.png', fn(), 8)
+    # Hard / Extreme pack variants (1.24.0): the same sprite with a coloured outline, keyed <id>_<variant>
+    for vstyle in variants.STYLES:
+        put(f'enemies/{eid}_{vstyle}.png', variants.outlined(fn(), vstyle), 8)
 for vid, fn in (('giant_rat', sprites.rat_giant), ('blight_rat', sprites.rat_blight), ('vampire_bat', monsters.bat_vampire),
                 ('dire_wolf', monsters.wolf_dire), ('skeleton_knight', monsters.skeleton_knight), ('stone_troll', monsters.troll_stone)):
     put(f'enemies/variants/{vid}.png', fn(), 8)

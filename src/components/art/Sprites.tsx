@@ -3,8 +3,8 @@
 // sizes are whole points per art pixel where it matters (a 32x32 enemy at `pixel` 1 is 32 pt, the 48x48 troll 48 pt).
 import { memo, type ReactNode } from 'react';
 import { Image, type ImageSourcePropType, type ImageStyle, type StyleProp, StyleSheet, Text, type TextStyle, View, type ViewStyle } from 'react-native';
-import type { EnemyId, SkillKey, WorkerNodeId } from '../../engine';
-import { ENEMY_SPRITES, HERO_PORTRAIT, ICONS, type IconName, itemImage, nodeImage, SKILL_ICONS } from './images';
+import type { EnemyId, MobVariant, SkillKey, WorkerNodeId } from '../../engine';
+import { ENEMY_SPRITES, ENEMY_VARIANT_SPRITES, HERO_PORTRAIT, ICONS, type IconName, itemImage, nodeImage, SKILL_ICONS } from './images';
 
 type ImageProps = { style?: StyleProp<ImageStyle> };
 
@@ -46,10 +46,11 @@ export function NodeIcon({ node, size = 32, style }: ImageProps & { node: Worker
 
 /**
  * An enemy, `pixel` points per art pixel: every enemy keeps the same pixel scale, so the 48x48 troll shows 1.5x the
- * size of a 32x32 rat.
+ * size of a 32x32 rat. `variant` (1.24.0): the Veteran / Extreme outline of a Hard / Extreme pack mob.
  */
-export function EnemySprite({ enemyId, pixel = 1, style }: ImageProps & { enemyId: EnemyId; pixel?: number }) {
-  const s = ENEMY_SPRITES[enemyId];
+export function EnemySprite({ enemyId, pixel = 1, variant = 'base', style }: ImageProps & { enemyId: EnemyId; pixel?: number; variant?: MobVariant }) {
+  // A pack variant (Veteran / Extreme) is the same sprite with a coloured outline; the plain one when an enemy has none (the boss).
+  const s = (variant !== 'base' ? ENEMY_VARIANT_SPRITES[enemyId]?.[variant] : undefined) ?? ENEMY_SPRITES[enemyId];
   return <PixelImage source={s.source} width={s.w * pixel} height={s.h * pixel} style={style} />;
 }
 
