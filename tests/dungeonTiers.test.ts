@@ -145,8 +145,8 @@ describe('unlocks', () => {
   it('a fresh hero has only Rat Cellar open', () => {
     const s = newGame(1, T0);
     expect(DUNGEON_IDS.map((id) => isDungeonUnlocked(s, id))).toEqual([true, false, false, false, false]);
-    expect(dungeonUnlockView(s, 'rat_cellar')).toEqual({ unlocked: true, requirement: null, progress: 0 });
-    expect(dungeonUnlockView(s, 'bat_cave')).toEqual({ unlocked: false, requirement: { dungeonId: 'rat_cellar', wins: 10 }, progress: 0 });
+    expect(dungeonUnlockView(s, 'rat_cellar')).toEqual({ unlocked: true, requirement: null, progress: 0, difficultyLocked: false });
+    expect(dungeonUnlockView(s, 'bat_cave')).toEqual({ unlocked: false, requirement: { dungeonId: 'rat_cellar', wins: 10 }, progress: 0, difficultyLocked: false });
   });
 
   it('thresholds 10 / 15 / 25 / 40: one win short stays locked, exactly the count unlocks', () => {
@@ -158,9 +158,9 @@ describe('unlocks', () => {
     ];
     for (const [id, from, wins] of cases) {
       const short = withCounters({ [from]: { runs: wins - 1, wins: wins - 1, losses: 0 } });
-      expect(dungeonUnlockView(short, id)).toEqual({ unlocked: false, requirement: { dungeonId: from, wins }, progress: wins - 1 });
+      expect(dungeonUnlockView(short, id)).toEqual({ unlocked: false, requirement: { dungeonId: from, wins }, progress: wins - 1, difficultyLocked: false });
       const exact = withCounters({ [from]: { runs: wins, wins, losses: 0 } });
-      expect(dungeonUnlockView(exact, id)).toEqual({ unlocked: true, requirement: { dungeonId: from, wins }, progress: wins });
+      expect(dungeonUnlockView(exact, id)).toEqual({ unlocked: true, requirement: { dungeonId: from, wins }, progress: wins, difficultyLocked: false });
       // Progress is capped at the requirement.
       expect(dungeonUnlockView(withCounters({ [from]: { runs: 99, wins: 99, losses: 0 } }), id).progress).toBe(wins);
     }

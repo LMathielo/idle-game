@@ -40,7 +40,7 @@ import {
 } from '../src/engine';
 import { rollQuality, rollRarity } from '../src/engine/gear';
 import { enemyCombatSide, enemyFightOptions, enemyHpAt, enemyRegen, heroCombatSide, newFight, nextFightEvent, resolveFight, strike } from '../src/engine/combat';
-import { bossHero, bossSlayer, builtGame, cmd, fightSide, HOUR, makeClient, SEC, T0, withTrollBridgeWins, woodcuttingGame } from './helpers';
+import { asV21, bossHero, bossSlayer, builtGame, cmd, fightSide, HOUR, makeClient, SEC, T0, withTrollBridgeWins, woodcuttingGame } from './helpers';
 
 const ENTER = { type: 'ENTER_BOSS', bossId: 'troll_chieftain', maxCost: 10 } as const;
 const chieftain = ENEMIES.troll_chieftain;
@@ -116,7 +116,7 @@ describe('unlock', () => {
   it('is locked until 50 lifetime Troll Bridge wins; progress is shown; the engine refuses it with a typed error', () => {
     const s = builtGame(1, T0);
     expect(isBossUnlocked(s, 'troll_chieftain')).toBe(false);
-    expect(bossUnlockView(s, 'troll_chieftain')).toEqual({ unlocked: false, requirement: { dungeonId: 'troll_bridge', wins: 50 }, progress: 0 });
+    expect(bossUnlockView(s, 'troll_chieftain')).toEqual({ unlocked: false, requirement: { dungeonId: 'troll_bridge', wins: 50 }, progress: 0, difficultyLocked: false });
     expect(errorOf(s)).toBe('BOSS_LOCKED');
     const at49 = withTrollBridgeWins(s, 49);
     expect(bossUnlockView(at49, 'troll_chieftain')).toMatchObject({ unlocked: false, progress: 49 });
@@ -160,9 +160,11 @@ describe('entry', () => {
     expect(r.events.map((e) => e.type)).toEqual(['ACTIVITY_STARTED']);
     expect(r.state.activity).toMatchObject({ kind: 'boss', bossId: 'troll_chieftain', startedAt: T0, progressMs: 0 });
     const f = bossFightOf(r.state)!;
-    expect(f).toMatchObject({ enemyId: 'troll_chieftain', elapsedMs: 0, enemyHp: 1000, enemyMaxHp: 1000, heroHpStart: s.character.hp, maxFightMs: 120_000, enemyRegenBp: 50, heroStunStrikes: 0, heroStrikes: 0, enemyStrikes: 0 });
-    expect(f.enemySkillReady).toEqual({ heavy_bash: 3 });
-    expect(f.enemy.skills).toEqual(['heavy_bash']);
+    expect(f).toMatchObject({ enemyId: 'troll_chieftain', elapsedMs: 0, heroHpStart: s.character.hp, maxFightMs: 120_000, heroStunStrikes: 0, heroStrikes: 0 });
+    expect(f.mobs).toHaveLength(1);
+    expect(f.mobs[0]).toMatchObject({ variant: 'base', multBp: 10_000, hp: 1000, maxHp: 1000, regenBp: 50, strikes: 0 });
+    expect(f.mobs[0].skillReady).toEqual({ heavy_bash: 3 });
+    expect(f.mobs[0].side.skills).toEqual(['heavy_bash']);
     expect(f.hero.skills).toEqual([]);
   });
 
@@ -309,9 +311,9 @@ describe('Heavy Bash', () => {
         const ev = nextFightEvent(f);
         if (ev.type !== 'strike') break;
         const stunnedNow = ev.actor === 'hero' && f.heroStunStrikes > 0;
-        const castNow = ev.actor === 'enemy' && f.enemyStrikes + 1 >= (f.enemySkillReady.heavy_bash ?? Infinity);
+        const castNow = ev.actor === 'enemy' && f.mobs[0].strikes + 1 >= (f.mobs[0].skillReady.heavy_bash ?? Infinity);
         const before = rng;
-        const res = strike(f, ev.actor, ev.atMs, heroHp, rng);
+        const res = strike(f, ev.actor, ev.atMs, heroHp, rng, ev.mob);
         heroHp = res.heroHp;
         rng = res.rng;
         // Count the draws by replaying the generator from `before` until it equals the new state.
@@ -358,7 +360,7 @@ describe('Heavy Bash', () => {
   it('stuns never stack: a new stun only raises the strikes left (state check)', () => {
     const f = newFight('troll_chieftain', fightSide(), enemyCombatSide(chieftain), 1000, 1000, 1000, enemyFightOptions(chieftain));
     f.heroStunStrikes = 2;
-    f.enemyStrikes = 2; // next boss strike is the 3rd: Bash ready
+    f.mobs[0].strikes = 2; // next boss strike is the 3rd: Bash ready
     const skill = COMBAT_SKILLS.heavy_bash;
     const original = skill.effects;
     (skill as { effects: unknown }).effects = [{ type: 'stun', chanceBp: 10_000, strikes: 3 }];
@@ -416,10 +418,10 @@ describe('enemy regen', () => {
 
   it('enemyHpAt (the live bar) matches the HP the fight reaches at that time', () => {
     const f = newFight('troll_chieftain', fightSide(), enemyCombatSide(chieftain), 1000, 1000, 1000, enemyFightOptions(chieftain));
-    f.enemyHp = 400;
-    expect(enemyHpAt(f, 0)).toBe(400);
-    expect(enemyHpAt(f, 2000)).toBe(410);
-    expect(enemyHpAt(f, 200_000)).toBe(1000);
+    f.mobs[0].hp = 400;
+    expect(enemyHpAt(f.mobs[0], 0)).toBe(400);
+    expect(enemyHpAt(f.mobs[0], 2000)).toBe(410);
+    expect(enemyHpAt(f.mobs[0], 200_000)).toBe(1000);
   });
 });
 
@@ -659,12 +661,14 @@ describe('golden fight (pins the RNG draw order, Bash and a stun)', () => {
     expect(fight.log).toHaveLength(71);
     expect(fight.log.filter((e) => e.skill).map((e) => [e.strike, e.stun ?? 0])).toEqual([[3, 3], [10, 0], [17, 0], [24, 0], [31, 0]]);
     expect(fight.log.filter((e) => e.stunned)).toHaveLength(3);
-    expect(events.map((e) => e.type)).toEqual(['FIGHT_RESOLVED', 'ACTIVITY_STOPPED']);
+    // 1.24.0: the first boss win opens Hard
+    expect(events.map((e) => e.type)).toEqual(['FIGHT_RESOLVED', 'DIFFICULTY_UNLOCKED', 'ACTIVITY_STOPPED']);
     expect(summary.boss).toEqual({ fights: 1, wins: 1, losses: 0 });
     expect(state.rng).toEqual({ seed: 2072178003 });
     // 1.22.0: d611449f is the 1.20.0 hash df20ce2e in the v21 shape (only saveVersion moved: no gear dropped here, so no affixes).
-    expect(hashState(state)).toBe('d611449f');
-    expect(hashState({ ...state, saveVersion: 20 } as unknown as GameState)).toBe('df20ce2e');
+    // 1.24.0: seen in the v21 shape (asV21: no difficulty fields, the fight's one enemy flat) the hash is still the 1.22.0 one: no outcome moved.
+    expect(hashState(asV21(state))).toBe('d611449f');
+    expect(hashState({ ...asV21(state), saveVersion: 20 } as unknown as GameState)).toBe('df20ce2e');
   });
 
   it('seed 1: a loss with five stuns (12 strikes lost): the hero falls at 38 s', () => {
@@ -848,15 +852,17 @@ describe('save v20', () => {
     expect('maxFightMs' in doc.activity.fight).toBe(false);
     const s = loadSave(V19);
     expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
-    expect(CURRENT_SAVE_VERSION).toBe(21);
+    expect(CURRENT_SAVE_VERSION).toBe(22);
     expect(s.dungeon.bosses).toEqual({});
     const f = s.activity?.kind === 'dungeon' ? s.activity.fight! : null;
-    expect(f).toMatchObject({ maxFightMs: 60_000, enemyRegenBp: 0, enemyRegenProgress: 0, enemySkillReady: {}, heroStunStrikes: 0 });
+    expect(f).toMatchObject({ maxFightMs: 60_000, heroStunStrikes: 0 });
+    expect(f!.mobs[0]).toMatchObject({ regenBp: 0, regenProgress: 0, skillReady: {} });
     expect(f!.hero.skills).toEqual([]);
-    expect(f!.enemy.skills).toEqual([]);
+    expect(f!.mobs[0].side.skills).toEqual([]);
     // Everything else is kept byte for byte.
     const orig = doc.activity.fight as { enemyHp: number; heroStrikes: number; enemyStrikes: number; log: unknown[] };
-    expect(f).toMatchObject({ enemyHp: orig.enemyHp, heroStrikes: orig.heroStrikes, enemyStrikes: orig.enemyStrikes });
+    expect(f).toMatchObject({ heroStrikes: orig.heroStrikes });
+    expect(f!.mobs[0]).toMatchObject({ hp: orig.enemyHp, strikes: orig.enemyStrikes });
     expect(f!.log).toEqual(orig.log);
   });
 

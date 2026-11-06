@@ -8,9 +8,9 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.23.0** | 1.1.0 |
-| Save | **v21** | v2 |
-| Contents | Everything below, up to the Crafting debug buttons (Force craft, Finish now), the compact Crafting recipe list and the Done reveal fix (UI only), gear rarity tiers and affixes (#36), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
+| Engine | **1.24.0** | 1.1.0 |
+| Save | **v22** | v2 |
+| Contents | Everything below, up to the difficulty tiers (Hard / Extreme for Tier 1, pack fights; art pending owner approval), the Crafting debug buttons (Force craft, Finish now), the compact Crafting recipe list and the Done reveal fix (UI only), gear rarity tiers and affixes (#36), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is behind `dev` by PRs #3–#25. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
 - **Open PRs:** Expo Go previews by label plus per-branch saves (`feat/expo-test-previews`).
@@ -20,6 +20,17 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.24.0 · save v22
+- **Difficulty tiers: Hard and Extreme for Tier 1** (`feat/difficulty-tiers`; owner-approved 2026-11-06; **art pending owner approval**):
+  - **Unlocks:** the first Troll Chieftain win on Normal opens Hard, the first on Hard opens Extreme (permanent). A tier header has three skull buttons (white Normal, red Hard, black with flaming eyes Extreme); a locked one is greyed with a padlock and a tap explains why. The selection is per tier, set by the logged `SET_DUNGEON_DIFFICULTY` (`UNKNOWN_TIER` / `UNKNOWN_DIFFICULTY` / `DIFFICULTY_LOCKED`). Rows, stage detail, danger hint, rewards and the boss follow it; a run keeps its own difficulty. Counters are per difficulty (existing ones are Normal). Boss unlock inside a difficulty: 50 / 100 / 400 Troll Bridge wins on it. Banners "Hard unlocked for Tier 1" / "Extreme unlocked for Tier 1".
+  - **Packs:** Hard 1-4 mobs (25% Veteran; x2 / x3), Extreme 7-10 mobs (all Veteran x12, 25% Extreme x16). All mobs fight at once, the hero hits the front-most alive one, no overkill, ties hero first then pack order, 60 s fixed. Rewards for a full clear only, per mob (XP and gold x its multiplier, drops per mob). Fixed RNG draw order (size, then one variant roll per mob), pinned by goldens. Normal draws exactly as before.
+  - **Boss:** still one Chieftain, stats x2 / x8, XP and gold x2 / x8, gear 35%, rarity blue 75 / purple 25 (Hard) and blue 25 / purple 75 (Extreme).
+  - **UI:** pack rows in the live fight and the replay (two columns, target marked, dead greyed, log lines name the mob), stage detail "Pack of 1-4" with both mob kinds and loot per mob, scaled boss detail, away summary / activity strip / last fight state the difficulty, debug "+1 boss win" and difficulty-aware "+10 wins".
+  - **Art (pending owner approval):** three skull icons (`tools/art/icons.py`) and a Veteran (amber) and Extreme (violet) outline sprite per enemy (`tools/art/variants.py`).
+  - **Save v22:** counters become Normal's, a fight in progress becomes a pack of one that plays on as before. Frozen v21 fixture + reference of the untouched engine.
+  - **Balance (report only, no tuning):** table in ENGINE.md "Difficulty and packs". Extreme is a wall; the Gold set clears Hard, boss included.
+  - **Tests:** `tests/difficulty.test.ts`, `tests/difficultyPacks.test.ts`, `tests/migrationV21.test.ts`, gated `tests/balanceSimDifficulty.test.ts`; `tests/art.test.ts` covers the variant sprites.
 
 ### Engine 1.23.0 · save v21 (unchanged)
 - **Item grids switch popovers in one tap** (`feat/popover-switch`; owner-approved 2026-11-06; UI only, engine and save unchanged): while an item popover is open, tapping another item slot moves the popover onto it with a quick crossfade (old box out 80 ms, new box in 120 ms once measured; the Modal and backdrop stay up, so no flicker; reduce-motion: instant swap; state machine `ui/popoverCrossfade.ts`, `tests/popoverCrossfade.test.ts`); tapping the same item, empty space, the close button or Android back closes it. Covers Hero inventory + equipment, Crafting recipe tiles, Merchant Buy and Sell grids. `InfoPopover` / `ItemSheet` take `onOutsidePress`; `useSlotHitTest` + pure `hitSlot` (`slotHitTest.ts`, `tests/slotHitTest.test.ts`). **Dismiss frees the screen fast** (owner bug 2026-11-06 "UI blocked too long after a popup is dismissed"; two causes confirmed in the code: the backdrop tap awaited measuring every slot (30-60 `measureInWindow`) before closing began, and the Modal's `animationType="fade"` dismissal kept the full-screen window on top for ~300 ms): the Modal is now `animationType="none"` and the popover fades itself (open 120 ms, dismiss 80 ms, then the Modal is hidden; a 110 ms timer backs up a lost animation callback; reduce-motion: instant), and `useSlotHitTest` caches slot + viewport rects while a popover is open (measured on open / switch / registered-set or window change) so the backdrop decides close vs switch synchronously, measuring at tap time only when the cache is missing; a failed viewport measure now counts as no hit. Also: an Equip / Buy / Sell in flight that finishes after the player switched items no longer closes the new item's popover or disables its buttons (busy and close are scoped to the item the command was sent for).
@@ -202,7 +213,8 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 
 Decided and scoped; ready to brief to an engineer. Top = next.
 
-0. **Boss tuning: decided 2026-11-05, keep as is** (see PRODUCT.md decision log). Still open: real art for the Chieftain and the Tusk.
+0. **Difficulty tiers: owner to try Hard / Extreme and approve the new art** (three skulls, Veteran / Extreme outlines). Then decide the balance (Hard may be easy for a Gold-tier hero; Extreme is a wall; see the table in ENGINE.md). Tier 2 will reuse the same difficulty system.
+0b. **Boss tuning: decided 2026-11-05, keep as is** (see PRODUCT.md decision log). Still open: real art for the Chieftain and the Tusk.
 1. **Enemy tier check after the stats rework:** the 1.19.0 balance sim (PR for `feat/stats-rework`) shows the Skeleton falls at core 10 from Lv1 and the Troll at core 20 even at Lv1/Lv5, where 1.18 needed Lv10-15. Decide the targets, then retune enemy HP / damage / armor (and the core curves) where a tier is off. Earlier note: since 1.17.0 a level gives 5 points to spend instead of +5 on every attribute (20 per level), so level growth drops a lot and the 1.16.0 "dungeons are easy" concern may be gone. Sim each tier with typical builds (all STR/END, mixed) and only retune enemy HP / damage / armor where a tier is now off its target effort. (Normal STR counting toward WS / MS was decided: yes, 1.17.0.)
 2. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
 3. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.

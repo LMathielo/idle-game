@@ -2,10 +2,11 @@
 // A run = a search for an opponent, then a fight that plays out in engine time. See docs/ENGINE.md
 // ("Dungeon & combat").
 import { cloneState } from './clone';
-import { BOSS_IDS, DUNGEON_IDS, DUNGEON_RUN, DUNGEONS, ENEMIES, isBossId } from './config/dungeons';
+import { DUNGEON_RUN, DUNGEONS, ENEMIES } from './config/dungeons';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { grantHeroXp } from './activities';
-import { finishBossFight, isBossUnlocked } from './boss';
+import { finishBossFight } from './boss';
+import { harderTally } from './summary';
 import {
   type DungeonFightView,
   enemyCombatSide,
@@ -14,11 +15,13 @@ import {
   type FightOutcome,
   fightView,
   heroCombatSide,
-  newFight,
+  newPackFight,
   nextFightEvent,
   outcomeOf,
+  packDefeated,
   strike,
 } from './combat';
+import { emitNewUnlocks, isDifficultyUnlocked, isStageUnlocked, plainMob, rollPack, scaleStat, setStageTotals, snapshotUnlocks, stageTotalsAt } from './difficulty';
 import { regenHeroPools } from './hp';
 import { addStackable } from './inventory';
 import { chance, nextInt } from './rng';
@@ -28,8 +31,8 @@ import type {
   ActiveFight,
   BossActivity,
   DungeonActivity,
+  Difficulty,
   DungeonId,
-  DungeonOrBossId,
   DungeonPhase,
   DungeonTotals,
   EnemyId,
@@ -60,17 +63,17 @@ function bump(map: Record<string, number>, key: string, by: number) {
 
 // ---------- per-dungeon counters and unlocks ----------
 
-const ZERO_TOTALS: DungeonTotals = { runs: 0, wins: 0, losses: 0 };
-
-/** Lifetime runs / wins / losses in one dungeon (0/0/0 before its first run). Read-only. */
-export function dungeonTotals(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId): DungeonTotals {
-  return state.dungeon.byDungeon[dungeonId] ?? ZERO_TOTALS;
+/** Lifetime runs / wins / losses in one dungeon on a difficulty (Normal by default; 0/0/0 before its first run). Read-only. */
+export function dungeonTotals(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId, difficulty: Difficulty = 'normal'): DungeonTotals {
+  return stageTotalsAt(state, dungeonId, difficulty);
 }
 
-/** True when every condition of the dungeon's unlock rule is met. Permanent: wins never go down. */
-export function isDungeonUnlocked(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId): boolean {
-  const rule = DUNGEONS[dungeonId].unlock;
-  return !rule || dungeonTotals(state, rule.dungeonId).wins >= rule.wins;
+/**
+ * True when every condition of the dungeon's unlock rule is met. On Hard / Extreme the stage is open when that difficulty is unlocked AND
+ * the stage is open on Normal (there is no separate chain). Permanent: wins never go down.
+ */
+export function isDungeonUnlocked(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId, difficulty: Difficulty = 'normal'): boolean {
+  return isStageUnlocked(state, dungeonId, difficulty);
 }
 
 export type DungeonUnlockView = {
@@ -79,52 +82,52 @@ export type DungeonUnlockView = {
   requirement: { dungeonId: DungeonId; wins: number } | null;
   /** Wins so far toward the requirement, capped at the requirement (0 when there is none). */
   progress: number;
+  /** The stage's own rule is met but the difficulty is not unlocked yet (Hard / Extreme only). */
+  difficultyLocked: boolean;
 };
 
-/** Read-only, for the UI: is it open, what opens it, how far along. */
-export function dungeonUnlockView(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId): DungeonUnlockView {
+/** Read-only, for the UI: is it open on the difficulty, what opens it, how far along (the requirement is always the Normal one). */
+export function dungeonUnlockView(state: Pick<GameState, 'dungeon'>, dungeonId: DungeonId, difficulty: Difficulty = 'normal'): DungeonUnlockView {
   const rule = DUNGEONS[dungeonId].unlock;
-  if (!rule) return { unlocked: true, requirement: null, progress: 0 };
-  const wins = dungeonTotals(state, rule.dungeonId).wins;
-  return { unlocked: wins >= rule.wins, requirement: { dungeonId: rule.dungeonId, wins: rule.wins }, progress: Math.min(wins, rule.wins) };
+  const difficultyLocked = !isDifficultyUnlocked(state, DUNGEONS[dungeonId].tier, difficulty);
+  if (!rule) return { unlocked: !difficultyLocked, requirement: null, progress: 0, difficultyLocked };
+  const wins = stageTotalsAt(state, rule.dungeonId, 'normal').wins;
+  return { unlocked: !difficultyLocked && wins >= rule.wins, requirement: { dungeonId: rule.dungeonId, wins: rule.wins }, progress: Math.min(wins, rule.wins), difficultyLocked };
 }
 
 /**
- * Adds to one dungeon's counters (and the global ones), then emits DUNGEON_UNLOCKED for every dungeon that
- * was locked before and is unlocked after. Compared through isDungeonUnlocked(), so any future unlock
- * condition is covered without changing this. Mutates `draft.dungeon`, which the caller must own.
+ * Adds to one dungeon's counters on a difficulty (and the global ones), then emits DUNGEON_UNLOCKED / DIFFICULTY_UNLOCKED for everything
+ * that was locked before and is unlocked after. Compared through the unlock predicates, so any future unlock condition is covered
+ * without changing this. Mutates `draft.dungeon`, which the caller must own.
  */
 export function recordDungeonResults(
   draft: GameState,
   dungeonId: DungeonId,
+  difficulty: Difficulty,
   wins: number,
   losses: number,
   summary: SimulationSummary | null,
   events: GameEvent[],
 ): void {
-  // Stage dungeons and bosses (1.20.0: a boss opens on stage wins); a boss's own wins open nothing yet.
-  const lockedBefore: DungeonOrBossId[] = [...DUNGEON_IDS.filter((id) => !isDungeonUnlocked(draft, id)), ...BOSS_IDS.filter((id) => !isBossUnlocked(draft, id))];
-  const before = dungeonTotals(draft, dungeonId);
-  const after = { runs: before.runs + wins + losses, wins: before.wins + wins, losses: before.losses + losses };
-  draft.dungeon.byDungeon = { ...draft.dungeon.byDungeon, [dungeonId]: after };
+  const before = snapshotUnlocks(draft);
+  const prev = stageTotalsAt(draft, dungeonId, difficulty);
+  setStageTotals(draft.dungeon, difficulty, dungeonId, { runs: prev.runs + wins + losses, wins: prev.wins + wins, losses: prev.losses + losses });
   const totals = draft.dungeon.totals;
   draft.dungeon.totals = { runs: totals.runs + wins + losses, wins: totals.wins + wins, losses: totals.losses + losses };
-  for (const id of lockedBefore) {
-    if (isBossId(id) ? !isBossUnlocked(draft, id) : !isDungeonUnlocked(draft, id)) continue;
-    events.push({ type: 'DUNGEON_UNLOCKED', dungeonId: id });
-    summary?.dungeonsUnlocked.push(id);
-  }
+  emitNewUnlocks(before, draft, summary, events);
 }
 
 // ---------- the fight ----------
 
 /**
  * Ends the fight of the current run and applies its outcome, then starts the next search at once.
- * Win: hero XP, gold (rolled), drops (rolled, lost when the inventory is full); the hero keeps the HP left.
- * Loss (any reason): nothing, and the hero ends at 0 HP. Mutates `draft` (owned by the caller).
+ * Win (the whole pack killed): for each mob in pack order, its hero XP (stage XP × its multiplier), its gold (one roll × its multiplier)
+ * and then each of the stage's drop rolls; a drop is lost when the inventory is full. The hero keeps the HP left.
+ * Loss (any reason): nothing, kills made before it included, and the hero ends at 0 HP. Mutates `draft` (owned by the caller).
  */
 function finishFight(draft: GameState, activity: DungeonActivity, outcome: FightOutcome, summary: SimulationSummary | null, events: GameEvent[]): void {
   const dungeonId = activity.dungeonId;
+  const difficulty = activity.difficulty;
   const dungeon = DUNGEONS[dungeonId];
   const won = outcome.endReason === 'enemy_defeated';
   if (!won) draft.character.hp = 0;
@@ -132,26 +135,28 @@ function finishFight(draft: GameState, activity: DungeonActivity, outcome: Fight
   const rewards: FightRewards = { heroXp: 0, gold: 0, items: {}, itemsLost: {} };
   if (won) {
     const r = dungeon.rewards;
-    if (r.heroXp > 0) {
-      grantHeroXp(draft, r.heroXp, summary, events);
-      rewards.heroXp = r.heroXp;
+    // Per mob, in pack order: gold (one draw), then the drops (one draw each, in config order). XP needs no draw.
+    for (const mob of outcome.mobs) {
+      rewards.heroXp += scaleStat(r.heroXp, mob.multBp);
+      const gold = nextInt(draft.rng, r.gold.min, r.gold.max);
+      draft.rng = gold.rng;
+      rewards.gold += scaleStat(gold.value, mob.multBp);
+      for (const drop of r.drops) {
+        const roll = chance(draft.rng, drop.chance);
+        draft.rng = roll.rng;
+        if (!roll.value) continue;
+        const { added, lost } = addStackable(draft.inventory, drop.itemId, 1);
+        bump(rewards.items, drop.itemId, added);
+        bump(rewards.itemsLost, drop.itemId, lost);
+      }
     }
-    const gold = nextInt(draft.rng, r.gold.min, r.gold.max);
-    draft.rng = gold.rng;
-    draft.character.gold += gold.value;
-    rewards.gold = gold.value;
-    for (const drop of r.drops) {
-      const roll = chance(draft.rng, drop.chance);
-      draft.rng = roll.rng;
-      if (!roll.value) continue;
-      const { added, lost } = addStackable(draft.inventory, drop.itemId, 1);
-      bump(rewards.items, drop.itemId, added);
-      bump(rewards.itemsLost, drop.itemId, lost);
-    }
+    if (rewards.heroXp > 0) grantHeroXp(draft, rewards.heroXp, summary, events);
+    draft.character.gold += rewards.gold;
   }
 
   draft.dungeon.lastFight = {
     dungeonId,
+    difficulty,
     enemyId: outcome.enemyId,
     won,
     endReason: outcome.endReason,
@@ -161,16 +166,23 @@ function finishFight(draft: GameState, activity: DungeonActivity, outcome: Fight
     heroMaxHp: outcome.heroMaxHp,
     enemyMaxHp: outcome.enemyMaxHp,
     enemyHpEnd: outcome.enemyHpEnd,
+    mobs: outcome.mobs,
     rewards,
     log: outcome.log,
   };
   events.push({ type: 'FIGHT_RESOLVED', dungeonId, won });
-  recordDungeonResults(draft, dungeonId, won ? 1 : 0, won ? 0 : 1, summary, events);
+  recordDungeonResults(draft, dungeonId, difficulty, won ? 1 : 0, won ? 0 : 1, summary, events);
 
   if (summary) {
     summary.dungeon.runs += 1;
     if (won) summary.dungeon.wins += 1;
     else summary.dungeon.losses += 1;
+    const tally = harderTally(summary, difficulty);
+    if (tally) {
+      tally.runs += 1;
+      if (won) tally.wins += 1;
+      else tally.losses += 1;
+    }
     summary.goldGained += rewards.gold;
     for (const [id, n] of Object.entries(rewards.items)) bump(summary.itemsGained, id, n);
     for (const [id, n] of Object.entries(rewards.itemsLost)) bump(summary.itemsLost, id, n);
@@ -183,9 +195,10 @@ function finishFight(draft: GameState, activity: DungeonActivity, outcome: Fight
 }
 
 /**
- * The search is over: the fight starts now, with the hero's current HP and stats (frozen for this fight).
- * A hero at 0 HP loses at once with no rolls (`no_hp`) and the next search starts. Mutates `draft` and
- * `activity` (owned by the caller).
+ * The search is over: the fight starts now, with the hero's current HP and stats (frozen for this fight). On Hard / Extreme the pack is
+ * rolled first (pack size, then each mob's variant: ONE main-RNG draw each, in that order; Normal draws nothing). A hero at 0 HP loses
+ * at once with no rolls (`no_hp`, no pack either: the record shows the difficulty's plain mob) and the next search starts.
+ * Mutates `draft` and `activity` (owned by the caller).
  */
 export function beginFight(draft: GameState, activity: DungeonActivity, summary: SimulationSummary | null, events: GameEvent[]): void {
   const enemy = ENEMIES[DUNGEONS[activity.dungeonId].enemyId];
@@ -194,21 +207,33 @@ export function beginFight(draft: GameState, activity: DungeonActivity, summary:
   const hp = Math.max(0, Math.min(draft.character.hp, heroMaxHp));
   activity.progressMs = 0;
   if (hp <= 0) {
+    const mob = plainMob(enemy, activity.difficulty);
     const outcome: FightOutcome = {
       endReason: 'no_hp',
       durationMs: 0,
       enemyId: enemy.id,
       heroHpStart: 0,
       heroMaxHp,
-      enemyMaxHp: enemy.hp,
-      enemyHpEnd: enemy.hp,
+      enemyMaxHp: mob.enemy.hp,
+      enemyHpEnd: mob.enemy.hp,
+      mobs: [{ variant: mob.variant, multBp: mob.multBp, maxHp: mob.enemy.hp, hpEnd: mob.enemy.hp }],
       log: [],
     };
     finishFight(draft, activity, outcome, summary, events);
     return;
   }
+  const pack = rollPack(draft.rng, enemy, activity.difficulty);
+  draft.rng = pack.rng;
+  const options = enemyFightOptions(enemy);
   activity.phase = 'fight';
-  activity.fight = newFight(enemy.id, heroCombatSide(stats), enemyCombatSide(enemy), hp, heroMaxHp, enemy.hp, enemyFightOptions(enemy));
+  activity.fight = newPackFight(
+    enemy.id,
+    heroCombatSide(stats),
+    pack.mobs.map((m) => ({ variant: m.variant, multBp: m.multBp, side: enemyCombatSide(m.enemy), hp: m.enemy.hp, regenBp: options.enemyRegenBp })),
+    hp,
+    heroMaxHp,
+    options,
+  );
 }
 
 /**
@@ -253,10 +278,10 @@ function stepFight(draft: GameState, activity: DungeonActivity | BossActivity, f
     end('hero_defeated', ev.atMs);
     return;
   }
-  const res = strike(fight, ev.actor, ev.atMs, draft.character.hp, draft.rng);
+  const res = strike(fight, ev.actor, ev.atMs, draft.character.hp, draft.rng, ev.mob);
   draft.rng = res.rng;
   draft.character.hp = res.heroHp;
-  if (fight.enemyHp === 0) end('enemy_defeated', ev.atMs);
+  if (packDefeated(fight)) end('enemy_defeated', ev.atMs);
   else if (res.heroHp === 0) end('hero_defeated', ev.atMs);
 }
 
@@ -373,6 +398,8 @@ export function dungeonNextEventMs(state: GameState): number {
 export type DungeonRunView = {
   kind: 'dungeon';
   dungeonId: DungeonId;
+  /** The difficulty this run plays on (fixed when it started). */
+  difficulty: Difficulty;
   /** 1-based number of the run in progress (lifetime runs + 1). A skip names it, so it can't hit a later run. */
   run: number;
   phase: DungeonPhase;
@@ -390,7 +417,7 @@ export function dungeonRunView(state: GameState): DungeonRunView | null {
   const a = state.activity;
   if (!a || a.kind !== 'dungeon') return null;
   const searchMs = searchMsFor(a.dungeonId, state);
-  const base = { kind: 'dungeon' as const, dungeonId: a.dungeonId, run: state.dungeon.totals.runs + 1, searchMs };
+  const base = { kind: 'dungeon' as const, dungeonId: a.dungeonId, difficulty: a.difficulty, run: state.dungeon.totals.runs + 1, searchMs };
   const f = a.phase === 'fight' ? a.fight : null;
   if (f) {
     return { ...base, phase: 'fight', fraction: 1, remainingMs: 0, skipCost: null, fight: fightView(state.character.hp, f) };

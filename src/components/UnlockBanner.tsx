@@ -1,12 +1,13 @@
 // "New dungeon unlocked" banner. Driven by the engine's DUNGEON_UNLOCKED events, which the client
-// collects into `snapshot.unlockedDungeons`. Tap to dismiss; it also hides itself after a few seconds.
+// collects into `snapshot.unlockedDungeons` (and, 1.24.0, `snapshot.unlockedHarder`: "Hard unlocked for Tier 1", "Extreme unlocked for
+// Tier 1", and a boss opening on Hard / Extreme). Tap to dismiss; it also hides itself after a few seconds.
 // Hosted twice, like the away summary: once over the tabs and once inside each village modal (a
 // full-screen modal covers the tabs), so it shows wherever the player is.
 import { useEffect } from 'react';
 import { AccessibilityInfo, Pressable, type StyleProp, StyleSheet, Text, type ViewStyle } from 'react-native';
 import Animated, { FadeInDown, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { useGameClient, useGameSnapshot } from '../client/GameProvider';
-import { type DungeonOrBossId, dungeonOrBossName, isBossId } from '../engine';
+import { BOSSES, DIFFICULTY, type DungeonOrBossId, dungeonOrBossName, type HarderUnlock, isBossId } from '../engine';
 import { colors, fonts } from '../theme';
 import { GameIcon } from './art/Sprites';
 
@@ -17,35 +18,42 @@ const AUTO_HIDE_MS = 5000;
  * comparing identity makes exactly one of them announce it (an `alert` role is ignored on iOS and a live
  * region rarely fires on first mount, hence the explicit announcement).
  */
-let lastAnnounced: readonly DungeonOrBossId[] | null = null;
+let lastAnnounced: { dungeons: readonly DungeonOrBossId[]; harder: readonly HarderUnlock[] } | null = null;
 
-function texts(ids: readonly DungeonOrBossId[]) {
+function harderText(u: HarderUnlock): string {
+  return u.kind === 'difficulty' ? `${DIFFICULTY[u.difficulty].name} unlocked for Tier ${u.tier}` : `${BOSSES[u.bossId].name} unlocked on ${DIFFICULTY[u.difficulty].name}`;
+}
+
+function texts(ids: readonly DungeonOrBossId[], harder: readonly HarderUnlock[]) {
   const names = ids.map(dungeonOrBossName).join(', ');
-  const title = ids.every(isBossId) ? (ids.length === 1 ? 'Boss unlocked!' : 'Bosses unlocked!') : ids.length === 1 ? 'New dungeon unlocked!' : 'New dungeons unlocked!';
-  return { names, title };
+  const dungeonTitle = ids.every(isBossId) ? (ids.length === 1 ? 'Boss unlocked!' : 'Bosses unlocked!') : ids.length === 1 ? 'New dungeon unlocked!' : 'New dungeons unlocked!';
+  if (harder.length === 0) return { names, title: dungeonTitle };
+  // The harder difficulty leads ("Hard unlocked for Tier 1"); a dungeon unlocked at the same time follows.
+  const title = harder.map(harderText).join('\n');
+  return { names: ids.length > 0 ? `${dungeonTitle} ${names}` : '', title };
 }
 
 /** `position` places the banner inside its host (absolute; left/right are set here). */
 export function UnlockBanner({ position }: { position: StyleProp<ViewStyle> }) {
   const client = useGameClient();
-  const { unlockedDungeons } = useGameSnapshot();
-  const shown = unlockedDungeons.length > 0;
+  const { unlockedDungeons, unlockedHarder } = useGameSnapshot();
+  const shown = unlockedDungeons.length > 0 || unlockedHarder.length > 0;
 
   useEffect(() => {
-    if (!shown || lastAnnounced === unlockedDungeons) return;
-    lastAnnounced = unlockedDungeons;
-    const { title, names } = texts(unlockedDungeons);
-    AccessibilityInfo.announceForAccessibility(`${title} ${names}`);
-  }, [shown, unlockedDungeons]);
+    if (!shown || (lastAnnounced?.dungeons === unlockedDungeons && lastAnnounced?.harder === unlockedHarder)) return;
+    lastAnnounced = { dungeons: unlockedDungeons, harder: unlockedHarder };
+    const { title, names } = texts(unlockedDungeons, unlockedHarder);
+    AccessibilityInfo.announceForAccessibility(`${title.replace('\n', '. ')} ${names}`);
+  }, [shown, unlockedDungeons, unlockedHarder]);
 
   useEffect(() => {
     if (!shown) return;
     const t = setTimeout(() => client.dismissUnlocks(), AUTO_HIDE_MS);
     return () => clearTimeout(t);
-  }, [client, shown, unlockedDungeons]);
+  }, [client, shown, unlockedDungeons, unlockedHarder]);
 
   if (!shown) return null;
-  const { names, title } = texts(unlockedDungeons);
+  const { names, title } = texts(unlockedDungeons, unlockedHarder);
   return (
     <Animated.View
       entering={FadeInDown.reduceMotion(ReduceMotion.System)}
@@ -56,14 +64,14 @@ export function UnlockBanner({ position }: { position: StyleProp<ViewStyle> }) {
       <Pressable
         onPress={() => client.dismissUnlocks()}
         accessibilityRole="button"
-        accessibilityLabel={`${title} ${names}`}
+        accessibilityLabel={`${title.replace('\n', '. ')} ${names}`}
         accessibilityHint="Dismisses this message"
         style={styles.banner}
       >
         <GameIcon name="unlocked" size={32} />
         <Text style={styles.text}>
           <Text style={styles.title}>{title}</Text>
-          {'\n'}
+          {names ? '\n' : ''}
           {names}
         </Text>
       </Pressable>

@@ -1,0 +1,1368 @@
+{
+  "saveVersion": 21,
+  "rng": {
+    "seed": 481224377
+  },
+  "time": {
+    "lastSimulatedAt": 1792929878500,
+    "highestSeenAt": 1792929878500
+  },
+  "offline": {
+    "capMs": 28800000,
+    "efficiency": 1
+  },
+  "activity": {
+    "kind": "dungeon",
+    "dungeonId": "troll_bridge",
+    "startedAt": 1792929874000,
+    "phase": "fight",
+    "progressMs": 0,
+    "fight": {
+      "enemyId": "troll",
+      "elapsedMs": 3500,
+      "heroHpStart": 65,
+      "heroMaxHp": 475,
+      "enemyHp": 175,
+      "enemyMaxHp": 300,
+      "hero": {
+        "damage": {
+          "min": 66,
+          "max": 70
+        },
+        "armor": 81,
+        "magicDamage": 0,
+        "magicResist": 0,
+        "critChanceBp": 0,
+        "critMultBp": 15000,
+        "attackIntervalMs": 1000,
+        "skills": []
+      },
+      "enemy": {
+        "damage": {
+          "min": 22,
+          "max": 30
+        },
+        "armor": 30,
+        "magicDamage": 0,
+        "magicResist": 30,
+        "critChanceBp": 0,
+        "critMultBp": 10000,
+        "attackIntervalMs": 1000,
+        "skills": []
+      },
+      "heroStrikes": 3,
+      "enemyStrikes": 3,
+      "maxFightMs": 60000,
+      "enemyRegenBp": 0,
+      "enemyRegenProgress": 0,
+      "enemyRegenAtMs": 3000,
+      "enemySkillReady": {},
+      "heroStunStrikes": 0,
+      "log": [
+        {
+          "atMs": 1000,
+          "actor": "hero",
+          "strike": 1,
+          "roll": 66,
+          "crit": false,
+          "physical": 41,
+          "magic": 0,
+          "dealt": 41,
+          "targetHpAfter": 259
+        },
+        {
+          "atMs": 1000,
+          "actor": "enemy",
+          "strike": 1,
+          "roll": 30,
+          "crit": false,
+          "physical": 11,
+          "magic": 0,
+          "dealt": 11,
+          "targetHpAfter": 55
+        },
+        {
+          "atMs": 2000,
+          "actor": "hero",
+          "strike": 2,
+          "roll": 69,
+          "crit": false,
+          "physical": 43,
+          "magic": 0,
+          "dealt": 43,
+          "targetHpAfter": 216
+        },
+        {
+          "atMs": 2000,
+          "actor": "enemy",
+          "strike": 2,
+          "roll": 22,
+          "crit": false,
+          "physical": 8,
+          "magic": 0,
+          "dealt": 8,
+          "targetHpAfter": 47
+        },
+        {
+          "atMs": 3000,
+          "actor": "hero",
+          "strike": 3,
+          "roll": 66,
+          "crit": false,
+          "physical": 41,
+          "magic": 0,
+          "dealt": 41,
+          "targetHpAfter": 175
+        },
+        {
+          "atMs": 3000,
+          "actor": "enemy",
+          "strike": 3,
+          "roll": 24,
+          "crit": false,
+          "physical": 9,
+          "magic": 0,
+          "dealt": 9,
+          "targetHpAfter": 39
+        }
+      ]
+    }
+  },
+  "stamina": {
+    "current": 90,
+    "max": 100,
+    "progressMs": 136500
+  },
+  "dungeon": {
+    "lastFight": {
+      "dungeonId": "troll_chieftain",
+      "enemyId": "troll_chieftain",
+      "won": true,
+      "endReason": "enemy_defeated",
+      "durationMs": 38000,
+      "heroHpStart": 475,
+      "heroHpEnd": 28,
+      "heroMaxHp": 475,
+      "enemyMaxHp": 1000,
+      "enemyHpEnd": 0,
+      "rewards": {
+        "heroXp": 2000,
+        "gold": 379,
+        "items": {},
+        "itemsLost": {}
+      },
+      "log": [
+        {
+          "atMs": 1000,
+          "actor": "hero",
+          "strike": 1,
+          "roll": 67,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 963,
+          "enemyHpAfter": 963
+        },
+        {
+          "atMs": 1000,
+          "actor": "enemy",
+          "strike": 1,
+          "roll": 33,
+          "crit": false,
+          "physical": 13,
+          "magic": 0,
+          "dealt": 13,
+          "targetHpAfter": 462,
+          "enemyHpAfter": 963
+        },
+        {
+          "atMs": 2000,
+          "actor": "hero",
+          "strike": 2,
+          "roll": 66,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 931,
+          "enemyHpAfter": 931
+        },
+        {
+          "atMs": 2000,
+          "actor": "enemy",
+          "strike": 2,
+          "roll": 31,
+          "crit": false,
+          "physical": 12,
+          "magic": 0,
+          "dealt": 12,
+          "targetHpAfter": 450,
+          "enemyHpAfter": 931
+        },
+        {
+          "atMs": 3000,
+          "actor": "hero",
+          "strike": 3,
+          "roll": 67,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 899,
+          "enemyHpAfter": 899
+        },
+        {
+          "atMs": 3000,
+          "actor": "enemy",
+          "strike": 3,
+          "roll": 28,
+          "crit": false,
+          "physical": 15,
+          "magic": 0,
+          "dealt": 15,
+          "targetHpAfter": 435,
+          "skill": "heavy_bash",
+          "stun": 0,
+          "enemyHpAfter": 899
+        },
+        {
+          "atMs": 4000,
+          "actor": "hero",
+          "strike": 4,
+          "roll": 70,
+          "crit": false,
+          "physical": 39,
+          "magic": 0,
+          "dealt": 39,
+          "targetHpAfter": 865,
+          "enemyHpAfter": 865
+        },
+        {
+          "atMs": 4000,
+          "actor": "enemy",
+          "strike": 4,
+          "roll": 26,
+          "crit": false,
+          "physical": 10,
+          "magic": 0,
+          "dealt": 10,
+          "targetHpAfter": 426,
+          "enemyHpAfter": 865
+        },
+        {
+          "atMs": 5000,
+          "actor": "hero",
+          "strike": 5,
+          "roll": 66,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 833,
+          "enemyHpAfter": 833
+        },
+        {
+          "atMs": 5000,
+          "actor": "enemy",
+          "strike": 5,
+          "roll": 36,
+          "crit": false,
+          "physical": 14,
+          "magic": 0,
+          "dealt": 14,
+          "targetHpAfter": 412,
+          "enemyHpAfter": 833
+        },
+        {
+          "atMs": 6000,
+          "actor": "hero",
+          "strike": 6,
+          "roll": 67,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 801,
+          "enemyHpAfter": 801
+        },
+        {
+          "atMs": 6000,
+          "actor": "enemy",
+          "strike": 6,
+          "roll": 35,
+          "crit": false,
+          "physical": 13,
+          "magic": 0,
+          "dealt": 13,
+          "targetHpAfter": 400,
+          "enemyHpAfter": 801
+        },
+        {
+          "atMs": 7000,
+          "actor": "hero",
+          "strike": 7,
+          "roll": 66,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 769,
+          "enemyHpAfter": 769
+        },
+        {
+          "atMs": 7000,
+          "actor": "enemy",
+          "strike": 7,
+          "roll": 35,
+          "crit": false,
+          "physical": 13,
+          "magic": 0,
+          "dealt": 13,
+          "targetHpAfter": 387,
+          "enemyHpAfter": 769
+        },
+        {
+          "atMs": 8000,
+          "actor": "hero",
+          "strike": 8,
+          "roll": 69,
+          "crit": false,
+          "physical": 38,
+          "magic": 0,
+          "dealt": 38,
+          "targetHpAfter": 736,
+          "enemyHpAfter": 736
+        },
+        {
+          "atMs": 8000,
+          "actor": "enemy",
+          "strike": 8,
+          "roll": 28,
+          "crit": false,
+          "physical": 11,
+          "magic": 0,
+          "dealt": 11,
+          "targetHpAfter": 376,
+          "enemyHpAfter": 736
+        },
+        {
+          "atMs": 9000,
+          "actor": "hero",
+          "strike": 9,
+          "roll": 66,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 704,
+          "enemyHpAfter": 704
+        },
+        {
+          "atMs": 9000,
+          "actor": "enemy",
+          "strike": 9,
+          "roll": 30,
+          "crit": false,
+          "physical": 11,
+          "magic": 0,
+          "dealt": 11,
+          "targetHpAfter": 366,
+          "enemyHpAfter": 704
+        },
+        {
+          "atMs": 10000,
+          "actor": "hero",
+          "strike": 10,
+          "roll": 68,
+          "crit": false,
+          "physical": 38,
+          "magic": 0,
+          "dealt": 38,
+          "targetHpAfter": 671,
+          "enemyHpAfter": 671
+        },
+        {
+          "atMs": 10000,
+          "actor": "enemy",
+          "strike": 10,
+          "roll": 35,
+          "crit": false,
+          "physical": 19,
+          "magic": 0,
+          "dealt": 19,
+          "targetHpAfter": 347,
+          "skill": "heavy_bash",
+          "stun": 3,
+          "enemyHpAfter": 671
+        },
+        {
+          "atMs": 11000,
+          "actor": "hero",
+          "strike": 11,
+          "roll": 0,
+          "crit": false,
+          "physical": 0,
+          "magic": 0,
+          "dealt": 0,
+          "targetHpAfter": 676,
+          "stunned": true,
+          "enemyHpAfter": 676
+        },
+        {
+          "atMs": 11000,
+          "actor": "enemy",
+          "strike": 11,
+          "roll": 36,
+          "crit": false,
+          "physical": 14,
+          "magic": 0,
+          "dealt": 14,
+          "targetHpAfter": 334,
+          "enemyHpAfter": 676
+        },
+        {
+          "atMs": 12000,
+          "actor": "hero",
+          "strike": 12,
+          "roll": 0,
+          "crit": false,
+          "physical": 0,
+          "magic": 0,
+          "dealt": 0,
+          "targetHpAfter": 681,
+          "stunned": true,
+          "enemyHpAfter": 681
+        },
+        {
+          "atMs": 12000,
+          "actor": "enemy",
+          "strike": 12,
+          "roll": 35,
+          "crit": false,
+          "physical": 13,
+          "magic": 0,
+          "dealt": 13,
+          "targetHpAfter": 321,
+          "enemyHpAfter": 681
+        },
+        {
+          "atMs": 13000,
+          "actor": "hero",
+          "strike": 13,
+          "roll": 0,
+          "crit": false,
+          "physical": 0,
+          "magic": 0,
+          "dealt": 0,
+          "targetHpAfter": 686,
+          "stunned": true,
+          "enemyHpAfter": 686
+        },
+        {
+          "atMs": 13000,
+          "actor": "enemy",
+          "strike": 13,
+          "roll": 32,
+          "crit": false,
+          "physical": 12,
+          "magic": 0,
+          "dealt": 12,
+          "targetHpAfter": 309,
+          "enemyHpAfter": 686
+        },
+        {
+          "atMs": 14000,
+          "actor": "hero",
+          "strike": 14,
+          "roll": 69,
+          "crit": false,
+          "physical": 38,
+          "magic": 0,
+          "dealt": 38,
+          "targetHpAfter": 653,
+          "enemyHpAfter": 653
+        },
+        {
+          "atMs": 14000,
+          "actor": "enemy",
+          "strike": 14,
+          "roll": 30,
+          "crit": false,
+          "physical": 11,
+          "magic": 0,
+          "dealt": 11,
+          "targetHpAfter": 299,
+          "enemyHpAfter": 653
+        },
+        {
+          "atMs": 15000,
+          "actor": "hero",
+          "strike": 15,
+          "roll": 67,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 621,
+          "enemyHpAfter": 621
+        },
+        {
+          "atMs": 15000,
+          "actor": "enemy",
+          "strike": 15,
+          "roll": 28,
+          "crit": false,
+          "physical": 11,
+          "magic": 0,
+          "dealt": 11,
+          "targetHpAfter": 288,
+          "enemyHpAfter": 621
+        },
+        {
+          "atMs": 16000,
+          "actor": "hero",
+          "strike": 16,
+          "roll": 70,
+          "crit": false,
+          "physical": 39,
+          "magic": 0,
+          "dealt": 39,
+          "targetHpAfter": 587,
+          "enemyHpAfter": 587
+        },
+        {
+          "atMs": 16000,
+          "actor": "enemy",
+          "strike": 16,
+          "roll": 27,
+          "crit": false,
+          "physical": 10,
+          "magic": 0,
+          "dealt": 10,
+          "targetHpAfter": 279,
+          "enemyHpAfter": 587
+        },
+        {
+          "atMs": 17000,
+          "actor": "hero",
+          "strike": 17,
+          "roll": 67,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 555,
+          "enemyHpAfter": 555
+        },
+        {
+          "atMs": 17000,
+          "actor": "enemy",
+          "strike": 17,
+          "roll": 26,
+          "crit": false,
+          "physical": 14,
+          "magic": 0,
+          "dealt": 14,
+          "targetHpAfter": 265,
+          "skill": "heavy_bash",
+          "stun": 0,
+          "enemyHpAfter": 555
+        },
+        {
+          "atMs": 18000,
+          "actor": "hero",
+          "strike": 18,
+          "roll": 67,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 523,
+          "enemyHpAfter": 523
+        },
+        {
+          "atMs": 18000,
+          "actor": "enemy",
+          "strike": 18,
+          "roll": 27,
+          "crit": false,
+          "physical": 10,
+          "magic": 0,
+          "dealt": 10,
+          "targetHpAfter": 255,
+          "enemyHpAfter": 523
+        },
+        {
+          "atMs": 19000,
+          "actor": "hero",
+          "strike": 19,
+          "roll": 70,
+          "crit": false,
+          "physical": 39,
+          "magic": 0,
+          "dealt": 39,
+          "targetHpAfter": 489,
+          "enemyHpAfter": 489
+        },
+        {
+          "atMs": 19000,
+          "actor": "enemy",
+          "strike": 19,
+          "roll": 35,
+          "crit": false,
+          "physical": 13,
+          "magic": 0,
+          "dealt": 13,
+          "targetHpAfter": 243,
+          "enemyHpAfter": 489
+        },
+        {
+          "atMs": 20000,
+          "actor": "hero",
+          "strike": 20,
+          "roll": 68,
+          "crit": false,
+          "physical": 38,
+          "magic": 0,
+          "dealt": 38,
+          "targetHpAfter": 456,
+          "enemyHpAfter": 456
+        },
+        {
+          "atMs": 20000,
+          "actor": "enemy",
+          "strike": 20,
+          "roll": 33,
+          "crit": false,
+          "physical": 13,
+          "magic": 0,
+          "dealt": 13,
+          "targetHpAfter": 230,
+          "enemyHpAfter": 456
+        },
+        {
+          "atMs": 21000,
+          "actor": "hero",
+          "strike": 21,
+          "roll": 67,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 424,
+          "enemyHpAfter": 424
+        },
+        {
+          "atMs": 21000,
+          "actor": "enemy",
+          "strike": 21,
+          "roll": 31,
+          "crit": false,
+          "physical": 12,
+          "magic": 0,
+          "dealt": 12,
+          "targetHpAfter": 219,
+          "enemyHpAfter": 424
+        },
+        {
+          "atMs": 22000,
+          "actor": "hero",
+          "strike": 22,
+          "roll": 69,
+          "crit": false,
+          "physical": 38,
+          "magic": 0,
+          "dealt": 38,
+          "targetHpAfter": 391,
+          "enemyHpAfter": 391
+        },
+        {
+          "atMs": 22000,
+          "actor": "enemy",
+          "strike": 22,
+          "roll": 26,
+          "crit": false,
+          "physical": 10,
+          "magic": 0,
+          "dealt": 10,
+          "targetHpAfter": 209,
+          "enemyHpAfter": 391
+        },
+        {
+          "atMs": 23000,
+          "actor": "hero",
+          "strike": 23,
+          "roll": 67,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 359,
+          "enemyHpAfter": 359
+        },
+        {
+          "atMs": 23000,
+          "actor": "enemy",
+          "strike": 23,
+          "roll": 33,
+          "crit": false,
+          "physical": 13,
+          "magic": 0,
+          "dealt": 13,
+          "targetHpAfter": 196,
+          "enemyHpAfter": 359
+        },
+        {
+          "atMs": 24000,
+          "actor": "hero",
+          "strike": 24,
+          "roll": 66,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 327,
+          "enemyHpAfter": 327
+        },
+        {
+          "atMs": 24000,
+          "actor": "enemy",
+          "strike": 24,
+          "roll": 30,
+          "crit": false,
+          "physical": 16,
+          "magic": 0,
+          "dealt": 16,
+          "targetHpAfter": 181,
+          "skill": "heavy_bash",
+          "stun": 0,
+          "enemyHpAfter": 327
+        },
+        {
+          "atMs": 25000,
+          "actor": "hero",
+          "strike": 25,
+          "roll": 69,
+          "crit": false,
+          "physical": 38,
+          "magic": 0,
+          "dealt": 38,
+          "targetHpAfter": 294,
+          "enemyHpAfter": 294
+        },
+        {
+          "atMs": 25000,
+          "actor": "enemy",
+          "strike": 25,
+          "roll": 29,
+          "crit": false,
+          "physical": 11,
+          "magic": 0,
+          "dealt": 11,
+          "targetHpAfter": 170,
+          "enemyHpAfter": 294
+        },
+        {
+          "atMs": 26000,
+          "actor": "hero",
+          "strike": 26,
+          "roll": 69,
+          "crit": false,
+          "physical": 38,
+          "magic": 0,
+          "dealt": 38,
+          "targetHpAfter": 261,
+          "enemyHpAfter": 261
+        },
+        {
+          "atMs": 26000,
+          "actor": "enemy",
+          "strike": 26,
+          "roll": 36,
+          "crit": false,
+          "physical": 14,
+          "magic": 0,
+          "dealt": 14,
+          "targetHpAfter": 157,
+          "enemyHpAfter": 261
+        },
+        {
+          "atMs": 27000,
+          "actor": "hero",
+          "strike": 27,
+          "roll": 68,
+          "crit": false,
+          "physical": 38,
+          "magic": 0,
+          "dealt": 38,
+          "targetHpAfter": 228,
+          "enemyHpAfter": 228
+        },
+        {
+          "atMs": 27000,
+          "actor": "enemy",
+          "strike": 27,
+          "roll": 33,
+          "crit": false,
+          "physical": 13,
+          "magic": 0,
+          "dealt": 13,
+          "targetHpAfter": 144,
+          "enemyHpAfter": 228
+        },
+        {
+          "atMs": 28000,
+          "actor": "hero",
+          "strike": 28,
+          "roll": 66,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 196,
+          "enemyHpAfter": 196
+        },
+        {
+          "atMs": 28000,
+          "actor": "enemy",
+          "strike": 28,
+          "roll": 34,
+          "crit": false,
+          "physical": 13,
+          "magic": 0,
+          "dealt": 13,
+          "targetHpAfter": 131,
+          "enemyHpAfter": 196
+        },
+        {
+          "atMs": 29000,
+          "actor": "hero",
+          "strike": 29,
+          "roll": 66,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 164,
+          "enemyHpAfter": 164
+        },
+        {
+          "atMs": 29000,
+          "actor": "enemy",
+          "strike": 29,
+          "roll": 29,
+          "crit": false,
+          "physical": 11,
+          "magic": 0,
+          "dealt": 11,
+          "targetHpAfter": 121,
+          "enemyHpAfter": 164
+        },
+        {
+          "atMs": 30000,
+          "actor": "hero",
+          "strike": 30,
+          "roll": 69,
+          "crit": false,
+          "physical": 38,
+          "magic": 0,
+          "dealt": 38,
+          "targetHpAfter": 131,
+          "enemyHpAfter": 131
+        },
+        {
+          "atMs": 30000,
+          "actor": "enemy",
+          "strike": 30,
+          "roll": 32,
+          "crit": false,
+          "physical": 12,
+          "magic": 0,
+          "dealt": 12,
+          "targetHpAfter": 109,
+          "enemyHpAfter": 131
+        },
+        {
+          "atMs": 31000,
+          "actor": "hero",
+          "strike": 31,
+          "roll": 70,
+          "crit": false,
+          "physical": 39,
+          "magic": 0,
+          "dealt": 39,
+          "targetHpAfter": 97,
+          "enemyHpAfter": 97
+        },
+        {
+          "atMs": 31000,
+          "actor": "enemy",
+          "strike": 31,
+          "roll": 27,
+          "crit": false,
+          "physical": 15,
+          "magic": 0,
+          "dealt": 15,
+          "targetHpAfter": 95,
+          "skill": "heavy_bash",
+          "stun": 3,
+          "enemyHpAfter": 97
+        },
+        {
+          "atMs": 32000,
+          "actor": "hero",
+          "strike": 32,
+          "roll": 0,
+          "crit": false,
+          "physical": 0,
+          "magic": 0,
+          "dealt": 0,
+          "targetHpAfter": 102,
+          "stunned": true,
+          "enemyHpAfter": 102
+        },
+        {
+          "atMs": 32000,
+          "actor": "enemy",
+          "strike": 32,
+          "roll": 33,
+          "crit": false,
+          "physical": 13,
+          "magic": 0,
+          "dealt": 13,
+          "targetHpAfter": 82,
+          "enemyHpAfter": 102
+        },
+        {
+          "atMs": 33000,
+          "actor": "hero",
+          "strike": 33,
+          "roll": 0,
+          "crit": false,
+          "physical": 0,
+          "magic": 0,
+          "dealt": 0,
+          "targetHpAfter": 107,
+          "stunned": true,
+          "enemyHpAfter": 107
+        },
+        {
+          "atMs": 33000,
+          "actor": "enemy",
+          "strike": 33,
+          "roll": 26,
+          "crit": false,
+          "physical": 10,
+          "magic": 0,
+          "dealt": 10,
+          "targetHpAfter": 73,
+          "enemyHpAfter": 107
+        },
+        {
+          "atMs": 34000,
+          "actor": "hero",
+          "strike": 34,
+          "roll": 0,
+          "crit": false,
+          "physical": 0,
+          "magic": 0,
+          "dealt": 0,
+          "targetHpAfter": 112,
+          "stunned": true,
+          "enemyHpAfter": 112
+        },
+        {
+          "atMs": 34000,
+          "actor": "enemy",
+          "strike": 34,
+          "roll": 31,
+          "crit": false,
+          "physical": 12,
+          "magic": 0,
+          "dealt": 12,
+          "targetHpAfter": 61,
+          "enemyHpAfter": 112
+        },
+        {
+          "atMs": 35000,
+          "actor": "hero",
+          "strike": 35,
+          "roll": 67,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 80,
+          "enemyHpAfter": 80
+        },
+        {
+          "atMs": 35000,
+          "actor": "enemy",
+          "strike": 35,
+          "roll": 28,
+          "crit": false,
+          "physical": 11,
+          "magic": 0,
+          "dealt": 11,
+          "targetHpAfter": 50,
+          "enemyHpAfter": 80
+        },
+        {
+          "atMs": 36000,
+          "actor": "hero",
+          "strike": 36,
+          "roll": 66,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 48,
+          "enemyHpAfter": 48
+        },
+        {
+          "atMs": 36000,
+          "actor": "enemy",
+          "strike": 36,
+          "roll": 36,
+          "crit": false,
+          "physical": 14,
+          "magic": 0,
+          "dealt": 14,
+          "targetHpAfter": 37,
+          "enemyHpAfter": 48
+        },
+        {
+          "atMs": 37000,
+          "actor": "hero",
+          "strike": 37,
+          "roll": 66,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 16,
+          "enemyHpAfter": 16
+        },
+        {
+          "atMs": 37000,
+          "actor": "enemy",
+          "strike": 37,
+          "roll": 27,
+          "crit": false,
+          "physical": 10,
+          "magic": 0,
+          "dealt": 10,
+          "targetHpAfter": 27,
+          "enemyHpAfter": 16
+        },
+        {
+          "atMs": 38000,
+          "actor": "hero",
+          "strike": 38,
+          "roll": 67,
+          "crit": false,
+          "physical": 37,
+          "magic": 0,
+          "dealt": 37,
+          "targetHpAfter": 0,
+          "enemyHpAfter": 0
+        }
+      ]
+    },
+    "totals": {
+      "runs": 140,
+      "wins": 140,
+      "losses": 0
+    },
+    "byDungeon": {
+      "rat_cellar": {
+        "runs": 10,
+        "wins": 10,
+        "losses": 0
+      },
+      "bat_cave": {
+        "runs": 15,
+        "wins": 15,
+        "losses": 0
+      },
+      "wolf_den": {
+        "runs": 25,
+        "wins": 25,
+        "losses": 0
+      },
+      "forgotten_crypt": {
+        "runs": 40,
+        "wins": 40,
+        "losses": 0
+      },
+      "troll_bridge": {
+        "runs": 50,
+        "wins": 50,
+        "losses": 0
+      }
+    },
+    "bosses": {
+      "troll_chieftain": {
+        "runs": 2,
+        "wins": 1,
+        "losses": 1
+      }
+    }
+  },
+  "training": {
+    "tier": 1,
+    "attributes": {
+      "strength": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "dexterity": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "endurance": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      },
+      "intelligence": {
+        "level": 0,
+        "xp": 0,
+        "progressMs": 0
+      }
+    }
+  },
+  "merchant": {
+    "charges": 5,
+    "chargeProgressMs": 0,
+    "stock": [
+      {
+        "defId": "health_potion_t1",
+        "quantity": 10,
+        "unitPrice": 12
+      },
+      {
+        "defId": "iron_axe",
+        "quantity": 1,
+        "unitPrice": 600,
+        "quality": 25,
+        "rarity": "common"
+      },
+      {
+        "defId": "iron_pickaxe",
+        "quantity": 1,
+        "unitPrice": 600,
+        "quality": 25,
+        "rarity": "common"
+      },
+      {
+        "defId": "iron_sword",
+        "quantity": 1,
+        "unitPrice": 500,
+        "quality": 25,
+        "rarity": "common"
+      },
+      {
+        "defId": "iron_helm",
+        "quantity": 1,
+        "unitPrice": 400,
+        "quality": 25,
+        "rarity": "common"
+      }
+    ]
+  },
+  "buildings": {
+    "woodcutting": {
+      "state": "built",
+      "level": 1
+    },
+    "mine_shaft": {
+      "state": "built",
+      "level": 1
+    },
+    "town_hall": {
+      "state": "built",
+      "level": 1
+    },
+    "training_grounds": {
+      "state": "built",
+      "level": 1
+    },
+    "merchant": {
+      "state": "built",
+      "level": 1
+    },
+    "crafting": {
+      "state": "built",
+      "level": 1
+    },
+    "storage": {
+      "state": "built",
+      "level": 1
+    }
+  },
+  "construction": null,
+  "workers": {
+    "list": [],
+    "nextSerial": 1,
+    "crews": {},
+    "paused": false,
+    "minuteLeftMs": 0,
+    "paidPerMin": 0
+  },
+  "crafting": {
+    "pipesUnlocked": 2,
+    "pipes": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "remainders": {},
+    "nextJobSerial": 1
+  },
+  "nextItemSerial": 1,
+  "stats": {
+    "totalActions": 0,
+    "itemsGathered": {}
+  },
+  "flags": {
+    "debugUsed": true
+  },
+  "character": {
+    "name": "Lucius",
+    "title": "Novice Gladiator",
+    "level": 20,
+    "xp": 2000,
+    "xpToNext": 8944,
+    "hp": 39,
+    "hpRegenProgress": 1420000,
+    "mana": 43,
+    "manaRegenProgress": 1250000,
+    "gold": 879,
+    "attributes": {
+      "strength": 0,
+      "dexterity": 0,
+      "endurance": 0,
+      "intelligence": 0
+    },
+    "spentPoints": {
+      "strength": 48,
+      "dexterity": 0,
+      "endurance": 47,
+      "intelligence": 0
+    },
+    "unspentPoints": 0,
+    "equipment": {
+      "weapon": {
+        "id": "iron_sword#hero",
+        "defId": "iron_sword",
+        "name": "Iron Sword",
+        "icon": "⚔️",
+        "slot": "weapon",
+        "rarity": "uncommon",
+        "quality": 50
+      },
+      "armor": {
+        "id": "iron_chestplate#hero",
+        "defId": "iron_chestplate",
+        "name": "Iron Chestplate",
+        "icon": "🦺",
+        "slot": "armor",
+        "rarity": "uncommon",
+        "quality": 50
+      },
+      "boots": {
+        "id": "iron_boots#hero",
+        "defId": "iron_boots",
+        "name": "Iron Boots",
+        "icon": "🥾",
+        "slot": "boots",
+        "rarity": "uncommon",
+        "quality": 50
+      },
+      "axe": {
+        "id": "start-wooden_axe",
+        "defId": "wooden_axe",
+        "name": "Wooden Axe",
+        "icon": "🪓",
+        "slot": "axe",
+        "rarity": "common",
+        "quality": 25
+      },
+      "pickaxe": {
+        "id": "start-wooden_pickaxe",
+        "defId": "wooden_pickaxe",
+        "name": "Wooden Pickaxe",
+        "icon": "⛏️",
+        "slot": "pickaxe",
+        "rarity": "common",
+        "quality": 25
+      },
+      "helmet": {
+        "id": "iron_helm#hero",
+        "defId": "iron_helm",
+        "name": "Iron Helm",
+        "icon": "🪖",
+        "slot": "helmet",
+        "rarity": "uncommon",
+        "quality": 50
+      },
+      "shield": {
+        "id": "iron_shield#hero",
+        "defId": "iron_shield",
+        "name": "Iron Shield",
+        "icon": "🛡️",
+        "slot": "shield",
+        "rarity": "uncommon",
+        "quality": 50
+      },
+      "gloves": {
+        "id": "iron_gloves#hero",
+        "defId": "iron_gloves",
+        "name": "Iron Gloves",
+        "icon": "🧤",
+        "slot": "gloves",
+        "rarity": "uncommon",
+        "quality": 50
+      }
+    },
+    "skills": {
+      "woodcutting": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      },
+      "mining": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      },
+      "fishing": {
+        "level": 1,
+        "xp": 0,
+        "xpToNext": 100
+      }
+    }
+  },
+  "inventory": {
+    "capacity": 20,
+    "items": [
+      {
+        "id": "bread",
+        "defId": "bread",
+        "name": "Bread",
+        "icon": "🍞",
+        "stackable": true,
+        "quantity": 3
+      }
+    ]
+  }
+}

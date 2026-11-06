@@ -121,7 +121,7 @@ import {
   manaView,
   woodcuttingView,
 } from '../src/engine';
-import { HOUR, MIN, SEC, T0, v12Skills, v17Start, v16Attributes, v17Added, withBuilt, withCore, withoutAffixes, withoutGearRolls } from './helpers';
+import { asV21, HOUR, MIN, SEC, T0, v12Skills, v22Dungeon, v17Start, v16Attributes, v17Added, withBuilt, withCore, withoutAffixes, withoutGearRolls } from './helpers';
 
 /** End of the 1.5.0 script; the 1.6.0 segment starts here. */
 const B = T0 + 47 * HOUR + 411 * SEC + 30 * MIN + 30 * SEC;
@@ -227,16 +227,18 @@ function asV12(s: GameState): unknown {
  * is the 1.19.0 one: the pin of the 1.10.0 script below did NOT move in 1.20.0.
  */
 function asV19(s: GameState): GameState {
-  const { bosses: _bosses, ...dungeon } = s.dungeon;
-  let activity: unknown = s.activity;
-  if (s.activity?.kind === 'dungeon' && s.activity.fight) {
-    const { maxFightMs: _m, enemyRegenBp: _r, enemyRegenProgress: _p, enemyRegenAtMs: _a, enemySkillReady: _k, heroStunStrikes: _h, hero, enemy, ...fight } = s.activity.fight;
+  const v21 = asV21(s);
+  const { bosses: _bosses, ...dungeon } = v21.dungeon;
+  let activity: unknown = v21.activity;
+  const fightV21 = (v21.activity as { fight?: Record<string, any> | null } | null)?.fight;
+  if (v21.activity?.kind === 'dungeon' && fightV21) {
+    const { maxFightMs: _m, enemyRegenBp: _r, enemyRegenProgress: _p, enemyRegenAtMs: _a, enemySkillReady: _k, heroStunStrikes: _h, hero, enemy, ...fight } = fightV21;
     const { skills: _hs, ...heroSide } = hero;
     const { skills: _es, ...enemySide } = enemy;
-    activity = { ...s.activity, fight: { ...fight, hero: heroSide, enemy: enemySide } };
+    activity = { ...v21.activity, fight: { ...fight, hero: heroSide, enemy: enemySide } };
   }
   // 1.22.0: no gear affixes either (rare / epic pieces only; no script outcome reads them).
-  return withoutAffixes({ ...s, saveVersion: 19, dungeon, activity } as unknown as GameState);
+  return withoutAffixes({ ...v21, saveVersion: 19, dungeon, activity } as unknown as GameState);
 }
 
 /**
@@ -551,6 +553,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.21.0', 20],
       ['1.22.0', 21],
       ['1.23.0', 21],
+      ['1.24.0', 22],
     ]);
   });
 });
@@ -655,7 +658,7 @@ describe('golden', () => {
       stamina: s.stamina,
       woodcutting: s.character.skills.woodcutting,
       logs: Object.fromEntries(s.inventory.items.filter((i) => i.defId.endsWith('_logs')).map((i) => [i.defId, i.quantity])),
-      dungeon: s.dungeon,
+      dungeon: asV21(s).dungeon, // 1.24.0: seen in the v21 shape (no difficulty fields), exactly as 1.23.0 produced it
       training: s.training,
       rng: s.rng,
     }).toMatchInlineSnapshot(`
@@ -1269,7 +1272,7 @@ describe('golden', () => {
     // New: full HP at level 5 (50 + 10 × 4), empty fight state.
     expect(s.character.level).toBe(5);
     expect([hp, hpRegenProgress]).toEqual([90, 0]);
-    expect(dungeon).toEqual({ lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {}, bosses: {} });
+    expect(dungeon).toEqual(v22Dungeon({ lastFight: null, totals: { runs: 0, wins: 0, losses: 0 }, byDungeon: {}, bosses: {} }));
 
     // Plays on: Oak (Woodcutting built again) cuts a log every 2:00 (its +5 DEX is normal, not core, since 1.16.0), then
     // a dungeon searches 2:00 and fights.
@@ -1329,7 +1332,7 @@ describe('golden 1.13.0: the Crafting house', () => {
     // new character fields (spent / unspent points, mana). Every crafting outcome above is unchanged.
     // 1.19.0 re-pin (was 2dbabf75): crit draws shift every later roll; END gives max HP; logged strikes carry crit / physical / magic; save v19.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.23.0', hash: '11f7779b' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.24.0', hash: '11f7779b' });
   });
 });
 
@@ -1430,7 +1433,7 @@ describe('golden 1.15.0: continuous material pipes', () => {
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
     // 1.22.0: hash a4eba9d5 -> 6d9814be, the ONLY change in the state (diffed against the 1.20.0 engine): the equipped Iron Sword is rare, so its
     // +INT affix adds 5 mana (140 -> 145; the hash above is seen without affixes, the mana is the one real difference). rng, gold, HP, items: identical.
-    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.23.0', gold: 10218, hash: '6d9814be' });
+    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.24.0', gold: 10218, hash: '6d9814be' });
   });
 });
 
@@ -1505,7 +1508,7 @@ describe('golden 1.16.0: normal and core attributes', () => {
     expect(s.stats.totalActions).toBe(16 + 65); // ~30 min then 2 h 2 s of 110,004 ms cuts
     // 1.17.0 re-pin (1.16.0: df33601f): points to spend instead of level points, WS from total STR (more logs), mana.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.23.0', hash: '233aa32a' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.24.0', hash: '233aa32a' });
   });
 });
 
@@ -1548,6 +1551,6 @@ describe('golden 1.17.0: spendable points, total STR → WS, mana', () => {
     expect(s.character.spentPoints.strength).toBe(6);
     // 1.19.0 re-pin (was b27e380f): crit draws, END max HP, regen units, logged strikes with crit / physical / magic, save v19.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.23.0', hash: '3be73d3c' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.24.0', hash: '3be73d3c' });
   });
 });

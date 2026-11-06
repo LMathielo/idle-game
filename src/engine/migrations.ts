@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 21 as const;
+export const CURRENT_SAVE_VERSION = 22 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -31,6 +31,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   18: migrateV18toV19,
   19: migrateV19toV20,
   20: migrateV20toV21,
+  21: migrateV21toV22,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -858,6 +859,68 @@ function migrateV20toV21(doc: SaveDoc): SaveDoc {
       return affixes ? { ...job, gear: { ...job.gear, affixes } } : job;
     });
     out.crafting = { ...doc.crafting, pipes };
+  }
+  return out;
+}
+
+// ---- v21 → v22 (2026-11-06): difficulties and packs ----
+// Existing counters, boss kills and runs become NORMAL: `byDungeon` / `bosses` stay where they are (they are the Normal counters now), the
+// Hard and Extreme counters start empty (`harder`), and the selected difficulty is Normal for tier 1 (`difficulty` = {"1": "normal"}).
+// A dungeon or boss activity gets `difficulty: 'normal'`. A fight in progress becomes a pack of ONE plain Normal mob that plays on
+// exactly as before: the flat enemy fields (HP, max HP, side, strikes, regen, skill readiness) move into `mobs[0]` unchanged
+// (`variant` 'base', `multBp` 10 000). The last fight gets `difficulty` 'normal' and `mobs` = its one plain mob. Log entries need nothing
+// (`mob` is optional and absent means mob 0). Frozen literals on purpose (the tier list, the basis points).
+
+function migrateV22Fight(fight: unknown): unknown {
+  if (!isDoc(fight) || Array.isArray(fight.mobs)) return fight;
+  const {
+    enemyHp,
+    enemyMaxHp,
+    enemy,
+    enemyStrikes,
+    enemyRegenBp,
+    enemyRegenProgress,
+    enemyRegenAtMs,
+    enemySkillReady,
+    ...rest
+  } = fight;
+  return {
+    ...rest,
+    mobs: [
+      {
+        variant: 'base',
+        multBp: 10000,
+        hp: enemyHp,
+        maxHp: enemyMaxHp,
+        side: enemy,
+        strikes: enemyStrikes,
+        regenBp: enemyRegenBp ?? 0,
+        regenProgress: enemyRegenProgress ?? 0,
+        regenAtMs: enemyRegenAtMs ?? 0,
+        skillReady: isDoc(enemySkillReady) ? enemySkillReady : {},
+      },
+    ],
+  };
+}
+
+function migrateV21toV22(doc: SaveDoc): SaveDoc {
+  const out: SaveDoc = { ...doc, saveVersion: 22 };
+  if (isDoc(doc.dungeon)) {
+    const d = doc.dungeon;
+    const dungeon: Doc = {
+      ...d,
+      harder: isDoc(d.harder) ? d.harder : { hard: { byDungeon: {}, bosses: {} }, extreme: { byDungeon: {}, bosses: {} } },
+      difficulty: isDoc(d.difficulty) ? d.difficulty : { '1': 'normal' },
+    };
+    if (isDoc(d.lastFight) && !Array.isArray(d.lastFight.mobs)) {
+      const f = d.lastFight;
+      dungeon.lastFight = { ...f, difficulty: 'normal', mobs: [{ variant: 'base', multBp: 10000, maxHp: f.enemyMaxHp, hpEnd: f.enemyHpEnd }] };
+    }
+    out.dungeon = dungeon;
+  }
+  const a = doc.activity;
+  if (isDoc(a) && (a.kind === 'dungeon' || a.kind === 'boss')) {
+    out.activity = { ...a, difficulty: typeof a.difficulty === 'string' ? a.difficulty : 'normal', ...(a.fight ? { fight: migrateV22Fight(a.fight) } : {}) };
   }
   return out;
 }

@@ -10,12 +10,22 @@
 //   expectedHpLoss = enemyHits × enemyAvg   (regen during the fight is ignored: a hint, not a sim)
 //   percent  = expectedHpLoss / max HP
 //   Easy < toughAtPercent ≤ Tough < deadlyAtPercent ≤ Deadly; killAt > COMBAT.maxFightMs is always Deadly.
+//
+// Packs (1.24.0, Hard / Extreme): the same estimate for the AVERAGE pack. Every mob has the stats of the average multiplier
+// (base × (1 − p) + upgrade × p, in bp), the pack size is each whole size of the uniform range in turn (the mean of the results is the
+// expectation), and the hero kills the mobs front to back while every alive mob keeps striking on its own timer:
+//   mob j (0-based) dies at (j + 1) × heroHits × hero interval;  it lands ceil(that / its interval) − 1 strikes before (ties go to the hero)
+//   loss(k) = enemyAvg × the sum of those over the k mobs;  fightMs(k) = k × heroHits × hero interval
+//   expected loss and fight time = the mean over k = min..max;  Deadly also when the expected fight time passes the limit (60 s).
+// Normal is the pack of one at x1, which is exactly the formula above.
+import { DIFFICULTY } from './config/difficulty';
 import { BOSSES, COMBAT, DANGER, DUNGEONS, ENEMIES } from './config/dungeons';
+import { scaledEnemy } from './difficulty';
 import { COMBAT_SKILLS } from './config/skills';
 import { BASIS_POINTS } from './config/stats';
 import { critDamage, dealtDamage, reducedDamage } from './combat';
 import { getDerivedStats, type StatsInput } from './stats';
-import type { BossId, DungeonId } from './types';
+import type { BossId, Difficulty, DungeonId } from './types';
 
 /** How much one fight costs in HP (not the chance to lose): Tough fights are usually won, at a price. */
 export type DangerLevel = 'easy' | 'tough' | 'deadly';
@@ -34,12 +44,18 @@ export type DangerHint = {
   /** The hero's crit chance (bp) and multiplier (bp), as used. */
   critChanceBp: number;
   critMultBp: number;
-  /** Hero strikes expected to defeat the enemy. */
+  /** Hero strikes expected to defeat one mob (of the average pack on Hard / Extreme). */
   heroHits: number;
-  /** Enemy strikes expected to land before that. */
+  /** Enemy strikes expected to land before the fight ends (the mean over the pack sizes on Hard / Extreme). */
   enemyHits: number;
-  /** Expected fight length with average rolls, ms. */
+  /** Expected fight length with average rolls, ms (the mean over the pack sizes). */
   fightMs: number;
+  /** The pack size range (1-1 on Normal) and the average mob multiplier in basis points (10 000 on Normal) the estimate used. */
+  packMin: number;
+  packMax: number;
+  avgMultBp: number;
+  /** The mob the estimate fights: the Normal enemy scaled by `avgMultBp` (HP, damage, armor, magic resist). */
+  mob: { hp: number; damageMin: number; damageMax: number; armor: number };
 };
 
 /** Ranges wider than this are averaged from their two ends instead of every roll. */
@@ -70,8 +86,21 @@ export function averagePhysical(range: { min: number; max: number }, armor: numb
   return sum / (max - min + 1);
 }
 
-export function dangerHint(state: StatsInput, dungeonId: DungeonId): DangerHint {
-  const enemy = ENEMIES[DUNGEONS[dungeonId].enemyId];
+/** The average mob multiplier of a pack rule, basis points (10 000 on Normal): base × (1 − p) + upgrade × p, rounded half up. */
+export function averageMobBp(difficulty: Difficulty): number {
+  const rule = DIFFICULTY[difficulty].pack;
+  if (!rule) return BASIS_POINTS;
+  const p = rule.upgrade.chanceBp;
+  return Math.floor((rule.base.bp * (BASIS_POINTS - p) + rule.upgrade.bp * p + BASIS_POINTS / 2) / BASIS_POINTS);
+}
+
+export function dangerHint(state: StatsInput, dungeonId: DungeonId, difficulty: Difficulty = 'normal'): DangerHint {
+  const base = ENEMIES[DUNGEONS[dungeonId].enemyId];
+  const rule = DIFFICULTY[difficulty].pack;
+  const packMin = rule?.size.min ?? 1;
+  const packMax = rule?.size.max ?? 1;
+  const avgMultBp = averageMobBp(difficulty);
+  const enemy = scaledEnemy(base, avgMultBp);
   const stats = getDerivedStats(state);
   const maxHp = stats.maxHp.value;
   const critChanceBp = stats.critChanceBp.value;
@@ -80,16 +109,47 @@ export function dangerHint(state: StatsInput, dungeonId: DungeonId): DangerHint 
   const heroAvg = Math.max(COMBAT.minDamage, averagePhysical(stats.damage, enemy.armor, critChanceBp, critMultBp) + heroMagicAvg); // never 0
   const enemyAvg = averageDealt(enemy.damage, stats.armor.value);
   const heroHits = Math.ceil(enemy.hp / heroAvg);
-  const fightMs = heroHits * Math.max(1, stats.attackIntervalMs.value);
-  const enemyHits = Math.max(0, Math.ceil(fightMs / Math.max(1, enemy.attackIntervalMs)) - 1);
+  const heroInterval = Math.max(1, stats.attackIntervalMs.value);
+  const enemyInterval = Math.max(1, enemy.attackIntervalMs);
+  // Enemy strikes landing while the hero works through k mobs front to back (every alive mob strikes on its own timer).
+  const strikesFor = (k: number) => {
+    let n = 0;
+    for (let j = 0; j < k; j++) n += Math.max(0, Math.ceil(((j + 1) * heroHits * heroInterval) / enemyInterval) - 1);
+    return n;
+  };
+  let hitsSum = 0;
+  let fightSum = 0;
+  let sizes = 0;
+  for (let k = packMin; k <= packMax; k++) {
+    hitsSum += strikesFor(k);
+    fightSum += k * heroHits * heroInterval;
+    sizes += 1;
+  }
+  const enemyHits = hitsSum / sizes;
+  const fightMs = fightSum / sizes;
   const expectedHpLoss = Math.round(enemyHits * enemyAvg);
   const percent = maxHp > 0 ? Math.round((expectedHpLoss * 100) / maxHp) : 100;
   let level: DangerLevel = 'easy';
   if (fightMs > COMBAT.maxFightMs || percent >= DANGER.deadlyAtPercent) level = 'deadly';
   else if (percent >= DANGER.toughAtPercent) level = 'tough';
-  return { level, expectedHpLoss, maxHp, percent, heroAvg, heroMagicAvg, critChanceBp, critMultBp, heroHits, enemyHits, fightMs };
+  return {
+    level,
+    expectedHpLoss,
+    maxHp,
+    percent,
+    heroAvg,
+    heroMagicAvg,
+    critChanceBp,
+    critMultBp,
+    heroHits,
+    enemyHits,
+    fightMs,
+    packMin,
+    packMax,
+    avgMultBp,
+    mob: { hp: enemy.hp, damageMin: enemy.damage.min, damageMax: enemy.damage.max, armor: enemy.armor },
+  };
 }
-
 
 // ---------- bosses ----------
 
@@ -134,8 +194,8 @@ export type BossDangerHint = {
   enemyDps: number;
 };
 
-export function bossDangerHint(state: StatsInput, bossId: BossId): BossDangerHint {
-  const enemy = ENEMIES[BOSSES[bossId].enemyId];
+export function bossDangerHint(state: StatsInput, bossId: BossId, difficulty: Difficulty = 'normal'): BossDangerHint {
+  const enemy = scaledEnemy(ENEMIES[BOSSES[bossId].enemyId], DIFFICULTY[difficulty].boss.statBp);
   const skill = COMBAT_SKILLS.heavy_bash;
   const stun = skill.effects.find((e) => e.type === 'stun');
   const stats = getDerivedStats(state);

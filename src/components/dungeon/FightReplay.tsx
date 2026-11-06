@@ -3,16 +3,16 @@
 // with the live fight (LiveFight.tsx).
 import { memo, useEffect, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
-import { COMBAT_SKILLS, type FightLogEntry, type FightRecord } from '../../engine';
+import { useReducedMotion } from 'react-native-reanimated';
+import { COMBAT_SKILLS, type FightLogEntry, type FightRecord, mobName } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { PixelButton } from '../PixelButton';
-import { outcomeLabel } from './outcome';
+import { AnimatedHpBar } from './HpBars';
+import { PackRows } from './PackRows';
+import { mobLabel, outcomeLabel } from './outcome';
 
 /** Whole replay takes about this long (each line between 40 and 600 ms). */
 const REPLAY_TOTAL_MS = 3000;
-const BAR_MS = 220;
-const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 
 export function replayStepMs(lines: number): number {
   return Math.min(600, Math.max(40, Math.floor(REPLAY_TOTAL_MS / Math.max(1, lines))));
@@ -43,20 +43,26 @@ export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
 
   // HP after the last shown strike of each side. A regenerating enemy (a boss) logs its HP after every strike (enemyHpAfter);
   // the stun left is what the shown Heavy Bash casts gave minus the hero strikes already lost.
+  // A pack (Hard / Extreme): each hero strike names the mob it hit (`mob`) and that mob's HP after it; the target is the first alive mob.
+  const packed = fight.mobs.length > 1;
+  const mobHp = fight.mobs.map((m) => m.maxHp);
   let heroHp = fight.heroHpStart;
-  let enemyHp = fight.enemyMaxHp;
   let stunLeft = 0;
   for (let i = 0; i < shown; i++) {
     const e = fight.log[i];
-    if (e.actor === 'hero') enemyHp = e.targetHpAfter;
+    const at = e.mob ?? 0;
+    if (e.actor === 'hero') mobHp[at] = e.targetHpAfter;
     else heroHp = e.targetHpAfter;
-    if (e.enemyHpAfter !== undefined) enemyHp = e.enemyHpAfter;
+    if (e.enemyHpAfter !== undefined) mobHp[at] = e.enemyHpAfter;
     if (e.stunned) stunLeft = Math.max(0, stunLeft - 1);
     else if (e.stun) stunLeft = Math.max(stunLeft, e.stun);
   }
+  const enemyHp = mobHp.reduce((n, h) => n + h, 0);
   const done = shown >= total;
   if (done) heroHp = fight.heroHpEnd; // a time-limit loss ends at 0 even though no strike says so (and regen shows here)
   const result = outcomeLabel(fight.endReason, fight.dungeonId);
+  const size = fight.mobs.length;
+  const nameOf = (e: FightLogEntry) => mobLabel(enemyName, fight.mobs[e.mob ?? 0]?.variant ?? 'base', e.mob ?? 0, size);
 
   // Screen readers hear the result once, not every line as it appears.
   useEffect(() => {
@@ -67,13 +73,14 @@ export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
     <View style={styles.root}>
       <View style={styles.bars}>
         <AnimatedHpBar label={heroName} value={heroHp} max={fight.heroMaxHp} color={colors.skill} instant={reducedMotion} />
-        <AnimatedHpBar label={enemyName} value={enemyHp} max={fight.enemyMaxHp} color={colors.hp} instant={reducedMotion} />
+        {packed ? null : <AnimatedHpBar label={mobName(enemyName, fight.mobs[0]?.variant ?? 'base')} value={enemyHp} max={fight.enemyMaxHp} color={colors.hp} instant={reducedMotion} />}
       </View>
+      {packed ? <PackRows enemyId={fight.enemyId} enemyName={enemyName} mobs={fight.mobs.map((m, i) => ({ variant: m.variant, hp: mobHp[i], maxHp: m.maxHp }))} instant={reducedMotion} /> : null}
       {!done && stunLeft > 0 ? <StunNotice name={heroName} strikes={stunLeft} /> : null}
       <View style={styles.log}>
         {fight.log.length === 0 ? <Text style={styles.line}>{heroName} had no HP left and could not fight.</Text> : null}
         {fight.log.slice(0, shown).map((e, i) => (
-          <LogLine key={i} entry={e} heroName={heroName} enemyName={enemyName} />
+          <LogLine key={i} entry={e} heroName={heroName} enemyName={nameOf(e)} />
         ))}
         {done ? (
           <Text style={[styles.result, fight.won ? styles.win : styles.loss]} accessibilityLiveRegion="polite">
@@ -87,6 +94,8 @@ export function FightReplay({ fight, heroName, enemyName, onClose }: Props) {
     </View>
   );
 }
+
+export { AnimatedHpBar };
 
 /** "0:07": fight time when the strike landed, whole seconds rounded down. */
 export function strikeTime(atMs: number): string {
@@ -137,63 +146,9 @@ export const LogLine = memo(function LogLine({ entry, heroName, enemyName }: { e
   );
 });
 
-export const AnimatedHpBar = memo(function AnimatedHpBar({
-  label,
-  value,
-  max,
-  color,
-  instant,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  color: string;
-  instant: boolean;
-}) {
-  const pct = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
-  const width = useSharedValue(pct);
-  useEffect(() => {
-    width.set(instant ? pct : withTiming(pct, { duration: BAR_MS, easing: EASE_OUT }));
-  }, [pct, instant, width]);
-  const fillStyle = useAnimatedStyle(() => ({ width: `${width.get() * 100}%` }));
-  return (
-    <View style={styles.barBlock} accessible accessibilityLabel={`${label} HP ${value} of ${max}`}>
-      <Text style={styles.barName} numberOfLines={1}>
-        {label}
-      </Text>
-      <View style={styles.barOuter}>
-        <Animated.View style={[styles.barFill, { backgroundColor: color }, fillStyle]} />
-        <Text style={styles.barLabel}>
-          {value}/{max}
-        </Text>
-      </View>
-    </View>
-  );
-});
-
 const styles = StyleSheet.create({
   root: { gap: 10 },
   bars: { flexDirection: 'row', gap: 10 },
-  barBlock: { flex: 1, gap: 2 },
-  barName: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.ink },
-  barOuter: {
-    height: 18,
-    backgroundColor: colors.slot,
-    borderWidth: 2,
-    borderColor: colors.slotBorder,
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  barFill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
-  barLabel: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 11,
-    color: '#fff',
-    textAlign: 'center',
-    textShadowColor: '#000',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 0,
-  },
   log: { gap: 3, minHeight: 40 },
   line: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.ink },
   heroLine: { color: colors.ink },

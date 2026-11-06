@@ -1,6 +1,6 @@
 // Player commands. Serializable, validated here (never in the UI), applied after simulating to `now`.
 import { grantHeroXp } from './activities';
-import { type BossErrorCode, checkBossEntry, newBossActivity } from './boss';
+import { type BossErrorCode, checkBossEntry, newBossActivity, recordBossResults, resolveBossDifficulty } from './boss';
 import { build, buildingForActivity, completeBuilding, completeConstruction, isBuilt, startUpgrade, type UpgradeErrorCode } from './buildings';
 import { onUpgraded } from './upgradeEffects';
 import { cloneState } from './clone';
@@ -11,8 +11,9 @@ import { isGatheringKind, isTreeId, TREES } from './config/woodcutting';
 import { SKILL_XP_CURVE } from './config/xpCurve';
 import { xpToNext } from './progression';
 import { DEV_TOOLS_ENABLED } from './config/dev';
-import { BOSSES, DUNGEONS, isDungeonId } from './config/dungeons';
+import { BOSSES, DUNGEONS, isBossId, isDungeonId } from './config/dungeons';
 import { beginFight, forfeitFight, isDungeonUnlocked, recordDungeonResults, searchMsFor, skipCost } from './dungeon';
+import { checkDifficulty, type DifficultyErrorCode, selectedDifficulty } from './difficulty';
 import { equipItem, unequipItem, useItem } from './equipment';
 import { markDebugUsed } from './flags';
 import { addMerchantCharge, buyItem, type ItemError, type ItemErrorCode, refreshMerchant, sellItem } from './merchant';
@@ -28,6 +29,7 @@ import {
   ATTRIBUTE_KEYS,
   type AttributeKey,
   type BossId,
+  type Difficulty,
   type BuildingId,
   type DungeonId,
   type EquipmentSlot,
@@ -46,7 +48,7 @@ export type Command =
   /** Mines ores from one rock back-to-back. Needs the Mine Shaft built and the rock's level and MS. Same rock = no-op. */
   | { id: string; type: 'START_ACTIVITY'; kind: 'mining'; rockId: RockId }
   /** Starts auto-repeating runs. Only one activity at a time: a running one is stopped (a dungeon run in progress is lost). */
-  | { id: string; type: 'START_ACTIVITY'; kind: 'dungeon'; dungeonId: DungeonId }
+  | { id: string; type: 'START_ACTIVITY'; kind: 'dungeon'; dungeonId: DungeonId; difficulty?: Difficulty }
   /**
    * Trains one attribute (XP is kept per attribute). Needs tier ≥ 1 and the attribute below the tier's cap.
    * Same attribute again = no-op; another attribute switches. Stops any other activity (a dungeon run is lost).
@@ -70,7 +72,13 @@ export type Command =
    * changed or spent: BOSS_LOCKED, FIGHT_IN_PROGRESS (a boss or dungeon fight is on; a second tap never pays twice), NO_HP,
    * NOT_ENOUGH_STAMINA.
    */
-  | { id: string; type: 'ENTER_BOSS'; bossId: BossId; maxCost: number }
+  | { id: string; type: 'ENTER_BOSS'; bossId: BossId; maxCost: number; difficulty?: Difficulty }
+  /**
+   * Selects the difficulty of a dungeon tier (1.24.0). The dungeon list, stage details, danger hints and rewards follow it, and the next
+   * START_ACTIVITY / ENTER_BOSS that does not name one uses it. A run already going keeps its own difficulty. Refused with UNKNOWN_TIER,
+   * UNKNOWN_DIFFICULTY or DIFFICULTY_LOCKED, changing nothing.
+   */
+  | { id: string; type: 'SET_DUNGEON_DIFFICULTY'; tier: number; difficulty: Difficulty }
   /**
    * Spends ceil(remaining minutes) stamina to finish the current log now (exactly one log). `log` is the log
    * the player saw (WoodcutActivityView.log) and `maxCost` the cost shown: if that log already finished, or the
@@ -117,7 +125,9 @@ export type Command =
   | { id: string; type: 'DEBUG_ADD_WOODCUTTING_LEVEL'; levels: number }
   | { id: string; type: 'DEBUG_SET_HERO_HP'; hp: number }
   /** Adds wins (and runs) to an unlocked dungeon's lifetime counters, so unlocks can be tested on a phone. */
-  | { id: string; type: 'DEBUG_ADD_DUNGEON_WINS'; dungeonId: DungeonId; amount: number }
+  | { id: string; type: 'DEBUG_ADD_DUNGEON_WINS'; dungeonId: DungeonId; amount: number; difficulty?: Difficulty }
+  /** Adds boss wins (and fights) on a difficulty (default Normal), so Hard / Extreme can be unlocked on a phone (1.24.0). */
+  | { id: string; type: 'DEBUG_ADD_BOSS_WINS'; bossId: BossId; amount: number; difficulty?: Difficulty }
   /** Ends the current run's search now, for free: the fight starts at once (refused during the fight). */
   | { id: string; type: 'DEBUG_FINISH_DUNGEON_RUN' }
   | { id: string; type: 'DEBUG_GRANT_HERO_XP'; amount: number }
@@ -211,6 +221,7 @@ export type CommandErrorCode =
   | 'NO_DUNGEON_RUN'
   | 'RUN_CHANGED'
   | BossErrorCode
+  | DifficultyErrorCode
   | 'INVALID_AMOUNT'
   | 'UNKNOWN_ATTRIBUTE'
   | 'NOT_ENOUGH_STAMINA'
@@ -309,10 +320,15 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
         next = { kind: 'training', attribute, startedAt: now };
       } else if (cmd.kind === 'dungeon') {
         if (!isDungeonId(cmd.dungeonId)) return fail('UNKNOWN_DUNGEON', `Unknown dungeon ${String(cmd.dungeonId)}`);
-        if (!isDungeonUnlocked(draft, cmd.dungeonId)) return fail('DUNGEON_LOCKED', `${DUNGEONS[cmd.dungeonId].name} is locked`);
-        // Already running this dungeon: keep the current run.
-        if (draft.activity?.kind === 'dungeon' && draft.activity.dungeonId === cmd.dungeonId) break;
-        next = { kind: 'dungeon', dungeonId: cmd.dungeonId, startedAt: now, phase: 'search', progressMs: 0, fight: null };
+        // The difficulty the command names, else the tier's selected one: the run keeps it for good (every repeat).
+        const tier = DUNGEONS[cmd.dungeonId].tier;
+        const difficulty = cmd.difficulty === undefined ? selectedDifficulty(draft, tier) : cmd.difficulty;
+        const badDifficulty = checkDifficulty(draft, tier, difficulty);
+        if (badDifficulty) return fail(badDifficulty.code, badDifficulty.message);
+        if (!isDungeonUnlocked(draft, cmd.dungeonId, difficulty)) return fail('DUNGEON_LOCKED', `${DUNGEONS[cmd.dungeonId].name} is locked`);
+        // Already running this dungeon on this difficulty: keep the current run (another difficulty starts a new run).
+        if (draft.activity?.kind === 'dungeon' && draft.activity.dungeonId === cmd.dungeonId && draft.activity.difficulty === difficulty) break;
+        next = { kind: 'dungeon', dungeonId: cmd.dungeonId, difficulty, startedAt: now, phase: 'search', progressMs: 0, fight: null };
       } else if (cmd.kind === 'mining') {
         const { rockId } = cmd;
         if (!isRockId(rockId)) return fail('UNKNOWN_ROCK', `Unknown rock ${String(rockId)}`);
@@ -369,6 +385,12 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       events.push({ type: 'TRAINING_TIER_UNLOCKED', tier });
       break;
     }
+    case 'SET_DUNGEON_DIFFICULTY': {
+      const bad = checkDifficulty(draft, cmd.tier, cmd.difficulty);
+      if (bad) return fail(bad.code, bad.message);
+      draft.dungeon.difficulty = { ...draft.dungeon.difficulty, [String(cmd.tier)]: cmd.difficulty };
+      break;
+    }
     case 'STOP_ACTIVITY': {
       if (!draft.activity) return fail('NO_ACTIVE_ACTIVITY', 'No activity is running');
       stopActivity(draft, events);
@@ -395,15 +417,16 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       break;
     }
     case 'ENTER_BOSS': {
-      const e = checkBossEntry(draft, cmd.bossId, cmd.maxCost);
+      const e = checkBossEntry(draft, cmd.bossId, cmd.maxCost, cmd.difficulty);
       if (e) return fail(e.code, e.message);
       const boss = BOSSES[cmd.bossId];
+      const difficulty = resolveBossDifficulty(draft, cmd.bossId, cmd.difficulty) as Difficulty; // checked above
       const spent = spendStamina(draft, boss.entryStamina);
       if (!spent.ok) return fail(spent.error.code, spent.error.message);
       draft = spent.state;
       // One activity at a time: a dungeon search is cancelled, gathering / training stop (a fight can't be on: checked above).
       if (draft.activity) stopActivity(draft, events);
-      draft.activity = newBossActivity(draft, cmd.bossId, now);
+      draft.activity = newBossActivity(draft, cmd.bossId, now, difficulty);
       events.push({ type: 'ACTIVITY_STARTED', kind: 'boss' });
       break;
     }
@@ -565,12 +588,30 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
       const { dungeonId, amount } = cmd;
       if (!isDungeonId(dungeonId)) return fail('UNKNOWN_DUNGEON', `Unknown dungeon ${String(dungeonId)}`);
-      if (!isDungeonUnlocked(draft, dungeonId)) return fail('DUNGEON_LOCKED', `${DUNGEONS[dungeonId].name} is locked`);
+      const difficulty = cmd.difficulty ?? 'normal';
+      const badDifficulty = checkDifficulty(draft, DUNGEONS[dungeonId].tier, difficulty);
+      if (badDifficulty) return fail(badDifficulty.code, badDifficulty.message);
+      if (!isDungeonUnlocked(draft, dungeonId, difficulty)) return fail('DUNGEON_LOCKED', `${DUNGEONS[dungeonId].name} is locked`);
       if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0 || amount > MAX_DEBUG_DUNGEON_WINS) {
         return fail('INVALID_AMOUNT', `Invalid win amount ${String(amount)}`);
       }
       draft = markDebugUsed(draft);
-      recordDungeonResults(draft, dungeonId, amount, 0, null, events);
+      recordDungeonResults(draft, dungeonId, difficulty, amount, 0, null, events);
+      break;
+    }
+    case 'DEBUG_ADD_BOSS_WINS': {
+      if (!allowDebug) return fail('DEBUG_DISABLED', 'Debug commands are disabled');
+      const { bossId, amount } = cmd;
+      if (!isBossId(bossId)) return fail('UNKNOWN_BOSS', `Unknown boss ${String(bossId)}`);
+      const difficulty = cmd.difficulty ?? 'normal';
+      // The difficulty must be open (Hard needs a Normal boss win, Extreme a Hard one); the boss itself need not be.
+      const badDifficulty = checkDifficulty(draft, BOSSES[bossId].tier, difficulty);
+      if (badDifficulty) return fail(badDifficulty.code, badDifficulty.message);
+      if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0 || amount > MAX_DEBUG_DUNGEON_WINS) {
+        return fail('INVALID_AMOUNT', `Invalid win amount ${String(amount)}`);
+      }
+      draft = markDebugUsed(draft);
+      recordBossResults(draft, bossId, difficulty, amount, 0, null, events);
       break;
     }
     case 'DEBUG_FINISH_DUNGEON_RUN': {

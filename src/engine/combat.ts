@@ -2,6 +2,10 @@
 //
 //   each side strikes on its own timer from the fight's start: strike n of a side lands at n × its attackIntervalMs
 //   on a tie the hero strikes first
+//   PACKS (1.24.0, save v22): a fight has one or more mobs (Normal and bosses: one). Every ALIVE mob strikes on its own timer from the
+//     fight's start; the hero strikes the FIRST alive mob in pack order (no overkill carry-over: a strike only hurts its target; when it
+//     dies the next hero strike goes to the next mob). Same-instant ties: the hero first, then the mobs in pack order. A dead mob never
+//     strikes again. The fight is won when every mob is dead; the time limit, a flee and the hero's death are losses as before.
 //   hero strike (1.19.0): physical roll in [min, max] (seeded) → ONE crit draw (every hero strike, even at 0%) → on a crit the
 //     roll × critMultBp → reduced by the target's armor; magic part = magicDamage reduced by the target's magic resist
 //     (no roll, no crit); dealt = max(minDamage, physical + magic)
@@ -30,7 +34,7 @@ import { COMBAT_SKILLS, type CombatSkillDef } from './config/skills';
 import { BASIS_POINTS } from './config/stats';
 import { nextInt } from './rng';
 import type { DerivedStats } from './stats';
-import type { ActiveFight, CombatSide, EnemyId, FightEndReason, FightLogEntry, RngState } from './types';
+import type { ActiveFight, CombatSide, EnemyId, FightEndReason, FightLogEntry, FightMob, MobVariant, RngState } from './types';
 
 export type Combatant = CombatSide & { hp: number };
 
@@ -91,7 +95,63 @@ function copySide(side: CombatSide): CombatSide {
   return { ...side, damage: { ...side.damage }, skills: [...(side.skills ?? [])], attackIntervalMs: safeInterval(side.attackIntervalMs) };
 }
 
-/** A fresh fight at time 0. `heroHp` must be > 0 (a 0 HP hero loses with no fight). */
+/** What a mob is made from: its (frozen) side, HP and the extras only bosses have. */
+export type MobInit = {
+  variant?: MobVariant;
+  /** Stat / reward multiplier it was made with, bp (default 10 000). */
+  multBp?: number;
+  side: CombatSide;
+  hp: number;
+  /** HP regeneration, bp of its max HP per second (default 0). */
+  regenBp?: number;
+};
+
+function newMob(init: MobInit): FightMob {
+  const side = copySide(init.side);
+  const skillReady: FightMob['skillReady'] = {};
+  for (const id of side.skills) {
+    const def = COMBAT_SKILLS[id];
+    if (def) skillReady[id] = def.firstReadyStrike;
+  }
+  const hp = Math.max(0, init.hp);
+  return {
+    variant: init.variant ?? 'base',
+    multBp: init.multBp ?? BASIS_POINTS,
+    hp,
+    maxHp: hp,
+    side,
+    strikes: 0,
+    regenBp: Math.max(0, Math.floor(init.regenBp ?? 0)),
+    regenProgress: 0,
+    regenAtMs: 0,
+    skillReady,
+  };
+}
+
+/** A fresh fight at time 0 against a pack (at least one mob, in pack order). `heroHp` must be > 0 (a 0 HP hero loses with no fight). */
+export function newPackFight(
+  enemyId: EnemyId,
+  hero: CombatSide,
+  mobs: readonly MobInit[],
+  heroHp: number,
+  heroMaxHp: number,
+  options: Pick<FightOptions, 'maxFightMs'> = {},
+): ActiveFight {
+  return {
+    enemyId,
+    elapsedMs: 0,
+    heroHpStart: heroHp,
+    heroMaxHp,
+    hero: copySide(hero),
+    heroStrikes: 0,
+    mobs: mobs.map(newMob),
+    maxFightMs: Number.isFinite(options.maxFightMs) ? Math.max(1, Math.floor(options.maxFightMs!)) : COMBAT.maxFightMs,
+    heroStunStrikes: 0,
+    log: [],
+  };
+}
+
+/** A fresh fight at time 0 against ONE enemy (a Normal stage fight, a boss). `heroHp` must be > 0 (a 0 HP hero loses with no fight). */
 export function newFight(
   enemyId: EnemyId,
   hero: CombatSide,
@@ -101,42 +161,44 @@ export function newFight(
   enemyHp: number,
   options: FightOptions = {},
 ): ActiveFight {
-  const enemySide = copySide(enemy);
-  const enemySkillReady: ActiveFight['enemySkillReady'] = {};
-  for (const id of enemySide.skills) {
-    const def = COMBAT_SKILLS[id];
-    if (def) enemySkillReady[id] = def.firstReadyStrike;
-  }
-  return {
-    enemyId,
-    elapsedMs: 0,
-    heroHpStart: heroHp,
-    heroMaxHp,
-    enemyHp: Math.max(0, enemyHp),
-    enemyMaxHp: Math.max(0, enemyHp),
-    hero: copySide(hero),
-    enemy: enemySide,
-    heroStrikes: 0,
-    enemyStrikes: 0,
-    maxFightMs: Number.isFinite(options.maxFightMs) ? Math.max(1, Math.floor(options.maxFightMs!)) : COMBAT.maxFightMs,
-    enemyRegenBp: Math.max(0, Math.floor(options.enemyRegenBp ?? 0)),
-    enemyRegenProgress: 0,
-    enemyRegenAtMs: 0,
-    enemySkillReady,
-    heroStunStrikes: 0,
-    log: [],
-  };
+  return newPackFight(enemyId, hero, [{ side: enemy, hp: enemyHp, regenBp: options.enemyRegenBp }], heroHp, heroMaxHp, options);
 }
 
-export type FightEvent = { type: 'strike'; actor: 'hero' | 'enemy'; atMs: number } | { type: 'time_limit'; atMs: number };
+/** The first alive mob (the hero's target), or -1 when every mob is dead. */
+export function frontMob(fight: Pick<ActiveFight, 'mobs'>): number {
+  return fight.mobs.findIndex((m) => m.hp > 0);
+}
 
-/** The next thing that happens in this fight, by fight time. Ties go to the hero. The limit is the fight's own (frozen at its start). */
+/** True when every mob is dead. */
+export function packDefeated(fight: Pick<ActiveFight, 'mobs'>): boolean {
+  return fight.mobs.every((m) => m.hp <= 0);
+}
+
+/**
+ * A strike (`mob` = the mob that strikes, or the one the hero's strike lands on) or the time limit. The hero's `mob` is the first alive
+ * mob at the moment the event is read.
+ */
+export type FightEvent = { type: 'strike'; actor: 'hero' | 'enemy'; mob: number; atMs: number } | { type: 'time_limit'; atMs: number };
+
+/**
+ * The next thing that happens in this fight, by fight time. Ties: the hero first, then the mobs in pack order (dead mobs never strike).
+ * The limit is the fight's own (frozen at its start).
+ */
 export function nextFightEvent(fight: ActiveFight, maxFightMs: number = fight.maxFightMs): FightEvent {
-  const heroAt = (fight.heroStrikes + 1) * fight.hero.attackIntervalMs;
-  const enemyAt = (fight.enemyStrikes + 1) * fight.enemy.attackIntervalMs;
-  const actor = heroAt <= enemyAt ? 'hero' : 'enemy';
-  const atMs = Math.min(heroAt, enemyAt);
-  return atMs <= maxFightMs ? { type: 'strike', actor, atMs } : { type: 'time_limit', atMs: maxFightMs };
+  let atMs = (fight.heroStrikes + 1) * fight.hero.attackIntervalMs;
+  let actor: 'hero' | 'enemy' = 'hero';
+  let mob = frontMob(fight);
+  for (let i = 0; i < fight.mobs.length; i++) {
+    const m = fight.mobs[i];
+    if (m.hp <= 0) continue;
+    const at = (m.strikes + 1) * m.side.attackIntervalMs;
+    if (at < atMs) {
+      atMs = at;
+      actor = 'enemy';
+      mob = i;
+    }
+  }
+  return atMs <= maxFightMs ? { type: 'strike', actor, mob, atMs } : { type: 'time_limit', atMs: maxFightMs };
 }
 
 /**
@@ -153,29 +215,34 @@ export function enemyRegen(hp: number, progress: number, maxHp: number, regenBp:
   return [hp + gained, banked - gained * ENEMY_REGEN_UNIT];
 }
 
-/** Applies the enemy's regen up to fight time `atMs` (mutates `fight`, which the caller owns). Idempotent for the same time. */
-export function regenEnemyTo(fight: ActiveFight, atMs: number): void {
-  const dt = atMs - fight.enemyRegenAtMs;
+/** Applies one mob's regen up to fight time `atMs` (mutates the mob, which the caller owns). Idempotent for the same time. */
+export function regenMobTo(mob: FightMob, atMs: number): void {
+  const dt = atMs - mob.regenAtMs;
   if (!(dt > 0)) return;
-  fight.enemyRegenAtMs = atMs;
-  if (!(fight.enemyRegenBp > 0)) return;
-  const [hp, progress] = enemyRegen(fight.enemyHp, fight.enemyRegenProgress, fight.enemyMaxHp, fight.enemyRegenBp, dt);
-  fight.enemyHp = hp;
-  fight.enemyRegenProgress = progress;
+  mob.regenAtMs = atMs;
+  if (!(mob.regenBp > 0)) return;
+  const [hp, progress] = enemyRegen(mob.hp, mob.regenProgress, mob.maxHp, mob.regenBp, dt);
+  mob.hp = hp;
+  mob.regenProgress = progress;
 }
 
-/** The enemy's HP at fight time `atMs` without changing the fight (read-only, for the live bar). */
-export function enemyHpAt(fight: Pick<ActiveFight, 'enemyHp' | 'enemyMaxHp' | 'enemyRegenBp' | 'enemyRegenProgress' | 'enemyRegenAtMs'>, atMs: number): number {
-  const dt = atMs - fight.enemyRegenAtMs;
-  if (!(fight.enemyRegenBp > 0) || !(dt > 0)) return fight.enemyHp;
-  return enemyRegen(fight.enemyHp, fight.enemyRegenProgress, fight.enemyMaxHp, fight.enemyRegenBp, dt)[0];
+/** Applies every mob's regen up to fight time `atMs` (mutates `fight`, which the caller owns). Without regen this changes nothing. */
+export function regenEnemyTo(fight: Pick<ActiveFight, 'mobs'>, atMs: number): void {
+  for (const m of fight.mobs) regenMobTo(m, atMs);
 }
 
-/** The first skill of the enemy that is ready for its next strike, or null. */
-function readyEnemySkill(fight: ActiveFight): CombatSkillDef | null {
-  const next = fight.enemyStrikes + 1;
-  for (const id of fight.enemy.skills) {
-    const ready = fight.enemySkillReady[id];
+/** A mob's HP at fight time `atMs` without changing it (read-only, for the live bar). */
+export function enemyHpAt(mob: Pick<FightMob, 'hp' | 'maxHp' | 'regenBp' | 'regenProgress' | 'regenAtMs'>, atMs: number): number {
+  const dt = atMs - mob.regenAtMs;
+  if (!(mob.regenBp > 0) || !(dt > 0)) return mob.hp;
+  return enemyRegen(mob.hp, mob.regenProgress, mob.maxHp, mob.regenBp, dt)[0];
+}
+
+/** The first skill of the mob that is ready for its next strike, or null. */
+function readyMobSkill(mob: FightMob): CombatSkillDef | null {
+  const next = mob.strikes + 1;
+  for (const id of mob.side.skills) {
+    const ready = mob.skillReady[id];
     const def = COMBAT_SKILLS[id];
     if (def && ready !== undefined && next >= ready) return def;
   }
@@ -183,18 +250,29 @@ function readyEnemySkill(fight: ActiveFight): CombatSkillDef | null {
 }
 
 /**
- * One strike at `atMs` (fight time). Mutates `fight` (the caller owns it): the strike counter, the log, the enemy's regen and,
- * for a hero strike, the enemy's HP, a cast's cooldown and a stun. Returns the hero's HP after it and the advanced RNG.
+ * One strike at `atMs` (fight time). Mutates `fight` (the caller owns it): the strike counters, the log, the mobs' regen and, for a hero
+ * strike, the target's HP, a cast's cooldown and a stun. Returns the hero's HP after it and the advanced RNG. A hero strike lands on the
+ * first alive mob; an enemy strike is by mob `mobIndex` (default 0, a fight of one mob).
  *
  * RNG (see the header): a hero strike draws twice, always in this order: the physical roll, then the crit check (drawn even at 0%
  * chance, so the stream never depends on the chance); a stunned hero strike draws nothing. An enemy strike draws once (its roll;
  * enemies cannot crit); a skill cast draws its roll, then one stun check per stun effect in listed order, always.
  */
-export function strike(fight: ActiveFight, actor: 'hero' | 'enemy', atMs: number, heroHp: number, rng: RngState): { heroHp: number; rng: RngState } {
-  // The enemy regenerates up to this instant first (before it is hit or acts). Without regen this changes nothing.
+export function strike(
+  fight: ActiveFight,
+  actor: 'hero' | 'enemy',
+  atMs: number,
+  heroHp: number,
+  rng: RngState,
+  mobIndex: number = 0,
+): { heroHp: number; rng: RngState } {
+  // The mobs regenerate up to this instant first (before one is hit or acts). Without regen this changes nothing.
   regenEnemyTo(fight, atMs);
-  const regens = fight.enemyRegenBp > 0;
+  const packed = fight.mobs.length > 1;
   if (actor === 'hero') {
+    const index = Math.max(0, frontMob(fight));
+    const target = fight.mobs[index];
+    const regens = target.regenBp > 0;
     if (fight.heroStunStrikes > 0) {
       // Stunned: the strike is lost (the timer keeps running), no roll, no crit check.
       fight.heroStunStrikes -= 1;
@@ -208,39 +286,42 @@ export function strike(fight: ActiveFight, actor: 'hero' | 'enemy', atMs: number
         physical: 0,
         magic: 0,
         dealt: 0,
-        targetHpAfter: fight.enemyHp,
+        targetHpAfter: target.hp,
         stunned: true,
       };
-      if (regens) lost.enemyHpAfter = fight.enemyHp;
+      if (regens) lost.enemyHpAfter = target.hp;
+      if (packed) lost.mob = index;
       fight.log.push(lost);
       return { heroHp, rng };
     }
     const h = rollDamage(rng, fight.hero.damage);
     const c = nextInt(h.rng, 0, BASIS_POINTS - 1);
     const crit = c.value < Math.min(BASIS_POINTS, Math.max(0, fight.hero.critChanceBp));
-    const physical = reducedDamage(crit ? critDamage(h.value, fight.hero.critMultBp) : h.value, fight.enemy.armor);
-    const magic = reducedDamage(fight.hero.magicDamage, fight.enemy.magicResist);
+    const physical = reducedDamage(crit ? critDamage(h.value, fight.hero.critMultBp) : h.value, target.side.armor);
+    const magic = reducedDamage(fight.hero.magicDamage, target.side.magicResist);
     const dealt = Math.max(COMBAT.minDamage, physical + magic);
     fight.heroStrikes += 1;
-    fight.enemyHp = Math.max(0, fight.enemyHp - dealt);
-    const entry: FightLogEntry = { atMs, actor, strike: fight.heroStrikes, roll: h.value, crit, physical, magic, dealt, targetHpAfter: fight.enemyHp };
-    if (regens) entry.enemyHpAfter = fight.enemyHp;
+    target.hp = Math.max(0, target.hp - dealt);
+    const entry: FightLogEntry = { atMs, actor, strike: fight.heroStrikes, roll: h.value, crit, physical, magic, dealt, targetHpAfter: target.hp };
+    if (regens) entry.enemyHpAfter = target.hp;
+    if (packed) entry.mob = index;
     fight.log.push(entry);
     return { heroHp, rng: c.rng };
   }
-  const skill = readyEnemySkill(fight);
-  const e = rollDamage(rng, fight.enemy.damage);
+  const mob = fight.mobs[mobIndex];
+  const skill = readyMobSkill(mob);
+  const e = rollDamage(rng, mob.side.damage);
   let r = e.rng;
   const raw = skill ? critDamage(e.value, skill.damageMultBp) : e.value;
   const physical = reducedDamage(raw, fight.hero.armor);
-  const magic = reducedDamage(fight.enemy.magicDamage, fight.hero.magicResist);
+  const magic = reducedDamage(mob.side.magicDamage, fight.hero.magicResist);
   const dealt = Math.max(COMBAT.minDamage, physical + magic);
-  fight.enemyStrikes += 1;
+  mob.strikes += 1;
   const hp = Math.max(0, heroHp - dealt);
-  const entry: FightLogEntry = { atMs, actor, strike: fight.enemyStrikes, roll: e.value, crit: false, physical, magic, dealt, targetHpAfter: hp };
+  const entry: FightLogEntry = { atMs, actor, strike: mob.strikes, roll: e.value, crit: false, physical, magic, dealt, targetHpAfter: hp };
   if (skill) {
     entry.skill = skill.id;
-    fight.enemySkillReady[skill.id] = fight.enemyStrikes + skill.cooldownStrikes;
+    mob.skillReady[skill.id] = mob.strikes + skill.cooldownStrikes;
     for (const effect of skill.effects) {
       if (effect.type === 'stun') {
         const check = nextInt(r, 0, BASIS_POINTS - 1);
@@ -252,39 +333,45 @@ export function strike(fight: ActiveFight, actor: 'hero' | 'enemy', atMs: number
       }
     }
   }
-  if (regens) entry.enemyHpAfter = fight.enemyHp;
+  if (mob.regenBp > 0) entry.enemyHpAfter = mob.hp;
+  if (packed) entry.mob = mobIndex;
   fight.log.push(entry);
   return { heroHp: hp, rng: r };
 }
 
 /**
  * A whole fight at once, with no HP regen between strikes (tests, balance sims). The dungeon loop plays the same
- * events in engine time instead, with regen.
+ * events in engine time instead, with regen. `enemy` is one mob, or a pack in pack order (a Hard / Extreme stage fight).
  */
 export function resolveFight(
   hero: Combatant,
-  enemy: Combatant,
+  enemy: (CombatSide & { hp: number }) | readonly (CombatSide & { hp: number; regenBp?: number })[],
   rng: RngState,
   maxFightMs: number = COMBAT.maxFightMs,
   options: Omit<FightOptions, 'maxFightMs'> = {},
 ): FightResult {
+  const single = !Array.isArray(enemy);
+  const pack = (single ? [enemy] : enemy) as readonly (CombatSide & { hp: number; regenBp?: number })[];
   let heroHp = Math.max(0, hero.hp);
-  const enemyStartHp = Math.max(0, enemy.hp);
-  if (heroHp <= 0) return { won: false, endReason: 'no_hp', durationMs: 0, heroHp: 0, enemyHp: enemyStartHp, log: [], rng };
-  const fight = newFight('rat', hero, enemy, heroHp, heroHp, enemyStartHp, { ...options, maxFightMs });
+  const startHp = pack.reduce((n, m) => n + Math.max(0, m.hp), 0);
+  if (heroHp <= 0) return { won: false, endReason: 'no_hp', durationMs: 0, heroHp: 0, enemyHp: startHp, log: [], rng };
+  // `options.enemyRegenBp` is the regen of the one enemy; a pack lists each mob's own `regenBp`.
+  const mobs: MobInit[] = pack.map((m) => ({ side: m, hp: m.hp, regenBp: single ? options.enemyRegenBp : m.regenBp }));
+  const fight = newPackFight('rat', hero, mobs, heroHp, heroHp, { maxFightMs });
+  const left = () => fight.mobs.reduce((n, m) => n + m.hp, 0);
   let r = rng;
   for (;;) {
     const ev = nextFightEvent(fight, maxFightMs);
     if (ev.type === 'time_limit') {
       // Time limit: a loss, and every loss leaves the hero at 0 HP.
       regenEnemyTo(fight, ev.atMs);
-      return { won: false, endReason: 'time_limit', durationMs: ev.atMs, heroHp: 0, enemyHp: fight.enemyHp, log: fight.log, rng: r };
+      return { won: false, endReason: 'time_limit', durationMs: ev.atMs, heroHp: 0, enemyHp: left(), log: fight.log, rng: r };
     }
-    const res = strike(fight, ev.actor, ev.atMs, heroHp, r);
+    const res = strike(fight, ev.actor, ev.atMs, heroHp, r, ev.mob);
     heroHp = res.heroHp;
     r = res.rng;
-    if (fight.enemyHp === 0) return { won: true, endReason: 'enemy_defeated', durationMs: ev.atMs, heroHp, enemyHp: 0, log: fight.log, rng: r };
-    if (heroHp === 0) return { won: false, endReason: 'hero_defeated', durationMs: ev.atMs, heroHp: 0, enemyHp: fight.enemyHp, log: fight.log, rng: r };
+    if (packDefeated(fight)) return { won: true, endReason: 'enemy_defeated', durationMs: ev.atMs, heroHp, enemyHp: 0, log: fight.log, rng: r };
+    if (heroHp === 0) return { won: false, endReason: 'hero_defeated', durationMs: ev.atMs, heroHp: 0, enemyHp: left(), log: fight.log, rng: r };
   }
 }
 
@@ -330,6 +417,9 @@ export function enemyFightOptions(enemy: EnemyDef): FightOptions {
 
 // ---------- how a fight ended ----------
 
+/** One mob of a finished fight: what it was, its reward multiplier, and the HP it had at the start and at the end. */
+export type OutcomeMob = { variant: MobVariant; multBp: number; maxHp: number; hpEnd: number };
+
 /** What a finished fight hands to the code that applies its result (dungeon.ts for a stage run, boss.ts for a boss). */
 export type FightOutcome = {
   endReason: FightEndReason;
@@ -337,30 +427,38 @@ export type FightOutcome = {
   enemyId: EnemyId;
   heroHpStart: number;
   heroMaxHp: number;
+  /** The whole pack's max HP and what was left (sums over `mobs`). */
   enemyMaxHp: number;
   enemyHpEnd: number;
+  /** The pack in pack order. */
+  mobs: OutcomeMob[];
   log: FightLogEntry[];
 };
 
 /**
- * The outcome of `fight` ending at fight time `durationMs`. An enemy that regenerates gets its regen up to that instant first
- * (a time-limit loss or a flee shows the HP it really had); a defeated enemy stays at 0. Mutates `fight` (regen only).
+ * The outcome of `fight` ending at fight time `durationMs`. Mobs that regenerate get their regen up to that instant first
+ * (a time-limit loss or a flee shows the HP they really had); a defeated mob stays at 0. Mutates `fight` (regen only).
  */
 export function outcomeOf(fight: ActiveFight, endReason: FightEndReason, durationMs: number): FightOutcome {
   if (endReason !== 'enemy_defeated') regenEnemyTo(fight, durationMs);
+  const mobs = fight.mobs.map((m) => ({ variant: m.variant, multBp: m.multBp, maxHp: m.maxHp, hpEnd: m.hp }));
   return {
     endReason,
     durationMs,
     enemyId: fight.enemyId,
     heroHpStart: fight.heroHpStart,
     heroMaxHp: fight.heroMaxHp,
-    enemyMaxHp: fight.enemyMaxHp,
-    enemyHpEnd: fight.enemyHp,
+    enemyMaxHp: mobs.reduce((n, m) => n + m.maxHp, 0),
+    enemyHpEnd: mobs.reduce((n, m) => n + m.hpEnd, 0),
+    mobs,
     log: fight.log,
   };
 }
 
 // ---------- the fight on screen ----------
+
+/** One mob on screen: its HP at the fight's current time. */
+export type MobView = { variant: MobVariant; hp: number; maxHp: number; alive: boolean };
 
 /** The fight on screen, as it stands at the state's engine time (read-only). */
 export type DungeonFightView = {
@@ -371,10 +469,13 @@ export type DungeonFightView = {
   /** The hero's current HP (character.hp), which regenerates during the fight too. */
   heroHp: number;
   heroMaxHp: number;
-  /** The enemy's HP at `elapsedMs`: for a regenerating enemy this includes the regen since its last strike. */
+  /** The pack's HP at `elapsedMs` (the sum over `mobs`; for a fight of one mob, that mob's, regen since its last strike included). */
   enemyHp: number;
   enemyMaxHp: number;
-  /** Enemy regen, basis points of its max HP per second (0 = none). */
+  /** The pack in pack order (1.24.0), and the position of the mob the hero strikes next (-1 when none is alive). */
+  mobs: MobView[];
+  targetIndex: number;
+  /** Regen of the first mob, basis points of its max HP per second (0 = none; bosses only). */
   enemyRegenBp: number;
   /** Hero strikes still to be lost to a stun. */
   heroStunStrikes: number;
@@ -383,15 +484,21 @@ export type DungeonFightView = {
 };
 
 export function fightView(heroHp: number, fight: ActiveFight): DungeonFightView {
+  const mobs = fight.mobs.map((m) => {
+    const hp = enemyHpAt(m, fight.elapsedMs);
+    return { variant: m.variant, hp, maxHp: m.maxHp, alive: hp > 0 };
+  });
   return {
     enemyId: fight.enemyId,
     elapsedMs: fight.elapsedMs,
     maxFightMs: fight.maxFightMs,
     heroHp: Math.max(0, Math.min(heroHp, fight.heroMaxHp)),
     heroMaxHp: fight.heroMaxHp,
-    enemyHp: enemyHpAt(fight, fight.elapsedMs),
-    enemyMaxHp: fight.enemyMaxHp,
-    enemyRegenBp: fight.enemyRegenBp,
+    enemyHp: mobs.reduce((n, m) => n + m.hp, 0),
+    enemyMaxHp: mobs.reduce((n, m) => n + m.maxHp, 0),
+    mobs,
+    targetIndex: mobs.findIndex((m) => m.alive),
+    enemyRegenBp: fight.mobs[0]?.regenBp ?? 0,
     heroStunStrikes: fight.heroStunStrikes,
     log: fight.log,
   };

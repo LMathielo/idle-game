@@ -32,7 +32,7 @@ import {
 } from '../src/engine';
 import { rollAffixes } from '../src/engine/gear';
 import type { GearAffixes, Item } from '../src/engine/types';
-import { HOUR, makeClient, MIN, T0, withoutAffixes } from './helpers';
+import { asV21, HOUR, makeClient, MIN, T0, withoutAffixes } from './helpers';
 
 const V20: Record<string, any> = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'save-v20.json'), 'utf8'));
 const entries = (rows: LogRow[]): ReplayEntry[] => rows.map(({ seq: _s, synced: _y, ...r }) => r);
@@ -71,12 +71,13 @@ describe('v20 → v21', () => {
   const s = loadSave(V20);
 
   it('loads as the current save; the main RNG, the clock and everything else are untouched', () => {
-    expect(CURRENT_SAVE_VERSION).toBe(21);
-    expect(s.saveVersion).toBe(21);
+    expect(CURRENT_SAVE_VERSION).toBe(22);
+    expect(s.saveVersion).toBe(22);
     expect(s.rng).toEqual(V20.rng);
     expect(s.time).toEqual(V20.time);
     // Nothing lost or changed but the affixes: with them stripped and the version put back, the document is the fixture byte for byte.
-    expect(withoutAffixes({ ...s, saveVersion: 20 })).toEqual(V20);
+    // (The v21 -> v22 step on top only adds difficulty fields, which asV21 takes off again.)
+    expect(withoutAffixes({ ...asV21(s), saveVersion: 20 })).toEqual(V20);
   });
 
   it('every rare / epic piece got affixes, in all four places; common and uncommon got none', () => {

@@ -33,7 +33,7 @@ import {
   upgradeView,
 } from '../src/engine';
 import { makeItem } from '../src/engine/inventory';
-import { apply, builtGame, cmd, HOUR, makeClient, MIN, qty, T0, V18_ADDED, withBuilt, withCore } from './helpers';
+import { apply, builtGame, cmd, HOUR, makeClient, MIN, qty, T0, V18_ADDED, v22Doc, withBuilt, withCore } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v17 save + log written by the untouched 1.17.0 engine (origin/dev): Merchant Lv2 (7 slots, one refresh and one buy done, 4/5 charges, 45 min banked), Town Hall Lv2. 21 rows. */
@@ -232,7 +232,7 @@ describe('save v18 migration (v17 → v18)', () => {
     expect(s.character.gold).not.toBe(500);
     const { saveVersion: _v, buildings, ...rest } = s;
     const { saveVersion: _rv, buildings: rawBuildings, ...raw } = V17_SAVE;
-    expect(rest).toEqual({ ...raw, dungeon: { ...raw.dungeon, bosses: {} } }); // v20: boss counters;
+    expect(rest).toEqual(v22Doc({ ...raw, dungeon: { ...raw.dungeon, bosses: {} } })); // v20: boss counters; v22: difficulty fields
     expect(buildings).toEqual({ ...rawBuildings, storage: V18_ADDED.storageBuilding });
     expect(hashState(loadSave(V17_SAVE))).toBe(hashState(s)); // deterministic
   });

@@ -79,6 +79,41 @@ def padlock(open_=False):
     return done(c, body)
 
 
+BONE = ramp('#5b5664', '#8c8794', '#bcb7bd', '#e4e0dc', '#fbf9f2')
+BLOOD = ramp('#2e0810', '#6a1020', '#a01828', '#c8242c', '#ec4c48')
+OBSIDIAN = ramp('#07060b', '#15121c', '#262233', '#3c3750', '#58526c')
+FLAME = ramp('#8a2a0a', '#d9561a', '#f2a94a', '#ffe08a', '#fffbe0')
+
+
+def skull(kind):
+    """Difficulty skulls (16x16, owner brief 2026-11-06): normal = white, hard = red, extreme = black with flaming eyes.
+    Same silhouette for all three, so the three buttons read as one family. PENDING OWNER APPROVAL (docs/STATUS.md)."""
+    c = C()
+    r = {'normal': BONE, 'hard': BLOOD, 'extreme': OBSIDIAN}[kind]
+    cranium = c.m_ellipse(7.5, 6.2, 5.6, 5.2)
+    jaw = c.m_rect(4, 9, 11, 13) & ~c.m_rect(4, 13, 4, 13) & ~c.m_rect(11, 13, 11, 13)
+    sh = cranium | jaw
+    c.shade(sh, r, soft=1.4)
+    # rim light on the top-left edge so the dark skull still reads
+    rim = sh & ~np.roll(sh, 1, 0) | sh & ~np.roll(sh, 1, 1)
+    c.fill(rim & (c.yy < 9), r[4] if kind != 'extreme' else r[3])
+    # eye sockets, nose, teeth
+    eyes = c.m_ellipse(5.2, 7.2, 1.7, 2.0) | c.m_ellipse(9.8, 7.2, 1.7, 2.0)
+    c.fill(eyes, '#120c14')
+    c.fill(c.m_poly([(7, 9), (8, 9), (8, 10), (7, 10)]), '#120c14')
+    c.fill(c.m_rect(5, 12, 10, 12) & ((c.xx % 2) == 1), '#120c14')
+    c.fill(c.m_rect(5, 11, 10, 11), r[1])
+    if kind == 'extreme':
+        # flaming eyes: a hot core in each socket and tongues of flame rising off them
+        for ex in (5, 10):
+            c.px(ex, 7, FLAME[3]); c.px(ex, 8, FLAME[2]); c.px(ex - 1, 8, FLAME[1]); c.px(ex + 1, 8, FLAME[1])
+            c.px(ex, 6, FLAME[4]); c.px(ex - 1, 7, FLAME[2]); c.px(ex + 1, 7, FLAME[2])
+        for (fx, fy, k) in ((4, 4, 2), (5, 3, 3), (10, 4, 2), (11, 3, 3), (5, 2, 1), (10, 2, 1)):
+            c.px(fx, fy, FLAME[k])
+    c.outline(sh | (c.m_rect(3, 2, 12, 5) if kind == 'extreme' else c.empty()) & c.alpha, OUT)
+    return c
+
+
 def hammer_icon(c, ox=0, oy=0):
     handle = c.m_line([(3 + ox, 14 + oy), (10 + ox, 7 + oy)], 2)
     c.fill(handle, WOOD[3]); c.fill(handle & (c.xx + c.yy < 17 + ox + oy), WOOD[4])
@@ -221,7 +256,10 @@ SET = [('gold', coin, 'Gold', '🪙'), ('stamina', bolt, 'Stamina', '⚡'), ('he
        ('unlocked', lambda: padlock(True), 'Unlocked', '🔓'), ('upgrade', upgrade, 'Upgrade', '🔨'),
        ('crafting', anvil_craft, 'Crafting', '⚒️'), ('workers', worker, 'Workers', '👷'), ('ready', check, 'Ready', '✅'),
        ('power', flex, 'Power (WS/MS)', '💪'), ('training', dummy, 'Training', '🏋️'), ('fight', swords, 'Fight', '⚔️'),
-       ('unknown', unknown, 'Unknown item', '❔')]
+       ('unknown', unknown, 'Unknown item', '❔'),
+       ('skull_normal', lambda: skull('normal'), 'Normal difficulty', '💀'),
+       ('skull_hard', lambda: skull('hard'), 'Hard difficulty', '💀'),
+       ('skull_extreme', lambda: skull('extreme'), 'Extreme difficulty', '💀')]
 
 if __name__ == '__main__':
     os.makedirs(OUTDIR, exist_ok=True)

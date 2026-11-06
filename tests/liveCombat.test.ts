@@ -180,11 +180,11 @@ describe('strike timing', () => {
 
   it('nextFightEvent: the time limit comes after the last strike due at or before it', () => {
     const f = newFight('rat', side(1000), side(1000), 10, 10, 10);
-    expect(nextFightEvent(f, 60_000)).toEqual({ type: 'strike', actor: 'hero', atMs: 1000 });
+    expect(nextFightEvent(f, 60_000)).toEqual({ type: 'strike', actor: 'hero', mob: 0, atMs: 1000 });
     f.heroStrikes = 60;
-    f.enemyStrikes = 59;
-    expect(nextFightEvent(f, 60_000)).toEqual({ type: 'strike', actor: 'enemy', atMs: 60_000 });
-    f.enemyStrikes = 60;
+    f.mobs[0].strikes = 59;
+    expect(nextFightEvent(f, 60_000)).toEqual({ type: 'strike', actor: 'enemy', mob: 0, atMs: 60_000 });
+    f.mobs[0].strikes = 60;
     expect(nextFightEvent(f, 60_000)).toEqual({ type: 'time_limit', atMs: 60_000 });
   });
 
@@ -202,10 +202,13 @@ describe('strike timing', () => {
       attackIntervalMs: 1000,
       skills: [],
     });
-    expect(f.enemy).toEqual({ damage: ENEMIES.rat.damage, armor: ENEMIES.rat.armor, magicDamage: 0, magicResist: ENEMIES.rat.magicResist, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000, skills: [] });
-    expect(f).toMatchObject({ elapsedMs: 0, heroHpStart: 50, heroMaxHp: 50, enemyHp: 30, enemyMaxHp: 30, log: [] });
+    expect(f.mobs[0].side).toEqual({ damage: ENEMIES.rat.damage, armor: ENEMIES.rat.armor, magicDamage: 0, magicResist: ENEMIES.rat.magicResist, critChanceBp: 0, critMultBp: 10_000, attackIntervalMs: 1000, skills: [] });
+    expect(f).toMatchObject({ elapsedMs: 0, heroHpStart: 50, heroMaxHp: 50, log: [] });
+    expect(f.mobs).toHaveLength(1);
+    expect(f.mobs[0]).toMatchObject({ variant: 'base', multBp: 10_000, hp: 30, maxHp: 30 });
     // 1.20.0: a dungeon fight has the plain 60 s limit, no regen, no skills, no stun
-    expect(f).toMatchObject({ maxFightMs: 60_000, enemyRegenBp: 0, enemyRegenProgress: 0, enemySkillReady: {}, heroStunStrikes: 0 });
+    expect(f).toMatchObject({ maxFightMs: 60_000, heroStunStrikes: 0 });
+    expect(f.mobs[0]).toMatchObject({ regenBp: 0, regenProgress: 0, skillReady: {} });
   });
 });
 
@@ -433,7 +436,7 @@ describe('skip: search only', () => {
       endReason: 'forfeit',
       durationMs: 1500,
       heroHpEnd: 0,
-      enemyHpEnd: fight.enemyHp,
+      enemyHpEnd: fight.mobs[0].hp,
       rewards: { heroXp: 0, gold: 0, items: {}, itemsLost: {} },
     });
     expect(stop.state.dungeon.lastFight!.log).toEqual(fight.log);

@@ -4,10 +4,13 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
-import type { DungeonFightView, EnemyId } from '../../engine';
+import { type DungeonFightView, type EnemyId, mobName } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { EnemySprite } from '../art/Sprites';
-import { AnimatedHpBar, LogLine, StunNotice, strikeTime } from './FightReplay';
+import { LogLine, StunNotice, strikeTime } from './FightReplay';
+import { AnimatedHpBar } from './HpBars';
+import { PackRows } from './PackRows';
+import { mobLabel, packText } from './outcome';
 
 /** Lines kept on screen; older strikes scroll out (the last fight's replay has them all). */
 const VISIBLE_LINES = 8;
@@ -27,30 +30,38 @@ export const LiveFight = memo(function LiveFight({ fight, heroName, enemyName, e
   const clock = `${strikeTime(fight.elapsedMs)} / ${strikeTime(fight.maxFightMs)}`;
   // A regenerating enemy (a boss): whole HP a second, from its basis points of max HP (display only, the engine heals it).
   const regenPerSec = Math.floor((fight.enemyMaxHp * fight.enemyRegenBp) / 10_000);
+  // A pack (Hard / Extreme, 1.24.0): the mobs as rows, the log naming the mob ("Veteran Troll #3 hits ..."). One mob keeps the two bars.
+  const size = fight.mobs.length;
+  const packed = size > 1;
+  const soloName = mobName(enemyName, fight.mobs[0]?.variant ?? 'base');
+  const nameOf = (mob: number | undefined) => mobLabel(enemyName, fight.mobs[mob ?? 0]?.variant ?? 'base', mob ?? 0, size);
+  const title = packed ? `Fighting a pack: ${packText(size)}` : `Fighting ${soloName}`;
+  const down = fight.mobs.filter((m) => !m.alive).length;
   return (
     <View style={styles.root}>
       <View
         style={styles.header}
         accessible
-        accessibilityLabel={`Fighting ${enemyName}. ${heroName} HP ${fight.heroHp} of ${fight.heroMaxHp}, ${enemyName} HP ${fight.enemyHp} of ${fight.enemyMaxHp}. ${clock}${paused ? ', paused' : ''}`}
+        accessibilityLabel={`${title}${packed ? `, ${down} down` : ''}. ${heroName} HP ${fight.heroHp} of ${fight.heroMaxHp}, ${packed ? 'pack' : soloName} HP ${fight.enemyHp} of ${fight.enemyMaxHp}. ${clock}${paused ? ', paused' : ''}`}
       >
         <View style={styles.who}>
           <EnemySprite enemyId={enemyId} />
-          <Text style={styles.title}>Fighting {enemyName}</Text>
+          <Text style={styles.title}>{title}</Text>
         </View>
         <Text style={styles.clock}>{paused ? `Paused · ${clock}` : clock}</Text>
       </View>
       <View style={styles.bars}>
         <AnimatedHpBar label={heroName} value={fight.heroHp} max={fight.heroMaxHp} color={colors.skill} instant={reducedMotion} />
-        <AnimatedHpBar label={enemyName} value={fight.enemyHp} max={fight.enemyMaxHp} color={colors.hp} instant={reducedMotion} />
+        {packed ? null : <AnimatedHpBar label={soloName} value={fight.enemyHp} max={fight.enemyMaxHp} color={colors.hp} instant={reducedMotion} />}
       </View>
-      {regenPerSec > 0 ? <Text style={styles.note}>{enemyName} heals {regenPerSec} HP a second.</Text> : null}
+      {packed ? <PackRows enemyId={enemyId} enemyName={enemyName} mobs={fight.mobs} instant={reducedMotion} /> : null}
+      {regenPerSec > 0 ? <Text style={styles.note}>{soloName} heals {regenPerSec} HP a second.</Text> : null}
       {fight.heroStunStrikes > 0 ? <StunNotice name={heroName} strikes={fight.heroStunStrikes} /> : null}
       <View style={styles.log}>
-        {fight.log.length === 0 ? <Text style={styles.wait}>The {enemyName} circles you…</Text> : null}
+        {fight.log.length === 0 ? <Text style={styles.wait}>{packed ? 'The pack circles you…' : `The ${soloName} circles you…`}</Text> : null}
         {hidden > 0 ? <Text style={styles.more}>… {hidden} earlier {hidden === 1 ? 'strike' : 'strikes'}</Text> : null}
         {lines.map((e) => (
-          <LogLine key={`${e.actor}-${e.strike}`} entry={e} heroName={heroName} enemyName={enemyName} />
+          <LogLine key={`${e.actor}-${e.mob ?? 0}-${e.strike}`} entry={e} heroName={heroName} enemyName={nameOf(e.mob)} />
         ))}
       </View>
       <Text style={styles.note}>The fight plays out live and can't be skipped. Closing this screen keeps it going.</Text>
