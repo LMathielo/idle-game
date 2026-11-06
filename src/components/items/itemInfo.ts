@@ -35,7 +35,8 @@ export function itemSubtitle(item: ShownItem, def: ItemDef): string {
 export const SLOT_LABELS: Record<EquipmentSlot, string> = {
   helmet: 'Helmet',
   amulet: 'Amulet',
-  armor: 'Armor',
+  armor: 'Torso',
+  legs: 'Legs',
   weapon: 'Weapon',
   shield: 'Shield',
   gloves: 'Gloves',

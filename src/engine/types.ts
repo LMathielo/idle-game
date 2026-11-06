@@ -15,7 +15,7 @@ export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
  */
 export type Attributes = Record<AttributeKey, number>;
 
-export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots' | 'axe' | 'pickaxe';
+export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'legs' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots' | 'axe' | 'pickaxe';
 
 /**
  * Item rarity: the colour tier. `junk` is sell-only; `common` has a game use (gear, logs, potions); uncommon →
@@ -26,7 +26,7 @@ export const ITEM_RARITIES = ['junk', 'common', 'uncommon', 'rare', 'epic', 'leg
 
 export type ItemRarity = (typeof ITEM_RARITIES)[number];
 
-export const EQUIPMENT_SLOTS = ['helmet', 'amulet', 'armor', 'weapon', 'shield', 'gloves', 'ring1', 'ring2', 'boots', 'axe', 'pickaxe'] as const satisfies readonly EquipmentSlot[];
+export const EQUIPMENT_SLOTS = ['helmet', 'amulet', 'armor', 'legs', 'weapon', 'shield', 'gloves', 'ring1', 'ring2', 'boots', 'axe', 'pickaxe'] as const satisfies readonly EquipmentSlot[];
 
 export type Item = {
   /** Stackable items use their definition id (e.g. `oak_logs`); unique items use an instance id. */

@@ -26,8 +26,8 @@ anchor and draw order). Commit the generated files with the change. Never edit t
 | `sprites.py` | hero portraits, rats |
 | `monsters.py` | bestiary (bat, wolf, skeleton, troll and variants) |
 | `icons.py` | common UI symbols (16x16) |
-| `equipment.py` | tiered equipment (sword, helm, chestplate, shield, gloves, boots) |
-| `gear_named.py` | starter gear and gathering tools |
+| `equipment.py` | tiered equipment (sword, helm, chestplate, shield, greaves, gloves, boots) |
+| `gear_named.py` | starter gear and gathering tools, plus the crafted Stone / Copper / Silver / Gold axes and pickaxes |
 | `materials.py` | logs, planks, stone, ores, ingots |
 | `drops.py` | monster drops, junk, potions |
 | `gather.py` | trees and hero skill icons |

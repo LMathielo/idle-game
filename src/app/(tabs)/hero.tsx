@@ -11,6 +11,7 @@ import { ItemSheet, type SheetAction } from '../../components/items/ItemSheet';
 import { ItemSlot } from '../../components/items/ItemSlot';
 import type { AnchorRect } from '../../components/ui/InfoPopover';
 import { Bar, Panel } from '../../components/Panel';
+import { PixelButton } from '../../components/PixelButton';
 import { StatusPanel } from '../../components/StatusPanel';
 import { type CommandInput } from '../../client/types';
 import { freeSlots, hpView } from '../../engine';
@@ -24,13 +25,15 @@ const SKILL_LABELS: Record<SkillKey, string> = {
   fishing: 'Fishing',
 };
 
-// Paper-doll layout: 3 columns, null = empty cell
-const EQUIPMENT_GRID: (EquipmentSlot | null)[][] = [
+// Paper-doll layouts (1.21.0): 3 columns, null = empty cell. Combat is the paper doll, Tools the gathering tools.
+const COMBAT_GRID: (EquipmentSlot | null)[][] = [
   [null, 'helmet', 'amulet'],
   ['weapon', 'armor', 'shield'],
-  ['ring1', 'gloves', 'ring2'],
-  ['axe', 'boots', 'pickaxe'],
+  ['ring1', 'legs', 'ring2'],
+  ['gloves', 'boots', null],
 ];
+const TOOLS_GRID: (EquipmentSlot | null)[][] = [['axe', 'pickaxe']];
+type EquipmentTab = 'combat' | 'tools';
 
 /** What the item box shows: an inventory item (by id) or an equipment slot, anchored on the tapped slot. */
 type Selection = ({ kind: 'inventory'; itemId: string } | { kind: 'equipment'; slot: EquipmentSlot }) & { anchor: AnchorRect };
@@ -91,9 +94,15 @@ const HeaderPanel = memo(function HeaderPanel({ name, title, level, xp, xpToNext
 type PressHandler = (key: string | number, anchor: AnchorRect) => void;
 
 const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress }: { equipment: Character['equipment']; onPress: PressHandler }) {
+  const [tab, setTab] = useState<EquipmentTab>('combat');
+  const grid = tab === 'combat' ? COMBAT_GRID : TOOLS_GRID;
   return (
     <Panel title="Equipment">
-      {EQUIPMENT_GRID.map((row, r) => (
+      <View style={styles.equipTabs}>
+        <PixelButton label="Combat" active={tab === 'combat'} stretch onPress={() => setTab('combat')} accessibilityLabel="Combat equipment" />
+        <PixelButton label="Tools" active={tab === 'tools'} stretch onPress={() => setTab('tools')} accessibilityLabel="Tools equipment" />
+      </View>
+      {grid.map((row, r) => (
         <View key={r} style={styles.equipRow}>
           {row.map((slot, c) =>
             slot ? (
@@ -234,6 +243,7 @@ const styles = StyleSheet.create({
   bars: { marginTop: 12, gap: 4 },
   barCaption: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.inkSoft, marginTop: 4 },
 
+  equipTabs: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   equipRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
   equipCell: { width: 84, alignItems: 'center' },
   slotLabel: { fontFamily: fonts.body, fontSize: 12, color: colors.inkSoft, marginTop: 3 },

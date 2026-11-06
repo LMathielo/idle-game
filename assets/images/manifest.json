@@ -227,6 +227,11 @@
   "h": 32,
   "scale": 8
  },
+ "items/stone_greaves.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
  "items/stone_gloves.png": {
   "w": 32,
   "h": 32,
@@ -253,6 +258,11 @@
   "scale": 8
  },
  "items/copper_shield.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/copper_greaves.png": {
   "w": 32,
   "h": 32,
   "scale": 8
@@ -287,6 +297,11 @@
   "h": 32,
   "scale": 8
  },
+ "items/iron_greaves.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
  "items/iron_gloves.png": {
   "w": 32,
   "h": 32,
@@ -317,6 +332,11 @@
   "h": 32,
   "scale": 8
  },
+ "items/silver_greaves.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
  "items/silver_gloves.png": {
   "w": 32,
   "h": 32,
@@ -343,6 +363,11 @@
   "scale": 8
  },
  "items/gold_shield.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/gold_greaves.png": {
   "w": 32,
   "h": 32,
   "scale": 8
@@ -403,6 +428,46 @@
   "scale": 8
  },
  "items/steel_pickaxe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/stone_axe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/stone_pickaxe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/copper_axe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/copper_pickaxe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/silver_axe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/silver_pickaxe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/gold_axe.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/gold_pickaxe.png": {
   "w": 32,
   "h": 32,
   "scale": 8

@@ -82,7 +82,7 @@ export type DerivedStats = {
 export type StatsInput = { character: Pick<Character, 'level' | 'attributes' | 'spentPoints' | 'equipment'>; training: TrainingLevels };
 
 /** Fixed order so breakdowns are stable. */
-const SLOT_ORDER: readonly EquipmentSlot[] = ['weapon', 'shield', 'helmet', 'armor', 'gloves', 'boots', 'amulet', 'ring1', 'ring2'];
+const SLOT_ORDER: readonly EquipmentSlot[] = ['weapon', 'shield', 'helmet', 'armor', 'legs', 'gloves', 'boots', 'amulet', 'ring1', 'ring2'];
 
 /** Every slot, for stats any equipped item may carry (attack interval). Same order as SLOT_ORDER, then the axe. */
 const ALL_SLOTS_ORDER: readonly EquipmentSlot[] = [...SLOT_ORDER, 'axe'];

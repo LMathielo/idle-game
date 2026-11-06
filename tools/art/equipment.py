@@ -1,4 +1,4 @@
-"""Craftable equipment: 6 pieces x 5 tiers, 32x32 item icons.
+"""Craftable equipment: 7 pieces x 5 tiers (sword, helm, chestplate, shield, greaves, gloves, boots), 32x32 item icons.
 One silhouette per piece; each tier changes material, wood, trim and ornament:
   stone  - stone blocks lashed with leather to oak, chipped edges
   copper - warm hammered copper, iron rivets, birch wood
@@ -325,14 +325,56 @@ def boots(t):
     return c
 
 
+# ------------------------------------------------------------------ greaves (leg guards, front view, pair)
+def greaves(t):
+    c = Canvas(32, 32)
+    m = t['metal']
+    tr = t['trim'] if t['orn'] else LEATHER
+    # waist belt joining the two legs
+    belt = c.m_rect(6, 3, 25, 6)
+    legs = c.empty()
+    guards = c.empty()
+    for x0, x1, dark in ((6, 14, False), (17, 25, True)):
+        thigh = c.m_poly([(x0, 6), (x1, 6), (x1 - 1, 15), (x0 + 1, 15)])
+        shin = c.m_poly([(x0 + 1, 15), (x1 - 1, 15), (x1 - 1, 25), (x0 + 1, 25)])
+        foot = c.m_poly([(x0 - 1, 25), (x1 + 1, 25), (x1 + 1, 29), (x0 - 2, 29)])
+        g = thigh | shin | foot
+        r = [mix(v, hx('#000000'), .22) for v in m] if dark else m
+        c.shade(g, r, soft=2.2)
+        knee = c.m_ellipse((x0 + x1) / 2, 15, 4.4, 2.6)
+        c.shade(knee, r, soft=1)
+        c.fill(c.m_rect(x0 - 1, 25, x1 + 1, 25) & g, r[1])             # ankle line
+        c.fill(c.m_rect(x0 - 2, 28, x1 + 1, 29) & g, LEATHER[1])        # sole
+        if t['orn'] == 0:
+            chips(c, g, t, 11 if dark else 9)
+            for y in (10, 20):
+                c.fill(c.m_rect(x0 + 1, y, x1 - 1, y) & g, LEATHER[2])    # lashing straps
+        else:
+            c.fill(c.m_rect((x0 + x1) // 2, 17, (x0 + x1) // 2, 24) & g, r[4])   # shin ridge
+        if not dark:
+            rivets(c, [(x0 + 2, 8), (x1 - 3, 8), (x0 + 2, 22), (x1 - 3, 22)], t)
+        legs |= g | knee
+    c.shade(belt, tr, soft=1)
+    c.fill(belt & (c.yy == 3), tr[3]); c.fill(belt & (c.yy == 6), tr[1])
+    bk = c.m_rect(14, 3, 17, 6); c.fill(bk, tr[4] if t['orn'] else LEATHER[3]); c.px(15, 5, tr[1])
+    if t['orn'] >= 3:
+        for k in range(4):
+            c.px(8 + k * 5, 4, hx(t['trim'][3]))
+    allm = legs | belt
+    c.outline(allm, OUT_LIT, OUT)
+    gem(c, 10, 15, t['gem'], 1.3); gem(c, 21, 15, t['gem'], 1.3)
+    return c
+
+
 PIECES = [('sword', sword, 'Sword', '⚔️'), ('helm', helm, 'Helm', '🪖'), ('chestplate', chest, 'Chestplate', '🦺'),
-          ('shield', shield, 'Shield', '🛡️'), ('gloves', gloves, 'Gloves', '🧤'), ('boots', boots, 'Boots', '🥾')]
+          ('shield', shield, 'Shield', '🛡️'), ('greaves', greaves, 'Greaves', '🦿'), ('gloves', gloves, 'Gloves', '🧤'),
+          ('boots', boots, 'Boots', '🥾')]
 
 if __name__ == '__main__':
     os.makedirs(OUTDIR, exist_ok=True)
     from PIL import Image
     S = 5
-    sheet = Image.new('RGB', (6 * 32 * S + 7 * 12, 5 * 32 * S + 6 * 12), (58, 42, 28))
+    sheet = Image.new('RGB', (len(PIECES) * 32 * S + (len(PIECES) + 1) * 12, 5 * 32 * S + 6 * 12), (58, 42, 28))
     for r, (tn, t) in enumerate(TIERS.items()):
         for col, (pn, fn, _, _) in enumerate(PIECES):
             c = fn(t)

@@ -18,7 +18,7 @@ Navigation uses **Expo Router**. Routes live in `src/app/`; every file there is 
 
 ```
 src/app/              routes: _layout.tsx (fonts, GameProvider, root Stack: tabs group + village modals, away modal),
-                      (tabs)/_layout.tsx (tabs + activity strip), (tabs)/index.tsx (Village), (tabs)/hero.tsx (Hero),
+                      (tabs)/_layout.tsx (tabs + activity strip), (tabs)/index.tsx (Village), (tabs)/hero.tsx (Hero; the Equipment panel has Combat | Tools tabs, grids `COMBAT_GRID` / `TOOLS_GRID`),
                       dungeon.tsx (Dungeon full-screen modal), training.tsx (Training full-screen modal),
                       woodcutting.tsx (Woodcutting full-screen modal), mine.tsx (Mine Shaft full-screen modal),
                       merchant.tsx (Merchant full-screen modal), town-hall.tsx (Town Hall full-screen modal),

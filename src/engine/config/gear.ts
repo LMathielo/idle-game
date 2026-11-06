@@ -65,7 +65,7 @@ export const GEAR = {
 
 // ---------- crafted gear sets ----------
 
-export type GearPieceId = 'sword' | 'helm' | 'chestplate' | 'shield' | 'gloves' | 'boots';
+export type GearPieceId = 'sword' | 'helm' | 'chestplate' | 'shield' | 'greaves' | 'gloves' | 'boots' | 'axe' | 'pickaxe';
 export type GearSetId = 'stone' | 'copper' | 'iron' | 'silver' | 'gold';
 
 /** Tier n's set is made from tier n's processed materials. Ids are `<set>_<piece>` (T3 = the existing iron items). */
@@ -83,15 +83,19 @@ export const GEAR_SETS: readonly { id: GearSetId; name: string; tier: number; ba
  */
 export const GEAR_PIECES: Record<
   GearPieceId,
-  { name: string; slot: EquipmentSlot; icon: string; bars: number; planks: number; t1Ms: number; damage?: readonly (readonly [number, number])[]; armor?: readonly number[] }
+  { name: string; slot: EquipmentSlot; icon: string; bars: number; planks: number; t1Ms: number; damage?: readonly (readonly [number, number])[]; armor?: readonly number[]; woodcuttingStrength?: readonly number[]; miningStrength?: readonly number[] }
 > = {
   sword: { name: 'Sword', slot: 'weapon', icon: '⚔️', bars: 4, planks: 2, t1Ms: 5 * MIN_MS, damage: [[4, 6], [7, 10], [10, 14], [16, 22], [24, 34]] },
   helm: { name: 'Helm', slot: 'helmet', icon: '🪖', bars: 3, planks: 1, t1Ms: 4 * MIN_MS, armor: [2, 4, 6, 10, 15] },
   chestplate: { name: 'Chestplate', slot: 'armor', icon: '🦺', bars: 6, planks: 2, t1Ms: 8 * MIN_MS, armor: [3, 6, 10, 16, 24] },
   shield: { name: 'Shield', slot: 'shield', icon: '🛡️', bars: 3, planks: 3, t1Ms: 5 * MIN_MS, armor: [3, 5, 8, 13, 20] },
+  greaves: { name: 'Greaves', slot: 'legs', icon: '🦿', bars: 4, planks: 2, t1Ms: 5 * MIN_MS, armor: [2, 5, 8, 13, 20] },
   gloves: { name: 'Gloves', slot: 'gloves', icon: '🧤', bars: 2, planks: 1, t1Ms: 2 * MIN_MS, armor: [1, 2, 3, 5, 8] },
   boots: { name: 'Boots', slot: 'boots', icon: '🥾', bars: 2, planks: 1, t1Ms: 2 * MIN_MS, armor: [1, 2, 3, 5, 8] },
+  // Tools (1.21.0, owner-approved 2026-11-05): the Iron tier is the existing iron_axe / iron_pickaxe (same ids, prices and 64).
+  axe: { name: 'Axe', slot: 'axe', icon: '🪓', bars: 3, planks: 2, t1Ms: 3 * MIN_MS, woodcuttingStrength: [8, 24, 64, 128, 256] },
+  pickaxe: { name: 'Pickaxe', slot: 'pickaxe', icon: '⛏️', bars: 3, planks: 2, t1Ms: 3 * MIN_MS, miningStrength: [8, 24, 64, 128, 256] },
 };
 
 /** Picker order inside a tier. */
-export const GEAR_PIECE_IDS: readonly GearPieceId[] = ['sword', 'helm', 'chestplate', 'shield', 'gloves', 'boots'];
+export const GEAR_PIECE_IDS: readonly GearPieceId[] = ['sword', 'helm', 'chestplate', 'shield', 'greaves', 'gloves', 'boots', 'axe', 'pickaxe'];
