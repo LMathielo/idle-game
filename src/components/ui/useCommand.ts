@@ -21,20 +21,20 @@ export function useCommand({ silentCodes }: Options = {}) {
   const silentKey = silentCodes?.join('|') ?? '';
 
   /** Runs any client call (dispatch or a debug helper) under the same one-at-a-time guard and error handling. */
-  const run = useCallback(
-    async (call: () => Promise<DispatchResult>, info?: { quiet?: boolean }): Promise<boolean> => {
-      if (inFlight.current) return false;
+  const runResult = useCallback(
+    async (call: () => Promise<DispatchResult>, info?: { quiet?: boolean }): Promise<Extract<DispatchResult, { ok: true }> | null> => {
+      if (inFlight.current) return null;
       inFlight.current = true;
       try {
         const res = await call();
         if (!res.ok) {
           if (!info?.quiet && !silentKey.split('|').includes(res.error.code)) void dialog.notPossible(res.error.message);
-          return false;
+          return null;
         }
-        return true;
+        return res;
       } catch (err) {
         if (!info?.quiet) void dialog.saveFailed(err instanceof Error ? err.message : undefined);
-        return false;
+        return null;
       } finally {
         inFlight.current = false;
       }
@@ -42,7 +42,11 @@ export function useCommand({ silentCodes }: Options = {}) {
     [dialog, silentKey],
   );
 
-  const send: Send = useCallback((cmd, info) => run(() => client.dispatch(cmd), info), [client, run]);
+  const run = useCallback(async (call: () => Promise<DispatchResult>, info?: { quiet?: boolean }): Promise<boolean> => (await runResult(call, info)) !== null, [runResult]);
 
-  return { send, run, dialog, client };
+  const send: Send = useCallback((cmd, info) => run(() => client.dispatch(cmd), info), [client, run]);
+  /** Like `send`, but resolves the accepted DispatchResult (with the engine's events), or null when refused / busy / failed. */
+  const sendForResult = useCallback((cmd: CommandInput, info?: { quiet?: boolean }) => runResult(() => client.dispatch(cmd), info), [client, runResult]);
+
+  return { send, sendForResult, run, dialog, client };
 }

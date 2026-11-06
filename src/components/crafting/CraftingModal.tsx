@@ -3,58 +3,62 @@
 // and the pipe waits ("Waiting for Oak Logs (1/2)") while they are short. A running material craft shows "Crafted N",
 // the time left, the bar with a live "xx.yy%", Insta, ×10 (that craft only) and Stop. Gear pipes are unchanged: one
 // piece, Insta / Cancel, "✓ Ready — Done" and the reveal popover. The header's Recipes button opens the recipe list
-// (an in-modal view, Materials | Equipment) even when every pipe is busy; its Start goes into the first free pipe. An
-// idle pipe's "Craft…" opens the same list for that pipe. Rules stay in the engine: this file reads craftingView() /
+// (an in-modal view, see RecipePicker.tsx) even when every pipe is busy; its Craft goes into the first free pipe. An
+// idle pipe's "Craft…" opens the same list; its first Craft goes into that pipe, then the list behaves like Recipes. Rules stay in the engine: this file reads craftingView() /
 // craftJobView() and dispatches START_CRAFT / INSTA_CRAFT / X10_CRAFT / STOP_CRAFT / CANCEL_CRAFT / COLLECT_CRAFT.
 // Pipes are not an activity: nothing here stops or starts the hero.
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, type HostInstance, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { BackHandler, type HostInstance, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { collectedItemIdOf } from '../../client/dispatchEvents';
 import { useGameSnapshot } from '../../client/GameProvider';
-import {
-  collectedItemId,
-  type CraftingView,
-  craftingView,
-  craftJobView,
-  type CraftJobView,
-  freeSlots,
-  type GameState,
-  gearQualityFloor,
-  type GearRarityDetail,
-  type GearStats,
-  type PipeView,
-  type RecipeView,
-} from '../../engine';
+import { type CraftJobView, craftingView, craftJobView, freeSlots, type PipeView, type RecipeId, recipeView } from '../../engine';
 import { colors, fonts, rarityColors } from '../../theme';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
 import { IconText, ItemIcon } from '../art/Sprites';
 import { formatClock, formatNumber, formatPercentBp, itemName } from '../format';
-import { PERK_NAMES, RARITY_COLOR_NAMES } from '../items/itemInfo';
 import { RevealSheet } from '../items/RevealSheet';
 import { LiveBar } from '../LiveBar';
 import { closeVillageModal, ModalScreen } from '../ModalScreen';
-import { Panel } from '../Panel';
 import { PixelButton } from '../PixelButton';
 import { type AnchorRect, measureAnchor } from '../ui/InfoPopover';
 import { useCommand } from '../ui/useCommand';
-
-/** Craft time: one decimal under a minute (4.6s), m:ss above. */
-const formatCraftTime = (ms: number) => (ms < 60_000 ? `${(Math.ceil(ms / 100) / 10).toFixed(1)}s` : formatClock(ms));
+import { RecipePicker } from './RecipePicker';
 
 /** "2 Oak Logs, 1 Stone" */
 const amounts = (items: { defId: string; quantity: number }[]) => items.map((i) => `${formatNumber(i.quantity)} ${itemName(i.defId)}`).join(', ');
 
-/** The sub-view on screen: the pipe list, the recipe list for one idle pipe, or the header's Recipes view. */
-type SubView = { kind: 'pipes' } | { kind: 'picker'; pipe: number } | { kind: 'recipes' };
+/** The sub-view on screen: the pipe list, or the recipe list (`pipe`: the idle pipe its first Craft goes into; null: the first free pipe). */
+type SubView = { kind: 'pipes' } | { kind: 'list'; pipe: number | null };
+/** Room left after a popover closes before the next one presents (the iOS Modal dismiss animation). */
+const REVEAL_GAP_MS = 400;
 const PIPES: SubView = { kind: 'pipes' };
 
 export function CraftingModal() {
   const { state, clockPaused } = useGameSnapshot();
   const view = craftingView(state); // 8 pipes + 40 recipes, read-only
   const [sub, setSub] = useState<SubView>(PIPES);
+  /** When the last reveal closed: a new RN Modal presented while the old one is still dismissing (iOS) never shows. */
+  const closedAt = useRef(0);
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (revealTimer.current) clearTimeout(revealTimer.current);
+    },
+    [],
+  );
+  const presentReveal = useCallback((itemId: string, anchor: AnchorRect) => {
+    const wait = Math.max(0, closedAt.current + REVEAL_GAP_MS - Date.now());
+    if (revealTimer.current) clearTimeout(revealTimer.current);
+    if (wait === 0) setReveal({ itemId, anchor });
+    else revealTimer.current = setTimeout(() => setReveal({ itemId, anchor }), wait);
+  }, []);
   /** The piece Done just collected: its popover (the reveal), anchored on the pipe it came from. */
   const [reveal, setReveal] = useState<{ itemId: string; anchor: AnchorRect } | null>(null);
   // CRAFT_CHANGED: the craft or job on screen finished meanwhile; the screen already shows the new state.
-  const { send, dialog, client } = useCommand({ silentCodes: ['CRAFT_CHANGED'] });
+  const { send, sendForResult, dialog, client } = useCommand({ silentCodes: ['CRAFT_CHANGED'] });
+  /** "Iron Sword started in Pipe 2": the recipe list's confirmation line. */
+  const [started, setStarted] = useState<string | null>(null);
+  const win = useWindowDimensions();
 
   // Android back steps out of a sub-view before it closes the modal.
   useEffect(() => {
@@ -66,9 +70,14 @@ export function CraftingModal() {
     return () => h.remove();
   }, [sub]);
   const onClose = useCallback(() => (sub.kind !== 'pipes' ? setSub(PIPES) : closeVillageModal()), [sub]);
-  const openPicker = useCallback((pipe: number) => setSub({ kind: 'picker', pipe }), []);
-  const openRecipes = useCallback(() => setSub({ kind: 'recipes' }), []);
-  const back = useCallback(() => setSub(PIPES), []);
+  const openPicker = useCallback((pipe: number) => {
+    setStarted(null);
+    setSub({ kind: 'list', pipe });
+  }, []);
+  const openRecipes = useCallback(() => {
+    setStarted(null);
+    setSub({ kind: 'list', pipe: null });
+  }, []);
 
   /** Hold-to-repeat insta, bound to the job, craft and cost on screen now (read from the live state at each tick). */
   const onInsta = useCallback(
@@ -109,29 +118,47 @@ export function CraftingModal() {
     },
     [client, dialog, send],
   );
-  /** Start from a recipe list: into `pipe`, or (null: the Recipes view) into the first free open pipe. */
-  const onStart = useCallback(
+  /**
+   * Craft from the recipe list: into `pipe`, or (null) into the first free open pipe. Stays on the list: the first craft
+   * of an idle pipe's list used its pipe, so from then on the list behaves like the header's Recipes view.
+   */
+  const onCraft = useCallback(
     async (pipe: number | null, recipeId: string, stamina?: number) => {
       const base = pipe === null ? { type: 'START_CRAFT' as const, recipeId } : { type: 'START_CRAFT' as const, pipe, recipeId };
-      if (await send(stamina === undefined ? base : { ...base, stamina, maxCost: stamina })) setSub(PIPES);
+      const res = await sendForResult(stamina === undefined ? base : { ...base, stamina, maxCost: stamina });
+      if (!res) return false;
+      let startedPipe = pipe;
+      for (const e of res.events) if (e.type === 'CRAFT_STARTED' && e.recipeId === recipeId && (pipe === null || e.pipe === pipe)) startedPipe = e.pipe;
+      const name = recipeView(res.state, recipeId as RecipeId).name;
+      setStarted(startedPipe === null ? `${name} started` : `${name} started in Pipe ${startedPipe + 1}`);
+      setSub({ kind: 'list', pipe: null });
+      return true;
     },
-    [send],
+    [sendForResult],
   );
-  /** Done: collects the ready piece and opens its popover (the reveal) where the pipe row was. */
+  /**
+   * Done: collects the ready piece and opens its popover (the reveal) where the pipe row was. The id comes from the
+   * engine's CRAFT_COLLECTED event (the dispatch first simulates up to now, which can move the item serial: a guess
+   * made before it was wrong), and a failed measure falls back to the screen centre so the reveal always shows.
+   */
   const onDone = useCallback(
     async (pipe: number, node: HostInstance | null) => {
       const live = craftJobView(client.getState(), pipe);
       if (!live?.ready) return;
-      const anchor = await measureAnchor(node);
-      const itemId = collectedItemId(client.getState(), live.outputDefId);
-      if ((await send({ type: 'COLLECT_CRAFT', pipe, jobId: live.id })) && anchor) setReveal({ itemId, anchor });
+      const anchor = (await measureAnchor(node)) ?? { x: win.width / 2 - 40, y: win.height / 3, width: 80, height: 40 };
+      const res = await sendForResult({ type: 'COLLECT_CRAFT', pipe, jobId: live.id });
+      const itemId = res ? collectedItemIdOf(res, live.id) : null;
+      if (itemId) presentReveal(itemId, anchor);
     },
-    [client, send],
+    [client, sendForResult, win.width, win.height, presentReveal],
   );
-  const closeReveal = useCallback(() => setReveal(null), []);
+  const closeReveal = useCallback(() => {
+    closedAt.current = Date.now();
+    setReveal(null);
+  }, []);
   const revealed = reveal ? (state.inventory.items.find((i) => i.id === reveal.itemId) ?? null) : null;
   const invFull = freeSlots(state.inventory) < 1;
-  const title = sub.kind === 'picker' ? `Crafting · Pipe ${sub.pipe + 1}` : sub.kind === 'recipes' ? 'Recipes' : 'Crafting';
+  const title = sub.kind === 'list' ? (sub.pipe !== null ? `Crafting · Pipe ${sub.pipe + 1}` : 'Recipes') : 'Crafting';
 
   return (
     <ModalScreen
@@ -144,20 +171,13 @@ export function CraftingModal() {
           <IconText icon="stamina" style={styles.stamina} accessibilityLabel={`Stamina ${state.stamina.current} of ${state.stamina.max}`}>
             {state.stamina.current}/{state.stamina.max}
           </IconText>
-          {sub.kind === 'pipes' ? <PixelButton label="Recipes" onPress={openRecipes} accessibilityHint="Every recipe; Start goes into the first free pipe" /> : null}
+          {sub.kind === 'pipes' ? <PixelButton label="Recipes" onPress={openRecipes} accessibilityHint="Every recipe; Craft goes into the first free pipe" /> : null}
         </View>
       }
     >
       {clockPaused ? <Text style={styles.paused}>Paused: your device clock moved back. Crafting waits until it catches up.</Text> : null}
       {sub.kind !== 'pipes' ? (
-        <RecipePicker
-          pipe={sub.kind === 'picker' ? sub.pipe : null}
-          view={view}
-          buildings={state.buildings}
-          stamina={state.stamina.current}
-          onStart={onStart}
-          onBack={back}
-        />
+        <RecipePicker pipe={sub.pipe} view={view} buildings={state.buildings} stamina={state.stamina.current} started={started} onCraft={onCraft} />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.intro}>
@@ -414,283 +434,6 @@ function LivePercent({ progressMs, craftMs, running }: { progressMs: number; cra
   return <Text style={styles.percent}>{craftMs > 0 ? ((p / craftMs) * 100).toFixed(2) : '100.00'}%</Text>;
 }
 
-// ---------- the recipe list (a pipe's "Craft…" or the header's Recipes) ----------
-
-type PickerProps = {
-  /** The idle pipe it was opened for, or null: the Recipes view (Start goes into the first free open pipe). */
-  pipe: number | null;
-  view: CraftingView;
-  buildings: GameState['buildings'];
-  stamina: number;
-  onStart: (pipe: number | null, recipeId: string, stamina?: number) => void;
-  onBack: () => void;
-};
-
-type PickerTab = 'material' | 'gear';
-
-/** Where Start goes and whether it can: the named pipe, else the first free one ("All pipes busy" when none). */
-type Target = { pipe: number | null; label: string; blocked: string | null };
-
-function RecipePicker({ pipe, view, buildings, stamina, onStart, onBack }: PickerProps) {
-  const [tab, setTab] = useState<PickerTab>('material');
-  const [selected, setSelected] = useState<string | null>(null);
-  const tiers = useMemo(() => {
-    const out = new Map<number, RecipeView[]>();
-    for (const r of view.recipes) if (r.kind === tab) out.set(r.tier, [...(out.get(r.tier) ?? []), r]);
-    return [...out.entries()];
-  }, [view.recipes, tab]);
-  const switchTab = useCallback((t: PickerTab) => {
-    setTab(t);
-    setSelected(null);
-  }, []);
-  const target: Target =
-    pipe !== null
-      ? { pipe, label: `Pipe ${pipe + 1}`, blocked: null }
-      : view.freePipe !== null
-        ? { pipe: null, label: `Pipe ${view.freePipe + 1}`, blocked: null }
-        : { pipe: null, label: '', blocked: 'All pipes busy' };
-  const recipe = (tab === 'material' && view.recipes.find((r) => r.recipeId === selected)) || null;
-
-  return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.tabs}>
-        <PixelButton label="Materials" active={tab === 'material'} stretch onPress={() => switchTab('material')} accessibilityLabel="Materials recipes" />
-        <PixelButton label="Equipment" active={tab === 'gear'} stretch onPress={() => switchTab('gear')} accessibilityLabel="Equipment recipes" />
-      </View>
-      {pipe === null ? (
-        <Text style={styles.intro}>{target.blocked ? 'All pipes are busy: stop one to start another recipe.' : `Start goes into ${target.label}, the first free pipe.`}</Text>
-      ) : null}
-      {recipe ? (
-        <Panel title={recipe.name} titleIcon={<ItemIcon defId={recipe.output.defId} size={24} />}>
-          <Text style={styles.detail}>
-            Each craft uses {recipe.inputs.map((i) => `${formatNumber(i.perCraft)} ${itemName(i.defId)} (you have ${formatNumber(i.have)})`).join(', ')}
-          </Text>
-          <Text style={styles.detail}>
-            Makes {formatNumber(recipe.output.perCraft)} {itemName(recipe.output.defId)}
-            {view.yieldBp > 0 ? ` +${formatPercentBp(view.yieldBp)}` : ''} · {formatCraftTime(recipe.craftMs)} each
-          </Text>
-          <Text style={styles.detail}>Crafts until you stop it. Without materials the pipe waits and starts again when they arrive. ×10 is a tap on the craft in progress.</Text>
-          <View style={styles.buttons}>
-            <PixelButton
-              label={target.blocked ? 'Start' : `Start · ${target.label}`}
-              sublabel={target.blocked ?? (recipe.enough ? undefined : 'waits for materials')}
-              onPress={() => onStart(target.pipe, recipe.recipeId)}
-              disabled={target.blocked !== null}
-              stretch
-            />
-            <PixelButton label="Back" onPress={onBack} stretch />
-          </View>
-        </Panel>
-      ) : null}
-      {tab === 'gear' ? (
-        <Text style={styles.intro}>
-          One piece per job. Quality (0–100%) scales its stats; invest stamina to raise the lowest quality it can roll. Quality and colour show when you
-          tap Done.
-        </Text>
-      ) : null}
-      {tiers.map(([tier, recipes]) => (
-        <View key={tier} style={styles.tier}>
-          <Text style={styles.tierTitle}>
-            Tier {tier}
-            {tab === 'gear' ? ` · ${recipes[0].name.split(' ')[0]}` : ''}
-          </Text>
-          {recipes.map((r) =>
-            r.kind === 'gear' ? (
-              <GearCard
-                key={r.recipeId}
-                recipe={r}
-                buildings={buildings}
-                selected={r.recipeId === selected}
-                onPress={setSelected}
-                stamina={stamina}
-                target={target}
-                onStart={onStart}
-                onBack={onBack}
-              />
-            ) : (
-              <RecipeRow key={r.recipeId} recipe={r} selected={r.recipeId === selected} onPress={setSelected} />
-            ),
-          )}
-        </View>
-      ))}
-    </ScrollView>
-  );
-}
-
-/** "4–6 damage", "+3 armor": a gear recipe's stats at 100% quality. */
-function statText(st: GearStats): string {
-  const out: string[] = [];
-  if (st.damage) out.push(`${st.damage.min}–${st.damage.max} damage`);
-  if (st.armor !== undefined) out.push(`+${st.armor} armor`);
-  if (st.woodcuttingStrength !== undefined) out.push(`+${st.woodcuttingStrength} WS`);
-  if (st.miningStrength !== undefined) out.push(`+${st.miningStrength} MS`);
-  return out.join(', ');
-}
-
-/** "×1.25" / "×1" for a main-stat multiplier given in percent. */
-const multiplierText = (pct: number) => `×${Number((pct / 100).toFixed(2))}`;
-
-/** "max damage, max armor, HP regen or mana regen" / "max woodcutting strength". */
-const perkKindsText = (kinds: GearRarityDetail['perk'] & object) => {
-  const names = kinds.kinds.map((k) => PERK_NAMES[k]);
-  return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names.join('');
-};
-
-/** The lines of one colour's details; every number comes from the engine (recipeView().gear.rarityDetails). */
-function detailLines(d: GearRarityDetail): string[] {
-  const lines = [
-    `Chance: ${d.chancePct}%`,
-    `Main stat, quality 0 to 100: ${statText(d.atQuality0)} to ${statText(d.atQuality100)} (${multiplierText(d.statPct)})`,
-  ];
-  if (!d.attributes) lines.push('Attribute bonuses: none');
-  else if (d.attributes.count === 1) lines.push(`Attribute bonus: 1 random attribute, +${d.attributes.min} to +${d.attributes.max}`);
-  else lines.push(`Attribute bonuses: ${d.attributes.count} different random attributes, +${d.attributes.min} to +${d.attributes.max} each`);
-  if (d.perk) {
-    lines.push(
-      d.perk.kinds.length > 1
-        ? `Perk: 1 random perk, +${d.perk.min}% to +${d.perk.max}%: ${perkKindsText(d.perk)}`
-        : `Perk: +${d.perk.min}% to +${d.perk.max}% ${perkKindsText(d.perk)}`,
-    );
-  } else lines.push('Perk: none');
-  return lines;
-}
-
-/** The Details body of a gear recipe: a Green | Blue | Purple toggle (default Green) and the chosen colour's lines. */
-function GearDetails({ details }: { details: GearRarityDetail[] }) {
-  const [pick, setPick] = useState(0);
-  const d = details[Math.min(pick, details.length - 1)];
-  if (!d) return null;
-  return (
-    <View style={styles.rarityDetails}>
-      <View style={styles.buttons}>
-        {details.map((o, k) => (
-          <PixelButton key={o.rarity} label={RARITY_COLOR_NAMES[o.rarity]} active={k === pick} onPress={() => setPick(k)} stretch />
-        ))}
-      </View>
-      {detailLines(d).map((line) => (
-        <Text key={line} style={styles.detail}>
-          {line}
-        </Text>
-      ))}
-    </View>
-  );
-}
-
-type GearCardProps = {
-  recipe: RecipeView;
-  /** For the engine's quality floor (gearQualityFloor); keeps its identity until a build. */
-  buildings: GameState['buildings'];
-  selected: boolean;
-  stamina: number;
-  target: Target;
-  onPress: (id: string) => void;
-  onStart: PickerProps['onStart'];
-  onBack: () => void;
-};
-
-/**
- * A gear recipe: inputs have / need, effective time, stats at 100% quality; tapped, it opens the stamina stepper
- * ("Quality 20–100%"), the rarity odds and Start.
- */
-const GearCard = memo(function GearCard({ recipe, buildings, selected, stamina, target, onPress, onStart, onBack }: GearCardProps) {
-  const g = recipe.gear!;
-  const [invest, setInvest] = useState(0);
-  const [showDetails, setShowDetails] = useState(false);
-  const enough = recipe.enough;
-  const floor = gearQualityFloor({ buildings }, invest);
-  const odds = g.rarityOdds.map((o) => `${RARITY_COLOR_NAMES[o.rarity]} ${o.pct}%`).join(' · ');
-  const inputs = recipe.inputs.map((i) => `${formatNumber(i.have)} / ${i.perCraft} ${itemName(i.defId)}`);
-  return (
-    <View style={[styles.recipe, selected && styles.recipeSelected]}>
-      <Pressable
-        onPress={() => onPress(recipe.recipeId)}
-        accessibilityRole="button"
-        accessibilityState={{ selected }}
-        accessibilityLabel={`${recipe.name}: ${recipe.inputs.map((i) => `${i.perCraft} ${itemName(i.defId)}, you have ${i.have}`).join('; ')}; ${formatCraftTime(recipe.craftMs)}; at 100% quality ${statText(g.maxStats)}`}
-      >
-        <IconText image={<ItemIcon defId={recipe.output.defId} size={24} />} style={styles.recipeName} rowStyle={styles.recipeHead}>
-          {recipe.name}
-        </IconText>
-        {inputs.map((line, k) => (
-          <IconText
-            key={k}
-            image={<ItemIcon defId={recipe.inputs[k].defId} size={16} />}
-            style={[styles.recipeLine, recipe.inputs[k].have < recipe.inputs[k].perCraft && styles.recipeShort]}
-          >
-            {line}
-          </IconText>
-        ))}
-        <Text style={styles.recipeLine}>
-          Time {formatCraftTime(recipe.craftMs)} · at 100%: {statText(g.maxStats)}
-        </Text>
-      </Pressable>
-      <View style={styles.detailsToggle}>
-        <PixelButton
-          label={showDetails ? 'Hide details' : 'Details'}
-          onPress={() => setShowDetails((v) => !v)}
-          accessibilityLabel={`${recipe.name} details, ${showDetails ? 'expanded' : 'collapsed'}`}
-        />
-      </View>
-      {showDetails ? <GearDetails details={g.rarityDetails} /> : null}
-      {selected ? (
-        <View style={styles.gearDetail}>
-          <Text style={styles.detailLabel}>Stamina to invest (+1% min quality each, not refunded)</Text>
-          <StaminaStepper value={invest} max={g.maxStamina} onChange={setInvest} />
-          <Text style={styles.detail}>
-            Quality {floor}–100%
-          </Text>
-          <Text style={styles.detail}>Colour: {odds}</Text>
-          {!enough ? <Text style={styles.missing}>Not enough materials</Text> : null}
-          <View style={styles.buttons}>
-            <PixelButton
-              label={`Start${invest > 0 ? ` · ${invest}` : ''}`}
-              icon={invest > 0 ? 'stamina' : undefined}
-              sublabel={target.blocked ?? (enough && invest > stamina ? 'Not enough stamina' : enough ? target.label : undefined)}
-              onPress={() => onStart(target.pipe, recipe.recipeId, invest)}
-              disabled={!enough || invest > stamina || target.blocked !== null}
-              stretch
-            />
-            <PixelButton label="Back" onPress={onBack} stretch />
-          </View>
-        </View>
-      ) : null}
-    </View>
-  );
-});
-
-const STAMINA_STEPS = [-10, -1, 1, 10] as const;
-
-/** 0..max with −10 / −1 / +1 / +10 (hold to repeat; a repeat stops quietly at either end). */
-function StaminaStepper({ value, max, onChange }: { value: number; max: number; onChange: (n: number) => void }) {
-  const current = useRef(value);
-  current.current = value;
-  const step = useCallback(
-    (d: number) => () => {
-      const next = Math.max(0, Math.min(max, current.current + d));
-      if (next === current.current) return false;
-      current.current = next;
-      onChange(next);
-      return true;
-    },
-    [max, onChange],
-  );
-  const actions = useMemo(() => STAMINA_STEPS.map((d) => step(d)), [step]);
-  return (
-    <View style={styles.stepper} accessible={false}>
-      {STAMINA_STEPS.slice(0, 2).map((d, k) => (
-        <PixelButton key={d} label={String(d).replace('-', '−')} repeat={actions[k]} disabled={value <= 0} accessibilityLabel={`${d} stamina`} />
-      ))}
-      <View style={styles.stepValueBox} accessible accessibilityLiveRegion="polite" accessibilityLabel={`${value} stamina invested`}>
-        <IconText icon="stamina" size={20} style={styles.stepValue}>
-          {value}
-        </IconText>
-      </View>
-      {STAMINA_STEPS.slice(2).map((d, k) => (
-        <PixelButton key={d} label={`+${d}`} repeat={actions[k + 2]} disabled={value >= max} accessibilityLabel={`+${d} stamina`} />
-      ))}
-    </View>
-  );
-}
 
 /** "Pipe 2 · [icon] Oak Planks" on one line (the name is cut, never wrapped). */
 function PipeTitle({ n, defId, name }: { n: number; defId: string; name: string }) {
@@ -705,30 +448,6 @@ function PipeTitle({ n, defId, name }: { n: number; defId: string; name: string 
   );
 }
 
-const RecipeRow = memo(function RecipeRow({ recipe, selected, onPress }: { recipe: RecipeView; selected: boolean; onPress: (id: string) => void }) {
-  const input = recipe.inputs[0];
-  const enough = recipe.enough;
-  return (
-    <Pressable
-      onPress={() => onPress(recipe.recipeId)}
-      style={[styles.recipe, selected && styles.recipeSelected]}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      accessibilityLabel={`${recipe.name}: ${input.perCraft} ${itemName(input.defId)}, you have ${input.have}, ${formatCraftTime(recipe.craftMs)}`}
-    >
-      <IconText image={<ItemIcon defId={recipe.output.defId} size={24} />} style={styles.recipeName} rowStyle={styles.recipeHead}>
-        {recipe.name}
-      </IconText>
-      <IconText image={<ItemIcon defId={input.defId} size={16} />} style={[styles.recipeLine, !enough && styles.recipeShort]}>
-        {formatNumber(input.have)} / {input.perCraft} {itemName(input.defId)}
-      </IconText>
-      <Text style={styles.recipeLine}>
-        Time {formatCraftTime(recipe.craftMs)} → {recipe.output.perCraft} {itemName(recipe.output.defId)}
-      </Text>
-    </Pressable>
-  );
-});
-
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -740,15 +459,7 @@ const styles = StyleSheet.create({
   pipeActive: { borderColor: colors.gold },
   pipeReady: { borderColor: colors.skill },
   ready: { fontFamily: fonts.bodyBold, fontSize: 14, color: rarityColors.uncommon }, // readable green on woodDark (≥ 4.5:1)
-  gearDetail: { marginTop: 8, gap: 2 },
-  detailsToggle: { marginTop: 6, alignItems: 'flex-start' },
-  rarityDetails: { marginTop: 6, gap: 2 },
-  detailLabel: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink, marginBottom: 4 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  stepValueBox: { flex: 1, alignItems: 'center' },
-  stepValue: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.ink },
   pipeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
-  recipeHead: { gap: 6 },
   pipeTitlePrefix: { flexShrink: 0 },
   pipeTitleName: { flexShrink: 1 },
   pipeLocked: { opacity: 0.6 },
@@ -762,14 +473,4 @@ const styles = StyleSheet.create({
   time: { fontFamily: fonts.body, fontSize: 14, color: colors.parchment },
   percent: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold, fontVariant: ['tabular-nums'] },
   buttons: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  tabs: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  tier: { marginBottom: 8 },
-  tierTitle: { fontFamily: fonts.title, fontSize: 18, color: colors.gold, marginBottom: 6 },
-  recipe: { backgroundColor: colors.parchment, borderWidth: 3, borderColor: colors.woodDark, padding: 10, marginBottom: 8, gap: 2 },
-  recipeSelected: { borderColor: colors.gold },
-  recipeName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
-  recipeLine: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft },
-  recipeShort: { color: colors.hp },
-  detail: { fontFamily: fonts.body, fontSize: 14, lineHeight: 19, color: colors.ink, marginTop: 6 },
-  missing: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.hp, marginTop: 6 },
 });

@@ -122,7 +122,7 @@ export class LocalGameClient implements GameClient {
   dispatch(input: CommandInput): Promise<DispatchResult> {
     return this.serial(async () => {
       const cmd = { ...input, id: input.id ?? this.ids.uuid() } as Command;
-      if (await this.repo.hasCommand(cmd.id)) return { ok: true, duplicate: true, state: this.getState() };
+      if (await this.repo.hasCommand(cmd.id)) return { ok: true, duplicate: true, state: this.getState(), events: [] };
 
       const now = this.clock.now();
       const pre = this.pendingCheckpoint();
@@ -139,7 +139,7 @@ export class LocalGameClient implements GameClient {
       this.noteAway(adv, false);
       this.noteUnlocks(res.events); // only once the state that holds the unlock is stored
       this.publish();
-      return { ok: true, duplicate: false, state: res.state };
+      return { ok: true, duplicate: false, state: res.state, events: res.events };
     });
   }
 
