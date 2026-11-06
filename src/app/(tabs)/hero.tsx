@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameClient, useGameState } from '../../client/GameProvider';
@@ -9,6 +9,7 @@ import { IconText, SkillIcon } from '../../components/art/Sprites';
 import { defOf, SLOT_LABELS } from '../../components/items/itemInfo';
 import { ItemSheet, type SheetAction } from '../../components/items/ItemSheet';
 import { ItemSlot } from '../../components/items/ItemSlot';
+import { type SlotHitTest, useSlotHitTest } from '../../components/ui/useSlotHitTest';
 import type { AnchorRect } from '../../components/ui/InfoPopover';
 import { Bar, Panel } from '../../components/Panel';
 import { PixelButton } from '../../components/PixelButton';
@@ -44,10 +45,19 @@ export default function HeroScreen() {
   const openInventory = useCallback((key: string | number, anchor: AnchorRect) => setSelection({ kind: 'inventory', itemId: String(key), anchor }), []);
   const openEquipment = useCallback((key: string | number, anchor: AnchorRect) => setSelection({ kind: 'equipment', slot: key as EquipmentSlot, anchor }), []);
   const close = useCallback(() => setSelection(null), []);
+  // A tap on another slot while the box is open moves the box there (no close / fade); the same slot closes it.
+  const hitTest = useSlotHitTest(selection);
+  const outsidePress = (p: { x: number; y: number }) =>
+    hitTest.press(p, (hit) => {
+      const equipment = typeof hit.id === 'string' && hit.id in SLOT_LABELS; // item ids contain '#', slot names do not
+      if (selection && (equipment ? selection.kind === 'equipment' && selection.slot === hit.id : selection.kind === 'inventory' && selection.itemId === hit.id)) return false;
+      (equipment ? openEquipment : openInventory)(hit.id, hit.anchor);
+      return true;
+    });
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={hitTest.viewportRef} contentContainerStyle={styles.content}>
         <HeaderPanel name={character.name} title={character.title} level={character.level} xp={character.xp} xpToNext={character.xpToNext} />
         <StatusPanel
           level={character.level}
@@ -62,12 +72,12 @@ export default function HeroScreen() {
           stamina={stamina}
           training={training}
         />
-        <EquipmentPanel equipment={character.equipment} onPress={openEquipment} />
-        <InventoryPanel inventory={inventory} gold={character.gold} onPress={openInventory} />
+        <EquipmentPanel equipment={character.equipment} onPress={openEquipment} hitTest={hitTest} />
+        <InventoryPanel inventory={inventory} gold={character.gold} onPress={openInventory} hitTest={hitTest} />
         <SkillsPanel skills={character.skills} />
         {DEV_TOOLS_ENABLED ? <DebugPanel /> : null}
       </ScrollView>
-      <HeroItemSheet selection={selection} onClose={close} />
+      <HeroItemSheet selection={selection} onClose={close} onOutsidePress={outsidePress} />
     </SafeAreaView>
   );
 }
@@ -93,7 +103,7 @@ const HeaderPanel = memo(function HeaderPanel({ name, title, level, xp, xpToNext
 
 type PressHandler = (key: string | number, anchor: AnchorRect) => void;
 
-const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress }: { equipment: Character['equipment']; onPress: PressHandler }) {
+const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress, hitTest }: { equipment: Character['equipment']; onPress: PressHandler; hitTest: SlotHitTest }) {
   const [tab, setTab] = useState<EquipmentTab>('combat');
   const grid = tab === 'combat' ? COMBAT_GRID : TOOLS_GRID;
   return (
@@ -107,7 +117,7 @@ const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress }: { eq
           {row.map((slot, c) =>
             slot ? (
               <View key={c} style={styles.equipCell}>
-                <ItemSlot item={equipment[slot]} size={58} pressKey={slot} onPress={onPress} />
+                <ItemSlot item={equipment[slot]} size={58} pressKey={slot} onPress={onPress} hitTest={hitTest} />
                 <Text style={styles.slotLabel} numberOfLines={1}>
                   {equipment[slot]?.name ?? SLOT_LABELS[slot]}
                 </Text>
@@ -122,7 +132,7 @@ const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress }: { eq
   );
 });
 
-const InventoryPanel = memo(function InventoryPanel({ inventory, gold, onPress }: { inventory: Inventory; gold: number; onPress: PressHandler }) {
+const InventoryPanel = memo(function InventoryPanel({ inventory, gold, onPress, hitTest }: { inventory: Inventory; gold: number; onPress: PressHandler; hitTest: SlotHitTest }) {
   const slots: (Item | undefined)[] = Array.from({ length: inventory.capacity }, (_, i) => inventory.items[i]);
   return (
     <Panel
@@ -136,7 +146,7 @@ const InventoryPanel = memo(function InventoryPanel({ inventory, gold, onPress }
       <View style={styles.invGrid}>
         {slots.map((item, i) => (
           <View key={i} style={styles.invCell}>
-            <ItemSlot item={item} size={52} pressKey={item?.id} onPress={onPress} />
+            <ItemSlot item={item} size={52} pressKey={item?.id} onPress={onPress} hitTest={hitTest} />
           </View>
         ))}
       </View>
@@ -166,11 +176,20 @@ const SkillsPanel = memo(function SkillsPanel({ skills }: { skills: Character['s
  * Item info box for the Hero tab (InfoPopover on the tapped slot): Equip for gear, Use for potions (inventory),
  * Unequip (equipment). Reads the item from the live state, so it closes by itself when the item leaves that place.
  */
-function HeroItemSheet({ selection, onClose }: { selection: Selection | null; onClose: () => void }) {
+function HeroItemSheet({ selection, onClose, onOutsidePress }: { selection: Selection | null; onClose: () => void; onOutsidePress: (p: { x: number; y: number }) => boolean | Promise<boolean> }) {
   const state = useGameState();
   const client = useGameClient();
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  // The error belongs to the item it came from: switching to another item must not show it.
+  const scope = selection ? (selection.kind === 'inventory' ? selection.itemId : selection.slot) : '';
+  const [errorState, setErrorState] = useState<{ scope: string; message: string } | null>(null);
+  const error = errorState && errorState.scope === scope ? errorState.message : null;
+  const setError = (message: string | null) => setErrorState(message === null ? null : { scope, message });
+  // Busy and the result's close belong to the item the command was sent for: if the player switched items meanwhile,
+  // the result neither closes the new item's popover nor disables its buttons.
+  const [busyScope, setBusyScope] = useState<string | null>(null);
+  const busy = busyScope === scope;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
 
   const item: Item | undefined =
     selection?.kind === 'inventory'
@@ -187,16 +206,17 @@ function HeroItemSheet({ selection, onClose }: { selection: Selection | null; on
 
   const send = (cmd: CommandInput, closeAfter: boolean) => {
     if (busy) return;
-    setBusy(true);
+    const at = scope;
+    setBusyScope(at);
     setError(null);
     client
       .dispatch(cmd)
       .then((res) => {
-        if (!res.ok) setError(res.error.message);
-        else if (closeAfter) close();
+        if (!res.ok) setErrorState({ scope: at, message: res.error.message });
+        else if (closeAfter && scopeRef.current === at) close();
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setBusy(false));
+      .catch((err: unknown) => setErrorState({ scope: at, message: err instanceof Error ? err.message : String(err) }))
+      .finally(() => setBusyScope((b) => (b === at ? null : b)));
   };
 
   const actions: SheetAction[] = [];
@@ -230,7 +250,7 @@ function HeroItemSheet({ selection, onClose }: { selection: Selection | null; on
     });
   }
 
-  return <ItemSheet item={item ?? null} anchor={selection?.anchor ?? null} quantity={item?.quantity} equipped={equipped} actions={actions} error={error} onClose={close} />;
+  return <ItemSheet item={item ?? null} anchor={selection?.anchor ?? null} quantity={item?.quantity} equipped={equipped} actions={actions} error={error} onClose={close} onOutsidePress={onOutsidePress} />;
 }
 
 const styles = StyleSheet.create({

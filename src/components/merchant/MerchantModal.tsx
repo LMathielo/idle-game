@@ -1,7 +1,7 @@
 // Village → Merchant. Buy | Sell tabs over a stock grid styled like the inventory. Reads merchantView() and
 // the inventory; dispatches BUY_ITEM / SELL_ITEM / REFRESH_MERCHANT. The merchant is not an activity, so
 // nothing here stops what the hero is doing.
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameState } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
@@ -18,6 +18,7 @@ import { PixelButton } from '../PixelButton';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
 import { type AnchorRect, PopoverText } from '../ui/InfoPopover';
 import { useCommand } from '../ui/useCommand';
+import { type SlotHitTest, useSlotHitTest } from '../ui/useSlotHitTest';
 
 type Tab = 'buy' | 'sell';
 
@@ -51,28 +52,41 @@ export function MerchantModal() {
   );
 }
 
-/** Dispatch with a busy flag and an inline error; stale-screen errors just close the sheet. */
-function useSend(onDone: () => void) {
+/**
+ * Dispatch with a busy flag and an inline error; stale-screen errors just close the sheet. Busy, errors and the
+ * close-after-done belong to the item the command was sent for (`scope`): if the player switched items meanwhile, the
+ * result neither closes the new item's popover nor disables its buttons.
+ */
+function useSend(onDone: () => void, scope: string) {
   const client = useGameClient();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [busyScope, setBusyScope] = useState<string | null>(null);
+  const busy = busyScope === scope;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  // The sheet stays mounted while the player moves between items, so an error belongs to the item it came from.
+  const [errorState, setErrorState] = useState<{ scope: string; message: string } | null>(null);
+  const error = errorState && errorState.scope === scope ? errorState.message : null;
+  const setError = useCallback((message: string | null) => setErrorState(message === null ? null : { scope: scopeRef.current, message }), []);
   const send = useCallback(
     (cmd: CommandInput, closeAfter = true) => {
       if (busy) return;
-      setBusy(true);
-      setError(null);
+      const at = scope;
+      const current = () => scopeRef.current === at;
+      setBusyScope(at);
+      setErrorState(null);
       client
         .dispatch(cmd)
         .then((res) => {
           if (res.ok) {
-            if (closeAfter) onDone();
-          } else if (STALE.has(res.error.code)) onDone();
-          else setError(res.error.message);
+            if (closeAfter && current()) onDone();
+          } else if (STALE.has(res.error.code)) {
+            if (current()) onDone();
+          } else setErrorState({ scope: at, message: res.error.message });
         })
-        .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-        .finally(() => setBusy(false));
+        .catch((err: unknown) => setErrorState({ scope: at, message: err instanceof Error ? err.message : String(err) }))
+        .finally(() => setBusyScope((b) => (b === at ? null : b)));
     },
-    [busy, client, onDone],
+    [busy, client, onDone, scope],
   );
   return { busy, error, setError, send };
 }
@@ -101,6 +115,13 @@ function BuyTab({ state }: { state: GameState }) {
     [view.stock],
   );
   const close = useCallback(() => setSelected(null), []);
+  const hitTest = useSlotHitTest(selected);
+  const outsidePress = (p: { x: number; y: number }) =>
+    hitTest.press(p, (hit) => {
+      if (hit.id === selected?.slot) return false;
+      open(hit.id, hit.anchor);
+      return true;
+    });
   const prices = useMemo(() => view.stock.map((l) => (l ? `${formatNumber(l.unitPrice)}g` : '')), [view.stock]);
 
   /** Refusals and save failures show in a GameDialog. */
@@ -117,9 +138,9 @@ function BuyTab({ state }: { state: GameState }) {
   const live = selected && listing && listing.defId === selected.defId ? { slot: selected.slot, listing, anchor: selected.anchor } : null;
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView ref={hitTest.viewportRef} contentContainerStyle={styles.content}>
       <Text style={styles.caption}>The merchant's wares</Text>
-      <StockGrid slots={slots} prices={prices} onPress={open} />
+      <StockGrid slots={slots} prices={prices} onPress={open} hitTest={hitTest} />
       <View style={styles.refreshRow}>
         <PixelButton
           label={`Refresh (${view.charges}/${view.maxCharges})`}
@@ -136,19 +157,25 @@ function BuyTab({ state }: { state: GameState }) {
         </View>
       ) : null}
       <UpgradeEntry buildingId="merchant" />
-      {live ? <BuySheet key={`${live.slot}-${live.listing.defId}`} state={state} slot={live.slot} anchor={live.anchor} onClose={close} /> : null}
+      {live ? <BuySheet state={state} slot={live.slot} anchor={live.anchor} onClose={close} onOutsidePress={outsidePress} /> : null}
     </ScrollView>
   );
 }
 
-function BuySheet({ state, slot, anchor, onClose }: { state: GameState; slot: number; anchor: AnchorRect; onClose: () => void }) {
+type OutsidePress = (p: { x: number; y: number }) => boolean | Promise<boolean>;
+
+/** Stays mounted while the player moves between items (so the popover only moves, no close / fade): per-item state is keyed. */
+function BuySheet({ state, slot, anchor, onClose, onOutsidePress }: { state: GameState; slot: number; anchor: AnchorRect; onClose: () => void; onOutsidePress: OutsidePress }) {
   const listing = state.merchant.stock[slot]!;
   const def = defOf(listing.defId);
   const max = maxBuyable(state, slot);
-  const [qty, setQty] = useState(1);
+  const scope = `${slot}-${listing.defId}`;
+  const [qtyState, setQtyState] = useState({ scope, qty: 1 });
+  const qty = qtyState.scope === scope ? qtyState.qty : 1;
+  const setQty = (n: number) => setQtyState({ scope, qty: n });
   const quantity = Math.max(1, Math.min(qty, Math.max(1, max)));
   const total = listing.unitPrice * quantity;
-  const { busy, error, send } = useSend(onClose);
+  const { busy, error, send } = useSend(onClose, scope);
 
   let blocked: string | undefined;
   if (max < 1) {
@@ -164,6 +191,7 @@ function BuySheet({ state, slot, anchor, onClose }: { state: GameState; slot: nu
       equipped={def.slot ? (equipped ?? null) : undefined}
       error={error}
       onClose={onClose}
+      onOutsidePress={onOutsidePress}
       actions={[
         {
           label: 'Buy',
@@ -199,15 +227,22 @@ function SellTab({ state }: { state: GameState }) {
   );
   const open = useCallback((key: string | number, anchor: AnchorRect) => setSelected({ id: String(key), anchor }), []);
   const close = useCallback(() => setSelected(null), []);
+  const hitTest = useSlotHitTest(selected);
+  const outsidePress = (p: { x: number; y: number }) =>
+    hitTest.press(p, (hit) => {
+      if (hit.id === selected?.id) return false;
+      open(hit.id, hit.anchor);
+      return true;
+    });
   const item = selected ? inventory.items.find((i) => i.id === selected.id) : undefined;
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView ref={hitTest.viewportRef} contentContainerStyle={styles.content}>
       <Text style={styles.caption}>
         Your inventory {inventory.items.length}/{inventory.capacity} · equipped gear must be unequipped first
       </Text>
-      <StockGrid slots={slots} prices={prices} onPress={open} keyOf={inventoryKey} />
-      {item && selected ? <SellSheet key={item.id} item={item} anchor={selected.anchor} unitPrice={sellPriceOfItem({ buildings }, item)} onClose={close} /> : null}
+      <StockGrid slots={slots} prices={prices} onPress={open} keyOf={inventoryKey} hitTest={hitTest} />
+      {item && selected ? <SellSheet item={item} anchor={selected.anchor} unitPrice={sellPriceOfItem({ buildings }, item)} onClose={close} onOutsidePress={outsidePress} /> : null}
     </ScrollView>
   );
 }
@@ -215,12 +250,14 @@ function SellTab({ state }: { state: GameState }) {
 /** Sell-tab slots hold inventory Items: tapping one opens it by item id. */
 const inventoryKey = (item: SlotItem | null, i: number): string | number => (item as Item | null)?.id ?? i;
 
-function SellSheet({ item, anchor, unitPrice, onClose }: { item: Item; anchor: AnchorRect; unitPrice: number; onClose: () => void }) {
+function SellSheet({ item, anchor, unitPrice, onClose, onOutsidePress }: { item: Item; anchor: AnchorRect; unitPrice: number; onClose: () => void; onOutsidePress: OutsidePress }) {
   const def = defOf(item.defId, item);
   const owned = item.stackable ? (item.quantity ?? 0) : 1;
-  const [qty, setQty] = useState(1);
+  const [qtyState, setQtyState] = useState({ scope: item.id, qty: 1 });
+  const qty = qtyState.scope === item.id ? qtyState.qty : 1;
+  const setQty = (n: number) => setQtyState({ scope: item.id, qty: n });
   const quantity = Math.max(1, Math.min(qty, owned));
-  const { busy, error, send } = useSend(onClose);
+  const { busy, error, send } = useSend(onClose, item.id);
   const sellable = unitPrice > 0;
 
   return (
@@ -230,6 +267,7 @@ function SellSheet({ item, anchor, unitPrice, onClose }: { item: Item; anchor: A
       quantity={item.quantity}
       error={error}
       onClose={onClose}
+      onOutsidePress={onOutsidePress}
       actions={[
         {
           label: 'Sell',
@@ -255,9 +293,10 @@ type GridProps = {
   onPress: (key: string | number, anchor: AnchorRect) => void;
   /** Key passed to onPress for a filled slot (default: the slot index). */
   keyOf?: (item: SlotItem | null, index: number) => string | number;
+  hitTest: SlotHitTest;
 };
 
-const StockGrid = memo(function StockGrid({ slots, prices, onPress, keyOf }: GridProps) {
+const StockGrid = memo(function StockGrid({ slots, prices, onPress, keyOf, hitTest }: GridProps) {
   return (
     <View style={styles.grid}>
       {slots.map((item, i) => (
@@ -268,6 +307,7 @@ const StockGrid = memo(function StockGrid({ slots, prices, onPress, keyOf }: Gri
             caption={prices[i] || ' '}
             pressKey={keyOf ? keyOf(item, i) : i}
             onPress={onPress}
+            hitTest={hitTest}
             hint={prices[i] ? `, ${prices[i].replace('g', ' gold')}` : undefined}
           />
         </View>

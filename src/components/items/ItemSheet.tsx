@@ -28,10 +28,13 @@ type Props = {
   /** Why the last action failed, shown above the buttons. */
   error?: string | null;
   onClose: () => void;
+  /** Item grids: a backdrop tap on another slot moves the popover there (see InfoPopover). */
+  onOutsidePress?: (point: { x: number; y: number }) => boolean | Promise<boolean>;
 };
 
-export function ItemSheet({ item, anchor, quantity, equipped, children, actions, error, onClose }: Props) {
-  if (!item) return null;
+export function ItemSheet({ item, anchor, quantity, equipped, children, actions, error, onClose, onOutsidePress }: Props) {
+  // No item (closed, or it is gone): stay mounted with no anchor, so the popover can fade its last box out.
+  if (!item) return <InfoPopover anchor={null} onClose={onClose} title="" />;
   const def = defOf(item.defId);
   const color = rarityColors[rarityOf(item)];
   const sell = baseSellPrice(item);
@@ -40,6 +43,7 @@ export function ItemSheet({ item, anchor, quantity, equipped, children, actions,
     <InfoPopover
       anchor={anchor}
       onClose={onClose}
+      onOutsidePress={onOutsidePress}
       title={`${def.name}${qty}`}
       titleColor={color}
       icon={<ItemIcon defId={item.defId} />}

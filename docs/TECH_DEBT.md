@@ -47,12 +47,17 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #37, 20] `src/components/crafting/CraftingModal.tsx` onCraft label — "X started" can omit the pipe when no CRAFT_STARTED matches. Cosmetic.
 - [PR #37, 15] `src/components/crafting/CraftingModal.tsx` onDone — measure runs before the in-flight guard; a double tap is harmless. Check the guard first if touched.
 - [PR #39, 40] `src/components/ui/popoverLayout.ts` placePopover — the unmeasured fallback (150 ms timeout, h null) placed above uses boxH 0, so the box can cover the anchor or run off the bottom. Fix: when h is null use boxH = maxHeight (or force below) and add a test.
+- [PR #40, 30] `src/components/ui/useSlotHitTest.ts` — a layout shift without a registration change (text wrap, a row appearing on level-up, a tile growing) leaves stale cached rects; a backdrop tap could switch to a neighbouring item. Fix: re-measure on content layout changes, or cap the cache age.
+- [PR #40, 20] `src/app/(tabs)/hero.tsx` / `src/components/merchant/MerchantModal.tsx` — the hit-test cache is nulled only when `openToken` becomes null, not when it changes, so it can be stale for a few ms after the next open. Fix: null the cache on token change.
 
 ## Engine and data
 
 - [PR #34, 40] `src/engine/config/skills.ts:21` — no-stun-lock invariant compares caster strikes vs target strikes; only holds at equal attack intervals. Make stun time-based or check in time; add a slow-hero (3000 ms) 100% stun test.
 
 - [pixel art, note] `engine/config/*` (`ITEMS`, `GEAR_PIECES`, `ENEMIES`, `DUNGEONS`, `TREES`, `ROCKS`, `BUILDINGS`), the views that copy them (`treeView`, `rockView`, `buildingView`, `constructionView`, worker / crew / node views) and stored `Item.icon` — the emoji `icon` fields are unused by the UI since the pixel art (art comes from `src/components/art/images.ts` by id). Remove them; `Item.icon` is in saves, so drop it in the next save migration (leave `engine/migrations.ts`' legacy literals alone). `tests/noEmoji.test.ts` allows exactly these fields until then.
+- [PR #40, 45] `src/components/ui/InfoPopover.tsx` backdrop + the screens' `outsidePress` handlers — nothing guards the awaited measure: a double tap, or a close meanwhile (sell, dialog, back), can re-open or flicker. Fix: a selection ref + an in-flight ref; drop a late result if the popover closed or was re-presented.
+- [PR #40, 30] `src/app/(tabs)/hero.tsx:51` — `hit.id in SLOT_LABELS` relies on item ids containing '#' (false for stackables and `start-<defId>` ids) and `in` matches prototype keys. Fix: `eq:` / `inv:` prefixed keys or `Object.hasOwn`.
+- [PR #40, 30] `src/components/ui/InfoPopover.tsx` / `useSlotHitTest.ts` — `pageX` / `pageY` and `measureInWindow` are assumed to share an origin on Android (translucent bars). Needs a device check; a mismatch offsets hits by the status-bar height.
 
 - [#8, <80] `client/LocalGameClient.ts:316` — MIGRATE's `fromEngine` comes from the meta; read it from the last log row to cover a pre-1.4.0 install killed between update and first commit.
 - [#19, 30] `engine/config/dev.ts` — `DEV_TOOLS_ENABLED = true` is hardcoded, so the Debug panel ships in every build, and held Debug buttons (grants) write a `DEBUG_*` row per tick. Gate on `__DEV__` (or an EAS env var) before any public build.
@@ -85,6 +90,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #38, 55] `tests/craftingDebug.test.ts` — no split-invariance test for a forced material job (a→b→c vs a→c, including held then released). Add one.
 - [PR #37, 40] `src/components/crafting/CraftingModal.tsx` presentReveal — the 400 ms gap before a new reveal is untested. Extract a pure `revealDelayMs` and unit-test it.
 - [PR #39, 30] `tests/popoverLayout.test.ts` — the "new anchor never reuses the old height" test duplicates the measuredFor test; hook ordering is verified on device only. Fix: drop or annotate.
+- [PR #40, 40] `tests/slotHitTest.test.ts` — only the pure helpers are tested. Extract the tap decision (hit vs same item vs miss) into a pure function and test it; add a partly clipped slot case.
+- [PR #40, 40] tests — the `useSlotHitTest` cache (invalidation, generation drop, null fallback, open gating, close) and `InfoPopover`'s close / open branches are untested. Fix: extract the cache behind an injectable measure and test it with fake timers.
 
 ## Docs and workflow
 
@@ -97,3 +104,4 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #37, 55] `src/client/types.ts` (DispatchResult.events doc) — says events include the time simulated before the command; only applyCommand's events are returned (pre-command advance() events go to rows / the away summary). Reword the comment.
 - [PR #38, 50] `docs/ENGINE.md` debug tools paragraph — does not list Force craft / Finish now. Append them.
 - [PR #38, 25] `docs/ENGINE.md` 1.23.0 note — a downgrade with a free job in flight would refund it (the old engine ignores `free`); accepted for debug. Add one line.
+- [PR #40, 25] `src/app/(tabs)/hero.tsx` / `src/components/merchant/MerchantModal.tsx` - a single `busyScope` is overwritten by the latest send; going back to an item still in flight re-enables its buttons (the engine rejects the duplicate). Fix: a Set of in-flight scopes.

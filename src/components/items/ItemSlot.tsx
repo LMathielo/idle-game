@@ -1,8 +1,9 @@
 // One inventory / equipment / merchant slot: icon, stack count, rarity-colored frame (the instance's), optional price
 // caption, tap to open the item's info box (anchored on the slot). Memoized: grids re-render only the slots that changed.
-import { memo, useCallback, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { type HostInstance, Pressable, StyleSheet, Text, View } from 'react-native';
 import { type AnchorRect, measureAnchor } from '../ui/InfoPopover';
+import type { SlotHitTest } from '../ui/useSlotHitTest';
 import { type ItemRarity, rarityOf } from '../../engine';
 import { colors, fonts, rarityColors } from '../../theme';
 import { ItemIcon } from '../art/Sprites';
@@ -25,14 +26,18 @@ type Props = {
   onPress?: (key: string | number, anchor: AnchorRect) => void;
   /** Spoken suffix, e.g. ", sells for 10 gold". */
   hint?: string;
+  /** Registers the slot so a tap on it while a popover is open moves the popover here (useSlotHitTest). */
+  hitTest?: SlotHitTest;
 };
 
-export const ItemSlot = memo(function ItemSlot({ item, size, caption, pressKey, onPress, hint }: Props) {
+export const ItemSlot = memo(function ItemSlot({ item, size, caption, pressKey, onPress, hint, hitTest }: Props) {
   const ref = useRef<HostInstance>(null);
   const handle = useCallback(() => {
     if (!onPress || pressKey === undefined) return;
     void measureAnchor(ref.current).then((anchor) => anchor && onPress(pressKey, anchor));
   }, [onPress, pressKey]);
+  const active = !!item && !!onPress && pressKey !== undefined;
+  useEffect(() => (active && hitTest ? hitTest.register(pressKey!, ref) : undefined), [active, hitTest, pressKey]);
   const rarity = item ? rarityOf(item) : null;
   const label = item ? `${item.name}${item.quantity ? ` x${item.quantity}` : ''}${hint ?? ''}` : 'Empty slot';
   const box = (
