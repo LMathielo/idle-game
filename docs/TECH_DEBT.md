@@ -39,6 +39,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #34, 30] Woodcutting / Mine / Training modals — inline "starting stops…" note missing for `boss` (confirm dialog still covers it). Add a boss line.
 - [PR #34, 25] BossDetail reveal effect — skipped when the replay panel is open (`lastBoxRef` null); View recovers. Clear replay on a new fight or fall back to the Fight panel anchor.
 - [first boss, 30] `AwayModal.tsx` — the boss line names the only boss (`BOSSES.troll_chieftain`) because `summary.boss` is one aggregate `{fights, wins, losses}`. With a second boss the summary needs counters per boss.
+- [PR #35, 40] `src/app/(tabs)/hero.tsx` EquipmentPanel — switching Combat/Tools leaves an open slot popover anchored to a slot no longer drawn; panel height jumps. Fix: clear the selection on tab change, give the grid a minHeight.
 
 ## Engine and data
 
@@ -52,6 +53,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#21, 50] `engine/crafting.ts` — 8 pipes at the 1 s floor over 8 h offline emit ~230k `CRAFT_COMPLETED` events in one simulate (under the step guard). Aggregate events per pipe per simulate.
 - [#21, 40] `engine/crafting.ts` `advancePipes` — `progressMs += ms × efficiency` is float; could be off by 1 ms at a split boundary with fractional efficiency. Use integer math like the workers.
 - [#25, 20] `engine/replay.ts` — replay applies every command with `allowDebug: true`, so `DEBUG_ADD_UNSPENT_POINTS` replays as valid (pre-existing for all debug commands; `markDebugUsed` flags the save). Server-side replay should reject debug commands.
+- [PR #35, 45] `src/engine/config/items.ts` iron_axe / iron_pickaxe — keep sell 180 (existing-item precedent) while the crafted-piece rule would give ~80; craft-and-sell is close to break-even with the Town Hall bonus. Fix: revisit in an economy pass.
 
 ## Tests
 
@@ -69,6 +71,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [#33, 40] `tests/statsRework.test.ts` — property tests stop at DEX ~600; nothing pins the crit-multiplier integer bound (exact up to ~6e9 DEX). Add one case with DEX 1e6 asserting a safe integer and the exact `dealt`.
 
 - [PR #34, 50] `tests/golden119.test.ts:176` — 1.19 hash re-pinned (fff9656e → 2e1282a3) without proof. Hash `asV19(s)` against the old pin like the 1.13–1.17 pins (move the helper to tests/helpers.ts).
+- [PR #35, 30] `tests/crafting.test.ts`, `tests/gear.test.ts` — hard-coded catalog counts and iron skip list. Fix: derive from GEAR_SETS × GEAR_PIECE_IDS.
 
 ## Docs and workflow
 
