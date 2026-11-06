@@ -53,6 +53,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #41, 40] `src/components/dungeon/DifficultySelector.tsx` — the container is a `radiogroup` but the skulls are `button`s with `selected`: mixed screen-reader semantics. Fix: drop the radiogroup role, or unlocked skulls `radio` + `checked`.
 - [PR #41, 35] `src/components/dungeon/LiveFight.tsx` / `PackRows.tsx` — `fight.mobs` gets a new identity every view rebuild, so the memoised `MobRow`s (10 animated bars on Extreme) re-render every tick. Fix: a field comparator on `MobRow` (hp, maxHp, variant) or stable mob identities in the view.
 - [PR #41, 30] `src/components/dungeon/FightReplay.tsx` — leftover `export { AnimatedHpBar }` after it moved to `HpBars.tsx`. Fix: remove the re-export.
+- [PR #42, 25] `src/components/dungeon/FightReplay.tsx:31` — the replay shows the first log line at once, assuming it is the hero's opening strike; a pre-1.25.0 `lastFight` whose first line is a monster strike shows it immediately too. Fix: reveal at once only entries with `atMs === 0`.
+- [PR #42, 20] `src/engine/danger.ts` `bossDangerHint` — `heroHeadStartMs = interval − 0` makes the hint slightly optimistic for slow heroes. Fix: derive the head start from both opening offsets.
 
 ## Engine and data
 
@@ -98,6 +100,9 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #40, 40] `tests/slotHitTest.test.ts` — only the pure helpers are tested. Extract the tap decision (hit vs same item vs miss) into a pure function and test it; add a partly clipped slot case.
 - [PR #40, 40] tests — the `useSlotHitTest` cache (invalidation, generation drop, null fallback, open gating, close) and `InfoPopover`'s close / open branches are untested. Fix: extract the cache behind an injectable measure and test it with fake timers.
 - [PR #41, 15] `tests/replayDebugDisabled.test.ts` — does not list `DEBUG_ADD_BOSS_WINS` (covered in `tests/difficulty.test.ts`). Fix: add it for consistency.
+- [PR #42, 40] `tests/fixtures/save-v22*.json` — no generator or source commit is recorded, so it cannot be checked that the untouched #41 engine wrote them (not the new one). Fix: note the #41 commit SHA and the command in the fixture header or a README line.
+- [PR #42, 30] `tests/migrationV22.test.ts` — the frozen v22 fixtures cover a Hard pack and the boss but no Normal 1v1 fight in progress (the most common save). Fix: add a small frozen Normal mid-fight fixture.
+- [PR #42, 20] `tests/golden.test.ts` — the inline-snapshot re-pins and the `q3 − q4` 500 → 550 gold change carry no "was" note. Fix: annotate them like the other pins.
 
 ## Docs and workflow
 
