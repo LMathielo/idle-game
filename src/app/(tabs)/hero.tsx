@@ -46,15 +46,14 @@ export default function HeroScreen() {
   const openEquipment = useCallback((key: string | number, anchor: AnchorRect) => setSelection({ kind: 'equipment', slot: key as EquipmentSlot, anchor }), []);
   const close = useCallback(() => setSelection(null), []);
   // A tap on another slot while the box is open moves the box there (no close / fade); the same slot closes it.
-  const hitTest = useSlotHitTest();
-  const outsidePress = async (p: { x: number; y: number }) => {
-    const hit = await hitTest.resolve(p);
-    if (!hit) return false;
-    const equipment = typeof hit.id === 'string' && hit.id in SLOT_LABELS; // item ids contain '#', slot names do not
-    if (selection && (equipment ? selection.kind === 'equipment' && selection.slot === hit.id : selection.kind === 'inventory' && selection.itemId === hit.id)) return false;
-    (equipment ? openEquipment : openInventory)(hit.id, hit.anchor);
-    return true;
-  };
+  const hitTest = useSlotHitTest(selection);
+  const outsidePress = (p: { x: number; y: number }) =>
+    hitTest.press(p, (hit) => {
+      const equipment = typeof hit.id === 'string' && hit.id in SLOT_LABELS; // item ids contain '#', slot names do not
+      if (selection && (equipment ? selection.kind === 'equipment' && selection.slot === hit.id : selection.kind === 'inventory' && selection.itemId === hit.id)) return false;
+      (equipment ? openEquipment : openInventory)(hit.id, hit.anchor);
+      return true;
+    });
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
@@ -177,7 +176,7 @@ const SkillsPanel = memo(function SkillsPanel({ skills }: { skills: Character['s
  * Item info box for the Hero tab (InfoPopover on the tapped slot): Equip for gear, Use for potions (inventory),
  * Unequip (equipment). Reads the item from the live state, so it closes by itself when the item leaves that place.
  */
-function HeroItemSheet({ selection, onClose, onOutsidePress }: { selection: Selection | null; onClose: () => void; onOutsidePress: (p: { x: number; y: number }) => Promise<boolean> }) {
+function HeroItemSheet({ selection, onClose, onOutsidePress }: { selection: Selection | null; onClose: () => void; onOutsidePress: (p: { x: number; y: number }) => boolean | Promise<boolean> }) {
   const state = useGameState();
   const client = useGameClient();
   // The error belongs to the item it came from: switching to another item must not show it.

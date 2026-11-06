@@ -56,7 +56,6 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #40, 45] `src/components/ui/InfoPopover.tsx` backdrop + the screens' `outsidePress` handlers — nothing guards the awaited measure: a double tap, or a close meanwhile (sell, dialog, back), can re-open or flicker. Fix: a selection ref + an in-flight ref; drop a late result if the popover closed or was re-presented.
 - [PR #40, 30] `src/app/(tabs)/hero.tsx:51` — `hit.id in SLOT_LABELS` relies on item ids containing '#' (false for stackables and `start-<defId>` ids) and `in` matches prototype keys. Fix: `eq:` / `inv:` prefixed keys or `Object.hasOwn`.
 - [PR #40, 30] `src/components/ui/InfoPopover.tsx` / `useSlotHitTest.ts` — `pageX` / `pageY` and `measureInWindow` are assumed to share an origin on Android (translucent bars). Needs a device check; a mismatch offsets hits by the status-bar height.
-- [PR #40, 20] `src/components/ui/useSlotHitTest.ts` — a failed viewport measure disables clipping instead of counting as no hit. Fix: treat a null viewport measure (when a viewport ref is set) as no hit.
 
 - [#8, <80] `client/LocalGameClient.ts:316` — MIGRATE's `fromEngine` comes from the meta; read it from the last log row to cover a pre-1.4.0 install killed between update and first commit.
 - [#19, 30] `engine/config/dev.ts` — `DEV_TOOLS_ENABLED = true` is hardcoded, so the Debug panel ships in every build, and held Debug buttons (grants) write a `DEBUG_*` row per tick. Gate on `__DEV__` (or an EAS env var) before any public build.

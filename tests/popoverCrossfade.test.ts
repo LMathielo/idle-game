@@ -23,8 +23,53 @@ describe('popover crossfade', () => {
     expect(crossfade(m, { t: 'outDone' })).toEqual({ phase: 'fadingIn', hasPrev: false, ready: true });
   });
 
-  it('nothing on screen to fade: stays idle (plain mount)', () => {
-    expect(crossfade(IDLE, { t: 'switch', prevShown: false, reduce: false })).toEqual(IDLE);
+  it('nothing on screen to fade: measure, then fade the new box in (no old box)', () => {
+    const m = crossfade(IDLE, { t: 'switch', prevShown: false, reduce: false });
+    expect(m).toEqual({ phase: 'waitingMeasure', hasPrev: false, ready: false });
+    expect(crossfade(IDLE, { t: 'switch', prevShown: false, reduce: true })).toEqual(IDLE);
+  });
+
+  it('open: measure, fade in, idle; reduce-motion: idle at once', () => {
+    const m = crossfade(IDLE, { t: 'open', reduce: false });
+    expect(m).toEqual({ phase: 'waitingMeasure', hasPrev: false, ready: false });
+    expect(run([{ t: 'ready', reduce: false }, { t: 'inDone' }], m)).toEqual(IDLE);
+    expect(crossfade(IDLE, { t: 'open', reduce: true })).toEqual(IDLE);
+  });
+
+  describe('close (dismiss)', () => {
+    const closing = { phase: 'closing', hasPrev: true, ready: false };
+    it('a shown box fades out, then the machine is idle (Modal hidden)', () => {
+      expect(crossfade(IDLE, { t: 'close', shown: true, reduce: false })).toEqual(closing);
+      expect(run([{ t: 'close', shown: true, reduce: false }, { t: 'outDone' }])).toEqual(IDLE);
+    });
+    it('nothing visible (not measured yet, or waiting): closes at once', () => {
+      expect(crossfade(IDLE, { t: 'close', shown: false, reduce: false })).toEqual(IDLE);
+      expect(crossfade(crossfade(IDLE, { t: 'open', reduce: false }), { t: 'close', shown: false, reduce: false })).toEqual(IDLE);
+    });
+    it('reduce-motion: closes at once from any phase', () => {
+      for (const m of [IDLE, run([sw]), run([sw, { t: 'outDone' }, { t: 'ready', reduce: false }])]) {
+        expect(crossfade(m, { t: 'close', shown: true, reduce: true })).toEqual(IDLE);
+      }
+    });
+    it('during a switch fade-out the old box carries on fading; fading in: the half-visible box fades out', () => {
+      expect(crossfade(run([sw, { t: 'ready', reduce: false }]), { t: 'close', shown: true, reduce: false })).toEqual(closing);
+      expect(crossfade(run([sw, { t: 'outDone' }, { t: 'ready', reduce: false }]), { t: 'close', shown: true, reduce: false })).toEqual(closing);
+    });
+    it('during a switch wait (old box gone, new not shown) it closes at once', () => {
+      expect(crossfade(run([sw, { t: 'outDone' }]), { t: 'close', shown: false, reduce: false })).toEqual(IDLE);
+    });
+    it('closing ignores ready / inDone / a second close, and never takes touches', () => {
+      const m = crossfade(IDLE, { t: 'close', shown: true, reduce: false });
+      expect(crossfade(m, { t: 'ready', reduce: false })).toEqual(m);
+      expect(crossfade(m, { t: 'inDone' })).toEqual(m);
+      expect(crossfade(m, { t: 'close', shown: true, reduce: false })).toEqual(m);
+      expect(liveTouchable('closing', true)).toBe(false);
+    });
+    it('always settles to idle after outDone', () => {
+      for (const from of [IDLE, run([sw]), run([sw, { t: 'ready', reduce: false }]), run([sw, { t: 'outDone' }, { t: 'ready', reduce: false }])]) {
+        expect(run([{ t: 'close', shown: true, reduce: false }, { t: 'outDone' }], from).phase).toBe('idle');
+      }
+    });
   });
 
   it('A -> B -> C during the fade-out settles on the last: old box kept, ready reset', () => {

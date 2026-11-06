@@ -54,13 +54,13 @@ export function RecipePicker({ pipe, view, buildings, stamina, started, onCraft 
   }, []);
   const closeInfo = useCallback(() => setSelected(null), []);
   // A tap on another tile while the popover is open moves it there (no close / fade); the same tile closes it.
-  const hitTest = useSlotHitTest();
-  const outsidePress = async (p: { x: number; y: number }) => {
-    const hit = await hitTest.resolve(p);
-    if (!hit || hit.id === selected?.recipeId) return false;
-    setSelected({ recipeId: String(hit.id), anchor: hit.anchor });
-    return true;
-  };
+  const hitTest = useSlotHitTest(selected);
+  const outsidePress = (p: { x: number; y: number }) =>
+    hitTest.press(p, (hit) => {
+      if (hit.id === selected?.recipeId) return false;
+      setSelected({ recipeId: String(hit.id), anchor: hit.anchor });
+      return true;
+    });
 
   const open = view.pipes.filter((p) => p.slot === 'open');
   const free = open.filter((p) => !p.job).length;

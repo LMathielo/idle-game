@@ -44,4 +44,13 @@ describe('hitSlot', () => {
     expect(hitSlot(rects, { x: 10, y: 10 }, viewport)).toBeNull();
     expect(hitSlot(rects, { x: 10, y: 80 }, viewport)).toBe(7);
   });
+  it('a viewport that could not be measured (null) hits nothing; none registered (undefined) does not clip', () => {
+    expect(hitSlot(rects, { x: 10, y: 10 }, null)).toBeNull();
+    expect(hitSlot(rects, { x: 10, y: 10 }, undefined)).toBe('a');
+  });
+  it('a partly clipped slot is hit only on its visible part', () => {
+    const viewport = { x: 0, y: 30, width: 400, height: 500 }; // slot 'a' spans y 0..52
+    expect(hitSlot(rects, { x: 10, y: 40 }, viewport)).toBe('a');
+    expect(hitSlot(rects, { x: 10, y: 20 }, viewport)).toBeNull();
+  });
 });

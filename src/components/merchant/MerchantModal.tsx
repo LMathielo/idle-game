@@ -115,13 +115,13 @@ function BuyTab({ state }: { state: GameState }) {
     [view.stock],
   );
   const close = useCallback(() => setSelected(null), []);
-  const hitTest = useSlotHitTest();
-  const outsidePress = async (p: { x: number; y: number }) => {
-    const hit = await hitTest.resolve(p);
-    if (!hit || hit.id === selected?.slot) return false;
-    open(hit.id, hit.anchor);
-    return true;
-  };
+  const hitTest = useSlotHitTest(selected);
+  const outsidePress = (p: { x: number; y: number }) =>
+    hitTest.press(p, (hit) => {
+      if (hit.id === selected?.slot) return false;
+      open(hit.id, hit.anchor);
+      return true;
+    });
   const prices = useMemo(() => view.stock.map((l) => (l ? `${formatNumber(l.unitPrice)}g` : '')), [view.stock]);
 
   /** Refusals and save failures show in a GameDialog. */
@@ -162,7 +162,7 @@ function BuyTab({ state }: { state: GameState }) {
   );
 }
 
-type OutsidePress = (p: { x: number; y: number }) => Promise<boolean>;
+type OutsidePress = (p: { x: number; y: number }) => boolean | Promise<boolean>;
 
 /** Stays mounted while the player moves between items (so the popover only moves, no close / fade): per-item state is keyed. */
 function BuySheet({ state, slot, anchor, onClose, onOutsidePress }: { state: GameState; slot: number; anchor: AnchorRect; onClose: () => void; onOutsidePress: OutsidePress }) {
@@ -227,13 +227,13 @@ function SellTab({ state }: { state: GameState }) {
   );
   const open = useCallback((key: string | number, anchor: AnchorRect) => setSelected({ id: String(key), anchor }), []);
   const close = useCallback(() => setSelected(null), []);
-  const hitTest = useSlotHitTest();
-  const outsidePress = async (p: { x: number; y: number }) => {
-    const hit = await hitTest.resolve(p);
-    if (!hit || hit.id === selected?.id) return false;
-    open(hit.id, hit.anchor);
-    return true;
-  };
+  const hitTest = useSlotHitTest(selected);
+  const outsidePress = (p: { x: number; y: number }) =>
+    hitTest.press(p, (hit) => {
+      if (hit.id === selected?.id) return false;
+      open(hit.id, hit.anchor);
+      return true;
+    });
   const item = selected ? inventory.items.find((i) => i.id === selected.id) : undefined;
 
   return (

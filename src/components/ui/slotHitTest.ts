@@ -14,10 +14,12 @@ export function pointInRect(p: Point, r: AnchorBox, slop = 0): boolean {
 
 /**
  * The slot under `p`, or null. `viewport` (optional) is the visible area the slots are clipped to (a ScrollView): a
- * point outside it hits nothing. When slop areas overlap, the slot whose own box contains the point wins, else the
- * nearest centre.
+ * point outside it hits nothing. `viewport === null` means a viewport exists but could not be measured: nothing can be
+ * trusted, so nothing is hit (`undefined` = no viewport, no clipping). When slop areas overlap, the slot whose own box
+ * contains the point wins, else the nearest centre.
  */
 export function hitSlot<K extends string | number>(rects: readonly SlotRect<K>[], p: Point, viewport?: AnchorBox | null, slop = SLOT_HIT_SLOP): K | null {
+  if (viewport === null) return null;
   if (viewport && !pointInRect(p, viewport)) return null;
   let best: K | null = null;
   let bestScore = Infinity;
