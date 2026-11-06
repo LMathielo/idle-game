@@ -192,6 +192,15 @@ function finishFight(draft: GameState, activity: DungeonActivity, outcome: Fight
     for (const [id, n] of Object.entries(rewards.itemsLost)) bump(summary.itemsLost, id, n);
   }
 
+  // A run on a stage the unlock chain has closed (a Hard / Extreme run from before the per-difficulty chains) ends with this fight: the hero
+  // goes idle instead of repeating, so a closed stage never farms the wins that open the next one. One shared place: live, offline and
+  // any split of time behave the same. A forfeit is already leaving (the caller clears the activity).
+  if (outcome.endReason !== 'forfeit' && !isDungeonUnlocked(draft, dungeonId, difficulty)) {
+    draft.activity = null;
+    events.push({ type: 'ACTIVITY_STOPPED', kind: 'dungeon' });
+    return;
+  }
+
   // Auto-repeat: the next run's search starts at once, whatever the HP.
   activity.phase = 'search';
   activity.progressMs = 0;
@@ -264,7 +273,7 @@ export function forfeitFight(draft: GameState, events: GameEvent[]): boolean {
 /**
  * Applies one fight event at its time: a strike, or the time limit. Ends the fight when a side reaches 0 HP or
  * time is up. A hero whose HP dropped to 0 outside the fight's strikes (debug) loses at the next event.
- * A boss fight ends the activity (the hero is idle); a dungeon fight starts the next search.
+ * A boss fight ends the activity (the hero is idle); a dungeon fight starts the next search (or ends it when the stage is closed).
  */
 function stepFight(draft: GameState, activity: DungeonActivity | BossActivity, fight: ActiveFight, ev: FightEvent, summary: SimulationSummary, events: GameEvent[]): void {
   const end = (reason: 'enemy_defeated' | 'hero_defeated' | 'time_limit', atMs: number) => {
@@ -346,8 +355,9 @@ export function advanceDungeon(
   const walk = (wallBudget: number, fightOnly: boolean): number => {
     let wallLeft = wallBudget;
     while (efficiency > 0 && guard < MAX_ACTIONS_PER_SIMULATION) {
-      // A boss fight ends the activity (the hero is idle): nothing more to walk, the rest of the time is plain regen.
-      if (activity.kind === 'boss' && draft.activity !== activity) break;
+      // A boss fight ends the activity (the hero is idle), and so does a stage fight on a stage the chain has closed: nothing more to walk,
+      // the rest of the time is plain regen.
+      if (draft.activity !== activity) break;
       const fight = activity.kind === 'boss' ? activity.fight : activity.phase === 'fight' ? activity.fight : null;
       if (fightOnly && !fight) break;
       const ev = fight ? nextFightEvent(fight) : null;
@@ -378,7 +388,7 @@ export function advanceDungeon(
   walk(grantedMs, false);
   // The cap fell inside a fight: finish it with the time beyond the cap (bounded by the time that really passed).
   const beyondCap = requestedMs - grantedMs;
-  if (beyondCap > 0 && (activity.kind === 'boss' ? draft.activity === activity : activity.phase === 'fight')) walk(beyondCap, true);
+  if (beyondCap > 0 && draft.activity === activity && (activity.kind === 'boss' || activity.phase === 'fight')) walk(beyondCap, true);
   regen(regenLeft);
 }
 

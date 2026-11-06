@@ -148,6 +148,13 @@ function bossRequirementText(req: { dungeonId: DungeonId; wins: number }, progre
   return `${difficulty === 'normal' ? '' : `${difficultyName(difficulty)} `}${DUNGEONS[req.dungeonId].name} wins ${formatNumber(progress)}/${formatNumber(req.wins)}`;
 }
 
+/** The locked-stage popover's note, from the unlock view: "Win Rat Cellar 20 times on Hard. Normal wins do not count. Once open, it stays open." */
+function unlockNoteText(req: { dungeonId: DungeonId; wins: number }, difficulty: Difficulty): string {
+  const times = `Win ${DUNGEONS[req.dungeonId].name} ${formatNumber(req.wins)} times`;
+  if (difficulty === 'normal') return `${times}. Once open, it stays open.`;
+  return `${times} on ${difficultyName(difficulty)}. Normal wins do not count. Once open, it stays open.`;
+}
+
 /** "Pack of 1-4" on Hard / Extreme, nothing on Normal. */
 function packRangeText(difficulty: Difficulty): string | null {
   if (difficulty === 'normal') return null;
@@ -236,7 +243,7 @@ function DungeonList({ state, running, onPick }: { state: GameState; running: Du
         );
       })}
       {info && infoStage && infoUnlock && !infoUnlock.unlocked && infoUnlock.requirement ? (
-        <LockedInfo id={infoStage} difficulty={infoDifficulty} anchor={info.anchor} requirement={requirementText(infoUnlock.requirement, infoUnlock.progress, infoDifficulty)} onClose={closeInfo} />
+        <LockedInfo id={infoStage} difficulty={infoDifficulty} anchor={info.anchor} requirement={requirementText(infoUnlock.requirement, infoUnlock.progress, infoDifficulty)} unlockNote={unlockNoteText(infoUnlock.requirement, infoDifficulty)} onClose={closeInfo} />
       ) : null}
       {info && infoBoss && infoBossUnlock && !infoBossUnlock.unlocked ? (
         <BossLockedInfo
@@ -264,7 +271,7 @@ function DungeonList({ state, running, onPick }: { state: GameState; running: Du
 }
 
 /** What a locked dungeon holds and what opens it (InfoPopover, anchored on its card). Stats are the stage's Normal enemy; a pack on Hard / Extreme is the same enemy scaled. */
-function LockedInfo({ id, difficulty, anchor, requirement, onClose }: { id: DungeonId; difficulty: Difficulty; anchor: AnchorRect; requirement: string; onClose: () => void }) {
+function LockedInfo({ id, difficulty, anchor, requirement, unlockNote, onClose }: { id: DungeonId; difficulty: Difficulty; anchor: AnchorRect; requirement: string; unlockNote: string; onClose: () => void }) {
   const d = DUNGEONS[id];
   const enemy = ENEMIES[d.enemyId];
   const pack = packRangeText(difficulty);
@@ -276,7 +283,8 @@ function LockedInfo({ id, difficulty, anchor, requirement, onClose }: { id: Dung
       <PopoverRow icon={<GameIcon name="hero_xp" />} label="Hero XP per win (Normal)" value={`+${d.rewards.heroXp}`} />
       <PopoverRow icon={<GameIcon name="gold" />} label="Gold per win (Normal)" value={range(d.rewards.gold.min, d.rewards.gold.max)} />
       <PopoverText tone="note">
-        {pack ? `On ${difficultyName(difficulty)} it opens with its Normal stage and sends a ${pack.toLowerCase()}. ` : ''}Only wins on Normal count toward the unlock; it is permanent once reached.
+        {pack ? `On ${difficultyName(difficulty)} it sends a ${pack.toLowerCase()}. ` : ''}
+        {unlockNote}
       </PopoverText>
     </InfoPopover>
   );

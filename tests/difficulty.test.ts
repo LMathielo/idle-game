@@ -375,19 +375,38 @@ describe('stages inside Hard / Extreme', () => {
     expect(n.events.filter((e) => e.type === 'DUNGEON_UNLOCKED')).toEqual([]);
   });
 
-  it('a Hard run on a stage the chain now closes (an old save) finishes; new starts are refused', () => {
+  it('a Hard run on a stage the chain now closes finishes ONE run, then the hero is idle; new starts are refused', () => {
     // A save from before the per-difficulty chain: Hard Wolf Den running, no Hard Bat Cave wins.
     const run = ok(setWins(heroGame('hard'), 'hard', { bat_cave: 30 }), { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den', difficulty: 'hard' });
     const old = structuredClone(run);
     old.dungeon.harder.hard.byDungeon = {};
     expect(isDungeonUnlocked(old, 'wolf_den', 'hard')).toBe(false);
-    const after = simulate(old, T0 + 12 * MIN).state;
-    expect(after.activity).toMatchObject({ kind: 'dungeon', dungeonId: 'wolf_den', difficulty: 'hard' });
-    expect(after.dungeon.harder.hard.byDungeon.wolf_den!.runs).toBeGreaterThan(0); // it kept running
-    // Starting it again (even the same run) and picking it from Normal's idle state are refused.
-    expect(errorOf(after, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den', difficulty: 'hard' }, T0 + 12 * MIN).code).toBe('DUNGEON_LOCKED');
-    const stopped = ok(after, { type: 'STOP_ACTIVITY' }, T0 + 12 * MIN);
-    expect(errorOf(stopped, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den', difficulty: 'hard' }, T0 + 12 * MIN).code).toBe('DUNGEON_LOCKED');
+    // The search in progress finishes into its fight (the run in progress); the fight is not interrupted.
+    const mid = simulate(old, T0 + searchMsFor('wolf_den', old) + 1);
+    expect(mid.state.activity).toMatchObject({ kind: 'dungeon', dungeonId: 'wolf_den', difficulty: 'hard', phase: 'fight' });
+    const end = simulate(old, T0 + 12 * MIN);
+    // Exactly one run was played and counted, and the hero went idle instead of repeating (no farming of the wins that open the next stage).
+    expect(end.state.activity).toBeNull();
+    expect(end.state.dungeon.harder.hard.byDungeon.wolf_den!.runs).toBe(1);
+    expect(end.summary.dungeon.runs).toBe(1);
+    expect(end.events.filter((e) => e.type === 'ACTIVITY_STOPPED')).toEqual([{ type: 'ACTIVITY_STOPPED', kind: 'dungeon' }]);
+    expect(simulate(end.state, T0 + 60 * MIN).state.dungeon.harder.hard.byDungeon.wolf_den!.runs).toBe(1);
+    // Live == offline == any split: many small steps, and a split inside the search and inside the fight, give the same state.
+    const split = (cuts: number[]) => cuts.reduce((st, t) => simulate(st, T0 + t).state, old);
+    const search = searchMsFor('wolf_den', old);
+    const steps = Array.from({ length: 12 * 60 }, (_, i) => (i + 1) * 1000);
+    for (const cuts of [steps, [search - 1, search, search + 1, search + 2000, 12 * MIN], [30 * SEC, search + 7000, 12 * MIN]]) {
+      const got = split(cuts);
+      expect(got.activity).toBeNull();
+      expect(got.dungeon).toEqual(end.state.dungeon);
+      expect(got.character).toEqual(end.state.character);
+    }
+    // New starts on the closed stage are refused (idle and from another activity).
+    expect(errorOf(end.state, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'wolf_den', difficulty: 'hard' }, T0 + 12 * MIN).code).toBe('DUNGEON_LOCKED');
+    // Open stages still repeat.
+    const open = simulate(ok(heroGame('hard'), { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar', difficulty: 'hard' }), T0 + 12 * MIN);
+    expect(open.state.activity).toMatchObject({ kind: 'dungeon' });
+    expect(open.summary.dungeon.runs).toBeGreaterThan(1);
   });
 
   it('counters are kept per difficulty (stages and boss); existing counters are the Normal ones', () => {

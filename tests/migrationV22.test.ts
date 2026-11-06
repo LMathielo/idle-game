@@ -32,6 +32,13 @@ import { asV22, makeClient, MIN, SEC } from './helpers';
 const read = (name: string): Record<string, any> => JSON.parse(readFileSync(join(__dirname, 'fixtures', name), 'utf8'));
 const PACK = read('save-v22.json');
 const BOSS = read('save-v22-boss.json');
+/**
+ * The frozen Hard run with Forgotten Crypt OPEN on Hard (50 Hard Wolf Den wins, the per-difficulty chain): the run repeats, so the tests that
+ * look at the NEXT fight have one. The frozen document itself has no Hard Wolf Den wins: its run ends with the fight in progress (tested in
+ * tests/difficulty.test.ts, "a Hard run on a stage the chain now closes").
+ */
+const PACK_OPEN = structuredClone(PACK);
+PACK_OPEN.dungeon.harder.hard.byDungeon = { ...PACK_OPEN.dungeon.harder.hard.byDungeon, wolf_den: { runs: 50, wins: 50, losses: 0 } };
 const REF = read('save-v22-reference.json');
 const entries = (rows: LogRow[]): ReplayEntry[] => rows.map(({ seq: _s, synced: _y, ...r }) => r);
 
@@ -137,7 +144,7 @@ describe('v22 -> v23', () => {
   });
 
   it('the NEXT fight opens the new way: the hero at 0, the monster at 300 ms', () => {
-    const r = simulate(pack, pack.time.lastSimulatedAt + 30 * MIN).state;
+    const r = simulate(loadSave(PACK_OPEN), PACK.time.lastSimulatedAt + 30 * MIN).state;
     const f = r.dungeon.lastFight!;
     expect(f).toMatchObject({ heroFirstStrikeMs: 0, enemyFirstStrikeMs: 300 });
     expect(f.log[0]).toMatchObject({ actor: 'hero', atMs: 0, strike: 1 });
@@ -187,8 +194,8 @@ describe('through the client', () => {
   it('loading writes a MIGRATE anchor (save 22 -> 23, engine 1.24.0 -> current); the old-timing fight plays on; the log replays', async () => {
     const repo = new MemoryGameRepository();
     await repo.init();
-    const last = { commandId: 'v22-last', type: 'SIMULATE' as const, payload: { checkpoint: true }, clientTime: PACK.time.lastSimulatedAt, engineVersion: '1.24.0', stateHash: hashState(PACK as unknown as GameState) };
-    await repo.commit([last], PACK as unknown as GameState, { [META_ENGINE_VERSION]: '1.24.0', device_id: 'phone' });
+    const last = { commandId: 'v22-last', type: 'SIMULATE' as const, payload: { checkpoint: true }, clientTime: PACK.time.lastSimulatedAt, engineVersion: '1.24.0', stateHash: hashState(PACK_OPEN as unknown as GameState) };
+    await repo.commit([last], PACK_OPEN as unknown as GameState, { [META_ENGINE_VERSION]: '1.24.0', device_id: 'phone' });
     const clock = new FakeClock(PACK.time.lastSimulatedAt + 3 * SEC);
     const { client } = makeClient({ repo, clock, prefix: 'v23' });
     await client.load();
@@ -196,7 +203,7 @@ describe('through the client', () => {
     expect(m).toHaveLength(1);
     const p = m[0].payload as MigratePayload;
     expect(p).toMatchObject({ fromSave: 22, toSave: CURRENT_SAVE_VERSION, fromEngine: '1.24.0', toEngine: ENGINE_VERSION });
-    expect(p.snapshot).toEqual(loadSave(PACK));
+    expect(p.snapshot).toEqual(loadSave(PACK_OPEN));
     // The fight in progress finishes the old way (27 s long in the reference), then the next ones open the new way.
     clock.advance(60 * SEC);
     await client.resume();
