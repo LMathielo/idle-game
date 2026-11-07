@@ -61,7 +61,6 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #43, 25] `src/components/dungeon/DungeonModal.tsx` ~1107/1130 — the last-fight box lists stage gear twice (rewards line + a "Drop:" row each) and the group a11y label repeats them. Fix: leave gear out of the items line when `gears` lists it.
 - [PR #43, 25] `src/components/dungeon/DungeonModal.tsx` ~1131 — every gear row in `LastFight` shares one `gearRef`; harmless today (stage drops have no View button). Fix: per-row refs if stage drops get one.
 - [PR #43, 25] `src/components/dungeon/DungeonModal.tsx` `BossDetail` — the Potion Belt note hardcodes the item name. Fix: build it from the unique drop's `itemName`.
-- [PR #44, 55] `src/components/belt/BeltPanel.tsx` ~253 — each bag row's pan (`minDistance: 6`, no direction limit) sits inside the bag ScrollView, so a vertical scroll swipe can start a drag once the list scrolls (many potion types / small phones). Fix: activate on long-press or horizontal-first (`activeOffsetX` + `failOffsetY`), or arbitrate with a native ScrollView gesture.
 - [PR #44, 30] `src/components/belt/BeltPanel.tsx` ~105-116 — drop rects come from async `measureInWindow` at layout / drag start; on Android edge-to-edge the window coords may differ from the gesture's `absoluteY` by the status bar (hidden by the 10 pt slop). Fix: check alignment on device; re-measure on layout shifts.
 
 ## Engine and data
