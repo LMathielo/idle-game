@@ -985,7 +985,7 @@ describe('save v20', () => {
     expect('maxFightMs' in doc.activity.fight).toBe(false);
     const s = loadSave(V19);
     expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
-    expect(CURRENT_SAVE_VERSION).toBe(24);
+    expect(CURRENT_SAVE_VERSION).toBe(25);
     expect(s.dungeon.bosses).toEqual({});
     const f = s.activity?.kind === 'dungeon' ? s.activity.fight! : null;
     expect(f).toMatchObject({ maxFightMs: 60_000, heroStunStrikes: 0 });

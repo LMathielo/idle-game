@@ -8,6 +8,7 @@ import {
   craftingView,
   craftJobView,
   craftMs,
+  firstEmptyCell,
   gearQualityFloor,
   type GameState,
   getItemDef,
@@ -201,7 +202,8 @@ describe('ready → Done (COLLECT_CRAFT)', () => {
     expect(code(s, { type: 'COLLECT_CRAFT', pipe: 0, jobId: 999 })).toBe('CRAFT_CHANGED');
     const done = ok(s, { type: 'COLLECT_CRAFT', pipe: 0, jobId: s.crafting.pipes[0]!.id });
     const item = done.inventory.items.find((i) => i.defId === 'stone_sword')!;
-    expect(item).toEqual(makeItem('stone_sword', 1, `stone_sword#${s.nextItemSerial}`, { quality: roll.quality, rarity: roll.rarity }));
+    // 1.28.0: the piece lands in the first empty bag cell.
+    expect(item).toEqual({ ...makeItem('stone_sword', 1, `stone_sword#${s.nextItemSerial}`, { quality: roll.quality, rarity: roll.rarity }), cell: firstEmptyCell(s.inventory) });
     expect(done.nextItemSerial).toBe(s.nextItemSerial + 1);
     expect(done.crafting.pipes[0]).toBeNull();
     // Equipped, it gives its scaled damage.

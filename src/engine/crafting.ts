@@ -35,7 +35,7 @@ import { GEAR } from './config/gear';
 import { getItemDef } from './config/items';
 import { BASIS_POINTS } from './config/stats';
 import { affixStream, gearRarityDetail, type GearRarityDetail, gearStatsAt, type GearStats, rarityOdds, rollAffixes, rollQuality, rollRarity } from './gear';
-import { addStackable, freeSlots, makeItem } from './inventory';
+import { addStackable, freeSlots, makeItem, placeInBag } from './inventory';
 import { itemQuantity } from './selectors';
 import type { CraftingState, CraftJob, GameEvent, GameState, Inventory, ItemRarity, SimulationSummary } from './types';
 
@@ -577,7 +577,7 @@ export function collectCraft(draft: GameState, pipe: unknown, jobId: unknown, ev
   if (freeSlots(draft.inventory) < 1) return err('INVENTORY_FULL', 'Free an inventory slot first: the piece waits in the pipe');
   const defId = RECIPES[job.recipeId].output.defId;
   const itemId = collectedItemId(draft, defId);
-  draft.inventory.items.push(makeItem(defId, 1, itemId, { quality: job.gear.quality, rarity: job.gear.rarity, affixes: job.gear.affixes }));
+  placeInBag(draft.inventory, makeItem(defId, 1, itemId, { quality: job.gear.quality, rarity: job.gear.rarity, affixes: job.gear.affixes }));
   draft.nextItemSerial += 1;
   draft.crafting.pipes[index] = null;
   events.push({ type: 'CRAFT_COLLECTED', pipe: index, jobId: job.id, itemId, defId });

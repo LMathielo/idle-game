@@ -54,7 +54,7 @@ import {
 } from '../src/engine';
 import { critMultiplierBp } from '../src/engine/attributes';
 import { newFight, strike } from '../src/engine/combat';
-import { apply, builtGame, fightSide, HOUR, makeClient, MIN, SEC, T0, v22Dungeon, withCore } from './helpers';
+import { apply, builtGame, fightSide, HOUR, makeClient, MIN, SEC, T0, v22Dungeon, v25Doc, withCore } from './helpers';
 
 type Attrs = Partial<Record<'strength' | 'dexterity' | 'endurance' | 'intelligence', number>>;
 
@@ -540,7 +540,7 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
     expect(V18_SAVE).toEqual(frozen); // the input is not mutated
     const { saveVersion: _v, character, activity: _a, dungeon, ...rest } = s;
     const { saveVersion: _rv, character: rawCharacter, activity: _ra, dungeon: rawDungeon, ...rawRest } = V18_SAVE;
-    expect(rest).toEqual({ ...rawRest, potionCooldowns: {} }); // v24: no potion cooldown running
+    expect(rest).toEqual(v25Doc({ ...rawRest, potionCooldowns: {} })); // v24: no potion cooldown running; v25: bag cells
     const { hpRegenProgress: _p, manaRegenProgress: _q, ...c } = character;
     const { hpRegenProgress: _rp, manaRegenProgress: _rq, ...rc } = rawCharacter;
     expect(c).toEqual(rc);
@@ -589,9 +589,9 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
   });
 });
 
-describe('a new game is a v24 game', () => {
-  it('saveVersion 24, engine 1.27.0 (the stats rework shipped as 1.19.0 / v19)', () => {
-    expect(newGame(1, T0).saveVersion).toBe(24);
-    expect(ENGINE_VERSION).toBe('1.27.0');
+describe('a new game is a v25 game', () => {
+  it('saveVersion 25, engine 1.28.0 (the stats rework shipped as 1.19.0 / v19)', () => {
+    expect(newGame(1, T0).saveVersion).toBe(25);
+    expect(ENGINE_VERSION).toBe('1.28.0');
   });
 });

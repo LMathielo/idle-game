@@ -20,7 +20,7 @@ import { BELT, BELT_RULES, isBeltRule } from './config/belt';
 import { getItemDef, type ItemDef, ITEMS } from './config/items';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { maxHpOf } from './hp';
-import { freeSlots, makeItem } from './inventory';
+import { freeSlots, makeItem, placeInBag } from './inventory';
 import type { ItemError } from './merchant';
 import type { ActiveFight, BeltRule, BeltSlot, GameState, Item, SimulationSummary } from './types';
 
@@ -176,7 +176,7 @@ export function beltTake(draft: GameState, slot: unknown): ItemError {
   if (stack) stack.quantity = (stack.quantity ?? 0) + held.count;
   else if (freeSlots(draft.inventory) < 1) {
     return err('INVENTORY_FULL', `No room in the bag for ${held.count} ${getItemDef(held.defId)?.name ?? held.defId}`);
-  } else draft.inventory.items.push(makeItem(held.defId, held.count));
+  } else placeInBag(draft.inventory, makeItem(held.defId, held.count));
   worn.slots[slot] = null;
   return null;
 }

@@ -2,19 +2,18 @@
 // InfoPopover, which are Modals owned by the screen, still present on top of it, on the Village and over the Dungeon's
 // full-screen modal alike). Four belt slots on top, the bag's potions below.
 //
-// Filling a slot: HOLD a potion in the list, then DRAG it onto a slot (Gesture Handler pan that activates after a short hold, so a
-// scroll swipe in the list never starts a drag; Reanimated shared values, all on the UI thread: the ghost follows the finger, the slot
-// under it lights up, one scheduleOnRN on release), or TAP a potion and then a slot.
-// Nothing here re-renders the panel when a drag starts or ends (the ghost's icon is state of its own small component, set through a ref),
-// and each row's gesture config is memoized, so the gesture is never re-created while a finger is on it.
+// Filling a slot: HOLD a potion in the list, then DRAG it onto a slot (the shared drag kit, ui/drag/dragKit.tsx: a Gesture Handler pan that
+// activates after DRAG_HOLD_MS, so a scroll swipe in the list never starts a drag; Reanimated shared values, all on the UI thread: the
+// ghost follows the finger, the slot under it lights up, one scheduleOnRN on release), or TAP a potion and then a slot (a tap held past the
+// hold is reported by the kit as a tap).
+// Nothing here re-renders the panel when a drag starts or ends, and each row's gesture config is memoized by the kit.
 // Tapping a filled slot opens its InfoPopover: the three rules (the current one marked) and Remove (back to the bag).
 // While a potion's cooldown group is cooling down (after a drink of any potion of it) its seconds count down in green over its slots and in the bag list; the
 // seconds come from the engine's clock the client ticks every second.
-import { type MutableRefObject, memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, type HostInstance, type LayoutChangeEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { GestureDetector, GestureHandlerRootView, type PanGestureConfig, usePanGesture } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { scheduleOnRN } from 'react-native-worklets';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useGameState } from '../../client/GameProvider';
 import { type BagPotionView, BELT_RULE_IDS, BELT_RULES, type BeltRule, type BeltSlotView, bagPotions, beltView } from '../../engine';
 import { colors, fonts } from '../../theme';
@@ -22,16 +21,13 @@ import { GameIcon, ItemIcon } from '../art/Sprites';
 import { formatQty } from '../format';
 import { PixelButton } from '../PixelButton';
 import { type AnchorRect, InfoPopover, measureAnchor, POPOVER_GOOD, PopoverActions, PopoverRow, PopoverText } from '../ui/InfoPopover';
-import { DRAG_HOLD_MS } from '../ui/dragHold';
+import { DragGhost, DragSource, type DragSurface, useDragSurface } from '../ui/drag/dragKit';
 import { useCommand } from '../ui/useCommand';
-import { type DropRect, slotAt } from './beltDrag';
 
 /** Whole seconds left of a cooldown (rounded up, so "1s" shows until it is over). */
 export const cooldownSeconds = (ms: number) => Math.ceil(ms / 1000);
 
 const SLOT_SIZE = 64;
-const GHOST_SIZE = 44;
-const NO_RECT: DropRect = { x: 0, y: 0, width: 0, height: 0 };
 
 type Props = {
   onClose: () => void;
@@ -61,29 +57,10 @@ export function BeltPanel({ onClose, bottomReserve = 0 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = bag.find((p) => p.itemId === selectedId) ?? null; // gone from the bag (all moved): no selection
   const [menu, setMenu] = useState<{ slot: number; anchor: AnchorRect } | null>(null);
-  /** Sets the ghost's icon (a potion's defId, null = none): owned by GhostIcon so a drag start / end re-renders only that. */
-  const ghostIcon = useRef<((defId: string | null) => void) | null>(null);
 
-  // ---- drag state, all on the UI thread ----
-  const slotRects = useSharedValue<DropRect[]>([NO_RECT, NO_RECT, NO_RECT, NO_RECT]);
-  const originX = useSharedValue(0); // the overlay root's window origin, to place the ghost
-  const originY = useSharedValue(0);
-  const dragX = useSharedValue(0);
-  const dragY = useSharedValue(0);
-  const ghostOn = useSharedValue(0);
-  const hover = useSharedValue(-1);
-
-  const rootRef = useRef<HostInstance>(null);
-  const slotRefs = useRef<(HostInstance | null)[]>([null, null, null, null]);
-  const measure = useCallback(() => {
-    void Promise.all([measureAnchor(rootRef.current), ...slotRefs.current.map((r) => measureAnchor(r))]).then(([root, ...rects]) => {
-      if (root) {
-        originX.set(root.x);
-        originY.set(root.y);
-      }
-      slotRects.set(rects.map((r) => (r ? { x: r.x, y: r.y, width: r.width, height: r.height } : NO_RECT)));
-    });
-  }, [originX, originY, slotRects]);
+  // ---- drag state (the shared kit): every slot accepts a potion; the overlay root is the ghost's layer ----
+  const surface = useDragSurface(belt.slots.length, true);
+  const { measure, ghostIcon, hover, setTarget, layerRef } = surface;
   // Boxes are measured once laid out (and again when a drag starts), never per frame.
   const onLayout = useCallback(
     (_e: LayoutChangeEvent) => {
@@ -99,20 +76,12 @@ export function BeltPanel({ onClose, bottomReserve = 0 }: Props) {
     [send],
   );
   const startDrag = useCallback(
-    (defId: string) => {
+    (_itemId: string, defId: string) => {
       ghostIcon.current?.(defId);
       setMenu(null); // no-op (no render) unless a slot's popover is open
       measure();
     },
-    [measure],
-  );
-  const endDrag = useCallback(() => ghostIcon.current?.(null), []);
-  const drop = useCallback(
-    (itemId: string, slot: number) => {
-      ghostIcon.current?.(null);
-      put(itemId, slot);
-    },
-    [put],
+    [ghostIcon, measure],
   );
 
   const onSlotPress = useCallback(
@@ -126,16 +95,11 @@ export function BeltPanel({ onClose, bottomReserve = 0 }: Props) {
     [belt.slots, put, selected],
   );
 
-  const ghostStyle = useAnimatedStyle(() => ({
-    opacity: ghostOn.get(),
-    transform: [{ translateX: dragX.get() - originX.get() - GHOST_SIZE / 2 }, { translateY: dragY.get() - originY.get() - GHOST_SIZE / 2 }],
-  }));
-
   const hint = selected ? `Tap a slot to put ${selected.name} there.` : 'Hold a potion and drag it onto a slot, or tap a potion and then a slot. Tap a filled slot to change its rule or remove it.';
 
   return (
     <GestureHandlerRootView style={styles.fill} pointerEvents="box-none">
-      <View ref={rootRef} style={styles.fill} onLayout={onLayout} collapsable={false}>
+      <View ref={layerRef} style={styles.fill} onLayout={onLayout} collapsable={false}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close the potion belt" />
         <View style={[styles.panel, { bottom: bottomReserve + 12 }]} accessibilityViewIsModal>
           <View style={styles.head}>
@@ -161,9 +125,7 @@ export function BeltPanel({ onClose, bottomReserve = 0 }: Props) {
                 hover={hover}
                 armed={!!selected}
                 onPress={onSlotPress}
-                setRef={(node) => {
-                  slotRefs.current[s.index] = node;
-                }}
+                setTarget={setTarget}
               />
             ))}
           </View>
@@ -181,14 +143,9 @@ export function BeltPanel({ onClose, bottomReserve = 0 }: Props) {
                   potion={p}
                   selected={p.itemId === selected?.itemId}
                   onSelect={setSelectedId}
-                  ghostOn={ghostOn}
-                  dragX={dragX}
-                  dragY={dragY}
-                  hover={hover}
-                  slotRects={slotRects}
+                  surface={surface}
                   startDrag={startDrag}
-                  endDrag={endDrag}
-                  drop={drop}
+                  drop={put}
                 />
               ))
             )}
@@ -196,26 +153,12 @@ export function BeltPanel({ onClose, bottomReserve = 0 }: Props) {
         </View>
 
         {/* The ghost that follows the finger (UI thread). */}
-        <Animated.View style={[styles.ghost, ghostStyle]} pointerEvents="none">
-          <GhostIcon setter={ghostIcon} />
-        </Animated.View>
+        <DragGhost surface={surface} />
       </View>
 
       <SlotMenu menu={menu} slotView={menu ? belt.slots[menu.slot] : null} maxPerSlot={belt.maxPerSlot} onClose={() => setMenu(null)} />
     </GestureHandlerRootView>
   );
-}
-
-/** The icon inside the drag ghost. Its own state, so starting / ending a drag re-renders this and nothing else. */
-function GhostIcon({ setter }: { setter: MutableRefObject<((defId: string | null) => void) | null> }) {
-  const [defId, setDefId] = useState<string | null>(null);
-  useEffect(() => {
-    setter.current = setDefId;
-    return () => {
-      setter.current = null;
-    };
-  }, [setter]);
-  return defId ? <ItemIcon defId={defId} size={36} /> : null;
 }
 
 // ---------- belt slot ----------
@@ -227,10 +170,11 @@ type SlotProps = {
   /** A bag potion is selected: a tap on any slot puts it there. */
   armed: boolean;
   onPress: (slot: number, anchor: AnchorRect) => void;
-  setRef: (node: HostInstance | null) => void;
+  /** Registers the slot's box as drop box `index` (the drag kit measures it). */
+  setTarget: DragSurface['setTarget'];
 };
 
-function BeltSlotCell({ slot, maxPerSlot, hover, armed, onPress, setRef }: SlotProps) {
+function BeltSlotCell({ slot, maxPerSlot, hover, armed, onPress, setTarget }: SlotProps) {
   const ref = useRef<HostInstance | null>(null);
   const filled = slot.defId !== null;
   const secs = cooldownSeconds(slot.cooldownLeftMs);
@@ -246,7 +190,7 @@ function BeltSlotCell({ slot, maxPerSlot, hover, armed, onPress, setRef }: SlotP
       <Pressable
         ref={(node) => {
           ref.current = node;
-          setRef(node);
+          setTarget(slot.index, node);
         }}
         onPress={handle}
         accessibilityRole="button"
@@ -273,57 +217,19 @@ type RowProps = {
   potion: BagPotionView;
   selected: boolean;
   onSelect: (itemId: string | null) => void;
-  ghostOn: { set: (v: number) => void };
-  dragX: { set: (v: number) => void };
-  dragY: { set: (v: number) => void };
-  hover: { set: (v: number) => void };
-  slotRects: { get: () => DropRect[] };
-  startDrag: (defId: string) => void;
-  endDrag: () => void;
+  surface: DragSurface;
+  startDrag: (itemId: string, defId: string) => void;
   drop: (itemId: string, slot: number) => void;
 };
 
-const BagRow = memo(function BagRow({ potion, selected, onSelect, ghostOn, dragX, dragY, hover, slotRects, startDrag, endDrag, drop }: RowProps) {
+const BagRow = memo(function BagRow({ potion, selected, onSelect, surface, startDrag, drop }: RowProps) {
   const secs = cooldownSeconds(potion.cooldownLeftMs);
   const { itemId, defId } = potion;
-  // Memoized: the cooldown counts down every second and re-renders the row, and a new config object would re-create the gesture each
-  // time, also under a finger. The callbacks are worklets by their own directive (the plugin only auto-workletizes an inline config).
-  const config = useMemo<PanGestureConfig>(
-    () => ({
-      // Hold, then drag: a swipe that moves before the hold fails the pan and scrolls the bag list instead (DRAG_HOLD_MS).
-      activateAfterLongPress: DRAG_HOLD_MS,
-      onActivate: (e) => {
-        'worklet';
-        dragX.set(e.absoluteX);
-        dragY.set(e.absoluteY);
-        ghostOn.set(1);
-        scheduleOnRN(startDrag, defId);
-      },
-      onUpdate: (e) => {
-        'worklet';
-        dragX.set(e.absoluteX);
-        dragY.set(e.absoluteY);
-        hover.set(slotAt(slotRects.get(), e.absoluteX, e.absoluteY));
-      },
-      onDeactivate: (e) => {
-        'worklet';
-        const slot = e.canceled ? -1 : slotAt(slotRects.get(), e.absoluteX, e.absoluteY);
-        if (slot >= 0) scheduleOnRN(drop, itemId, slot);
-      },
-      onFinalize: () => {
-        'worklet';
-        ghostOn.set(0);
-        hover.set(-1);
-        scheduleOnRN(endDrag);
-      },
-    }),
-    [defId, itemId, dragX, dragY, ghostOn, hover, slotRects, startDrag, endDrag, drop],
-  );
-  const pan = usePanGesture(config);
+  const toggle = useCallback(() => onSelect(selected ? null : itemId), [onSelect, selected, itemId]);
   return (
-    <GestureDetector gesture={pan}>
+    <DragSource surface={surface} spec={{ id: itemId, icon: defId, index: -1, onStart: startDrag, onDrop: drop, onTap: toggle }}>
       <Pressable
-        onPress={() => onSelect(selected ? null : itemId)}
+        onPress={toggle}
         style={[styles.row, selected && styles.rowSelected]}
         accessibilityRole="button"
         accessibilityState={{ selected }}
@@ -341,7 +247,7 @@ const BagRow = memo(function BagRow({ potion, selected, onSelect, ghostOn, dragX
         </View>
         {secs > 0 ? <Text style={styles.rowCooldown}>{`${secs}s`}</Text> : null}
       </Pressable>
-    </GestureDetector>
+    </DragSource>
   );
 });
 
@@ -450,5 +356,4 @@ const styles = StyleSheet.create({
   rowName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.parchment },
   rowQty: { fontFamily: fonts.body, fontSize: 13, color: colors.parchmentDark },
   rowCooldown: { fontFamily: fonts.bodyBold, fontSize: 18, color: POPOVER_GOOD },
-  ghost: { position: 'absolute', left: 0, top: 0, width: GHOST_SIZE, height: GHOST_SIZE, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.woodDark, borderWidth: 3, borderColor: colors.gold },
 });

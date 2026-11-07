@@ -14,7 +14,7 @@ import { getItemDef } from './config/items';
 import { GEAR } from './config/gear';
 import { MERCHANT, type MerchantPoolEntry } from './config/merchant';
 import { affixStream, copyAffixes, defaultGearRoll, gearPrice, isGearDef, rollAffixes, rollQuality, rollRarity } from './gear';
-import { addStackable, freeSlots, makeItem } from './inventory';
+import { addStackable, freeSlots, makeItem, placeInBag } from './inventory';
 import { nextInt } from './rng';
 import type { GameState, GearRoll, MerchantListing, MerchantState, RngState } from './types';
 
@@ -32,6 +32,10 @@ export type ItemErrorCode =
   | 'ITEM_EQUIPPED'
   | 'NOT_SELLABLE'
   | 'NOT_EQUIPPABLE'
+  | 'WRONG_SLOT'
+  | 'INVALID_CELL'
+  | 'SAME_CELL'
+  | 'CELL_TAKEN'
   | 'NOT_USABLE'
   | 'HP_FULL'
   | 'ON_COOLDOWN'
@@ -257,7 +261,7 @@ export function buyItem(draft: GameState, slot: unknown, defId: unknown, quantit
   } else {
     for (let n = 0; n < quantity; n += 1) {
       const roll = listing.quality !== undefined && listing.rarity !== undefined ? { quality: listing.quality, rarity: listing.rarity, affixes: listing.affixes } : undefined;
-      draft.inventory.items.push(makeItem(def.id, 1, `${def.id}#${draft.nextItemSerial}`, roll));
+      placeInBag(draft.inventory, makeItem(def.id, 1, `${def.id}#${draft.nextItemSerial}`, roll));
       draft.nextItemSerial += 1;
     }
   }

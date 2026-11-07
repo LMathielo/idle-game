@@ -9,7 +9,7 @@ import type { RarityWeight } from './config/gear';
 import type { GearDropDef } from './config/dungeons';
 import { getItemDef } from './config/items';
 import { affixStream, rollAffixes, rollQuality, rollRarity } from './gear';
-import { addStackable, heroOwnsItem, makeItem } from './inventory';
+import { addStackable, heroOwnsItem, makeItem, placeInBag } from './inventory';
 import { chance, weightedPick } from './rng';
 import type { DroppedGear, FightRewards, GameState } from './types';
 
@@ -37,7 +37,7 @@ export function rollGearDrop(draft: GameState, drop: GearDropDef, rarityWeights:
   if (getItemDef(defId) && draft.inventory.items.length < draft.inventory.capacity) {
     const itemId = `${defId}#${draft.nextItemSerial}`;
     draft.nextItemSerial += 1;
-    draft.inventory.items.push(makeItem(defId, 1, itemId, { quality: quality.value, rarity: rarity.value, affixes }));
+    placeInBag(draft.inventory, makeItem(defId, 1, itemId, { quality: quality.value, rarity: rarity.value, affixes }));
     bump(rewards.items, defId, 1);
     return { itemId, defId, rarity: rarity.value, quality: quality.value };
   }
@@ -59,7 +59,7 @@ export function rollItemDrop(draft: GameState, drop: { itemId: string; chance: n
   if (def && !def.stackable) {
     // Non-stackable, non-gear (only unique items today): one slot, instance id = definition id.
     if (draft.inventory.items.length < draft.inventory.capacity) {
-      draft.inventory.items.push(makeItem(drop.itemId, 1));
+      placeInBag(draft.inventory, makeItem(drop.itemId, 1));
       bump(rewards.items, drop.itemId, 1);
     } else {
       bump(rewards.itemsLost, drop.itemId, 1);

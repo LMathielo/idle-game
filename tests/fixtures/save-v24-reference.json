@@ -1,0 +1,423 @@
+{
+  "engine": "1.27.0",
+  "at": 1792930800000,
+  "start": {
+    "gold": 4000,
+    "hp": 50,
+    "xp": 0,
+    "level": 1,
+    "rng": 2271577899,
+    "serial": 8,
+    "stamina": 100,
+    "items": [
+      [
+        "bread",
+        "bread",
+        3
+      ],
+      [
+        "oak_logs",
+        "oak_logs",
+        2559
+      ],
+      [
+        "copper_helm#5",
+        "copper_helm",
+        1
+      ],
+      [
+        "health_potion_t1",
+        "health_potion_t1",
+        12
+      ],
+      [
+        "stone_sword#6",
+        "stone_sword",
+        1
+      ],
+      [
+        "wild_sage",
+        "wild_sage",
+        3
+      ],
+      [
+        "iron_boots#7",
+        "iron_boots",
+        1
+      ],
+      [
+        "stone",
+        "stone",
+        25
+      ]
+    ],
+    "equipment": {
+      "weapon": "iron_sword#4",
+      "armor": "start-linen_tunic",
+      "boots": "start-worn_sandals",
+      "axe": "start-wooden_axe",
+      "pickaxe": "start-wooden_pickaxe",
+      "helmet": "iron_helm#3",
+      "accessory": "potion_belt"
+    },
+    "belt": [
+      {
+        "defId": "health_potion_t1",
+        "count": 8,
+        "rule": "hp_below_50"
+      },
+      null,
+      {
+        "defId": "greater_health_potion",
+        "count": 3,
+        "rule": "always"
+      },
+      null
+    ],
+    "totals": {
+      "runs": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "hash": "70c5be99"
+  },
+  "afterWoodcutting3h": {
+    "gold": 4000,
+    "hp": 50,
+    "xp": 0,
+    "level": 1,
+    "rng": 1240942447,
+    "serial": 8,
+    "stamina": 100,
+    "items": [
+      [
+        "bread",
+        "bread",
+        3
+      ],
+      [
+        "oak_logs",
+        "oak_logs",
+        25330
+      ],
+      [
+        "copper_helm#5",
+        "copper_helm",
+        1
+      ],
+      [
+        "health_potion_t1",
+        "health_potion_t1",
+        12
+      ],
+      [
+        "stone_sword#6",
+        "stone_sword",
+        1
+      ],
+      [
+        "wild_sage",
+        "wild_sage",
+        3
+      ],
+      [
+        "iron_boots#7",
+        "iron_boots",
+        1
+      ],
+      [
+        "stone",
+        "stone",
+        25
+      ],
+      [
+        "bird_nest",
+        "bird_nest",
+        1
+      ]
+    ],
+    "equipment": {
+      "weapon": "iron_sword#4",
+      "armor": "start-linen_tunic",
+      "boots": "start-worn_sandals",
+      "axe": "start-wooden_axe",
+      "pickaxe": "start-wooden_pickaxe",
+      "helmet": "iron_helm#3",
+      "accessory": "potion_belt"
+    },
+    "belt": [
+      {
+        "defId": "health_potion_t1",
+        "count": 8,
+        "rule": "hp_below_50"
+      },
+      null,
+      {
+        "defId": "greater_health_potion",
+        "count": 3,
+        "rule": "always"
+      },
+      null
+    ],
+    "totals": {
+      "runs": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "hash": "43fc5458"
+  },
+  "afterCrypt90m": {
+    "gold": 8947,
+    "hp": 180,
+    "xp": 2490,
+    "level": 14,
+    "rng": 2993414463,
+    "serial": 11,
+    "stamina": 100,
+    "items": [
+      [
+        "bread",
+        "bread",
+        3
+      ],
+      [
+        "oak_logs",
+        "oak_logs",
+        2559
+      ],
+      [
+        "copper_helm#5",
+        "copper_helm",
+        1
+      ],
+      [
+        "health_potion_t1",
+        "health_potion_t1",
+        14
+      ],
+      [
+        "stone_sword#6",
+        "stone_sword",
+        1
+      ],
+      [
+        "wild_sage",
+        "wild_sage",
+        4
+      ],
+      [
+        "iron_boots#7",
+        "iron_boots",
+        1
+      ],
+      [
+        "stone",
+        "stone",
+        25
+      ],
+      [
+        "troll_hide",
+        "troll_hide",
+        12
+      ],
+      [
+        "copper_helm#8",
+        "copper_helm",
+        1
+      ],
+      [
+        "copper_sword#9",
+        "copper_sword",
+        1
+      ],
+      [
+        "copper_boots#10",
+        "copper_boots",
+        1
+      ]
+    ],
+    "equipment": {
+      "weapon": "iron_sword#4",
+      "armor": "start-linen_tunic",
+      "boots": "start-worn_sandals",
+      "axe": "start-wooden_axe",
+      "pickaxe": "start-wooden_pickaxe",
+      "helmet": "iron_helm#3",
+      "accessory": "potion_belt"
+    },
+    "belt": [
+      {
+        "defId": "health_potion_t1",
+        "count": 8,
+        "rule": "hp_below_50"
+      },
+      null,
+      null,
+      null
+    ],
+    "totals": {
+      "runs": 45,
+      "wins": 45,
+      "losses": 0
+    },
+    "hash": "b3ce8a58"
+  },
+  "afterCommands": {
+    "gold": 3988,
+    "hp": 50,
+    "xp": 0,
+    "level": 1,
+    "rng": 2271577899,
+    "serial": 8,
+    "stamina": 100,
+    "items": [
+      [
+        "bread",
+        "bread",
+        3
+      ],
+      [
+        "oak_logs",
+        "oak_logs",
+        2559
+      ],
+      [
+        "health_potion_t1",
+        "health_potion_t1",
+        13
+      ],
+      [
+        "stone_sword#6",
+        "stone_sword",
+        1
+      ],
+      [
+        "wild_sage",
+        "wild_sage",
+        3
+      ],
+      [
+        "start-worn_sandals",
+        "worn_sandals",
+        1
+      ],
+      [
+        "stone",
+        "stone",
+        25
+      ],
+      [
+        "iron_helm#3",
+        "iron_helm",
+        1
+      ]
+    ],
+    "equipment": {
+      "weapon": "iron_sword#4",
+      "armor": "start-linen_tunic",
+      "boots": "iron_boots#7",
+      "axe": "start-wooden_axe",
+      "pickaxe": "start-wooden_pickaxe",
+      "accessory": "potion_belt"
+    },
+    "belt": [
+      {
+        "defId": "health_potion_t1",
+        "count": 8,
+        "rule": "hp_below_50"
+      },
+      null,
+      {
+        "defId": "greater_health_potion",
+        "count": 3,
+        "rule": "always"
+      },
+      null
+    ],
+    "totals": {
+      "runs": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "hash": "f0d38a11"
+  },
+  "afterCommands1h": {
+    "gold": 3988,
+    "hp": 50,
+    "xp": 0,
+    "level": 1,
+    "rng": 496376983,
+    "serial": 8,
+    "stamina": 100,
+    "items": [
+      [
+        "bread",
+        "bread",
+        3
+      ],
+      [
+        "oak_logs",
+        "oak_logs",
+        10133
+      ],
+      [
+        "health_potion_t1",
+        "health_potion_t1",
+        13
+      ],
+      [
+        "stone_sword#6",
+        "stone_sword",
+        1
+      ],
+      [
+        "wild_sage",
+        "wild_sage",
+        3
+      ],
+      [
+        "start-worn_sandals",
+        "worn_sandals",
+        1
+      ],
+      [
+        "stone",
+        "stone",
+        25
+      ],
+      [
+        "iron_helm#3",
+        "iron_helm",
+        1
+      ]
+    ],
+    "equipment": {
+      "weapon": "iron_sword#4",
+      "armor": "start-linen_tunic",
+      "boots": "iron_boots#7",
+      "axe": "start-wooden_axe",
+      "pickaxe": "start-wooden_pickaxe",
+      "accessory": "potion_belt"
+    },
+    "belt": [
+      {
+        "defId": "health_potion_t1",
+        "count": 8,
+        "rule": "hp_below_50"
+      },
+      null,
+      {
+        "defId": "greater_health_potion",
+        "count": 3,
+        "rule": "always"
+      },
+      null
+    ],
+    "totals": {
+      "runs": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "hash": "847db88c"
+  }
+}

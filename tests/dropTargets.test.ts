@@ -1,6 +1,6 @@
-// The belt panel's drop target: which slot box a dragged potion is over (pure, window coordinates).
+// The shared drag kit's drop target: which box a dragged item is over (pure, window coordinates).
 import { describe, expect, it } from 'vitest';
-import { DROP_SLOP, type DropRect, slotAt } from '../src/components/belt/beltDrag';
+import { DROP_SLOP, type DropRect, slotAt } from '../src/components/ui/drag/dropTargets';
 
 const rects: DropRect[] = [0, 1, 2, 3].map((i) => ({ x: 20 + i * 80, y: 100, width: 64, height: 64 }));
 

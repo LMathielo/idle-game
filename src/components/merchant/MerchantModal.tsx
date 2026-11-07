@@ -5,7 +5,7 @@ import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameState } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
-import { baseSellPrice, beltPotionCount, DEV_TOOLS_ENABLED, freeSlots, type GameState, type Item, maxBuyable, merchantView, sellPriceOfItem, slotsNeeded } from '../../engine';
+import { baseSellPrice, bagCells, beltPotionCount, DEV_TOOLS_ENABLED, freeSlots, type GameState, type Item, maxBuyable, merchantView, sellPriceOfItem, slotsNeeded } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { IconText } from '../art/Sprites';
 import { formatHms, formatNumber } from '../format';
@@ -215,7 +215,8 @@ function BuySheet({ state, slot, anchor, onClose, onOutsidePress }: { state: Gam
 function SellTab({ state }: { state: GameState }) {
   const { inventory, buildings } = state;
   const [selected, setSelected] = useState<{ id: string; anchor: AnchorRect } | null>(null);
-  const slots = useMemo(() => Array.from({ length: inventory.capacity }, (_, i): Item | null => inventory.items[i] ?? null), [inventory]);
+  // The bag as the Hero tab shows it (1.28.0): every item in its own cell, gaps included, so a piece sits where the player put it.
+  const slots = useMemo(() => bagCells(inventory).map((item): Item | null => item ?? null), [inventory]);
   const prices = useMemo(
     () =>
       slots.map((item) => {

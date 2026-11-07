@@ -62,6 +62,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #43, 25] `src/components/dungeon/DungeonModal.tsx` ~1131 — every gear row in `LastFight` shares one `gearRef`; harmless today (stage drops have no View button). Fix: per-row refs if stage drops get one.
 - [PR #43, 25] `src/components/dungeon/DungeonModal.tsx` `BossDetail` — the Potion Belt note hardcodes the item name. Fix: build it from the unique drop's `itemName`.
 - [PR #44, 30] `src/components/belt/BeltPanel.tsx` ~105-116 — drop rects come from async `measureInWindow` at layout / drag start; on Android edge-to-edge the window coords may differ from the gesture's `absoluteY` by the status bar (hidden by the 10 pt slop). Fix: check alignment on device; re-measure on layout shifts.
+- [PR #45, 25] `src/app/(tabs)/hero.tsx` ~87 — the Hero ScrollView is not disabled during a drag; if an active pan does not take the touch from the native scroll on a device, the page scrolls under the finger and drop rects go stale. Fix: check on iOS + Android; if it scrolls, `scrollEnabled={false}` while dragging.
+- [PR #45, 20] `src/components/ui/drag/dragKit.tsx` `onFinalize` — `onEnd` is scheduled on every touch end (taps, scroll swipes) even when the pan never activated. Fix: track activation in a shared value and skip.
 
 ## Engine and data
 
@@ -114,6 +116,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #42, 30] `tests/migrationV22.test.ts` — the frozen v22 fixtures cover a Hard pack and the boss but no Normal 1v1 fight in progress (the most common save). Fix: add a small frozen Normal mid-fight fixture.
 - [PR #42, 20] `tests/golden.test.ts` — the inline-snapshot re-pins and the `q3 − q4` 500 → 550 gold change carry no "was" note. Fix: annotate them like the other pins.
 - [PR #43, 40] `tests/mobDrops.test.ts` ~156-183 — the seeded independence-by-rates test has loose tolerances (e.g. ±0.04 on 0.05) and could not catch a small coupling; the real proof is the draw-order test. Fix: tighten to ~3 standard errors or rename it a smoke test.
+- [PR #44, 60] `tests/potionBelt.test.ts` "its drink can make a later slot's rule false" — the comment says the other slot is a different group, but both are `health`; the outcome comes from the shared cooldown, not the rule turning false. Fix: correct the comment or use a different-rule case (HP 120, 25% Greater + 50% T1).
 
 ## Docs and workflow
 
@@ -127,3 +130,5 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #38, 50] `docs/ENGINE.md` debug tools paragraph — does not list Force craft / Finish now. Append them.
 - [PR #38, 25] `docs/ENGINE.md` 1.23.0 note — a downgrade with a free job in flight would refund it (the old engine ignores `free`); accepted for debug. Add one line.
 - [PR #40, 25] `src/app/(tabs)/hero.tsx` / `src/components/merchant/MerchantModal.tsx` - a single `busyScope` is overwritten by the latest send; going back to an item still in flight re-enables its buttons (the engine rejects the duplicate). Fix: a Set of in-flight scopes.
+- [PR #44, 40] `docs/PRODUCT.md` / `docs/ENGINE.md` — older Potion Belt rows still say slot order is the only tie rule; mark them superseded by the 2026-11-07 drink priority.
+- [PR #45, 40] `docs/CODEMAP.md` belt line — stray parenthetical "(the pure `slotAt` drop test now lives in ...)" where the `beltDrag.ts` entry was. Fix: rewrite the line.

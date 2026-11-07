@@ -1,16 +1,16 @@
 // Worklets run on the UI runtime, compiled by the Reanimated / Worklets Babel plugin (babel-preset-expo adds it). Vitest runs the source
 // as plain TypeScript, so a worklet bug that exists only in the compiled UI-runtime copy passes every other test and then kills the app on
-// the phone. This happened to the Potion Belt drag (PR #44): `slotAt(rects, x, y, slop = DROP_SLOP)` compiles to
+// the phone. This happened to the Potion Belt drag (PR #44; the drop-target worklet now lives in the shared drag kit, ui/drag/dropTargets.ts): `slotAt(rects, x, y, slop = DROP_SLOP)` compiles to
 //   function slotAt(rects, x, y, slop = DROP_SLOP) { const [DROP_SLOP] = this.__closure; ... }
 // where the default is read BEFORE the closure is destructured: "Property 'DROP_SLOP' doesn't exist", thrown on the UI runtime on the
 // first onUpdate of the drag (fatal in Expo Go). So here every worklet in src/ is compiled with the real plugin and:
 //   1. no parameter default may read a closure variable (static scan of all the compiled worklets), and
-//   2. the belt's drop-target worklet is run the way the UI runtime runs it (init-data code + `this.__closure`).
+//   2. the shared drag kit's drop-target worklet is run the way the UI runtime runs it (init-data code + `this.__closure`).
 import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { slotAt as slotAtSource } from '../src/components/belt/beltDrag';
+import { slotAt as slotAtSource } from '../src/components/ui/drag/dropTargets';
 
 const ROOT = join(__dirname, '..');
 const req = createRequire(join(ROOT, 'package.json'));
@@ -91,7 +91,7 @@ function walk(dir: string): string[] {
 }
 
 /** The plugin reads the file it compiles (source maps), so snippets are compiled under the name of a real file. */
-const SNIPPET_FILE = join(ROOT, 'src', 'components', 'belt', 'beltDrag.ts');
+const SNIPPET_FILE = join(ROOT, 'src', 'components', 'ui', 'drag', 'dropTargets.ts');
 const WORKLET_HINT = /'worklet'|usePanGesture|usePinchGesture|useAnimatedStyle|useAnimatedProps|useAnimatedReaction|useDerivedValue|useAnimatedScrollHandler|scheduleOnUI|runOnUI/;
 
 describe('worklets compiled for the UI runtime', () => {
@@ -121,7 +121,7 @@ describe('worklets compiled for the UI runtime', () => {
   }, 60_000);
 
   it('slotAt runs on the UI runtime copy (init-data code + this.__closure) and agrees with the source', () => {
-    const file = join(ROOT, 'src', 'components', 'belt', 'beltDrag.ts');
+    const file = join(ROOT, 'src', 'components', 'ui', 'drag', 'dropTargets.ts');
     const mod: { exports: Record<string, unknown> } = { exports: {} };
     new Function('exports', 'module', 'require', compile(readFileSync(file, 'utf8'), file))(mod.exports, mod, () => ({}));
     const compiled = mod.exports.slotAt as Parameters<typeof asOnUiRuntime>[0];
