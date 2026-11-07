@@ -155,7 +155,8 @@ export {
   type MerchantView,
 } from './merchant';
 export { isEquipmentSlot } from './equipment';
-export { emptyBeltSlots, freeSlots, heroOwnsItem } from './inventory';
+export { type DragSource, type DragTarget, type DropCommand, dropCommand } from './dragDrop';
+export { bagCells, emptyBeltSlots, firstEmptyCell, freeSlots, heroOwnsItem, itemInCell } from './inventory';
 export {
   bagPotions,
   beltDrinkOrder,

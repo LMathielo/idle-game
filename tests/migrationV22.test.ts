@@ -67,9 +67,9 @@ describe('v22 -> v23', () => {
   const boss = loadSave(BOSS);
 
   it('loads as the current save; the main RNG, the clock and everything else are untouched', () => {
-    expect(CURRENT_SAVE_VERSION).toBe(24);
+    expect(CURRENT_SAVE_VERSION).toBe(25);
     for (const [s, doc] of [[pack, PACK], [boss, BOSS]] as const) {
-      expect(s.saveVersion).toBe(24);
+      expect(s.saveVersion).toBe(25);
       expect(s.rng).toEqual(doc.rng);
       expect(s.time).toEqual(doc.time);
       // Taking the new fields off again gives the fixture byte for byte.
@@ -190,7 +190,7 @@ describe('v22 -> v23', () => {
     idle.activity = null;
     idle.dungeon.lastFight = null;
     const s = loadSave(idle);
-    expect(s.saveVersion).toBe(24);
+    expect(s.saveVersion).toBe(25);
     expect(s.activity).toBeNull();
     expect(s.dungeon.lastFight).toBeNull();
     expect(MIGRATIONS[22](JSON.parse(JSON.stringify(PACK))).saveVersion).toBe(23);

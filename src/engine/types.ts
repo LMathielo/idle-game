@@ -65,6 +65,11 @@ export type Item = {
    * (equipped or in the bag); selling the belt destroys the contents.
    */
   belt?: BeltSlot[];
+  /**
+   * Bag items only (save v25): the cell the item sits in, an integer 0..capacity-1, unique within the bag. The bag is a grid with gaps; the
+   * list order of `inventory.items` means nothing. Equipped items carry none (equipping drops it, unequipping assigns one). See inventory.ts.
+   */
+  cell?: number;
 };
 
 /**
@@ -614,7 +619,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 24;
+  saveVersion: 25;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */

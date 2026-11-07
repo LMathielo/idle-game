@@ -9,13 +9,13 @@ import { DEFAULT_OFFLINE_CAP_MS, DEFAULT_OFFLINE_EFFICIENCY } from './config/tim
 import { HERO_XP_CURVE, SKILL_XP_CURVE } from './config/xpCurve';
 import { maxHpOf } from './hp';
 import { maxManaOf } from './mana';
-import { makeItem } from './inventory';
+import { makeItem, placeInBag } from './inventory';
 import { newMerchantState } from './merchant';
 import { newProgress } from './progression';
 import { createRng } from './rng';
 import { newTrainingState } from './training';
 import { newWorkersState } from './workers';
-import type { Character, GameState, Item, SkillKey } from './types';
+import type { Character, GameState, Inventory, SkillKey } from './types';
 import { CURRENT_SAVE_VERSION } from './migrations';
 
 /** Fresh level-1 hero. `seed` is any uint32, `now` the engine time in epoch ms. */
@@ -33,7 +33,8 @@ export function newGame(seed: number, now: number): GameState {
   for (const k of STARTING_HERO.skills) skills[k] = newProgress(SKILL_XP_CURVE);
 
   const hero = newProgress(HERO_XP_CURVE);
-  const items: Item[] = STARTING_HERO.inventory.map((s) => makeItem(s.itemId, s.quantity));
+  const inventory: Inventory = { capacity: INVENTORY_CAPACITY, items: [] };
+  for (const s of STARTING_HERO.inventory) placeInBag(inventory, makeItem(s.itemId, s.quantity));
   const attributes = { ...STARTING_HERO.attributes };
   const training = newTrainingState();
   const buildings = newBuildingsState();
@@ -84,6 +85,6 @@ export function newGame(seed: number, now: number): GameState {
       equipment,
       skills,
     },
-    inventory: { capacity: INVENTORY_CAPACITY, items },
+    inventory,
   };
 }

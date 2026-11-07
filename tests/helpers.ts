@@ -350,14 +350,40 @@ export function v24Doc<D extends Record<string, any>>(doc: D): D {
       items: doc.inventory.items.map((i: any) => (i.defId === 'potion_belt' && !Array.isArray(i.belt) ? { ...i, slot: 'accessory', belt: [null, null, null, null] } : i)),
     };
   }
-  return out as D;
+  return v25Doc(out) as D;
+}
+
+/**
+ * What the v24 -> v25 migration does to a raw document (the bag grid, engine 1.28.0): every inventory item gets `cell` = its position in
+ * the list (capacity 20 when the document has none). v24Doc chains to it, so a test that wraps an old fixture in v22Doc / v23Doc / v24Doc
+ * gets the document as the CURRENT save loads it. Idempotent.
+ */
+export function v25Doc<D extends Record<string, any>>(doc: D): D {
+  if (!Array.isArray(doc.inventory?.items)) return doc;
+  const capacity = typeof doc.inventory.capacity === 'number' ? doc.inventory.capacity : 20;
+  return { ...doc, inventory: { ...doc.inventory, items: doc.inventory.items.map((i: any, n: number) => (n < capacity && i && typeof i === 'object' ? { ...i, cell: n } : i)) } } as D;
+}
+
+/**
+ * A 1.28.0 state seen in the v24 shape: no bag cells (save v25). Only the SHAPE: the items and their list order are the 1.27.0 ones, so a
+ * script that plays the same commands has the 1.27.0 hash.
+ */
+export function asV24(s: GameState): GameState {
+  const strip = (i: any) => {
+    if (!i || typeof i !== 'object' || !('cell' in i)) return i;
+    const { cell: _c, ...item } = i;
+    return item;
+  };
+  const equipment = Object.fromEntries(Object.entries(s.character.equipment).map(([k, v]) => [k, strip(v)]));
+  return { ...s, saveVersion: 24, character: { ...s.character, equipment }, inventory: { ...s.inventory, items: s.inventory.items.map(strip) } } as unknown as GameState;
 }
 
 /**
  * A 1.27.0 state seen in the v23 shape: no potion cooldowns, and a Potion Belt instance without its slot or its belt (save v24). Only the
  * SHAPE: a script that never wears a belt plays exactly as 1.26.0 did, so seen like this its hash is the 1.26.0 one.
  */
-export function asV23(s: GameState): GameState {
+export function asV23(state: GameState): GameState {
+  const s = asV24(state);
   const { potionCooldowns: _p, ...rest } = s;
   const strip = (i: any) => {
     if (i?.defId !== 'potion_belt') return i;

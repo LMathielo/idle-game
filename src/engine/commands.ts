@@ -15,7 +15,7 @@ import { DEV_TOOLS_ENABLED } from './config/dev';
 import { BOSSES, DUNGEONS, isBossId, isDungeonId } from './config/dungeons';
 import { beginFight, forfeitFight, isDungeonUnlocked, recordDungeonResults, searchMsFor, settleFightStart, skipCost } from './dungeon';
 import { checkDifficulty, type DifficultyErrorCode, selectedDifficulty } from './difficulty';
-import { equipItem, unequipItem, useItem } from './equipment';
+import { equipItem, moveItem, swapRings, unequipItem, useItem } from './equipment';
 import { markDebugUsed } from './flags';
 import { addMerchantCharge, buyItem, type ItemError, type ItemErrorCode, refreshMerchant, sellItem } from './merchant';
 import { maxHpOf } from './hp';
@@ -147,10 +147,24 @@ export type Command =
   /** Adds training XP (= trained minutes at the base rate) to the attribute being trained. */
   | { id: string; type: 'DEBUG_ADD_TRAINING_XP'; xp: number }
   | { id: string; type: 'DEBUG_ADD_GOLD'; amount: number }
-  /** Moves an inventory item into its slot; an item already there goes back to the inventory (a swap). */
-  | { id: string; type: 'EQUIP_ITEM'; itemId: string }
-  /** Moves the item in `slot` to the inventory. Fails with INVENTORY_FULL when there is no free slot. */
-  | { id: string; type: 'UNEQUIP_ITEM'; slot: EquipmentSlot }
+  /**
+   * Moves an inventory item into its slot; an item already there goes back to the bag cell the new one came from (a swap). `slot`
+   * (optional, 1.28.0) names the slot the player aimed at: only a ring may choose between Ring 1 and Ring 2 (WRONG_SLOT otherwise).
+   */
+  | { id: string; type: 'EQUIP_ITEM'; itemId: string; slot?: EquipmentSlot }
+  /**
+   * Moves the item in `slot` to the bag. Without `toCell` it takes the first empty cell (INVENTORY_FULL when there is none); with `toCell`
+   * (1.28.0) that cell: an empty one receives it, one that holds a piece that fits `slot` swaps (that piece is worn), anything else is
+   * CELL_TAKEN. INVALID_CELL for a cell outside the bag.
+   */
+  | { id: string; type: 'UNEQUIP_ITEM'; slot: EquipmentSlot; toCell?: number }
+  /**
+   * Bag layout (1.28.0): moves bag item `itemId` to cell `toCell`. An empty cell receives it and leaves a gap; a filled cell swaps the two.
+   * Refused: NOT_IN_INVENTORY, INVALID_CELL, SAME_CELL.
+   */
+  | { id: string; type: 'MOVE_ITEM'; itemId: string; toCell: number }
+  /** Ring 1 and Ring 2 trade places (a ring beside an empty ring slot moves into it). SLOT_EMPTY when both are empty. */
+  | { id: string; type: 'SWAP_RINGS' }
   /** Uses one unit of a consumable (Health Potion: +heal HP, capped at max; HP_FULL at max HP; ON_COOLDOWN while that potion's cooldown group runs, 1.27.0). */
   | { id: string; type: 'USE_ITEM'; itemId: string }
   /**
@@ -712,15 +726,25 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
       break;
     }
     case 'EQUIP_ITEM': {
-      const e = equipItem(draft, cmd.itemId);
+      const e = equipItem(draft, cmd.itemId, cmd.slot);
       if (e) return fail(e.code, e.message);
       stopGatheringIfTooWeak(draft, events);
       break;
     }
     case 'UNEQUIP_ITEM': {
-      const e = unequipItem(draft, cmd.slot);
+      const e = unequipItem(draft, cmd.slot, cmd.toCell);
       if (e) return fail(e.code, e.message);
       stopGatheringIfTooWeak(draft, events);
+      break;
+    }
+    case 'MOVE_ITEM': {
+      const e = moveItem(draft, cmd.itemId, cmd.toCell);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'SWAP_RINGS': {
+      const e = swapRings(draft);
+      if (e) return fail(e.code, e.message);
       break;
     }
     case 'USE_ITEM': {

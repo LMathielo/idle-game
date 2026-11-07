@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 24 as const;
+export const CURRENT_SAVE_VERSION = 25 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -34,6 +34,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   21: migrateV21toV22,
   22: migrateV22toV23,
   23: migrateV23toV24,
+  24: migrateV24toV25,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -981,6 +982,23 @@ function withBeltSlots(item: unknown): unknown {
 function migrateV23toV24(doc: SaveDoc): SaveDoc {
   const out: SaveDoc = { ...doc, saveVersion: 24, potionCooldowns: isDoc(doc.potionCooldowns) ? doc.potionCooldowns : {} };
   if (isDoc(doc.inventory) && Array.isArray(doc.inventory.items)) out.inventory = { ...doc.inventory, items: doc.inventory.items.map(withBeltSlots) };
+  return out;
+}
+
+// ---- v24 → v25 (2026-11-07): the bag is a grid with gaps ----
+// Every inventory item gets `cell` = its position in the list (0, 1, 2, ...), so the bag looks exactly as it did, packed from the top-left,
+// with the free cells at the end (a v24 document has no cells, so none is overwritten). An item past the capacity (a damaged document) gets
+// none; the engine places it in the first free cell on the next change and never drops it. Nothing else changes, so every outcome is the
+// 1.27.0 one. Frozen literal on purpose: the capacity default 20 when a document has none.
+
+const V25_DEFAULT_CAPACITY = 20;
+
+function migrateV24toV25(doc: SaveDoc): SaveDoc {
+  const out: SaveDoc = { ...doc, saveVersion: 25 };
+  const inv = doc.inventory;
+  if (!isDoc(inv) || !Array.isArray(inv.items)) return out;
+  const capacity = typeof inv.capacity === 'number' && Number.isInteger(inv.capacity) && inv.capacity >= 0 ? inv.capacity : V25_DEFAULT_CAPACITY;
+  out.inventory = { ...inv, items: inv.items.map((it, index) => (isDoc(it) && index < capacity ? { ...it, cell: index } : it)) };
   return out;
 }
 

@@ -19,7 +19,7 @@ import {
   type ReplayEntry,
   replayLogReport,
 } from '../src/engine';
-import { HOUR, makeClient, MIN, qty, V13_ADDED, V18_ADDED, v12Skills, withoutGearRolls, v16Attributes, v17Added, v19Dungeon } from './helpers';
+import { HOUR, makeClient, MIN, qty, V13_ADDED, V18_ADDED, v12Skills, withoutGearRolls, v16Attributes, v17Added, v19Dungeon, v25Doc } from './helpers';
 
 const FIXTURES = join(__dirname, 'fixtures');
 /** Frozen v10 save + its action log, written by the 1.9.0 engine before workers (tests/fixtures). */
@@ -92,7 +92,7 @@ describe('frozen v10 save (tests/fixtures/save-v10.json) → v11', () => {
     expect(s.workers).toEqual(newWorkersState());
     const { buildings: _b, construction: _c, workers: _w, crafting: _cr, saveVersion: _v, character, ...rest } = s;
     const { buildings: _rb, saveVersion: _rv, character: rc, ...rawRest } = V10_SAVE;
-    expect(rest).toEqual({ ...rawRest, potionCooldowns: {}, dungeon: v19Dungeon(rawRest.dungeon) }); // v24: no cooldown running; v19: the logged strikes gain crit / physical / magic
+    expect(rest).toEqual(v25Doc({ ...rawRest, potionCooldowns: {}, dungeon: v19Dungeon(rawRest.dungeon) })); // v24: no cooldown running; v25: bag cells; v19: the logged strikes gain crit / physical / magic
     // v11 → v12 (1.12.0): skills keep their total XP, levels recomputed on the new skill curve.
     expect(character).toEqual({ ...rc, ...v17Added(rc.level), attributes: v16Attributes(rc.attributes), skills: v12Skills(rc.skills) });
     expect(hashState(withoutGearRolls(loadSave(V10_SAVE)))).toBe(hashState(s));

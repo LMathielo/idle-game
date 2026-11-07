@@ -40,6 +40,8 @@ export const LOG_TYPES = [
   'DEBUG_ADD_WOODCUTTING_LEVEL',
   'EQUIP_ITEM',
   'UNEQUIP_ITEM',
+  'MOVE_ITEM',
+  'SWAP_RINGS',
   'USE_ITEM',
   'BELT_PUT',
   'BELT_TAKE',
@@ -188,6 +190,8 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'DEBUG_ADD_WOODCUTTING_LEVEL':
     case 'EQUIP_ITEM':
     case 'UNEQUIP_ITEM':
+    case 'MOVE_ITEM':
+    case 'SWAP_RINGS':
     case 'USE_ITEM':
     case 'BELT_PUT':
     case 'BELT_TAKE':
