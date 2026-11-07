@@ -1,5 +1,5 @@
 // The Potion Belt button: a pixel flask and the potions in the belt. Shown only while the belt is worn; dimmed (still tappable)
-// when every filled slot's potion type is on cooldown or the belt is empty. Taps open the belt panel (BeltPanel), which the host
+// when every filled slot's potion group is on cooldown or the belt is empty. Taps open the belt panel (BeltPanel), which the host
 // screen mounts: the Village floats the button over the map (`PotionBeltFloating`), the Dungeon modal keeps it in a footer row under
 // its scrolling content (`PotionBeltFooter`, so it can never cover a button there).
 import { memo } from 'react';

@@ -63,8 +63,9 @@ export function unequipItem(draft: GameState, slot: unknown): ItemError {
 }
 
 /**
- * Uses one unit of a consumable. Potions heal their catalog amount, capped at max HP, and start their TYPE's cooldown (1.27.0, from the
- * engine time `draft.time.lastSimulatedAt`, the command's time); a type still on cooldown is refused with ON_COOLDOWN, changing nothing.
+ * Uses one unit of a consumable. Potions heal their catalog amount, capped at max HP, and start their cooldown GROUP (1.27.0, from the
+ * engine time `draft.time.lastSimulatedAt`, the command's time, for the drunk potion's cooldownMs); a potion whose group is still on
+ * cooldown (any potion of it was drunk, the belt's too) is refused with ON_COOLDOWN, changing nothing.
  */
 export function useItem(draft: GameState, itemId: unknown): ItemError {
   const items = draft.inventory.items;

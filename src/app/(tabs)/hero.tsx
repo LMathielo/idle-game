@@ -233,7 +233,7 @@ function HeroItemSheet({ selection, onClose, onOutsidePress }: { selection: Sele
       });
     } else if (def.heal) {
       const hp = hpView(state);
-      // The potion type's cooldown (any drink starts it, the belt's too): the button waits it out, counting down.
+      // The potion's cooldown group (a drink of any potion of it starts it, the belt's too): the button waits it out, counting down.
       const cooldownS = Math.ceil(potionCooldownLeftMs(state, item.defId, state.time.lastSimulatedAt) / 1000);
       actions.push({
         label: 'Use',

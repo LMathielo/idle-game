@@ -151,7 +151,7 @@ export type Command =
   | { id: string; type: 'EQUIP_ITEM'; itemId: string }
   /** Moves the item in `slot` to the inventory. Fails with INVENTORY_FULL when there is no free slot. */
   | { id: string; type: 'UNEQUIP_ITEM'; slot: EquipmentSlot }
-  /** Uses one unit of a consumable (Health Potion: +heal HP, capped at max; HP_FULL at max HP; ON_COOLDOWN while that potion type's cooldown runs, 1.27.0). */
+  /** Uses one unit of a consumable (Health Potion: +heal HP, capped at max; HP_FULL at max HP; ON_COOLDOWN while that potion's cooldown group runs, 1.27.0). */
   | { id: string; type: 'USE_ITEM'; itemId: string }
   /**
    * Potion Belt (1.27.0), only while the belt is worn (BELT_NOT_EQUIPPED): moves the bag stack `itemId` (a potion) into belt slot `slot`

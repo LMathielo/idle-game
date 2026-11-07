@@ -4,7 +4,7 @@
 // (src/engine/gear.ts), so changing a number here rebalances every save without a migration. Rolled affixes (1.22.0)
 // are stored on the instance too (picks only; values come from quality, rarity and `gearLevel`); see docs/ENGINE.md.
 import type { EquipmentSlot, ItemRarity } from '../types';
-import { HEALTH_POTION_COOLDOWN_MS } from './belt';
+import { HEALTH_COOLDOWN_GROUP, HEALTH_POTION_COOLDOWN_MS } from './belt';
 import { GEAR, GEAR_PIECES, type GearPieceId, type GearSetId, GEAR_SETS } from './gear';
 
 export type ItemDef = {
@@ -51,10 +51,15 @@ export type ItemDef = {
   /** Usable consumables (USE_ITEM): HP restored, capped at max HP. Integer. */
   heal?: number;
   /**
-   * Potions (1.27.0): ms before the same TYPE can be drunk again, after any drink of it (the Potion Belt's or a manual USE_ITEM). Missing = no
-   * cooldown. Runs on engine time.
+   * Potions (1.27.0): ms the potion's cooldown GROUP waits after one of this potion is drunk (the Potion Belt's or a manual USE_ITEM). Missing
+   * = no cooldown. Runs on engine time. The wait always respects the cooldown of the potion that was drunk.
    */
   cooldownMs?: number;
+  /**
+   * Potions (owner decision 2026-11-07): potions of one group share one cooldown (a drink of any puts them all on cooldown). Missing = the
+   * potion is its own group (its defId). The health potions are group `health` (`HEALTH_COOLDOWN_GROUP`).
+   */
+  cooldownGroup?: string;
   /** true = the Potion Belt (1.27.0): its instance carries `belt` (the slots). Only for the unique item that fits the `accessory` slot. */
   belt?: true;
   /**
@@ -224,6 +229,7 @@ export const ITEMS = {
     stackable: true,
     heal: 50,
     cooldownMs: HEALTH_POTION_COOLDOWN_MS,
+    cooldownGroup: HEALTH_COOLDOWN_GROUP,
   },
   rusty_gladius: {
     id: 'rusty_gladius',
@@ -400,6 +406,7 @@ export const ITEMS = {
     stackable: true,
     heal: 60,
     cooldownMs: HEALTH_POTION_COOLDOWN_MS,
+    cooldownGroup: HEALTH_COOLDOWN_GROUP,
   },
   steel_axe: {
     id: 'steel_axe',

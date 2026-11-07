@@ -27,5 +27,12 @@ export function isBeltRule(rule: unknown): rule is BeltRule {
   return typeof rule === 'string' && Object.prototype.hasOwnProperty.call(BELT_RULES, rule);
 }
 
-/** Cooldown of a T1 / Greater health potion type after one is drunk, ms (a field of the potion's ItemDef). */
+/** Cooldown of a T1 / Greater health potion after one is drunk, ms (a field of the potion's ItemDef). */
 export const HEALTH_POTION_COOLDOWN_MS = 20_000;
+
+/**
+ * The cooldown group of the health potions (owner decision 2026-11-07): potions of one group share ONE cooldown. Drinking any of them (the
+ * belt's or a manual USE_ITEM) puts the whole group on cooldown until the drink time + the drunk potion's `cooldownMs`. A potion with a
+ * `cooldownMs` and no `cooldownGroup` is its own group (its defId).
+ */
+export const HEALTH_COOLDOWN_GROUP = 'health';

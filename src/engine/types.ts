@@ -640,9 +640,11 @@ export type GameState = {
   /** Save v13. The Crafting house's pipes and the yield fraction ledger. Not an activity: runs beside everything. */
   crafting: CraftingState;
   /**
-   * Save v24. Potion cooldowns by potion type (item definition id): the engine time (epoch ms) at which the type can be drunk again. Set by
-   * a drink (the Potion Belt's or a manual USE_ITEM); an entry in the past means ready. Runs on engine time, so it goes on between fights and
-   * while the app is closed.
+   * Save v24. Potion cooldowns by cooldown GROUP (`ItemDef.cooldownGroup`, else the item definition id; the health potions are `health`): the
+   * engine time (epoch ms) at which the group can be drunk again. Set by a drink of any potion of the group (the Potion Belt's or a manual
+   * USE_ITEM) to the drink time + the drunk potion's cooldownMs; an entry in the past means ready. Runs on engine time, so it goes on
+   * between fights and while the app is closed. (Saves written before 2026-11-07 keyed it by potion type; those keys are ignored and dropped
+   * at the next drink.)
    */
   potionCooldowns: Record<string, number>;
   /** Save v8. Serial for unique item instance ids (bought gear: `<defId>#<n>`). Only goes up. */

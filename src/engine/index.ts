@@ -162,6 +162,7 @@ export {
   beltPotionCount,
   beltSlotsOf,
   beltView,
+  cooldownGroupOf,
   equippedBelt,
   isPotionDef,
   potionCooldownLeftMs,

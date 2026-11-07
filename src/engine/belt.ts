@@ -4,11 +4,11 @@
 //
 //   drink pass (`beltPass`, at engine time T): for slot 1, 2, 3, 4 in that order, a slot drinks when
 //     - it holds at least one potion,
-//     - its potion TYPE is off cooldown (state.potionCooldowns[defId] <= T),
+//     - its potion's cooldown GROUP is off cooldown (state.potionCooldowns[group] <= T; the health potions are one group),
 //     - its rule holds for the hero's CURRENT HP (read again after every drink): hp_below_50 = hp x 100 <= maxHp x 50, hp_below_25 likewise,
 //       always = hp < maxHp. No rule drinks at full HP.
 //     A drink heals the potion's `heal`, capped at max HP (like USE_ITEM), takes one potion out of the slot (an emptied slot becomes empty:
-//     its rule is gone), starts the type's cooldown (T + the potion's cooldownMs) and counts in the summary. In a fight it is also a log
+//     its rule is gone), starts the group's cooldown (T + the drunk potion's cooldownMs) and counts in the summary. In a fight it is also a log
 //     entry (actor 'belt'). It draws no RNG.
 //   WHEN: the pass runs at the start of every simulate() (what a command changed), after every hero event (a strike, a fight's end, a
 //     level-up, a training level) and at every cooldown end, so a rule fires at the exact engine time its condition starts to hold.
@@ -16,7 +16,7 @@
 //     A drink due at the very instant a fight's time limit ends it is taken right AFTER the fight (outside it): 3 in a 60 s fight.
 //     Forfeited offline time (beyond the cap) is not walked, except to finish a fight that was in progress when the cap fell.
 import { BELT, BELT_RULES, isBeltRule } from './config/belt';
-import { getItemDef, type ItemDef } from './config/items';
+import { getItemDef, type ItemDef, ITEMS } from './config/items';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { maxHpOf } from './hp';
 import { freeSlots, makeItem } from './inventory';
@@ -46,20 +46,41 @@ export function beltPotionCount(item: Pick<Item, 'belt'> | null | undefined): nu
   return item ? beltSlotsOf(item).reduce((n, s) => n + (s?.count ?? 0), 0) : 0;
 }
 
-/** Engine time (ms) the potion type can be drunk again; a time in the past (or 0) means ready. */
-export function potionReadyAt(state: Pick<GameState, 'potionCooldowns'>, defId: string): number {
-  return state.potionCooldowns?.[defId] ?? 0;
+/** The cooldown group a potion belongs to (owner decision 2026-11-07): its `cooldownGroup`, else its own defId. Potions of a group share one cooldown. */
+export function cooldownGroupOf(defId: string): string {
+  return getItemDef(defId)?.cooldownGroup ?? defId;
 }
 
-/** Ms of cooldown the potion type has left at engine time `at` (0 = ready). */
+/** True when `key` names a cooldown group some potion with a cooldown belongs to (anything else in `potionCooldowns` is a stale key). */
+function isCooldownGroup(key: string): boolean {
+  return Object.values<ItemDef>(ITEMS).some((d) => (d.cooldownMs ?? 0) > 0 && (d.cooldownGroup ?? d.id) === key);
+}
+
+/** Engine time (ms) the potion's cooldown group can be drunk again; a time in the past (or 0) means ready. */
+export function potionReadyAt(state: Pick<GameState, 'potionCooldowns'>, defId: string): number {
+  return state.potionCooldowns?.[cooldownGroupOf(defId)] ?? 0;
+}
+
+/** Ms of cooldown the potion's group has left at engine time `at` (0 = ready). */
 export function potionCooldownLeftMs(state: Pick<GameState, 'potionCooldowns'>, defId: string, at: number): number {
   return Math.max(0, potionReadyAt(state, defId) - at);
 }
 
-/** Starts the type's cooldown at engine time `at` (a drink). Replaces the map (the caller's draft may share it with the input state). */
+/**
+ * Starts the cooldown of the potion's GROUP at engine time `at` (a drink): the group is ready again at `at` + the DRUNK potion's cooldownMs.
+ * Replaces the map (the caller's draft may share it with the input state) and drops keys that are not a cooldown group: a preview save
+ * written while cooldowns were stored by potion type (before 2026-11-07) holds such keys; they are never read and last 20 s at most.
+ */
 export function startPotionCooldown(draft: GameState, defId: string, at: number): void {
   const ms = getItemDef(defId)?.cooldownMs ?? 0;
-  if (ms > 0) draft.potionCooldowns = { ...draft.potionCooldowns, [defId]: at + ms };
+  if (ms <= 0) return;
+  const group = cooldownGroupOf(defId);
+  const next: Record<string, number> = {};
+  for (const [key, readyAt] of Object.entries(draft.potionCooldowns ?? {})) {
+    if (key !== group && typeof readyAt === 'number' && isCooldownGroup(key)) next[key] = readyAt;
+  }
+  next[group] = at + ms;
+  draft.potionCooldowns = next;
 }
 
 /** The rule test: never at full HP; a percent rule needs hp x 100 <= maxHp x pct (integers); `always` is any HP below max. */
@@ -170,7 +191,7 @@ export function beltPass(draft: GameState, at: number, summary: SimulationSummar
     if (!held || held.count <= 0) continue;
     const def = getItemDef(held.defId);
     if (!def || !isPotionDef(def)) continue;
-    if (potionReadyAt(draft, held.defId) > at) continue;
+    if (potionReadyAt(draft, held.defId) > at) continue; // its group is cooling down (a slot-1 drink of the group blocks the later slots)
     const maxHp = maxHpOf(draft);
     const hpBefore = Math.max(0, draft.character.hp);
     if (!ruleSatisfied(held.rule, hpBefore, maxHp)) continue;
@@ -212,7 +233,7 @@ export function beltPass(draft: GameState, at: number, summary: SimulationSummar
 }
 
 /**
- * Wall ms from `at` to the next cooldown end of a potion type the belt holds (a pass is due then: a slot may be waiting on it), or Infinity.
+ * Wall ms from `at` to the next cooldown end of a potion group the belt holds (a pass is due then: a slot may be waiting on it), or Infinity.
  */
 export function beltNextEventMs(draft: GameState, at: number): number {
   const worn = equippedBelt(draft);
@@ -261,7 +282,7 @@ export type BeltSlotView = {
   count: number;
   rule: BeltRule | null;
   ruleLabel: string | null;
-  /** Ms the slot's potion type still has on cooldown at the state's engine time (0 = ready, or an empty slot). */
+  /** Ms the slot's potion group still has on cooldown at the state's engine time (0 = ready, or an empty slot). Slots of one group show the same value. */
   cooldownLeftMs: number;
 };
 
@@ -271,7 +292,7 @@ export type BeltView = {
   slots: BeltSlotView[];
   /** Potions in all slots. */
   total: number;
-  /** Every filled slot's type is on cooldown, or the belt holds nothing: the button is dimmed. */
+  /** Every filled slot's group is on cooldown, or the belt holds nothing: the button is dimmed. */
   dimmed: boolean;
   maxPerSlot: number;
 };

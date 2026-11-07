@@ -1,5 +1,6 @@
 // The Potion Belt (engine 1.27.0, owner decisions 2026-11-06): an accessory whose item instance holds 4 slots of potions that drink
-// by rules at exact engine times (live == offline, split-invariant), with per-type cooldowns shared with manual USE_ITEM.
+// by rules at exact engine times (live == offline, split-invariant), with potion cooldowns shared with manual USE_ITEM. Potions of one
+// cooldown group (the two health potions) share ONE cooldown (owner decision 2026-11-07).
 import { describe, expect, it } from 'vitest';
 import {
   applyCommand,
@@ -15,10 +16,13 @@ import {
   isNoteworthy,
   ITEMS,
   maxHpOf,
+  cooldownGroupOf,
+  potionCooldownLeftMs,
   potionReadyAt,
   ruleSatisfied,
   simulate,
 } from '../src/engine';
+import { HEALTH_COOLDOWN_GROUP } from '../src/engine/config/belt';
 import { newPackFight } from '../src/engine/combat';
 import { makeItem } from '../src/engine/inventory';
 import { apply, bossHero, bossSlayer, builtGame, cmd, fightSide, SEC, T0, withTrollBridgeWins } from './helpers';
@@ -79,10 +83,14 @@ describe('the rules, exactly', () => {
     }
   });
 
-  it('the data: 4 slots, 25 each, default rule On 50% HP; the potions have a 20 s cooldown', () => {
+  it('the data: 4 slots, 25 each, default rule On 50% HP; the potions have a 20 s cooldown and share the `health` cooldown group', () => {
     expect(BELT).toMatchObject({ slots: 4, maxPerSlot: 25, defaultRule: 'hp_below_50' });
     expect(ITEMS.health_potion_t1.cooldownMs).toBe(20_000);
     expect(ITEMS.greater_health_potion.cooldownMs).toBe(20_000);
+    expect(HEALTH_COOLDOWN_GROUP).toBe('health');
+    expect(cooldownGroupOf(T1)).toBe('health');
+    expect(cooldownGroupOf(GREATER)).toBe('health');
+    expect(cooldownGroupOf('some_other_potion')).toBe('some_other_potion'); // no group: its own
   });
 });
 
@@ -228,18 +236,69 @@ describe('BELT_TAKE and BELT_SET_RULE', () => {
   });
 });
 
-describe('manual USE_ITEM and the per-type cooldown', () => {
-  it('a drink starts the type\'s cooldown (engine time); the same type is refused until it ends, other types are not', () => {
+describe('manual USE_ITEM and the shared cooldown', () => {
+  it('a drink starts the group\'s cooldown (engine time, stored by group); the same potion is refused until it ends', () => {
     const s = withHp(withBag(big(), [[T1, 5], [GREATER, 5]]), 100);
     const a = apply(s, { type: 'USE_ITEM', itemId: T1 }, T0);
     expect(a.character.hp).toBe(150);
-    expect(a.potionCooldowns[T1]).toBe(T0 + 20_000);
+    expect(a.potionCooldowns).toEqual({ health: T0 + 20_000 }); // one entry, by group (not by potion type)
     const early = applyCommand(a, cmd({ type: 'USE_ITEM', itemId: T1 }), T0 + 5 * SEC);
     expect(early).toMatchObject({ ok: false, error: { code: 'ON_COOLDOWN' } });
     expect(!early.ok && early.error.message).toMatch(/15 s/);
-    expect(code(a, { type: 'USE_ITEM', itemId: GREATER }, T0 + 5 * SEC)).toBe('ok'); // another type
     expect(code(a, { type: 'USE_ITEM', itemId: T1 }, T0 + 20 * SEC - 1)).toBe('ON_COOLDOWN');
     expect(code(a, { type: 'USE_ITEM', itemId: T1 }, T0 + 20 * SEC)).toBe('ok');
+  });
+
+  it('T1 -> Greater and Greater -> T1: a drink of either puts BOTH on cooldown (ON_COOLDOWN, nothing changes) until it ends', () => {
+    const s = withHp(withBag(big(), [[T1, 5], [GREATER, 5]]), 100);
+    for (const [first, second] of [[T1, GREATER], [GREATER, T1]] as const) {
+      const a = apply(s, { type: 'USE_ITEM', itemId: first }, T0);
+      const early = applyCommand(a, cmd({ type: 'USE_ITEM', itemId: second }), T0 + 5 * SEC);
+      expect(early, `${first} then ${second}`).toMatchObject({ ok: false, error: { code: 'ON_COOLDOWN' } });
+      expect(!early.ok && early.error.message).toMatch(/15 s/);
+      expect(code(a, { type: 'USE_ITEM', itemId: second }, T0 + 20 * SEC - 1)).toBe('ON_COOLDOWN');
+      expect(code(a, { type: 'USE_ITEM', itemId: second }, T0 + 20 * SEC)).toBe('ok');
+      expect(bagCount(a, second)).toBe(5); // a refusal took nothing
+    }
+  });
+
+  it('the wait is the DRUNK potion\'s cooldown: group ready at drink time + that potion\'s cooldownMs (config override 10 s T1, 30 s Greater)', () => {
+    const t1 = ITEMS.health_potion_t1 as { cooldownMs: number };
+    const gr = ITEMS.greater_health_potion as { cooldownMs: number };
+    const saved = [t1.cooldownMs, gr.cooldownMs];
+    try {
+      t1.cooldownMs = 10_000;
+      gr.cooldownMs = 30_000;
+      const s = withHp(withBag(big(), [[T1, 5], [GREATER, 5]]), 1);
+      // Greater drunk: the whole group waits 30 s, T1's own 10 s does not shorten it.
+      const g = apply(s, { type: 'USE_ITEM', itemId: GREATER }, T0);
+      expect(g.potionCooldowns).toEqual({ health: T0 + 30_000 });
+      expect(code(g, { type: 'USE_ITEM', itemId: T1 }, T0 + 29_999)).toBe('ON_COOLDOWN');
+      const t1After = apply(g, { type: 'USE_ITEM', itemId: T1 }, T0 + 30_000);
+      expect(t1After.potionCooldowns).toEqual({ health: T0 + 40_000 }); // now the T1 drink counts: 30 s + 10 s
+      expect(code(t1After, { type: 'USE_ITEM', itemId: GREATER }, T0 + 39_999)).toBe('ON_COOLDOWN');
+      expect(code(t1After, { type: 'USE_ITEM', itemId: GREATER }, T0 + 40_000)).toBe('ok');
+      // T1 drunk: the group waits only 10 s, and Greater (30 s of its own) can follow at once after that.
+      const t = apply(s, { type: 'USE_ITEM', itemId: T1 }, T0);
+      expect(t.potionCooldowns).toEqual({ health: T0 + 10_000 });
+      expect(code(t, { type: 'USE_ITEM', itemId: GREATER }, T0 + 9_999)).toBe('ON_COOLDOWN');
+      expect(code(t, { type: 'USE_ITEM', itemId: GREATER }, T0 + 10_000)).toBe('ok');
+      expect(potionCooldownLeftMs(g, T1, T0 + 5_000)).toBe(25_000); // both potions read the same group
+      expect(potionCooldownLeftMs(g, GREATER, T0 + 5_000)).toBe(25_000);
+    } finally {
+      [t1.cooldownMs, gr.cooldownMs] = saved;
+    }
+  });
+
+  it('a save written while cooldowns were stored by potion type is safe: those keys are ignored (ready) and dropped at the next drink', () => {
+    const old = { ...withHp(withBag(big(), [[T1, 5], [GREATER, 5]]), 100), potionCooldowns: { [T1]: T0 + 15_000, [GREATER]: T0 + 15_000 } };
+    expect(potionReadyAt(old, T1)).toBe(0); // the old key is not read: the group is ready
+    expect(code(old, { type: 'USE_ITEM', itemId: T1 }, T0)).toBe('ok');
+    const a = apply(old, { type: 'USE_ITEM', itemId: GREATER }, T0);
+    expect(a.potionCooldowns).toEqual({ health: T0 + 20_000 }); // the stale keys are gone
+    const belt = simulate(belted(withHp(big(), 1), [slotOf(T1, 3, 'always')]), T0 + 1);
+    expect(Object.keys(belt.state.potionCooldowns)).toEqual(['health']);
+    expect(Object.keys(simulate({ ...belted(withHp(big(), 1), [slotOf(T1, 3, 'always')]), potionCooldowns: { [T1]: T0 + 15_000 } }, T0 + 1).state.potionCooldowns)).toEqual(['health']);
   });
 
   it('a refused drink changes nothing (HP full is checked first)', () => {
@@ -302,12 +361,14 @@ describe('drinking out of a fight (idle), live == offline', () => {
     expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([24, 25, 260]);
     r = run([slotOf(T1), slotOf(GREATER)], 200);
     expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([24, 25, 250]);
-    // hp 100: both are still eligible after the first: both drink at the same instant, slot 1 then slot 2
+    // hp 100: both rules still hold after the first drink, but the two potions share one cooldown: only slot 1 drinks (Greater +60)
     r = run([slotOf(GREATER), slotOf(T1)], 100);
-    expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([24, 24, 210]);
+    expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([24, 25, 160]);
+    r = run([slotOf(T1), slotOf(GREATER)], 100);
+    expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([24, 25, 150]);
   });
 
-  it('the cooldown is per potion TYPE: two slots of one type drink one after the other; two types drink together', () => {
+  it('the cooldown is per GROUP: two slots of one type, or of the two health potions, drink one after the other, never together', () => {
     const same = idle(1, [slotOf(T1, 3, 'always'), slotOf(T1, 3, 'always')]);
     let r = simulate(same, T0 + MS).state;
     expect([countIn(r, 0), countIn(r, 1)]).toEqual([2, 3]);
@@ -316,14 +377,34 @@ describe('drinking out of a fight (idle), live == offline', () => {
     r = simulate(same, T0 + 60 * SEC).state; // slot 1 empties at t = 40 s (its 3rd), slot 2 takes over at 60 s
     expect(beltOf(r)[0]).toBeNull();
     expect(countIn(r, 1)).toBe(2);
+    // T1 and Greater share the cooldown: slot 1 (T1) drinks at 0 s, the Greater slot waits; slot 1 is first again at 20 s, and so on
     const mixed = simulate(idle(1, [slotOf(T1, 3, 'always'), slotOf(GREATER, 3, 'always')]), T0 + MS).state;
-    expect([countIn(mixed, 0), countIn(mixed, 1)]).toEqual([2, 2]);
-    expect(potionReadyAt(mixed, GREATER)).toBe(T0 + 20_000);
+    expect([countIn(mixed, 0), countIn(mixed, 1)]).toEqual([2, 3]);
+    expect(potionReadyAt(mixed, GREATER)).toBe(T0 + 20_000); // the T1 drink put the Greater on cooldown too
+    expect(potionReadyAt(mixed, T1)).toBe(T0 + 20_000);
+    expect(mixed.potionCooldowns).toEqual({ health: T0 + 20_000 });
+    const later = simulate(idle(1, [slotOf(T1, 1, 'always'), slotOf(GREATER, 3, 'always')]), T0 + 40 * SEC).state; // T1 at 0 s empties its slot, Greater at 20 s and 40 s
+    expect([beltOf(later)[0], countIn(later, 1)]).toEqual([null, 1]);
+  });
+
+  it('a Greater slot in front blocks a T1 slot behind it exactly the same way (slot order decides, not the potion)', () => {
+    const r = simulate(idle(1, [slotOf(GREATER, 3, 'always'), slotOf(T1, 3, 'always')]), T0 + 20 * SEC).state;
+    expect([countIn(r, 0), countIn(r, 1)]).toEqual([1, 3]); // Greater at 0 s and 20 s, the T1 slot never gets its turn
   });
 
   it('the last potion empties the slot', () => {
     const r = simulate(idle(1, [slotOf(T1, 1, 'always')]), T0 + MS).state;
     expect(beltOf(r)[0]).toBeNull();
+  });
+
+  it('a manual drink of the OTHER health potion holds the belt back, and a belt drink blocks a manual one of either', () => {
+    const s = idle(1, [slotOf(T1, 5, 'always')], withBag(big(), [[GREATER, 2], [T1, 2]]));
+    const manual = apply(s, { type: 'USE_ITEM', itemId: GREATER }, T0);
+    expect(countIn(simulate(manual, T0 + 19_999).state, 0)).toBe(5); // the belt's T1 waits for the Greater's cooldown
+    expect(countIn(simulate(manual, T0 + 20_000).state, 0)).toBe(4);
+    const belt = simulate(s, T0 + MS).state;
+    expect(code(belt, { type: 'USE_ITEM', itemId: GREATER }, T0 + 2 * SEC)).toBe('ON_COOLDOWN');
+    expect(code(belt, { type: 'USE_ITEM', itemId: T1 }, T0 + 2 * SEC)).toBe('ON_COOLDOWN');
   });
 
   it('a manual drink\'s cooldown holds the belt back, and a belt drink blocks a manual one', () => {
@@ -345,8 +426,9 @@ describe('drinking out of a fight (idle), live == offline', () => {
   });
 
   it('the summary counts every drink by type; merged ticks add up', () => {
-    const r = simulate(idle(1, [slotOf(T1, 25, 'always'), slotOf(GREATER, 25, 'always')]), T0 + 45 * SEC);
-    expect(r.summary.potionsUsed).toEqual({ [T1]: 3, [GREATER]: 3 });
+    // one T1 (0 s), then the slot is empty and the Greater slot drinks at 20 s and 40 s (the two types share one cooldown)
+    const r = simulate(idle(1, [slotOf(T1, 1, 'always'), slotOf(GREATER, 25, 'always')]), T0 + 45 * SEC);
+    expect(r.summary.potionsUsed).toEqual({ [T1]: 1, [GREATER]: 2 });
   });
 
   it('woodcutting, a dungeon search, training and idle: one simulate == any split == a tick every second', () => {
@@ -365,6 +447,42 @@ describe('drinking out of a fight (idle), live == offline', () => {
       let live = s;
       for (let t = 1; t <= 180; t++) live = simulate(live, T0 + t * SEC).state;
       expect(hashState(live), `${name} live`).toBe(hashState(once));
+    }
+  });
+});
+
+describe('the shared cooldown with different cooldowns per potion (config override), live == offline', () => {
+  it('split invariance and live ticks hold when T1 waits 10 s and Greater 30 s: the wait is the drunk potion\'s', () => {
+    const t1 = ITEMS.health_potion_t1 as { cooldownMs: number };
+    const gr = ITEMS.greater_health_potion as { cooldownMs: number };
+    const saved = [t1.cooldownMs, gr.cooldownMs];
+    try {
+      t1.cooldownMs = 10_000;
+      gr.cooldownMs = 30_000;
+      const start = belted(withHp(big(), 1), [slotOf(GREATER, 1, 'hp_below_50'), slotOf(T1, 25, 'always')]);
+      const games: [string, GameState][] = [
+        ['idle', start],
+        ['search', apply(start, { type: 'START_ACTIVITY', kind: 'dungeon', dungeonId: 'rat_cellar' }, T0)],
+      ];
+      for (const [name, s] of games) {
+        const end = T0 + 3 * 60 * SEC;
+        const once = simulate(s, end);
+        for (const at of [1, 9_999, 10_000, 29_999, 30_000, 30_001, 40_000, 61_234]) {
+          expect(hashState(simulate(simulate(s, T0 + at).state, end).state), `${name} split at ${at}`).toBe(hashState(once.state));
+        }
+        let live = s;
+        for (let t = 1; t <= 180; t++) live = simulate(live, T0 + t * SEC).state;
+        expect(hashState(live), `${name} live`).toBe(hashState(once.state));
+        expect(Object.keys(once.summary.potionsUsed).length, name).toBeGreaterThan(0);
+      }
+      // idle, exact edges: the single Greater at 0 s (30 s wait); T1 'always' behind it drinks at 30 s (then 10 s waits: 40 s, 50 s ...)
+      const r30 = simulate(start, T0 + 30_000).state;
+      expect(beltOf(r30)[0]).toBeNull();
+      expect(countIn(r30, 1)).toBe(24); // the T1 slot's first drink, at exactly 30 s
+      expect(r30.potionCooldowns).toEqual({ health: T0 + 40_000 });
+      expect(countIn(simulate(start, T0 + 29_999).state, 1)).toBe(25);
+    } finally {
+      [t1.cooldownMs, gr.cooldownMs] = saved;
     }
   });
 });
@@ -489,6 +607,7 @@ describe('the views', () => {
     const r = simulate(s, T0 + MS).state; // both drank (hp 1 <= 237)
     const v1 = beltView(r);
     expect(v1.slots[0].cooldownLeftMs).toBe(19_999);
+    expect(v1.slots[1].cooldownLeftMs).toBe(19_999); // the Greater slot shows the T1 drink's cooldown: one group, one countdown
     expect(v1.dimmed).toBe(true);
     expect(beltView(simulate(s, T0 + 20_000).state).slots[0].cooldownLeftMs).toBeGreaterThan(0); // drank again at 20 s
     expect(beltView(belted(big())).dimmed).toBe(true); // nothing inside
@@ -497,6 +616,13 @@ describe('the views', () => {
   it('bagPotions lists the potion stacks with their cooldown', () => {
     const s = withBag(builtGame(1, T0), [[T1, 5], [GREATER, 2]]);
     expect(bagPotions(s).map((p) => [p.defId, p.quantity, p.cooldownLeftMs])).toEqual(expect.arrayContaining([[T1, 5, 0], [GREATER, 2, 0]]));
+  });
+
+  it('bagPotions: a drink of one health potion shows the cooldown on both stacks', () => {
+    const s = withBag(withHp(big(), 100), [[T1, 5], [GREATER, 2]]);
+    const a = apply(s, { type: 'USE_ITEM', itemId: T1 }, T0);
+    const list = bagPotions(a).filter((p) => p.defId === T1 || p.defId === GREATER);
+    expect(list.map((p) => [p.defId, p.cooldownLeftMs])).toEqual(expect.arrayContaining([[T1, 20_000], [GREATER, 20_000]]));
   });
 });
 
