@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameClient, useGameState } from '../../client/GameProvider';
@@ -8,14 +8,17 @@ import { formatNumber } from '../../components/format';
 import { IconText, SkillIcon } from '../../components/art/Sprites';
 import { defOf, SLOT_LABELS } from '../../components/items/itemInfo';
 import { ItemSheet, type SheetAction } from '../../components/items/ItemSheet';
+import { acceptingBoxes, boxTarget, COMBAT_GRID, dropBoxCount, type EquipmentTab, noBoxes, parseDragId, slotBox, slotDragId, tabOfSlot, TOOLS_GRID } from '../../components/items/heroDrag';
 import { ItemSlot } from '../../components/items/ItemSlot';
+import { DragGhost, type DragHandlers, type DragSurface, useDragSurface } from '../../components/ui/drag/dragKit';
+import { useCommand } from '../../components/ui/useCommand';
 import { type SlotHitTest, useSlotHitTest } from '../../components/ui/useSlotHitTest';
 import type { AnchorRect } from '../../components/ui/InfoPopover';
 import { Bar, Panel } from '../../components/Panel';
 import { PixelButton } from '../../components/PixelButton';
 import { StatusPanel } from '../../components/StatusPanel';
 import { type CommandInput } from '../../client/types';
-import { freeSlots, hpView, potionCooldownLeftMs } from '../../engine';
+import { bagCells, dropCommand, freeSlots, hpView, potionCooldownLeftMs } from '../../engine';
 import { DEV_TOOLS_ENABLED } from '../../engine/config/dev';
 import type { Character, EquipmentSlot, Inventory, Item, SkillKey } from '../../engine/types';
 import { colors, fonts } from '../../theme';
@@ -26,27 +29,51 @@ const SKILL_LABELS: Record<SkillKey, string> = {
   fishing: 'Fishing',
 };
 
-// Paper-doll layouts (1.21.0): 3 columns, null = empty cell. Combat is the paper doll, Tools the gathering tools.
-const COMBAT_GRID: (EquipmentSlot | null)[][] = [
-  [null, 'helmet', 'amulet'],
-  ['weapon', 'armor', 'shield'],
-  ['ring1', 'legs', 'ring2'],
-  ['gloves', 'boots', 'accessory'], // the accessory (the Potion Belt) sits directly under Ring 2
-];
-const TOOLS_GRID: (EquipmentSlot | null)[][] = [['axe', 'pickaxe']];
-type EquipmentTab = 'combat' | 'tools';
-
 /** What the item box shows: an inventory item (by id) or an equipment slot, anchored on the tapped slot. */
 type Selection = ({ kind: 'inventory'; itemId: string } | { kind: 'equipment'; slot: EquipmentSlot }) & { anchor: AnchorRect };
 
 export default function HeroScreen() {
-  const { character, inventory, stamina, training } = useGameState();
+  const state = useGameState();
+  const { character, inventory, stamina, training } = state;
   const [selection, setSelection] = useState<Selection | null>(null);
   const openInventory = useCallback((key: string | number, anchor: AnchorRect) => setSelection({ kind: 'inventory', itemId: String(key), anchor }), []);
   const openEquipment = useCallback((key: string | number, anchor: AnchorRect) => setSelection({ kind: 'equipment', slot: key as EquipmentSlot, anchor }), []);
   const close = useCallback(() => setSelection(null), []);
   // A tap on another slot while the box is open moves the box there (no close / fade); the same slot closes it.
   const hitTest = useSlotHitTest(selection);
+
+  // ---- drag (1.28.0): hold an item, drag it onto a bag cell or an equipment slot. The shared kit does the gesture, the ghost and the
+  // highlight on the UI thread; here only the rules' side: which boxes accept (the engine's dropCommand) and what a drop sends. ----
+  const surface = useDragSurface(dropBoxCount(inventory.capacity));
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const { send } = useCommand();
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  /** The Equipment panel's tab setter, so a drag can bring the tab that holds the target slot on screen. */
+  const showTab = useRef<((tab: EquipmentTab) => void) | null>(null);
+  const dragHandlers = useMemo<DragHandlers>(
+    () => ({
+      onStart: (id, icon) => {
+        const st = stateRef.current;
+        const source = parseDragId(id);
+        surface.ghostIcon.current?.(icon);
+        surface.allowed.set(acceptingBoxes(st, source));
+        // A piece from the bag may belong to the other tab (a tool while Combat shows): switch so its slot is there to drop on.
+        const piece = source.kind === 'bag' ? st.inventory.items.find((i) => i.id === source.itemId) : undefined;
+        if (piece?.slot) showTab.current?.(tabOfSlot(piece.slot));
+        surface.measure();
+      },
+      onDrop: (id, box) => {
+        const st = stateRef.current;
+        const target = boxTarget(box, st.inventory.capacity);
+        const command = target ? dropCommand(st, parseDragId(id), target) : null;
+        if (command) void sendRef.current(command);
+      },
+      onEnd: () => surface.allowed.set(noBoxes(dropBoxCount(stateRef.current.inventory.capacity))),
+    }),
+    [surface],
+  );
   const outsidePress = (p: { x: number; y: number }) =>
     hitTest.press(p, (hit) => {
       const equipment = typeof hit.id === 'string' && hit.id in SLOT_LABELS; // item ids contain '#', slot names do not
@@ -72,11 +99,15 @@ export default function HeroScreen() {
           stamina={stamina}
           training={training}
         />
-        <EquipmentPanel equipment={character.equipment} onPress={openEquipment} hitTest={hitTest} />
-        <InventoryPanel inventory={inventory} gold={character.gold} onPress={openInventory} hitTest={hitTest} />
+        <EquipmentPanel equipment={character.equipment} capacity={inventory.capacity} onPress={openEquipment} hitTest={hitTest} drag={surface} dragHandlers={dragHandlers} showTab={showTab} />
+        <InventoryPanel inventory={inventory} gold={character.gold} onPress={openInventory} hitTest={hitTest} drag={surface} dragHandlers={dragHandlers} />
         <SkillsPanel skills={character.skills} />
         {DEV_TOOLS_ENABLED ? <DebugPanel /> : null}
       </ScrollView>
+      {/* The ghost that follows the finger: a layer over the screen that takes no touches (the kit places the ghost in it). */}
+      <View ref={surface.layerRef} style={styles.dragLayer} pointerEvents="none" collapsable={false}>
+        <DragGhost surface={surface} />
+      </View>
       <HeroItemSheet selection={selection} onClose={close} onOutsidePress={outsidePress} />
     </SafeAreaView>
   );
@@ -103,9 +134,35 @@ const HeaderPanel = memo(function HeaderPanel({ name, title, level, xp, xpToNext
 
 type PressHandler = (key: string | number, anchor: AnchorRect) => void;
 
-const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress, hitTest }: { equipment: Character['equipment']; onPress: PressHandler; hitTest: SlotHitTest }) {
+type DragProps = { drag: DragSurface; dragHandlers: DragHandlers };
+
+const EquipmentPanel = memo(function EquipmentPanel({
+  equipment,
+  capacity,
+  onPress,
+  hitTest,
+  drag,
+  dragHandlers,
+  showTab,
+}: { equipment: Character['equipment']; capacity: number; onPress: PressHandler; hitTest: SlotHitTest; showTab: { current: ((tab: EquipmentTab) => void) | null } } & DragProps) {
   const [tab, setTab] = useState<EquipmentTab>('combat');
   const grid = tab === 'combat' ? COMBAT_GRID : TOOLS_GRID;
+  useEffect(() => {
+    showTab.current = setTab;
+    return () => {
+      showTab.current = null;
+    };
+  }, [showTab]);
+  // The other tab changes this panel's height and so where the bag sits: measure the drop boxes again once it is laid out.
+  const firstTab = useRef(true);
+  useEffect(() => {
+    if (firstTab.current) {
+      firstTab.current = false;
+      return;
+    }
+    const frame = requestAnimationFrame(drag.measure);
+    return () => cancelAnimationFrame(frame);
+  }, [tab, drag]);
   return (
     <Panel title="Equipment">
       <View style={styles.equipTabs}>
@@ -117,7 +174,18 @@ const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress, hitTes
           {row.map((slot, c) =>
             slot ? (
               <View key={c} style={styles.equipCell}>
-                <ItemSlot item={equipment[slot]} size={58} pressKey={slot} onPress={onPress} hitTest={hitTest} placeholder={slot === 'accessory' ? 'slot_accessory' : undefined} />
+                <ItemSlot
+                  item={equipment[slot]}
+                  size={58}
+                  pressKey={slot}
+                  onPress={onPress}
+                  hitTest={hitTest}
+                  placeholder={slot === 'accessory' ? 'slot_accessory' : undefined}
+                  drag={drag}
+                  dragIndex={slotBox(slot, capacity)}
+                  dragHandlers={dragHandlers}
+                  dragId={slotDragId(slot)}
+                />
                 <Text style={styles.slotLabel} numberOfLines={1}>
                   {equipment[slot]?.name ?? SLOT_LABELS[slot]}
                 </Text>
@@ -132,8 +200,9 @@ const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress, hitTes
   );
 });
 
-const InventoryPanel = memo(function InventoryPanel({ inventory, gold, onPress, hitTest }: { inventory: Inventory; gold: number; onPress: PressHandler; hitTest: SlotHitTest }) {
-  const slots: (Item | undefined)[] = Array.from({ length: inventory.capacity }, (_, i) => inventory.items[i]);
+const InventoryPanel = memo(function InventoryPanel({ inventory, gold, onPress, hitTest, drag, dragHandlers }: { inventory: Inventory; gold: number; onPress: PressHandler; hitTest: SlotHitTest } & DragProps) {
+  // The bag is a grid with gaps (1.28.0): every cell is its own drop box, filled or not.
+  const slots = bagCells(inventory);
   return (
     <Panel
       title={`Inventory ${inventory.items.length}/${inventory.capacity} ·`}
@@ -146,7 +215,7 @@ const InventoryPanel = memo(function InventoryPanel({ inventory, gold, onPress, 
       <View style={styles.invGrid}>
         {slots.map((item, i) => (
           <View key={i} style={styles.invCell}>
-            <ItemSlot item={item} size={52} pressKey={item?.id} onPress={onPress} hitTest={hitTest} />
+            <ItemSlot item={item} size={52} pressKey={item?.id} onPress={onPress} hitTest={hitTest} drag={drag} dragIndex={i} dragHandlers={dragHandlers} />
           </View>
         ))}
       </View>
@@ -257,6 +326,7 @@ function HeroItemSheet({ selection, onClose, onOutsidePress }: { selection: Sele
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.night },
+  dragLayer: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 40, elevation: 40 },
   // Room for the activity strip that floats above the tab bar. The HUD above the scroll view keeps its own space.
   content: { padding: 12, paddingTop: 8, paddingBottom: 32 + ACTIVITY_STRIP_HEIGHT },
 

@@ -1,6 +1,6 @@
-// Drag and drop on the belt panel: which slot a dragged potion is over (pure, no React Native, so a test reads it). Runs as a
-// worklet on the UI thread (the Pan gesture's callbacks), in window coordinates: the slots' boxes come from measureInWindow, the
-// finger from the gesture's absoluteX / absoluteY.
+// Drag and drop, shared by the Potion Belt panel and the Hero tab: which drop box a dragged item is over (pure, no React Native, so a test
+// reads it). Runs as a worklet on the UI thread (the Pan gesture's callbacks), in window coordinates: the boxes come from measureInWindow,
+// the finger from the gesture's absoluteX / absoluteY.
 //
 // WORKLET RULE (this file crashed the app once): the worklet plugin hands the function a `this.__closure` that is destructured as the
 // FIRST statement of the BODY, so a closure variable used in a PARAMETER DEFAULT (`slop = DROP_SLOP`) is read before it exists and
@@ -12,6 +12,13 @@ export type DropRect = { x: number; y: number; width: number; height: number };
 
 /** Extra points around a slot that still count as over it (a thumb is not a pixel). */
 export const DROP_SLOP = 10;
+
+/**
+ * A release closer than this (points, squared: no square root on the UI thread) to where the hold began counts as a TAP, not a drop. The
+ * hold activates the drag after DRAG_HOLD_MS, and a tap that long would otherwise be swallowed (the active pan cancels the touchable's
+ * press), so the drag reports it as a tap instead.
+ */
+export const TAP_SLOP_SQ = 100;
 
 /**
  * Index of the slot box the point is over (boxes grown by `slop`), or -1. Slots are far enough apart that the first hit is the only
