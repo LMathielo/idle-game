@@ -62,6 +62,8 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
   const ready = Object.entries(summary.craftsReady ?? {});
   // Material pipes that spent time waiting for materials (1.15.0; older summaries have none): one line per pipe and item.
   const waits = summary.craftWaits ?? [];
+  // Potions the Potion Belt drank (1.27.0; older summaries have none), in or out of fights.
+  const drunk = Object.entries(summary.potionsUsed ?? {});
   const skills = Object.entries(summary.skillXpGained) as [SkillKey, number][];
   const trained = Object.entries(summary.trainingXpGained) as [AttributeKey, number][];
   const maxed = summary.trainingMaxed;
@@ -155,6 +157,10 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       {ready.map(([id, n]) => (
         <Line key={`r-${id}`} icon={<ItemIcon defId={id} size={16} />} label={itemName(id)} value={`×${formatNumber(n)}`} />
       ))}
+      {drunk.length > 0 ? <Section icon="potion">Potions used (Potion Belt)</Section> : null}
+      {drunk.map(([id, n]) => (
+        <Line key={`p-${id}`} icon={<ItemIcon defId={id} size={16} />} label={itemName(id)} value={`×${formatNumber(n)}`} />
+      ))}
       {summary.upkeepPaid > 0 ? <Line icon={<GameIcon name="gold" />} label="Upkeep paid" value={`−${formatNumber(summary.upkeepPaid)}`} cost /> : null}
       {summary.buildingsUpgraded.map((u) => (
         <Line key={`${u.buildingId}-${u.level}`} icon={<GameIcon name="upgrade" />} label={`${BUILDINGS[u.buildingId].name} upgraded`} value={`Lv ${u.level}`} />
@@ -193,6 +199,7 @@ function SummaryBody({ summary, capHours, tier }: { summary: SimulationSummary; 
       summary.craftsCompleted === 0 &&
       ready.length === 0 &&
       waits.length === 0 &&
+      drunk.length === 0 &&
       summary.buildingsUpgraded.length === 0 &&
       !backward ? (
         <Text style={styles.muted}>Nothing was gathered.</Text>

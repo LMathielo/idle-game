@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 23 as const;
+export const CURRENT_SAVE_VERSION = 24 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -33,6 +33,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   20: migrateV20toV21,
   21: migrateV21toV22,
   22: migrateV22toV23,
+  23: migrateV23toV24,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -960,6 +961,26 @@ function migrateV22toV23(doc: SaveDoc): SaveDoc {
   }
   const a = doc.activity;
   if (isDoc(a) && (a.kind === 'dungeon' || a.kind === 'boss') && a.fight) out.activity = { ...a, fight: migrateV23Fight(a.fight) };
+  return out;
+}
+
+// ---- v23 → v24 (2026-11-06): the Potion Belt ----
+// The belt becomes an accessory (slot `accessory`) whose item instance holds 4 belt slots, and potion cooldowns are stored by type. Nothing an
+// existing hero has changes except: `potionCooldowns = {}` (no cooldown running), and every Potion Belt instance (1.26.0 dropped them with
+// no mechanics: in the bag; nothing else can hold one) gets `slot: 'accessory'` and four EMPTY belt slots. The equipment keeps no accessory
+// (the Partial map has no entry for an empty slot). Frozen literals on purpose: the item id and the 4 slots.
+
+const V24_BELT_DEF_ID = 'potion_belt';
+const V24_BELT_SLOTS = 4;
+
+function withBeltSlots(item: unknown): unknown {
+  if (!isDoc(item) || item.defId !== V24_BELT_DEF_ID || Array.isArray(item.belt)) return item;
+  return { ...item, slot: 'accessory', belt: Array.from({ length: V24_BELT_SLOTS }, () => null) };
+}
+
+function migrateV23toV24(doc: SaveDoc): SaveDoc {
+  const out: SaveDoc = { ...doc, saveVersion: 24, potionCooldowns: isDoc(doc.potionCooldowns) ? doc.potionCooldowns : {} };
+  if (isDoc(doc.inventory) && Array.isArray(doc.inventory.items)) out.inventory = { ...doc.inventory, items: doc.inventory.items.map(withBeltSlots) };
   return out;
 }
 

@@ -1,5 +1,5 @@
 /** Engine rules version, stored on every action_log row. Bump when rules change outcomes. */
-export const ENGINE_VERSION = '1.26.0';
+export const ENGINE_VERSION = '1.27.0';
 
 /**
  * Every engine version that ever shipped, oldest first, with the save version it wrote. Append a row on
@@ -35,6 +35,7 @@ export const RELEASED_ENGINES: readonly { engine: string; save: number }[] = [
   { engine: '1.24.0', save: 22 }, // difficulties: Hard / Extreme packs and bosses, per-difficulty counters, SET_DUNGEON_DIFFICULTY, pack fights (mobs)
   { engine: '1.25.0', save: 23 }, // combat opening: the hero strikes at 0, monsters at 300 ms; the opening offsets are stored on the fight
   { engine: '1.26.0', save: 23 }, // engine-only bump: mob drops (stage Copper gear, Wild Sage, Troll Head, unique Potion Belt; the Tusk leaves the table); optional rewards.gears
+  { engine: '1.27.0', save: 24 }, // Potion Belt: the accessory slot, belt contents on the item, potion cooldowns, drinks by rule in simulate(), BELT_* commands
 ];
 
 /** Position of a released engine version in RELEASED_ENGINES, or -1 when it never shipped. */

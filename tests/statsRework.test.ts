@@ -540,7 +540,7 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
     expect(V18_SAVE).toEqual(frozen); // the input is not mutated
     const { saveVersion: _v, character, activity: _a, dungeon, ...rest } = s;
     const { saveVersion: _rv, character: rawCharacter, activity: _ra, dungeon: rawDungeon, ...rawRest } = V18_SAVE;
-    expect(rest).toEqual(rawRest);
+    expect(rest).toEqual({ ...rawRest, potionCooldowns: {} }); // v24: no potion cooldown running
     const { hpRegenProgress: _p, manaRegenProgress: _q, ...c } = character;
     const { hpRegenProgress: _rp, manaRegenProgress: _rq, ...rc } = rawCharacter;
     expect(c).toEqual(rc);
@@ -589,9 +589,9 @@ describe('save v19 migration (v18 -> v19) of a frozen v18 save', () => {
   });
 });
 
-describe('a new game is a v23 game', () => {
-  it('saveVersion 23, engine 1.26.0 (the stats rework shipped as 1.19.0 / v19)', () => {
-    expect(newGame(1, T0).saveVersion).toBe(23);
-    expect(ENGINE_VERSION).toBe('1.26.0');
+describe('a new game is a v24 game', () => {
+  it('saveVersion 24, engine 1.27.0 (the stats rework shipped as 1.19.0 / v19)', () => {
+    expect(newGame(1, T0).saveVersion).toBe(24);
+    expect(ENGINE_VERSION).toBe('1.27.0');
   });
 });

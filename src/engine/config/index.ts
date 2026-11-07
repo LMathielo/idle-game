@@ -15,3 +15,4 @@ export * from './workers';
 export * from './crafting';
 export * from './gear';
 export * from './skills';
+export * from './belt';

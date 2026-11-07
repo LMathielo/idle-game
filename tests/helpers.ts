@@ -241,7 +241,8 @@ export function v22Dungeon<D extends { lastFight: any }>(dungeon: D) {
  * save v23). Only the SHAPE: a script's outcomes moved with the opening (fights start with the hero's strike and the monster's 300 ms in),
  * so a hash taken in this shape is still a 1.25.0 pin.
  */
-export function asV22(s: GameState): GameState {
+export function asV22(state: GameState): GameState {
+  const s = asV23(state);
   const { lastFight, ...dungeon } = s.dungeon;
   let last: unknown = lastFight;
   if (lastFight) {
@@ -334,7 +335,36 @@ export function v23Doc<D extends Record<string, any>>(doc: D): D {
   if (a && (a.kind === 'dungeon' || a.kind === 'boss') && a.fight && typeof a.fight.heroFirstStrikeMs !== 'number') {
     out.activity = { ...a, fight: { ...a.fight, heroFirstStrikeMs: a.fight.hero.attackIntervalMs, enemyFirstStrikeMs: a.fight.mobs[0].side.attackIntervalMs } };
   }
+  return v24Doc(out) as D;
+}
+
+/**
+ * What the v23 -> v24 migration does to a v23-shaped raw document (the Potion Belt, engine 1.27.0): no potion cooldown is running
+ * (`potionCooldowns = {}`) and a Potion Belt instance in the bag becomes an accessory with four empty belt slots. Idempotent.
+ */
+export function v24Doc<D extends Record<string, any>>(doc: D): D {
+  const out: Record<string, any> = { ...doc, potionCooldowns: doc.potionCooldowns ?? {} };
+  if (doc.inventory?.items) {
+    out.inventory = {
+      ...doc.inventory,
+      items: doc.inventory.items.map((i: any) => (i.defId === 'potion_belt' && !Array.isArray(i.belt) ? { ...i, slot: 'accessory', belt: [null, null, null, null] } : i)),
+    };
+  }
   return out as D;
+}
+
+/**
+ * A 1.27.0 state seen in the v23 shape: no potion cooldowns, and a Potion Belt instance without its slot or its belt (save v24). Only the
+ * SHAPE: a script that never wears a belt plays exactly as 1.26.0 did, so seen like this its hash is the 1.26.0 one.
+ */
+export function asV23(s: GameState): GameState {
+  const { potionCooldowns: _p, ...rest } = s;
+  const strip = (i: any) => {
+    if (i?.defId !== 'potion_belt') return i;
+    const { belt: _b, slot: _s, ...item } = i;
+    return item;
+  };
+  return { ...rest, saveVersion: 23, inventory: { ...s.inventory, items: s.inventory.items.map(strip) } } as unknown as GameState;
 }
 
 // ---------- first boss (1.20.0) ----------

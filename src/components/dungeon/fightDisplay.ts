@@ -46,13 +46,17 @@ export function visibleEntries(log: readonly FightLogEntry[], displayMs: number)
 export function displayedFight(fight: DungeonFightView, displayMs: number): DungeonFightView {
   const log = visibleEntries(fight.log, displayMs);
   if (log === fight.log) return fight;
-  // Hero HP follows the shown entries: the last shown enemy strike's HP. With none shown yet the view does not expose the fight-start HP,
-  // so it is the current HP plus every enemy strike's damage (an approximation that ignores regen).
+  // Hero HP follows the shown entries: the HP after the last shown enemy strike or belt drink (a belt entry's targetHpAfter is the hero's HP
+  // too). With none shown yet the view does not expose the fight-start HP, so it is the current HP plus every enemy strike's damage minus every
+  // drink's healing (an approximation that ignores regen).
   let heroHp = -1;
-  for (const e of log) if (e.actor === 'enemy') heroHp = e.targetHpAfter;
+  for (const e of log) if (e.actor !== 'hero') heroHp = e.targetHpAfter;
   if (heroHp < 0) {
     heroHp = fight.heroHp;
-    for (const e of fight.log) if (e.actor === 'enemy') heroHp += e.dealt;
+    for (const e of fight.log) {
+      if (e.actor === 'enemy') heroHp += e.dealt;
+      else if (e.actor === 'belt') heroHp -= e.heal ?? 0;
+    }
   }
   heroHp = Math.max(0, Math.min(heroHp, fight.heroMaxHp));
   const hp = fight.mobs.map((m) => m.maxHp);

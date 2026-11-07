@@ -1,6 +1,7 @@
 // Equip, unequip and use (pure rules on a draft copy). Derived stats, woodcutting strength and run times
 // read the equipment, so they follow automatically. An item is always in exactly one place: a swap puts
 // the old item where the new one was, so it never needs a free slot and never loses an item.
+import { potionCooldownLeftMs, startPotionCooldown } from './belt';
 import { getItemDef } from './config/items';
 import { maxHpOf } from './hp';
 import { freeSlots } from './inventory';
@@ -61,7 +62,10 @@ export function unequipItem(draft: GameState, slot: unknown): ItemError {
   return null;
 }
 
-/** Uses one unit of a consumable. Potions heal their catalog amount, capped at max HP. */
+/**
+ * Uses one unit of a consumable. Potions heal their catalog amount, capped at max HP, and start their TYPE's cooldown (1.27.0, from the
+ * engine time `draft.time.lastSimulatedAt`, the command's time); a type still on cooldown is refused with ON_COOLDOWN, changing nothing.
+ */
 export function useItem(draft: GameState, itemId: unknown): ItemError {
   const items = draft.inventory.items;
   const index = items.findIndex((i) => i.id === itemId);
@@ -72,6 +76,10 @@ export function useItem(draft: GameState, itemId: unknown): ItemError {
   const c = draft.character;
   const maxHp = maxHpOf(draft);
   if (c.hp >= maxHp) return err('HP_FULL', 'HP is already full');
+  const at = draft.time.lastSimulatedAt;
+  const waitMs = potionCooldownLeftMs(draft, item.defId, at);
+  if (waitMs > 0) return err('ON_COOLDOWN', `${item.name} is on cooldown for ${Math.ceil(waitMs / 1000)} s`);
+  startPotionCooldown(draft, item.defId, at);
   c.hp = Math.min(maxHp, Math.max(0, c.hp) + heal);
   // Invariant (hp.ts): no banked regen while full.
   if (c.hp >= maxHp) c.hpRegenProgress = 0;

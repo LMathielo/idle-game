@@ -8,9 +8,9 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.26.0** | 1.1.0 |
-| Save | **v23** | v2 |
-| Contents | Everything below, up to the combat opening and the variant creatures (hero strikes at 0, monsters at 0.3 s; Hard / Extreme variants as their own creatures; art pending owner approval), the difficulty tiers (Hard / Extreme for Tier 1, pack fights; art pending owner approval), the Crafting debug buttons (Force craft, Finish now), the compact Crafting recipe list and the Done reveal fix (UI only), gear rarity tiers and affixes (#36), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
+| Engine | **1.27.0** | 1.1.0 |
+| Save | **v24** | v2 |
+| Contents | Everything below, up to the Potion Belt (`feat/potion-belt`, stacked on the mob drops, #43: the Accessory slot, the belt panel and button, rules, per-potion cooldowns, drinking in the time walk; new art pending owner approval), the combat opening and the variant creatures (hero strikes at 0, monsters at 0.3 s; Hard / Extreme variants as their own creatures; art pending owner approval), the difficulty tiers (Hard / Extreme for Tier 1, pack fights; art pending owner approval), the Crafting debug buttons (Force craft, Finish now), the compact Crafting recipe list and the Done reveal fix (UI only), gear rarity tiers and affixes (#36), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
 
 - **Release pending:** `main` is behind `dev` by PRs #3–#25. The owner releases with a PR `dev` → `main` after testing on the `dev` preview.
 - **Open PRs:** Expo Go previews by label plus per-branch saves (`feat/expo-test-previews`).
@@ -20,6 +20,19 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.27.0 · save v24
+- **Potion Belt** (`feat/potion-belt`, stacked on `feat/mob-drops`, #43; owner decisions 2026-11-06; **new icons pending owner approval**):
+  - **Accessory slot** (new `EquipmentSlot`), on the Hero tab directly under Ring 2 with an empty-slot placeholder; only the belt fits. `potion_belt` has `slot: 'accessory'` and is not gear (no quality / rarity roll).
+  - **Belt contents** live on the item instance (`Item.belt`): 4 slots, each empty or one potion type up to 25 with a rule (`BELT` in `config/belt.ts`). They persist on unequip; selling the belt destroys them (the Sell sheet warns: "3 potions inside will be lost"). `heroOwnsItem` counts the worn belt.
+  - **Commands** `BELT_PUT` (bag to slot, as many as fit), `BELT_TAKE` (back to the bag, refused with a reason when there is no room), `BELT_SET_RULE`; manual `USE_ITEM` stays and is refused with `ON_COOLDOWN` while the type cools down.
+  - **Rules:** On 50% HP (default), On 25% HP, Always (never at full HP). **Per-potion-type cooldown** (Health Potion T1 and Greater: 20 s) stored in `potionCooldowns` by engine time; any drink, belt or manual, starts it.
+  - **Drinks at any time while worn**, live and offline, inside `simulate()`: a drink pass after every HP change and at every cooldown end (`beltPass`, `walkWithBelt`, belt.ts; the dungeon walk runs it after each strike). Exact times, split-invariant, offline cap respected (a fight in progress at the cap is finished with the belt), no RNG. At most 3 drinks per type in a 60 s fight. `Always` drinks between fights until HP is full.
+  - **Fight log:** a drink is a log line ("Drank Health Potion (T1) +50") in the live fight and the replay (`actor: 'belt'`); the away summary lists "Potions used" by type (every drink, in or out of fights).
+  - **UI:** a potion button (flask + total, dimmed while every filled type cools down) bottom right above the strip on the Village and in a footer row of the Dungeon modal, shown only while the belt is worn; it opens the **belt panel** (an overlay, not a native Modal): 4 slots over the bag's potions, drag-and-drop (Gesture Handler pan + Reanimated, UI thread) plus tap-to-assign, a slot popover with the three rules and Remove, green cooldown seconds over a slot after a drink. The Hero tab's "Use" waits out the cooldown.
+  - **Save v24:** `potionCooldowns = {}`, every belt in the bag gets `slot: 'accessory'` and four empty slots. Frozen v23 fixture written by the untouched 1.26.0 engine + reference; an unworn belt changes no outcome. Goldens: whole-state hashes checked in the v23 shape (`asV23`).
+  - **Art (pending owner approval):** `icons/potion.png` (button), `icons/slot_accessory.png`, `icons/slot_potion.png` (`tools/art/icons.py`).
+  - **Tests:** `tests/potionBelt.test.ts`, `tests/migrationV23.test.ts`, `tests/potionBeltLayout.test.ts` (the button covers no sign on 375x667, 390x844, 430x932), `tests/beltDrag.test.ts`, belt cases in `tests/fightDisplay.test.ts`.
 
 ### Engine 1.26.0 · save v23 (unchanged)
 - **Mob drops** (`feat/mob-drops`; owner decisions 2026-11-06; **new item art pending owner approval**):
@@ -239,7 +252,8 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 Decided and scoped; ready to brief to an engineer. Top = next.
 
 0. **Difficulty tiers: owner to try Hard / Extreme and approve the new art** (three skulls; the variant creatures and the Troll Chieftain sprite: Plague Bat, Shadow Wolf, Bone Champion, Magma Troll, Troll Chieftain, 1.25.0). Then decide the balance (Hard may be easy for a Gold-tier hero; Extreme is a wall; see the table in ENGINE.md). Tier 2 will reuse the same difficulty system.
-0b. **Boss tuning: decided 2026-11-05, keep as is** (see PRODUCT.md decision log). Still open: the new item art (Wild Sage, Troll Head, Potion Belt, 1.26.0) and the Chieftain's sprite (1.25.0) await approval. The Tusk is no longer dropped, so its placeholder art matters only for old saves.
+0a. **Potion Belt: owner to try it** (the belt comes from a Chieftain win: the debug panel's Troll Bridge wins unlock the boss; wear it, put potions in, fight; check the panel's drag-and-drop on a phone and the green cooldown seconds). Follow-ups once happy: brewing (Wild Sage), more accessories, belt upgrades, auto-refill from the bag.
+0b. **Boss tuning: decided 2026-11-05, keep as is** (see PRODUCT.md decision log). Still open: the new item art (Wild Sage, Troll Head, Potion Belt, 1.26.0) and the Chieftain's sprite (1.25.0) await approval, and so do the 1.27.0 icons (potion button, two empty-slot ghosts). The Tusk is no longer dropped, so its placeholder art matters only for old saves.
 1. **Enemy tier check after the stats rework:** the 1.19.0 balance sim (PR for `feat/stats-rework`) shows the Skeleton falls at core 10 from Lv1 and the Troll at core 20 even at Lv1/Lv5, where 1.18 needed Lv10-15. Decide the targets, then retune enemy HP / damage / armor (and the core curves) where a tier is off. Earlier note: since 1.17.0 a level gives 5 points to spend instead of +5 on every attribute (20 per level), so level growth drops a lot and the 1.16.0 "dungeons are easy" concern may be gone. Sim each tier with typical builds (all STR/END, mixed) and only retune enemy HP / damage / armor where a tier is now off its target effort. (Normal STR counting toward WS / MS was decided: yes, 1.17.0.)
 2. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
 3. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
@@ -268,7 +282,7 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 - Crafting pipes 5–8: a premium purchase.
 
 **Combat and dungeons**
-- Multi-enemy runs (needs a save-shape change: `ActiveFight` holds one enemy). The first boss shipped in 1.20.0; Tier 2 and its boss, dungeon level 2 (the Troll Head opens it), the Potion Belt's slot and mechanics, potion brewing from Wild Sage, bad-luck protection and auto-repeat for bosses are not built.
+- Multi-enemy runs (needs a save-shape change: `ActiveFight` holds one enemy). The first boss shipped in 1.20.0; Tier 2 and its boss, dungeon level 2 (the Troll Head opens it), potion brewing from Wild Sage (the Potion Belt shipped in 1.27.0), bad-luck protection and auto-repeat for bosses are not built.
 - **Enemies with magic damage (gives magic resist a use).** Enemies have magic resist since 1.19.0 but only hit physically.
 - Hit chance (crits shipped in 1.19.0); a combat use for mana.
 - Attack-speed gear (the `attackIntervalModMs` hook exists, unused).

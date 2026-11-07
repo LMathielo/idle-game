@@ -51,6 +51,7 @@ export function emptySummary(): SimulationSummary {
     itemsCrafted: {},
     craftsReady: {},
     craftWaits: [],
+    potionsUsed: {},
     anomalies: [],
   };
 }
@@ -107,6 +108,7 @@ export function mergeSummaries(a: SimulationSummary, b: SimulationSummary): Simu
     itemsCrafted: addMaps(a.itemsCrafted, b.itemsCrafted),
     craftsReady: addMaps(a.craftsReady, b.craftsReady),
     craftWaits: mergeWaits(a.craftWaits, b.craftWaits),
+    potionsUsed: addMaps(a.potionsUsed ?? {}, b.potionsUsed ?? {}),
     anomalies: [...a.anomalies, ...b.anomalies],
   };
 }
@@ -124,6 +126,6 @@ export function trainingXpTotal(s: Pick<SimulationSummary, 'trainingXpGained'>):
  */
 export function isNoteworthy(s: SimulationSummary, minAwayMs: number = AWAY_SUMMARY_MIN_MS): boolean {
   const progressed =
-    s.actions > 0 || s.oresMined > 0 || s.dungeon.runs > 0 || (s.boss?.fights ?? 0) > 0 || trainingXpTotal(s) > 0 || s.trainingMaxed.length > 0 || s.buildingsUpgraded.length > 0 || s.workerActions > 0 || s.craftsCompleted > 0 || Object.keys(s.craftsReady).length > 0;
+    s.actions > 0 || s.oresMined > 0 || s.dungeon.runs > 0 || (s.boss?.fights ?? 0) > 0 || trainingXpTotal(s) > 0 || s.trainingMaxed.length > 0 || s.buildingsUpgraded.length > 0 || s.workerActions > 0 || s.craftsCompleted > 0 || Object.keys(s.craftsReady).length > 0 || Object.keys(s.potionsUsed ?? {}).length > 0;
   return s.anomalies.length > 0 || (s.requestedMs >= minAwayMs && progressed);
 }

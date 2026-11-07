@@ -94,7 +94,7 @@ function play(until: number = Infinity): GameState {
 
 describe('golden 1.19.0: a whole game from newGame', () => {
   it('starts with 500 gold and nothing built; the first two real BUILD commands cost 50 gold each', () => {
-    expect(ENGINE_VERSION).toBe('1.26.0');
+    expect(ENGINE_VERSION).toBe('1.27.0');
     const s0 = newGame(SEED, T0);
     expect(s0.character.gold).toBe(500);
     expect(Object.values(s0.buildings).every((b) => b.state === 'locked')).toBe(true);

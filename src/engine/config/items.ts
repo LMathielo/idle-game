@@ -4,6 +4,7 @@
 // (src/engine/gear.ts), so changing a number here rebalances every save without a migration. Rolled affixes (1.22.0)
 // are stored on the instance too (picks only; values come from quality, rarity and `gearLevel`); see docs/ENGINE.md.
 import type { EquipmentSlot, ItemRarity } from '../types';
+import { HEALTH_POTION_COOLDOWN_MS } from './belt';
 import { GEAR, GEAR_PIECES, type GearPieceId, type GearSetId, GEAR_SETS } from './gear';
 
 export type ItemDef = {
@@ -49,6 +50,13 @@ export type ItemDef = {
   gearLevel?: number;
   /** Usable consumables (USE_ITEM): HP restored, capped at max HP. Integer. */
   heal?: number;
+  /**
+   * Potions (1.27.0): ms before the same TYPE can be drunk again, after any drink of it (the Potion Belt's or a manual USE_ITEM). Missing = no
+   * cooldown. Runs on engine time.
+   */
+  cooldownMs?: number;
+  /** true = the Potion Belt (1.27.0): its instance carries `belt` (the slots). Only for the unique item that fits the `accessory` slot. */
+  belt?: true;
   /**
    * Gear: ms added to the hero's attack interval while equipped (negative = faster strikes). Integer. Not scaled by quality.
    * No item sets one yet; see STATS.attackInterval for the base and the floor.
@@ -198,10 +206,12 @@ export const ITEMS = {
     name: 'Potion Belt',
     icon: '🎒',
     rarity: 'epic',
-    description: 'Holds potions that are used automatically during fights (coming soon). You can own only one.',
+    description: 'Wear it as your accessory. Holds up to 4 kinds of potions and drinks them for you by the rules you set. Selling it loses the potions inside. You can own only one.',
     sellPrice: 100,
     stackable: false,
     unique: true,
+    slot: 'accessory',
+    belt: true,
   },
   health_potion_t1: {
     id: 'health_potion_t1',
@@ -213,6 +223,7 @@ export const ITEMS = {
     buyPrice: 12,
     stackable: true,
     heal: 50,
+    cooldownMs: HEALTH_POTION_COOLDOWN_MS,
   },
   rusty_gladius: {
     id: 'rusty_gladius',
@@ -388,6 +399,7 @@ export const ITEMS = {
     buyPrice: 30,
     stackable: true,
     heal: 60,
+    cooldownMs: HEALTH_POTION_COOLDOWN_MS,
   },
   steel_axe: {
     id: 'steel_axe',

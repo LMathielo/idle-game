@@ -646,15 +646,14 @@ describe('rewards', () => {
       return { state: sim.state, fight: sim.state.dungeon.lastFight! };
     };
 
-    it('is epic, not stackable, not gear (no slot, no quality), unique, sells for 100 flat', () => {
+    it('is epic, not stackable, not gear (no quality, no rarity roll), unique, sells for 100 flat; 1.27.0: the accessory with four empty slots', () => {
       const def = getItemDef('potion_belt')!;
-      expect(def).toMatchObject({ rarity: 'epic', stackable: false, unique: true, sellPrice: 100 });
-      expect(def.slot).toBeUndefined();
-      expect(def.description).toMatch(/automatically/i);
+      expect(def).toMatchObject({ rarity: 'epic', stackable: false, unique: true, sellPrice: 100, slot: 'accessory', belt: true });
+      expect(def.description).toMatch(/automatically|rules/i);
       const item = makeItem('potion_belt');
-      expect(item).toMatchObject({ id: 'potion_belt', defId: 'potion_belt' });
-      expect(item.slot).toBeUndefined();
+      expect(item).toMatchObject({ id: 'potion_belt', defId: 'potion_belt', slot: 'accessory', belt: [null, null, null, null] });
       expect(item.quality).toBeUndefined();
+      expect(item.rarity).toBeUndefined();
       expect(baseSellPrice(item)).toBe(100); // no rarity price multiplier: it is not gear
     });
 
@@ -986,7 +985,7 @@ describe('save v20', () => {
     expect('maxFightMs' in doc.activity.fight).toBe(false);
     const s = loadSave(V19);
     expect(s.saveVersion).toBe(CURRENT_SAVE_VERSION);
-    expect(CURRENT_SAVE_VERSION).toBe(23);
+    expect(CURRENT_SAVE_VERSION).toBe(24);
     expect(s.dungeon.bosses).toEqual({});
     const f = s.activity?.kind === 'dungeon' ? s.activity.fight! : null;
     expect(f).toMatchObject({ maxFightMs: 60_000, heroStunStrikes: 0 });

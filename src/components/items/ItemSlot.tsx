@@ -6,7 +6,8 @@ import { type AnchorRect, measureAnchor } from '../ui/InfoPopover';
 import type { SlotHitTest } from '../ui/useSlotHitTest';
 import { type ItemRarity, rarityOf } from '../../engine';
 import { colors, fonts, rarityColors } from '../../theme';
-import { ItemIcon } from '../art/Sprites';
+import { GameIcon, ItemIcon } from '../art/Sprites';
+import type { IconName } from '../art/images';
 import { formatQty } from '../format';
 
 /** The Hero tab's inventory slot size; the Crafting recipe tiles use it too. */
@@ -26,11 +27,13 @@ type Props = {
   onPress?: (key: string | number, anchor: AnchorRect) => void;
   /** Spoken suffix, e.g. ", sells for 10 gold". */
   hint?: string;
+  /** Ghost art shown while the slot is empty (the Hero tab's accessory slot: a belt outline). */
+  placeholder?: IconName;
   /** Registers the slot so a tap on it while a popover is open moves the popover here (useSlotHitTest). */
   hitTest?: SlotHitTest;
 };
 
-export const ItemSlot = memo(function ItemSlot({ item, size, caption, pressKey, onPress, hint, hitTest }: Props) {
+export const ItemSlot = memo(function ItemSlot({ item, size, caption, pressKey, onPress, hint, hitTest, placeholder }: Props) {
   const ref = useRef<HostInstance>(null);
   const handle = useCallback(() => {
     if (!onPress || pressKey === undefined) return;
@@ -42,7 +45,7 @@ export const ItemSlot = memo(function ItemSlot({ item, size, caption, pressKey, 
   const label = item ? `${item.name}${item.quantity ? ` x${item.quantity}` : ''}${hint ?? ''}` : 'Empty slot';
   const box = (
     <View style={[styles.slot, size === 58 ? styles.slot58 : styles.slot52, rarity ? { borderColor: rarityColors[rarity] } : null]}>
-      {item ? <ItemIcon defId={item.defId} size={size === 58 ? 40 : 36} /> : null}
+      {item ? <ItemIcon defId={item.defId} size={size === 58 ? 40 : 36} /> : placeholder ? <GameIcon name={placeholder} size={size === 58 ? 40 : 36} /> : null}
       {item?.quantity ? <Text style={styles.qty}>{formatQty(item.quantity)}</Text> : null}
     </View>
   );
