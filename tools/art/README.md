@@ -25,7 +25,7 @@ anchor and draw order). Commit the generated files with the change. Never edit t
 | `village_split.py` | the village split into a background + one sprite per building, and `village_layout.json` |
 | `sprites.py` | hero portraits, rats (Rat, Giant Rat, Blight Rat) |
 | `monsters.py` | bestiary: bat, wolf, skeleton, troll, the Troll Chieftain (boss), and each enemy's Hard / Extreme variant creature (Vampire Bat / Plague Bat, Dire Wolf / Shadow Wolf, Skeleton Knight / Bone Champion, Stone Troll / Magma Troll) |
-| `icons.py` | common UI symbols (16x16), incl. the three difficulty skulls |
+| `icons.py` | common UI symbols (16x16), incl. the three difficulty skulls and the Potion Belt's button flask and two empty-slot ghosts |
 | `equipment.py` | tiered equipment (sword, helm, chestplate, shield, greaves, gloves, boots) |
 | `gear_named.py` | starter gear and gathering tools, plus the crafted Stone / Copper / Silver / Gold axes and pickaxes |
 | `materials.py` | logs, planks, stone, ores, ingots |

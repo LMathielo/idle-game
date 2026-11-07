@@ -34,6 +34,12 @@ export type ItemErrorCode =
   | 'NOT_EQUIPPABLE'
   | 'NOT_USABLE'
   | 'HP_FULL'
+  | 'ON_COOLDOWN'
+  | 'BELT_NOT_EQUIPPED'
+  | 'BELT_SLOT_TAKEN'
+  | 'BELT_SLOT_FULL'
+  | 'NOT_A_POTION'
+  | 'INVALID_RULE'
   | 'NO_REFRESH_CHARGES'
   | 'CHARGES_FULL';
 

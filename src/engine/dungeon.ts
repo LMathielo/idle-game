@@ -1,6 +1,7 @@
 // Dungeon runs (pure): search time, skip cost, the live fight, and the auto-repeat loop used by simulate().
 // A run = a search for an opponent, then a fight that plays out in engine time. See docs/ENGINE.md
 // ("Dungeon & combat").
+import { type BeltClock, beltPass } from './belt';
 import { cloneState } from './clone';
 import { COMBAT, DUNGEON_RUN, DUNGEONS, ENEMIES } from './config/dungeons';
 import { MAX_ACTIONS_PER_SIMULATION } from './config/time';
@@ -316,6 +317,11 @@ function stepFight(draft: GameState, activity: DungeonActivity | BossActivity, f
  *
  * `draft` comes from simulate(): `draft.activity` is already a copy; its fight, and character/inventory/dungeon/rng,
  * may still be shared with the input, so they are copied before the first change.
+ *
+ * **Potion Belt (1.27.0):** with a `belt` clock (simulate() passes it while a belt is worn) the drink pass runs right after every fight event,
+ * so a slot reacts to each strike on its own (several mobs can strike at the same instant), the fight's end (0 HP after a loss) and a
+ * level-up. The clock holds the engine time of the END of the stretch this call walks; every event this call plays is due at that
+ * instant (simulate() cuts its steps at the next hero event), so that is the time the pass runs at. See belt.ts.
  */
 export function advanceDungeon(
   draft: GameState,
@@ -324,6 +330,7 @@ export function advanceDungeon(
   requestedMs: number,
   summary: SimulationSummary,
   events: GameEvent[],
+  belt?: { clock: BeltClock },
 ): void {
   const searchMs = activity.kind === 'dungeon' ? searchMsFor(activity.dungeonId, draft) : 0;
   const efficiency = draft.offline.efficiency;
@@ -373,6 +380,9 @@ export function advanceDungeon(
       if (fight && ev) {
         fight.elapsedMs = ev.atMs;
         stepFight(draft, activity, fight, ev, summary, events);
+        // Not when the fight's time limit is due at this very instant (a strike at the limit, then the end): the fight is over, so a drink due
+        // now happens right after it, outside the fight. That keeps "one drink per cooldown" at 3 per 60 s fight (at 0, 20, 40 s).
+        if (belt && !timeLimitDueNow(activity)) beltPass(draft, belt.clock.at, summary);
       } else if (activity.kind === 'dungeon') {
         beginFight(draft, activity, summary, events);
       } else {
@@ -388,6 +398,14 @@ export function advanceDungeon(
   const beyondCap = requestedMs - grantedMs;
   if (beyondCap > 0 && draft.activity === activity && (activity.kind === 'boss' || activity.phase === 'fight')) walk(beyondCap, true);
   regen(regenLeft);
+}
+
+/** The activity's fight is still on and its next event is the time limit, due at its current instant. */
+function timeLimitDueNow(activity: DungeonActivity | BossActivity): boolean {
+  const fight = activity.kind === 'boss' ? activity.fight : activity.phase === 'fight' ? activity.fight : null;
+  if (!fight) return false;
+  const next = nextFightEvent(fight);
+  return next.type === 'time_limit' && next.atMs <= fight.elapsedMs;
 }
 
 /**

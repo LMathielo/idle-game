@@ -25,6 +25,10 @@ export const ICONS = {
   skull_normal: require('../../../assets/images/icons/skull_normal.png'),
   skull_hard: require('../../../assets/images/icons/skull_hard.png'),
   skull_extreme: require('../../../assets/images/icons/skull_extreme.png'),
+  // Potion Belt (1.27.0): the button's flask, and the ghosts shown in an empty accessory slot / an empty belt slot.
+  potion: require('../../../assets/images/icons/potion.png'),
+  slot_accessory: require('../../../assets/images/icons/slot_accessory.png'),
+  slot_potion: require('../../../assets/images/icons/slot_potion.png'),
 } as const satisfies Record<string, ImageSourcePropType>;
 
 export type IconName = keyof typeof ICONS;

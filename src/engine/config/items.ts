@@ -4,6 +4,7 @@
 // (src/engine/gear.ts), so changing a number here rebalances every save without a migration. Rolled affixes (1.22.0)
 // are stored on the instance too (picks only; values come from quality, rarity and `gearLevel`); see docs/ENGINE.md.
 import type { EquipmentSlot, ItemRarity } from '../types';
+import { HEALTH_COOLDOWN_GROUP, HEALTH_POTION_COOLDOWN_MS } from './belt';
 import { GEAR, GEAR_PIECES, type GearPieceId, type GearSetId, GEAR_SETS } from './gear';
 
 export type ItemDef = {
@@ -49,6 +50,23 @@ export type ItemDef = {
   gearLevel?: number;
   /** Usable consumables (USE_ITEM): HP restored, capped at max HP. Integer. */
   heal?: number;
+  /**
+   * Potions (1.27.0): ms the potion's cooldown GROUP waits after one of this potion is drunk (the Potion Belt's or a manual USE_ITEM). Missing
+   * = no cooldown. Runs on engine time. The wait always respects the cooldown of the potion that was drunk.
+   */
+  cooldownMs?: number;
+  /**
+   * Potions (owner decision 2026-11-07): potions of one group share one cooldown (a drink of any puts them all on cooldown). Missing = the
+   * potion is its own group (its defId). The health potions are group `health` (`HEALTH_COOLDOWN_GROUP`).
+   */
+  cooldownGroup?: string;
+  /**
+   * Potions (owner decision 2026-11-07): the potency rank inside the cooldown group, higher = stronger (T1 = 1, Greater = 2). The Potion Belt tries the
+   * higher tier first among slots with the same rule. An explicit number, never inferred from `heal`. Missing = 0.
+   */
+  tier?: number;
+  /** true = the Potion Belt (1.27.0): its instance carries `belt` (the slots). Only for the unique item that fits the `accessory` slot. */
+  belt?: true;
   /**
    * Gear: ms added to the hero's attack interval while equipped (negative = faster strikes). Integer. Not scaled by quality.
    * No item sets one yet; see STATS.attackInterval for the base and the floor.
@@ -198,10 +216,12 @@ export const ITEMS = {
     name: 'Potion Belt',
     icon: '🎒',
     rarity: 'epic',
-    description: 'Holds potions that are used automatically during fights (coming soon). You can own only one.',
+    description: 'Wear it as your accessory. Holds up to 4 kinds of potions and drinks them for you by the rules you set. Selling it loses the potions inside. You can own only one.',
     sellPrice: 100,
     stackable: false,
     unique: true,
+    slot: 'accessory',
+    belt: true,
   },
   health_potion_t1: {
     id: 'health_potion_t1',
@@ -213,6 +233,9 @@ export const ITEMS = {
     buyPrice: 12,
     stackable: true,
     heal: 50,
+    cooldownMs: HEALTH_POTION_COOLDOWN_MS,
+    tier: 1,
+    cooldownGroup: HEALTH_COOLDOWN_GROUP,
   },
   rusty_gladius: {
     id: 'rusty_gladius',
@@ -388,6 +411,9 @@ export const ITEMS = {
     buyPrice: 30,
     stackable: true,
     heal: 60,
+    cooldownMs: HEALTH_POTION_COOLDOWN_MS,
+    tier: 2,
+    cooldownGroup: HEALTH_COOLDOWN_GROUP,
   },
   steel_axe: {
     id: 'steel_axe',

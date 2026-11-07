@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { DungeonFightView, FightLogEntry } from '../src/engine';
 import { displayClockMs, displayedFight, FIGHT_VIEW_LEAD_MS, FIGHT_VIEW_MAX_LAG_MS, isCatchingUp, isFreshFight, visibleEntries } from '../src/components/dungeon/fightDisplay';
 
-const entry = (actor: 'hero' | 'enemy', atMs: number, dealt: number, targetHpAfter: number, extra: Partial<FightLogEntry> = {}): FightLogEntry => ({
+const entry = (actor: 'hero' | 'enemy' | 'belt', atMs: number, dealt: number, targetHpAfter: number, extra: Partial<FightLogEntry> = {}): FightLogEntry => ({
   atMs, actor, strike: 1, roll: dealt, crit: false, physical: dealt, magic: 0, dealt, targetHpAfter, ...extra,
 });
 const LOG = [entry('hero', 0, 10, 20), entry('enemy', 300, 4, 46), entry('hero', 1000, 10, 10), entry('enemy', 1300, 4, 42)];
@@ -80,6 +80,19 @@ describe('visibleEntries / displayedFight', () => {
     const two = displayedFight(v, 300);
     expect([two.heroHp, two.enemyHp]).toEqual([46, 20]);
     expect(two.elapsedMs).toBe(300);
+  });
+
+  it('a Potion Belt drink (actor belt) moves the hero HP like a strike: shown ones win, hidden ones are taken off the fallback', () => {
+    // Max HP 50: the hero took 4 (46), drank at 600 ms for +4 (back to 50), then took 4 more (46).
+    const log = [entry('hero', 0, 10, 20), entry('enemy', 300, 4, 46), entry('belt', 600, 0, 50, { potion: 'health_potion_t1', heal: 4 }), entry('enemy', 1300, 4, 46)];
+    const v = { ...view(1300), heroHp: 46, log };
+    expect(displayedFight(v, 300).heroHp).toBe(46);
+    expect(displayedFight(v, 600).heroHp).toBe(50); // the drink's targetHpAfter is the hero's HP
+    expect(displayedFight(v, 1000).heroHp).toBe(50);
+    // Nothing shown yet: current 46 + 4 (enemy strike) + 4 (enemy strike) - 4 (the drink) = 50.
+    expect(displayedFight(v, -50).heroHp).toBe(50);
+    // The drink does not touch the mob bars.
+    expect(displayedFight(v, 600).enemyHp).toBe(20);
   });
 
   it('a stun is counted from what is shown', () => {

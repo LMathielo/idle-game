@@ -232,8 +232,8 @@ describe('debug gate and replay', () => {
     expect(s.flags.debugUsed).toBe(false);
   });
 
-  it('the engine is 1.26.0 (the crafting debug commands shipped in 1.23.0)', () => {
-    expect(ENGINE_VERSION).toBe('1.26.0');
+  it('the engine is 1.27.0 (the crafting debug commands shipped in 1.23.0)', () => {
+    expect(ENGINE_VERSION).toBe('1.27.0');
   });
 
   it('logged through the client, the rows replay to the same hash (and restore Stop with no minting)', async () => {

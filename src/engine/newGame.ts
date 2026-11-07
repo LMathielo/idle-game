@@ -63,6 +63,7 @@ export function newGame(seed: number, now: number): GameState {
     construction: null,
     workers: newWorkersState(),
     crafting: newCraftingState(),
+    potionCooldowns: {},
     nextItemSerial: 1,
     stats: { totalActions: 0, itemsGathered: {} },
     flags: { debugUsed: false },

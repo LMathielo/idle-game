@@ -41,6 +41,9 @@ export const LOG_TYPES = [
   'EQUIP_ITEM',
   'UNEQUIP_ITEM',
   'USE_ITEM',
+  'BELT_PUT',
+  'BELT_TAKE',
+  'BELT_SET_RULE',
   'REFRESH_MERCHANT',
   'BUY_ITEM',
   'SELL_ITEM',
@@ -186,6 +189,9 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'EQUIP_ITEM':
     case 'UNEQUIP_ITEM':
     case 'USE_ITEM':
+    case 'BELT_PUT':
+    case 'BELT_TAKE':
+    case 'BELT_SET_RULE':
     case 'REFRESH_MERCHANT':
     case 'BUY_ITEM':
     case 'SELL_ITEM':

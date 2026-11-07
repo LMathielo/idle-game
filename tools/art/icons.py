@@ -3,7 +3,7 @@
 import sys, os
 import numpy as np
 from pix import Canvas, ramp, hx, mix
-from elements import OUT
+from elements import OUT, OUT_LIT
 
 OUTDIR = sys.argv[1] if len(sys.argv) > 1 else 'out/icons'
 GOLD = ramp('#5a3a12', '#8f6420', '#c9962f', '#efc65a', '#fff0a8')
@@ -251,6 +251,56 @@ def unknown():
     return done(c, b)
 
 
+RED = ramp('#3a0610', '#7a1420', '#b82a2e', '#e0503e', '#ff8a70', '#ffd0c0')
+GLASS = ramp('#3a4450', '#6a7a8a', '#a8b8c4', '#e6f0f4')
+LEATHER = ramp('#1e120e', '#3a2418', '#5e3a24', '#82552f', '#a6744a')
+GHOST = ramp('#24180f', '#52402c', '#665240', '#806a54')  # empty-slot silhouettes: a little lighter than the slot's brown fill
+
+
+def potion_icon():
+    """The Potion Belt button's symbol: a small red health flask with a cork (16x16)."""
+    c = C()
+    bulb = c.m_ellipse(7.5, 10, 4.6, 4.4)
+    neck = c.m_rect(6, 4, 9, 7)
+    lip = c.m_rect(5, 3, 10, 4)
+    glass = bulb | neck | lip
+    c.fill(glass, GLASS[2]); c.fill(glass & (c.xx > 8), GLASS[1])
+    liq = bulb & (c.yy >= 9)
+    c.shade(liq, RED[1:5], soft=1.6)
+    c.fill(liq & (c.yy == 9), RED[4])
+    c.px(5, 11, RED[5]); c.px(5, 12, RED[4])
+    c.px(5, 8, GLASS[3]); c.px(6, 5, GLASS[3]); c.px(6, 6, GLASS[3])
+    c.outline(glass, OUT_LIT, OUT)
+    ck = c.m_rect(6, 1, 9, 2)
+    c.fill(ck, LEATHER[3]); c.fill(ck & (c.yy == 1), LEATHER[4])
+    c.outline(ck, OUT)
+    return c
+
+
+def slot_accessory():
+    """Empty accessory slot: the ghost of a belt with a buckle (16x16)."""
+    c = C()
+    belt = c.m_rect(1, 6, 14, 10)
+    c.fill(belt, GHOST[1]); c.fill(belt & (c.yy == 6), GHOST[2]); c.fill(belt & (c.yy == 10), GHOST[0])
+    for x in range(3, 13, 3):
+        c.px(x, 8, GHOST[0])
+    buckle = c.m_rect(6, 4, 9, 12)
+    c.fill(buckle, GHOST[2]); c.fill(c.m_rect(7, 6, 8, 10), GHOST[0]); c.fill(buckle & (c.xx == 6), GHOST[3])
+    c.outline(belt | buckle, GHOST[0])
+    return c
+
+
+def slot_potion():
+    """Empty belt slot: the ghost of a flask (16x16)."""
+    c = C()
+    bulb = c.m_ellipse(7.5, 10, 4.6, 4.4)
+    glass = bulb | c.m_rect(6, 4, 9, 7) | c.m_rect(5, 3, 10, 4)
+    c.fill(glass, GHOST[1]); c.fill(glass & (c.xx < 7) & (c.yy > 8), GHOST[2])
+    c.fill(c.m_rect(6, 1, 9, 2), GHOST[2])
+    c.outline(glass | c.m_rect(6, 1, 9, 2), GHOST[0])
+    return c
+
+
 SET = [('gold', coin, 'Gold', '🪙'), ('stamina', bolt, 'Stamina', '⚡'), ('hero_xp', sparkle, 'Hero XP', '✨'),
        ('hero_level', star, 'Hero level', '⭐'), ('locked', lambda: padlock(False), 'Locked', '🔒'),
        ('unlocked', lambda: padlock(True), 'Unlocked', '🔓'), ('upgrade', upgrade, 'Upgrade', '🔨'),
@@ -259,7 +309,9 @@ SET = [('gold', coin, 'Gold', '🪙'), ('stamina', bolt, 'Stamina', '⚡'), ('he
        ('unknown', unknown, 'Unknown item', '❔'),
        ('skull_normal', lambda: skull('normal'), 'Normal difficulty', '💀'),
        ('skull_hard', lambda: skull('hard'), 'Hard difficulty', '💀'),
-       ('skull_extreme', lambda: skull('extreme'), 'Extreme difficulty', '💀')]
+       ('skull_extreme', lambda: skull('extreme'), 'Extreme difficulty', '💀'),
+       ('potion', potion_icon, 'Potion Belt button', '🧪'), ('slot_accessory', slot_accessory, 'Empty accessory slot', '🎒'),
+       ('slot_potion', slot_potion, 'Empty belt slot', '🧪')]
 
 if __name__ == '__main__':
     os.makedirs(OUTDIR, exist_ok=True)

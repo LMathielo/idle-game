@@ -26,9 +26,12 @@ import {
   type RngState,
 } from './types';
 
-/** Gear = every equippable item (all slots, tools included). */
+/**
+ * Gear = every equippable item with a quality and a rarity roll (all slots, tools included). The `accessory` slot (1.27.0, the Potion Belt) is
+ * equippable but NOT gear: no quality, no rarity roll, no rarity price multiplier, no affixes.
+ */
 export function isGearDef(def: ItemDef | undefined): boolean {
-  return def?.slot !== undefined;
+  return def?.slot !== undefined && def.slot !== 'accessory';
 }
 
 export function isGear(defId: string): boolean {

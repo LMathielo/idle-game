@@ -568,6 +568,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.24.0', 22],
       ['1.25.0', 23],
       ['1.26.0', 23],
+      ['1.27.0', 24],
     ]);
   });
 });
@@ -1283,7 +1284,7 @@ describe('golden', () => {
     expect(activity).toBeNull(); // v10: woodcutting stops (its building starts locked)
     expect(training).toEqual(newTrainingState());
     const { character: _rc, saveVersion: _rv, activity: _ra, inventory: _ri, ...rawRest } = raw;
-    expect(rest).toEqual(rawRest);
+    expect(rest).toEqual({ ...rawRest, potionCooldowns: {} }); // v24: no potion cooldown running
 
     // New: full HP at level 5 (50 + 10 × 4), empty fight state.
     expect(s.character.level).toBe(5);
@@ -1349,7 +1350,7 @@ describe('golden 1.13.0: the Crafting house', () => {
     // 1.19.0 re-pin (was 2dbabf75): crit draws shift every later roll; END gives max HP; logged strikes carry crit / physical / magic; save v19.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
     // 1.25.0: re-pinned (was 11f7779b): the combat opening shifted every fight (see the header).
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.26.0', hash: '60c1b72a' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.27.0', hash: '60c1b72a' });
   });
 });
 
@@ -1456,7 +1457,7 @@ describe('golden 1.15.0: continuous material pipes', () => {
     // 1.22.0: hash a4eba9d5 -> 6d9814be, the ONLY change in the state (diffed against the 1.20.0 engine): the equipped Iron Sword is rare, so its
     // +INT affix adds 5 mana (140 -> 145; the hash above is seen without affixes, the mana is the one real difference). rng, gold, HP, items: identical.
     // 1.25.0: re-pinned (was gold 10,218, hash 6d9814be): the combat opening.
-    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.26.0', gold: 10186, hash: '059ced31' });
+    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.27.0', gold: 10186, hash: '059ced31' });
   });
 });
 
@@ -1532,7 +1533,7 @@ describe('golden 1.16.0: normal and core attributes', () => {
     // 1.17.0 re-pin (1.16.0: df33601f): points to spend instead of level points, WS from total STR (more logs), mana.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
     // 1.25.0: re-pinned (was 233aa32a): the combat opening.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.26.0', hash: 'a9a3d620' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.27.0', hash: 'a9a3d620' });
   });
 });
 
@@ -1576,6 +1577,6 @@ describe('golden 1.17.0: spendable points, total STR → WS, mana', () => {
     // 1.19.0 re-pin (was b27e380f): crit draws, END max HP, regen units, logged strikes with crit / physical / magic, save v19.
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
     // 1.25.0: re-pinned (was 3be73d3c): the combat opening.
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.26.0', hash: '8b52e922' });
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.27.0', hash: '8b52e922' });
   });
 });

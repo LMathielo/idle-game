@@ -232,6 +232,21 @@
   "h": 16,
   "scale": 8
  },
+ "icons/potion.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/slot_accessory.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
+ "icons/slot_potion.png": {
+  "w": 16,
+  "h": 16,
+  "scale": 8
+ },
  "icons/skill_woodcutting.png": {
   "w": 16,
   "h": 16,

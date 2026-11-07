@@ -5,7 +5,7 @@ import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameClient, useGameState } from '../../client/GameProvider';
 import type { CommandInput } from '../../client/types';
-import { baseSellPrice, DEV_TOOLS_ENABLED, freeSlots, type GameState, type Item, maxBuyable, merchantView, sellPriceOfItem, slotsNeeded } from '../../engine';
+import { baseSellPrice, beltPotionCount, DEV_TOOLS_ENABLED, freeSlots, type GameState, type Item, maxBuyable, merchantView, sellPriceOfItem, slotsNeeded } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { IconText } from '../art/Sprites';
 import { formatHms, formatNumber } from '../format';
@@ -17,6 +17,7 @@ import { ModalScreen } from '../ModalScreen';
 import { PixelButton } from '../PixelButton';
 import { UpgradeEntry } from '../buildings/UpgradeEntry';
 import { type AnchorRect, PopoverText } from '../ui/InfoPopover';
+import { useDialog } from '../ui/GameDialog';
 import { useCommand } from '../ui/useCommand';
 import { type SlotHitTest, useSlotHitTest } from '../ui/useSlotHitTest';
 
@@ -258,7 +259,22 @@ function SellSheet({ item, anchor, unitPrice, onClose, onOutsidePress }: { item:
   const setQty = (n: number) => setQtyState({ scope: item.id, qty: n });
   const quantity = Math.max(1, Math.min(qty, owned));
   const { busy, error, send } = useSend(onClose, item.id);
+  const dialog = useDialog();
   const sellable = unitPrice > 0;
+  // A Potion Belt keeps its potions when unequipped; selling it destroys them, so the player confirms first.
+  const sell = async () => {
+    const inside = beltPotionCount(item);
+    if (inside > 0) {
+      const ok = await dialog.confirm({
+        title: `Sell the ${def.name}?`,
+        message: `${inside} ${inside === 1 ? 'potion' : 'potions'} inside will be lost. Take them out first (wear the belt, then Remove) to keep them.`,
+        confirmLabel: 'Sell anyway',
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    send({ type: 'SELL_ITEM', itemId: item.id, quantity }, quantity >= owned);
+  };
 
   return (
     <ItemSheet
@@ -273,7 +289,7 @@ function SellSheet({ item, anchor, unitPrice, onClose, onOutsidePress }: { item:
           label: 'Sell',
           sublabel: sellable ? `${formatNumber(unitPrice * quantity)} gold` : def.sellable === false ? 'Not sold' : 'Not wanted',
           disabled: busy || !sellable,
-          onPress: () => send({ type: 'SELL_ITEM', itemId: item.id, quantity }, quantity >= owned),
+          onPress: () => void sell(),
         },
       ]}
     >

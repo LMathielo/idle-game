@@ -1,0 +1,208 @@
+{
+  "engine": "1.26.0",
+  "start": {
+    "gold": 827,
+    "hp": 40,
+    "hpRegenProgress": 0,
+    "xp": 297,
+    "level": 5,
+    "rng": 1760048323,
+    "woodcutting": {
+      "level": 3,
+      "xp": 492,
+      "xpToNext": 520
+    },
+    "items": [
+      [
+        "bread",
+        3
+      ],
+      [
+        "potion_belt",
+        1
+      ],
+      [
+        "health_potion_t1",
+        10
+      ],
+      [
+        "oak_logs",
+        8812
+      ]
+    ],
+    "lastFight": {
+      "won": true,
+      "durationMs": 0,
+      "log": 1,
+      "rewards": {
+        "heroXp": 2000,
+        "gold": 447,
+        "items": {
+          "potion_belt": 1
+        },
+        "itemsLost": {}
+      }
+    },
+    "totals": {
+      "runs": 0,
+      "wins": 0,
+      "losses": 0
+    }
+  },
+  "startHash": "9f9afe7d",
+  "afterWoodcutting3h": {
+    "gold": 827,
+    "hp": 90,
+    "hpRegenProgress": 0,
+    "xp": 297,
+    "level": 5,
+    "rng": 729412871,
+    "woodcutting": {
+      "level": 6,
+      "xp": 304,
+      "xpToNext": 1470
+    },
+    "items": [
+      [
+        "bread",
+        3
+      ],
+      [
+        "potion_belt",
+        1
+      ],
+      [
+        "health_potion_t1",
+        10
+      ],
+      [
+        "oak_logs",
+        31569
+      ],
+      [
+        "bird_nest",
+        2
+      ]
+    ],
+    "lastFight": {
+      "won": true,
+      "durationMs": 0,
+      "log": 1,
+      "rewards": {
+        "heroXp": 2000,
+        "gold": 447,
+        "items": {
+          "potion_belt": 1
+        },
+        "itemsLost": {}
+      }
+    },
+    "totals": {
+      "runs": 0,
+      "wins": 0,
+      "losses": 0
+    }
+  },
+  "afterRatCellar40m": {
+    "gold": 896,
+    "hp": 90,
+    "hpRegenProgress": 0,
+    "xp": 997,
+    "level": 5,
+    "rng": 233035895,
+    "woodcutting": {
+      "level": 3,
+      "xp": 492,
+      "xpToNext": 520
+    },
+    "items": [
+      [
+        "bread",
+        3
+      ],
+      [
+        "potion_belt",
+        1
+      ],
+      [
+        "health_potion_t1",
+        12
+      ],
+      [
+        "oak_logs",
+        8812
+      ],
+      [
+        "rat_skin",
+        8
+      ]
+    ],
+    "lastFight": {
+      "won": true,
+      "durationMs": 0,
+      "log": 1,
+      "rewards": {
+        "heroXp": 35,
+        "gold": 5,
+        "items": {},
+        "itemsLost": {}
+      }
+    },
+    "totals": {
+      "runs": 20,
+      "wins": 20,
+      "losses": 0
+    }
+  },
+  "afterBoss": {
+    "gold": 1135,
+    "hp": 100,
+    "hpRegenProgress": 0,
+    "xp": 1179,
+    "level": 6,
+    "rng": 3128873157,
+    "woodcutting": {
+      "level": 6,
+      "xp": 304,
+      "xpToNext": 1470
+    },
+    "items": [
+      [
+        "bread",
+        3
+      ],
+      [
+        "potion_belt",
+        1
+      ],
+      [
+        "health_potion_t1",
+        10
+      ],
+      [
+        "oak_logs",
+        31569
+      ],
+      [
+        "bird_nest",
+        2
+      ]
+    ],
+    "lastFight": {
+      "won": true,
+      "durationMs": 0,
+      "log": 1,
+      "rewards": {
+        "heroXp": 2000,
+        "gold": 308,
+        "items": {},
+        "itemsLost": {}
+      }
+    },
+    "totals": {
+      "runs": 0,
+      "wins": 0,
+      "losses": 0
+    }
+  }
+}

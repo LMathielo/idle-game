@@ -58,6 +58,8 @@ import { colors, fonts, rarityColors } from '../../theme';
 import { EnemySprite, GameIcon, HeroPortrait, IconText, ItemIcon } from '../art/Sprites';
 import { bpPercent, critMultText, formatClock, formatNumber, formatRate, itemName } from '../format';
 import { LiveBar } from '../LiveBar';
+import { BeltPanel } from '../belt/BeltPanel';
+import { PotionBeltFooter } from '../belt/PotionBeltButton';
 import { ModalScreen } from '../ModalScreen';
 import { Bar, Panel } from '../Panel';
 import { PixelButton } from '../PixelButton';
@@ -88,6 +90,9 @@ export function DungeonModal() {
   const hp = hpView(state);
   const stamina = staminaView(state);
 
+  const [beltOpen, setBeltOpen] = useState(false);
+  const openBelt = useCallback(() => setBeltOpen(true), []);
+  const closeBelt = useCallback(() => setBeltOpen(false), []);
   // Android back: from a dungeon's detail, go back to the list first; from the list it closes the modal.
   useEffect(() => {
     if (!selected) return;
@@ -109,16 +114,21 @@ export function DungeonModal() {
       }
       headerBelow={<HpRow hp={hp.hp} maxHp={hp.maxHp} regenPerMin={hp.regenPerMin} />}
     >
-      <ScrollView contentContainerStyle={styles.content}>
-        {clockPaused ? <Text style={styles.paused}>Paused: your device clock moved back. Runs and regen wait until it catches up.</Text> : null}
-        {selected && isBossId(selected) ? (
-          <BossDetail id={selected} state={state} running={running === selected} paused={clockPaused} onBack={() => setSelected(null)} />
-        ) : selected ? (
-          <DungeonDetail id={selected} state={state} running={running === selected} paused={clockPaused} onBack={() => setSelected(null)} />
-        ) : (
-          <DungeonList state={state} running={running} onPick={setSelected} />
-        )}
-      </ScrollView>
+      <View style={styles.body}>
+        <ScrollView contentContainerStyle={styles.content}>
+          {clockPaused ? <Text style={styles.paused}>Paused: your device clock moved back. Runs and regen wait until it catches up.</Text> : null}
+          {selected && isBossId(selected) ? (
+            <BossDetail id={selected} state={state} running={running === selected} paused={clockPaused} onBack={() => setSelected(null)} />
+          ) : selected ? (
+            <DungeonDetail id={selected} state={state} running={running === selected} paused={clockPaused} onBack={() => setSelected(null)} />
+          ) : (
+            <DungeonList state={state} running={running} onPick={setSelected} />
+          )}
+        </ScrollView>
+        {/* The Potion Belt (worn): its button sits in a footer row under the scrolling content, so it covers none of the buttons above. */}
+        <PotionBeltFooter onPress={openBelt} />
+        {beltOpen ? <BeltPanel onClose={closeBelt} /> : null}
+      </View>
     </ModalScreen>
   );
 }
@@ -1107,6 +1117,9 @@ const LastFight = memo(function LastFight({
   const where = fight.difficulty === 'normal' ? '' : `${difficultyName(fight.difficulty)} · `;
   const seconds = Math.floor(fight.durationMs / 1000);
   const gearRef = useRef<HostInstance>(null);
+  // Belt drinks are in the log too (actor 'belt'): they are not strikes.
+  const drinks = fight.log.filter((e) => e.actor === 'belt').length;
+  const strikes = fight.log.length - drinks;
   const rewardText = fight.won
     ? [`+${r.heroXp} XP`, `+${r.gold} gold`, ...items.map(([id, n]) => `${itemName(id)}${n > 1 ? ` ×${n}` : ''}`)].join(' · ')
     : 'No rewards';
@@ -1118,7 +1131,7 @@ const LastFight = memo(function LastFight({
       >
         <Text style={[styles.outcome, fight.won ? styles.win : styles.loss]}>{outcome}</Text>
         <Text style={styles.note}>
-          {where}{packSize > 1 ? `${packText(packSize)}, ${downCount} down · ` : ''}{seconds}s · {fight.log.length} {fight.log.length === 1 ? 'strike' : 'strikes'} · HP {fight.heroHpStart} → {fight.heroHpEnd}
+          {where}{packSize > 1 ? `${packText(packSize)}, ${downCount} down · ` : ''}{seconds}s · {strikes} {strikes === 1 ? 'strike' : 'strikes'}{drinks > 0 ? ` · ${drinks} ${drinks === 1 ? 'potion' : 'potions'} drunk` : ''} · HP {fight.heroHpStart} → {fight.heroHpEnd}
         </Text>
         <Text style={styles.rewards}>{rewardText}</Text>
         {lost.map(([id, n]) => (
@@ -1162,6 +1175,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   flexShrink: { flexShrink: 1 },
   centerRow: { justifyContent: 'center' },
+  body: { flex: 1 },
   content: { padding: 12, paddingBottom: 32 },
   paused: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.gold, marginBottom: 10 },
 

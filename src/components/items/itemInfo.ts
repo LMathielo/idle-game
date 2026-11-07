@@ -1,6 +1,8 @@
 // Display helpers for item sheets (read-only: catalog data and the engine's gear-quality selectors).
 import {
   attributeBonusesOf,
+  type BeltSlot,
+  beltSlotsOf,
   type EquipmentSlot,
   type GearAffixes,
   type GearPerkKind,
@@ -17,7 +19,7 @@ import {
 import { ATTRIBUTE_NAMES } from '../format';
 
 /** What a popover or slot shows: a stored item, a merchant listing or a crafted piece (gear carries its roll and affixes). */
-export type ShownItem = Pick<Item, 'defId'> & { quality?: number; rarity?: ItemRarity; affixes?: GearAffixes };
+export type ShownItem = Pick<Item, 'defId'> & { quality?: number; rarity?: ItemRarity; affixes?: GearAffixes; belt?: BeltSlot[] };
 
 export const RARITY_LABELS: Record<ItemRarity, string> = {
   junk: 'Junk',
@@ -60,6 +62,7 @@ export const SLOT_LABELS: Record<EquipmentSlot, string> = {
   boots: 'Boots',
   axe: 'Axe',
   pickaxe: 'Pickaxe',
+  accessory: 'Accessory',
 };
 
 /** Fallback for a stored item whose defId the catalog does not know: shown, never usable or sellable. */
@@ -131,4 +134,10 @@ export function affixLines(item: ShownItem): StatLine[] {
   const perk = perkOf(shown);
   if (perk) lines.push({ label: 'Perk', value: perkText(perk.kind, perk.value) });
   return lines;
+}
+
+/** The Potion Belt's contents, one line per slot ("Slot 1  Health Potion (T1) x10", "Slot 2  Empty"); none for any other item. */
+export function beltLines(item: ShownItem): StatLine[] {
+  if (!getItemDef(item.defId)?.belt) return [];
+  return beltSlotsOf({ belt: item.belt }).map((s, i) => ({ label: `Slot ${i + 1}`, value: s ? `${getItemDef(s.defId)?.name ?? s.defId} x${s.count}` : 'Empty' }));
 }

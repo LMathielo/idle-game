@@ -15,7 +15,7 @@ export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number];
  */
 export type Attributes = Record<AttributeKey, number>;
 
-export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'legs' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots' | 'axe' | 'pickaxe';
+export type EquipmentSlot = 'helmet' | 'amulet' | 'armor' | 'legs' | 'weapon' | 'shield' | 'gloves' | 'ring1' | 'ring2' | 'boots' | 'axe' | 'pickaxe' | 'accessory';
 
 /**
  * Item rarity: the colour tier. `junk` is sell-only; `common` has a game use (gear, logs, potions); uncommon →
@@ -26,7 +26,16 @@ export const ITEM_RARITIES = ['junk', 'common', 'uncommon', 'rare', 'epic', 'leg
 
 export type ItemRarity = (typeof ITEM_RARITIES)[number];
 
-export const EQUIPMENT_SLOTS = ['helmet', 'amulet', 'armor', 'legs', 'weapon', 'shield', 'gloves', 'ring1', 'ring2', 'boots', 'axe', 'pickaxe'] as const satisfies readonly EquipmentSlot[];
+export const EQUIPMENT_SLOTS = ['helmet', 'amulet', 'armor', 'legs', 'weapon', 'shield', 'gloves', 'ring1', 'ring2', 'boots', 'axe', 'pickaxe', 'accessory'] as const satisfies readonly EquipmentSlot[];
+
+/**
+ * When a Potion Belt slot drinks (1.27.0): `hp_below_50` = HP at or under 50% of max, `hp_below_25` = at or under 25%, `always` = whenever
+ * HP is below max. Every rule needs the potion's type off cooldown and never drinks at full HP. Data: config/belt.ts.
+ */
+export type BeltRule = 'hp_below_50' | 'hp_below_25' | 'always';
+
+/** One Potion Belt slot (1.27.0): empty (null), or ONE potion type with how many and its rule. Lives on the belt's item instance. */
+export type BeltSlot = { defId: string; count: number; rule: BeltRule } | null;
 
 export type Item = {
   /** Stackable items use their definition id (e.g. `oak_logs`); unique items use an instance id. */
@@ -51,6 +60,11 @@ export type Item = {
    * stored: they come from quality, rarity and the catalog gear level (src/engine/gear.ts), like the main stat.
    */
   affixes?: GearAffixes;
+  /**
+   * The Potion Belt only (save v24): its slots (BELT.slots of them), empty or holding one potion type each. Travels with the instance
+   * (equipped or in the bag); selling the belt destroys the contents.
+   */
+  belt?: BeltSlot[];
 };
 
 /**
@@ -314,8 +328,12 @@ export type TrainingState = {
 export type FightLogEntry = {
   /** Engine time into the fight when it landed, ms. */
   atMs: number;
-  actor: 'hero' | 'enemy';
-  /** 1-based: this side's n-th strike. */
+  /**
+   * 'belt' (save v24, engine 1.27.0) is a Potion Belt drink: `potion` names the potion, `heal` the HP it restored, `targetHpAfter` is the
+   * HERO's HP after it, `strike` counts the belt's drinks in this fight, and the strike fields (roll, crit, physical, magic, dealt) are 0.
+   */
+  actor: 'hero' | 'enemy' | 'belt';
+  /** 1-based: this side's n-th strike (a belt entry: the n-th drink of this fight). */
   strike: number;
   /** Raw physical damage roll, a whole number in [min, max] (before a crit and the target's armor). */
   roll: number;
@@ -344,6 +362,9 @@ export type FightLogEntry = {
    * entry) or was struck (a hero entry). Absent = mob 0, so a fight of one mob logs exactly as before.
    */
   mob?: number;
+  /** Belt drinks only (actor 'belt'): the potion's item definition id and the HP it restored (after the cap at max HP). */
+  potion?: string;
+  heal?: number;
 };
 
 export type FightRewards = {
@@ -593,7 +614,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 23;
+  saveVersion: 24;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -618,6 +639,14 @@ export type GameState = {
   workers: WorkersState;
   /** Save v13. The Crafting house's pipes and the yield fraction ledger. Not an activity: runs beside everything. */
   crafting: CraftingState;
+  /**
+   * Save v24. Potion cooldowns by cooldown GROUP (`ItemDef.cooldownGroup`, else the item definition id; the health potions are `health`): the
+   * engine time (epoch ms) at which the group can be drunk again. Set by a drink of any potion of the group (the Potion Belt's or a manual
+   * USE_ITEM) to the drink time + the drunk potion's cooldownMs; an entry in the past means ready. Runs on engine time, so it goes on
+   * between fights and while the app is closed. (Saves written before 2026-11-07 keyed it by potion type; those keys are ignored and dropped
+   * at the next drink.)
+   */
+  potionCooldowns: Record<string, number>;
   /** Save v8. Serial for unique item instance ids (bought gear: `<defId>#<n>`). Only goes up. */
   nextItemSerial: number;
   stats: GameStats;
@@ -742,5 +771,7 @@ export type SimulationSummary = {
   craftsReady: Record<string, number>;
   /** Material pipes that spent time waiting, per pipe and missing input, in first-seen order (save v15). */
   craftWaits: { pipe: number; defId: string }[];
+  /** Potions the Potion Belt drank (1.27.0), per potion type, in a fight or out of one. Summaries stored before 1.27.0 have none. */
+  potionsUsed: Record<string, number>;
   anomalies: ClockAnomalyEvent[];
 };

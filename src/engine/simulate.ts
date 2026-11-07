@@ -1,6 +1,7 @@
 // Advances the game to `now`. The only place where time turns into rewards.
 // Same code path for live ticks (1s) and offline catch-up (up to the cap).
-import { advanceDungeon } from './dungeon';
+import { type BeltClock, beltNextEventMs, beltPass, equippedBelt, walkWithBelt } from './belt';
+import { advanceDungeon, dungeonNextEventMs } from './dungeon';
 import { advanceMining } from './mining';
 import { regenHeroPools } from './hp';
 import { isBuilt } from './buildings';
@@ -9,8 +10,8 @@ import { regenStamina } from './stamina';
 import { advanceTraining } from './training';
 import { advanceWoodcutting } from './woodcutting';
 import { onUpgraded } from './upgradeEffects';
-import { advanceWorld } from './world';
-import { CLOCK_BACKWARD_TOLERANCE_MS } from './config/time';
+import { advanceWorld, heroNextEventMs } from './world';
+import { CLOCK_BACKWARD_TOLERANCE_MS, MAX_ACTIONS_PER_SIMULATION } from './config/time';
 import { emptySummary } from './summary';
 import type { GameEvent, GameState, SimulationSummary } from './types';
 
@@ -33,6 +34,10 @@ export type SimulationResult = { state: GameState; events: GameEvent[]; summary:
  * HP and mana regen in time order (advanceDungeon, advanceTraining); otherwise HP and mana simply regenerate over the whole
  * elapsed time. The builder (and the worker crews) run side by side with the hero's activity on the granted time,
  * in time order (advanceWorld, world.ts).
+ *
+ * **Potion Belt (1.27.0):** while a belt is worn the hero's steps are cut at every hero event and every potion cooldown end, HP regenerates
+ * step by step (not once at the end), and the belt's drink pass runs at the start, after every cut and after every fight event (belt.ts).
+ * A fight in progress when the offline cap falls is finished with the belt too; the rest of the forfeited time only regenerates.
  */
 export function simulate(state: GameState, now: number): SimulationResult {
   const summary = emptySummary();
@@ -79,6 +84,12 @@ export function simulate(state: GameState, now: number): SimulationResult {
     activity: state.activity ? { ...state.activity } : null,
   };
 
+  // The Potion Belt (1.27.0): `clock.at` is the engine time the walk is at (the walk starts at the last simulated time).
+  const belt = equippedBelt(draft) !== null;
+  const clock: BeltClock = { at: lastSimulatedAt };
+  // What a command left behind (a belt just worn or filled, HP lowered) drinks at the start of the walk.
+  if (belt) beltPass(draft, clock.at, summary);
+
   // Uncapped on purpose: requestedMs, not grantedMs. Same object when nothing changed.
   draft.stamina = regenStamina(state.stamina, requestedMs);
   // Merchant refresh charges follow the same rule: uncapped, bounded by their max. An unbuilt Merchant (1.18.0) banks nothing.
@@ -87,22 +98,43 @@ export function simulate(state: GameState, now: number): SimulationResult {
   // The hero's activity, one step of the world walk at a time. Dungeon runs and training interleave HP / mana regen with
   // their own events; gathering never touches them, so its regen is done once at the end ("plain" regen).
   let plainRegenMs = 0;
-  const heroStep = (ms: number) => {
-    if (!(ms > 0)) return;
+  const stepOnce = (ms: number) => {
     const a = draft.activity;
-    if (a?.kind === 'dungeon' || a?.kind === 'boss') advanceDungeon(draft, a, ms, ms, summary, events);
+    if (a?.kind === 'dungeon' || a?.kind === 'boss') advanceDungeon(draft, a, ms, ms, summary, events, belt ? { clock } : undefined);
     else if (a?.kind === 'training') advanceTraining(draft, a, ms, ms, summary, events);
     else {
       if (a?.kind === 'woodcutting') advanceWoodcutting(draft, a, ms, summary, events);
       if (a?.kind === 'mining') advanceMining(draft, a, ms, summary, events);
-      plainRegenMs += ms;
+      // With a belt worn HP must be current at every step (a drink reads it); without one it regenerates once at the end, as always.
+      if (belt) regenHeroPools(draft, ms);
+      else plainRegenMs += ms;
     }
+  };
+  const heroStep = (ms: number) => {
+    if (!(ms > 0)) return;
+    if (belt) walkWithBelt(draft, clock, ms, () => heroNextEventMs(draft), stepOnce, summary);
+    else stepOnce(ms);
   };
   // Granted (capped) time: the hero's activity and the village (builder) side by side, in time order.
   advanceWorld(draft, grantedMs, heroStep, summary, events, onUpgraded);
 
   // Beyond the cap only a dungeon or boss fight in progress finishes (and HP and mana regenerate); see advanceDungeon.
-  const beyondCapMs = requestedMs - grantedMs;
+  let beyondCapMs = requestedMs - grantedMs;
+  if (belt) {
+    // The fight that was in progress at the cap finishes with the belt, piece by piece (its events, and the cooldown ends inside it).
+    let guard = 0;
+    for (;;) {
+      const a = draft.activity;
+      const inFight = (a?.kind === 'boss' && a.fight) || (a?.kind === 'dungeon' && a.phase === 'fight' && a.fight);
+      if (!(beyondCapMs > 0) || !inFight || (a?.kind !== 'boss' && a?.kind !== 'dungeon') || guard >= MAX_ACTIONS_PER_SIMULATION) break;
+      const dt = Math.max(1, Math.min(beyondCapMs, dungeonNextEventMs(draft), beltNextEventMs(draft, clock.at)));
+      clock.at += dt;
+      advanceDungeon(draft, a, 0, dt, summary, events, { clock });
+      beyondCapMs -= dt;
+      guard += 1;
+      beltPass(draft, clock.at, summary);
+    }
+  }
   if (draft.activity?.kind === 'dungeon' || draft.activity?.kind === 'boss') advanceDungeon(draft, draft.activity, 0, beyondCapMs, summary, events);
   else plainRegenMs += beyondCapMs;
   // HP and mana (1.17.0) together. Same object when nothing changed (both full).

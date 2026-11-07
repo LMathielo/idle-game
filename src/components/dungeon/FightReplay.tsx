@@ -4,7 +4,7 @@
 import { memo, useEffect, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
-import { COMBAT_SKILLS, type FightLogEntry, type FightRecord, mobName } from '../../engine';
+import { COMBAT_SKILLS, type FightLogEntry, type FightRecord, getItemDef, mobName } from '../../engine';
 import { colors, fonts } from '../../theme';
 import { PixelButton } from '../PixelButton';
 import { FIGHT_VIEW_LEAD_MS } from './fightDisplay';
@@ -134,6 +134,15 @@ export const LogLine = memo(function LogLine({ entry, heroName, enemyName }: { e
       </Text>
     );
   }
+  if (entry.actor === 'belt') {
+    // A Potion Belt drink: "0:20.0 · Drank Health Potion (T1) +50 → 90 HP". Green text and the words say it is a heal.
+    const drink = `${logTime(entry.atMs)} · Drank ${getItemDef(entry.potion ?? '')?.name ?? entry.potion ?? 'a potion'} +${entry.heal ?? 0} → ${entry.targetHpAfter} HP`;
+    return (
+      <Text style={[styles.line, styles.drinkLine]} accessibilityLabel={drink}>
+        {drink}
+      </Text>
+    );
+  }
   const hero = entry.actor === 'hero';
   const attacker = hero ? heroName : enemyName;
   const target = hero ? enemyName : heroName;
@@ -164,6 +173,7 @@ const styles = StyleSheet.create({
   line: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.ink },
   heroLine: { color: colors.ink },
   enemyLine: { color: colors.hp },
+  drinkLine: { fontFamily: fonts.bodyBold, color: colors.dangerEasy },
   critDamage: { fontFamily: fonts.bodyBold, color: colors.crit },
   critTag: { fontFamily: fonts.bodyBold, color: colors.crit },
   skillTag: { fontFamily: fonts.bodyBold, color: colors.crit },

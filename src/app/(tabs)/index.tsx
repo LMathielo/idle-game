@@ -5,6 +5,8 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGameState } from '../../client/GameProvider';
 import { ACTIVITY_STRIP_HEIGHT } from '../../components/ActivityStrip';
+import { BeltPanel } from '../../components/belt/BeltPanel';
+import { PotionBeltFloating } from '../../components/belt/PotionBeltButton';
 import { BuildSheet } from '../../components/buildings/BuildSheet';
 import { HeroHud } from '../../components/hud/HeroHud';
 import { hudBottom } from '../../components/hud/hudLayout';
@@ -95,6 +97,10 @@ export default function VillageScreen() {
   const insets = useSafeAreaInsets();
   const topReserve = hudBottom(insets.top);
   const openHero = useCallback(() => router.navigate('/hero'), []);
+  // The Potion Belt: its button floats bottom right above the strip while the belt is worn; its panel is an overlay on this screen.
+  const [beltOpen, setBeltOpen] = useState(false);
+  const openBelt = useCallback(() => setBeltOpen(true), []);
+  const closeBelt = useCallback(() => setBeltOpen(false), []);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((text: string) => {
@@ -145,6 +151,7 @@ export default function VillageScreen() {
         topReserve={topReserve}
         bottomReserve={ACTIVITY_STRIP_HEIGHT}
       />
+      <PotionBeltFloating onPress={openBelt} stripHeight={ACTIVITY_STRIP_HEIGHT} />
       {/* Hero HUD over the sky, top-left: tapping it opens the Hero tab. Only the HUD takes touches. */}
       <SafeAreaView edges={['top']} style={styles.hudWrap} pointerEvents="box-none">
         <HeroHud onPress={openHero} />
@@ -154,6 +161,7 @@ export default function VillageScreen() {
           </Animated.View>
         ) : null}
       </SafeAreaView>
+      {beltOpen ? <BeltPanel onClose={closeBelt} bottomReserve={ACTIVITY_STRIP_HEIGHT} /> : null}
       <BuildSheet buildingId={building?.id ?? null} anchor={building?.anchor ?? null} onClose={closeSheet} onBuilt={onBuilt} />
     </View>
   );

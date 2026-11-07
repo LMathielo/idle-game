@@ -155,7 +155,24 @@ export {
   type MerchantView,
 } from './merchant';
 export { isEquipmentSlot } from './equipment';
-export { freeSlots, heroOwnsItem } from './inventory';
+export { emptyBeltSlots, freeSlots, heroOwnsItem } from './inventory';
+export {
+  bagPotions,
+  beltDrinkOrder,
+  beltHasPotions,
+  beltPotionCount,
+  beltSlotsOf,
+  beltView,
+  cooldownGroupOf,
+  equippedBelt,
+  isPotionDef,
+  potionCooldownLeftMs,
+  potionReadyAt,
+  ruleSatisfied,
+  type BagPotionView,
+  type BeltSlotView,
+  type BeltView,
+} from './belt';
 export {
   advanceMining,
   mineActivityView,

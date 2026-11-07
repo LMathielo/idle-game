@@ -15,7 +15,7 @@ import { Bar, Panel } from '../../components/Panel';
 import { PixelButton } from '../../components/PixelButton';
 import { StatusPanel } from '../../components/StatusPanel';
 import { type CommandInput } from '../../client/types';
-import { freeSlots, hpView } from '../../engine';
+import { freeSlots, hpView, potionCooldownLeftMs } from '../../engine';
 import { DEV_TOOLS_ENABLED } from '../../engine/config/dev';
 import type { Character, EquipmentSlot, Inventory, Item, SkillKey } from '../../engine/types';
 import { colors, fonts } from '../../theme';
@@ -31,7 +31,7 @@ const COMBAT_GRID: (EquipmentSlot | null)[][] = [
   [null, 'helmet', 'amulet'],
   ['weapon', 'armor', 'shield'],
   ['ring1', 'legs', 'ring2'],
-  ['gloves', 'boots', null],
+  ['gloves', 'boots', 'accessory'], // the accessory (the Potion Belt) sits directly under Ring 2
 ];
 const TOOLS_GRID: (EquipmentSlot | null)[][] = [['axe', 'pickaxe']];
 type EquipmentTab = 'combat' | 'tools';
@@ -117,7 +117,7 @@ const EquipmentPanel = memo(function EquipmentPanel({ equipment, onPress, hitTes
           {row.map((slot, c) =>
             slot ? (
               <View key={c} style={styles.equipCell}>
-                <ItemSlot item={equipment[slot]} size={58} pressKey={slot} onPress={onPress} hitTest={hitTest} />
+                <ItemSlot item={equipment[slot]} size={58} pressKey={slot} onPress={onPress} hitTest={hitTest} placeholder={slot === 'accessory' ? 'slot_accessory' : undefined} />
                 <Text style={styles.slotLabel} numberOfLines={1}>
                   {equipment[slot]?.name ?? SLOT_LABELS[slot]}
                 </Text>
@@ -233,10 +233,12 @@ function HeroItemSheet({ selection, onClose, onOutsidePress }: { selection: Sele
       });
     } else if (def.heal) {
       const hp = hpView(state);
+      // The potion's cooldown group (a drink of any potion of it starts it, the belt's too): the button waits it out, counting down.
+      const cooldownS = Math.ceil(potionCooldownLeftMs(state, item.defId, state.time.lastSimulatedAt) / 1000);
       actions.push({
         label: 'Use',
-        disabled: busy || hp.full,
-        sublabel: hp.full ? 'HP full' : `HP ${hp.hp}/${hp.maxHp}`,
+        disabled: busy || hp.full || cooldownS > 0,
+        sublabel: hp.full ? 'HP full' : cooldownS > 0 ? `Cooldown ${cooldownS}s` : `HP ${hp.hp}/${hp.maxHp}`,
         onPress: () => send({ type: 'USE_ITEM', itemId: item.id }, false),
       });
     }

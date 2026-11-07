@@ -2,6 +2,7 @@
 import { grantHeroXp } from './activities';
 import { type BossErrorCode, checkBossEntry, newBossActivity, recordBossResults, resolveBossDifficulty } from './boss';
 import { build, buildingForActivity, completeBuilding, completeConstruction, isBuilt, startUpgrade, type UpgradeErrorCode } from './buildings';
+import { beltPut, beltSetRule, beltTake } from './belt';
 import { onUpgraded } from './upgradeEffects';
 import { cloneState } from './clone';
 import { cancelCraft, collectCraft, type CraftErrorCode, finishCraftDebug, instaCraft, settleCrafting, startCraft, stopCraft, unlockPipe, x10Craft } from './crafting';
@@ -28,6 +29,7 @@ import {
   type Activity,
   ATTRIBUTE_KEYS,
   type AttributeKey,
+  type BeltRule,
   type BossId,
   type Difficulty,
   type BuildingId,
@@ -149,8 +151,18 @@ export type Command =
   | { id: string; type: 'EQUIP_ITEM'; itemId: string }
   /** Moves the item in `slot` to the inventory. Fails with INVENTORY_FULL when there is no free slot. */
   | { id: string; type: 'UNEQUIP_ITEM'; slot: EquipmentSlot }
-  /** Uses one unit of a consumable (Health Potion: +heal HP, capped at max; HP_FULL at max HP). */
+  /** Uses one unit of a consumable (Health Potion: +heal HP, capped at max; HP_FULL at max HP; ON_COOLDOWN while that potion's cooldown group runs, 1.27.0). */
   | { id: string; type: 'USE_ITEM'; itemId: string }
+  /**
+   * Potion Belt (1.27.0), only while the belt is worn (BELT_NOT_EQUIPPED): moves the bag stack `itemId` (a potion) into belt slot `slot`
+   * (0..3), as many as fit (one potion type per slot, 25 per slot). They leave the bag; the stack goes when used up. An empty slot gets the
+   * default rule (On 50% HP). Refused: UNKNOWN_SLOT, NOT_IN_INVENTORY, NOT_A_POTION, BELT_SLOT_TAKEN, BELT_SLOT_FULL.
+   */
+  | { id: string; type: 'BELT_PUT'; itemId: string; slot: number }
+  /** Moves everything in belt slot `slot` back to the bag (the existing stack, else a free place). Refused: SLOT_EMPTY, INVENTORY_FULL (nothing moves). */
+  | { id: string; type: 'BELT_TAKE'; slot: number }
+  /** Sets the rule of a filled belt slot. Refused: SLOT_EMPTY, INVALID_RULE. */
+  | { id: string; type: 'BELT_SET_RULE'; slot: number; rule: BeltRule }
   /** Spends 1 refresh charge and restocks the merchant. */
   | { id: string; type: 'REFRESH_MERCHANT' }
   /**
@@ -713,6 +725,21 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
     }
     case 'USE_ITEM': {
       const e = useItem(draft, cmd.itemId);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'BELT_PUT': {
+      const e = beltPut(draft, cmd.itemId, cmd.slot);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'BELT_TAKE': {
+      const e = beltTake(draft, cmd.slot);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'BELT_SET_RULE': {
+      const e = beltSetRule(draft, cmd.slot, cmd.rule);
       if (e) return fail(e.code, e.message);
       break;
     }
