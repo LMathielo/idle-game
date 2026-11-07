@@ -2,7 +2,8 @@
 // (up to BELT.maxPerSlot) and a rule. While the belt is WORN, simulate() drinks from it by its rules at exact engine times; see
 // docs/ENGINE.md "Potion Belt".
 //
-//   drink pass (`beltPass`, at engine time T): for slot 1, 2, 3, 4 in that order, a slot drinks when
+//   drink pass (`beltPass`, at engine time T): the slots are tried in the DRINK ORDER (`beltDrinkOrder`, owner decision 2026-11-07: the lowest-HP
+//     rule first, then the higher potion tier of a cooldown group, then slot 1 -> 4), and a slot drinks when
 //     - it holds at least one potion,
 //     - its potion's cooldown GROUP is off cooldown (state.potionCooldowns[group] <= T; the health potions are one group),
 //     - its rule holds for the hero's CURRENT HP (read again after every drink): hp_below_50 = hp x 100 <= maxHp x 50, hp_below_25 likewise,
@@ -81,6 +82,36 @@ export function startPotionCooldown(draft: GameState, defId: string, at: number)
   }
   next[group] = at + ms;
   draft.potionCooldowns = next;
+}
+
+/**
+ * The order the drink pass tries the belt's slots in (owner decision 2026-11-07), as slot indices; empty slots are left out. Static, no RNG:
+ *   1. the rule's `priority` (config): On 25% HP before On 50% HP before Always (the lowest-HP rule first);
+ *   2. among slots with the same rule, potions of one cooldown group by `tier`, the higher first (Greater before T1); different groups keep the
+ *      order of their first slot, so the order is a total order and each group is still tried in tier order;
+ *   3. slot order 1 -> 4.
+ * The shared group cooldown lets only one potion of a group drink per instant, so this decides WHICH one; each group is walked in this order.
+ */
+export function beltDrinkOrder(slots: readonly BeltSlot[]): number[] {
+  const rows = slots
+    .map((held, index) => ({ held, index }))
+    .filter((r): r is { held: NonNullable<BeltSlot>; index: number } => !!r.held && r.held.count > 0);
+  const firstOfGroup = new Map<string, number>(); // `${rule}|${group}` -> the lowest slot index holding that group under that rule
+  const keyOf = (h: NonNullable<BeltSlot>) => `${h.rule}|${cooldownGroupOf(h.defId)}`;
+  for (const { held, index } of rows) {
+    const key = keyOf(held);
+    if (!firstOfGroup.has(key)) firstOfGroup.set(key, index);
+  }
+  const prio = (h: NonNullable<BeltSlot>) => BELT_RULES[h.rule]?.priority ?? Number.MAX_SAFE_INTEGER;
+  const tier = (h: NonNullable<BeltSlot>) => getItemDef(h.defId)?.tier ?? 0;
+  return rows
+    .sort((a, b) =>
+      prio(a.held) - prio(b.held) ||
+      firstOfGroup.get(keyOf(a.held))! - firstOfGroup.get(keyOf(b.held))! ||
+      tier(b.held) - tier(a.held) ||
+      a.index - b.index,
+    )
+    .map((r) => r.index);
 }
 
 /** The rule test: never at full HP; a percent rule needs hp x 100 <= maxHp x pct (integers); `always` is any HP below max. */
@@ -186,12 +217,12 @@ export function beltPass(draft: GameState, at: number, summary: SimulationSummar
   if (!worn || beltPotionCount(worn) === 0) return 0;
   let slots = beltSlotsOf(worn);
   let drunk = 0;
-  for (let i = 0; i < slots.length; i++) {
-    const held = slots[i];
+  for (const i of beltDrinkOrder(slots)) {
+    const held = slots[i]; // slots[i] is replaced on a drink, never reordered: the order computed at the start of the pass stays valid
     if (!held || held.count <= 0) continue;
     const def = getItemDef(held.defId);
     if (!def || !isPotionDef(def)) continue;
-    if (potionReadyAt(draft, held.defId) > at) continue; // its group is cooling down (a slot-1 drink of the group blocks the later slots)
+    if (potionReadyAt(draft, held.defId) > at) continue; // its group is cooling down (an earlier drink of the group in this pass blocks the later slots)
     const maxHp = maxHpOf(draft);
     const hpBefore = Math.max(0, draft.character.hp);
     if (!ruleSatisfied(held.rule, hpBefore, maxHp)) continue;

@@ -22,8 +22,9 @@ import { GameIcon, ItemIcon } from '../art/Sprites';
 import { formatQty } from '../format';
 import { PixelButton } from '../PixelButton';
 import { type AnchorRect, InfoPopover, measureAnchor, POPOVER_GOOD, PopoverActions, PopoverRow, PopoverText } from '../ui/InfoPopover';
+import { DRAG_HOLD_MS } from '../ui/dragHold';
 import { useCommand } from '../ui/useCommand';
-import { DRAG_HOLD_MS, type DropRect, slotAt } from './beltDrag';
+import { type DropRect, slotAt } from './beltDrag';
 
 /** Whole seconds left of a cooldown (rounded up, so "1s" shows until it is over). */
 export const cooldownSeconds = (ms: number) => Math.ceil(ms / 1000);

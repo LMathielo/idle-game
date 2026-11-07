@@ -60,6 +60,11 @@ export type ItemDef = {
    * potion is its own group (its defId). The health potions are group `health` (`HEALTH_COOLDOWN_GROUP`).
    */
   cooldownGroup?: string;
+  /**
+   * Potions (owner decision 2026-11-07): the potency rank inside the cooldown group, higher = stronger (T1 = 1, Greater = 2). The Potion Belt tries the
+   * higher tier first among slots with the same rule. An explicit number, never inferred from `heal`. Missing = 0.
+   */
+  tier?: number;
   /** true = the Potion Belt (1.27.0): its instance carries `belt` (the slots). Only for the unique item that fits the `accessory` slot. */
   belt?: true;
   /**
@@ -229,6 +234,7 @@ export const ITEMS = {
     stackable: true,
     heal: 50,
     cooldownMs: HEALTH_POTION_COOLDOWN_MS,
+    tier: 1,
     cooldownGroup: HEALTH_COOLDOWN_GROUP,
   },
   rusty_gladius: {
@@ -406,6 +412,7 @@ export const ITEMS = {
     stackable: true,
     heal: 60,
     cooldownMs: HEALTH_POTION_COOLDOWN_MS,
+    tier: 2,
     cooldownGroup: HEALTH_COOLDOWN_GROUP,
   },
   steel_axe: {

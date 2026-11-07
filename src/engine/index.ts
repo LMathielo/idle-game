@@ -158,6 +158,7 @@ export { isEquipmentSlot } from './equipment';
 export { emptyBeltSlots, freeSlots, heroOwnsItem } from './inventory';
 export {
   bagPotions,
+  beltDrinkOrder,
   beltHasPotions,
   beltPotionCount,
   beltSlotsOf,

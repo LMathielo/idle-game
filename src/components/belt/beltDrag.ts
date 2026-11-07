@@ -14,14 +14,6 @@ export type DropRect = { x: number; y: number; width: number; height: number };
 export const DROP_SLOP = 10;
 
 /**
- * How long a finger must rest on a bag potion before the drag starts, ms (Pan `activateAfterLongPress`). The bag list scrolls, so a drag
- * that starts on any movement would fight the scroll: with a hold, moving more than ~10 pt BEFORE the delay fails the pan (native, both
- * platforms) and the list scrolls as usual; after the hold the pan is active and the potion follows the finger. A tap still selects.
- * Short enough to feel like "pick up", long enough that a scroll swipe (which moves at once) never reaches it.
- */
-export const DRAG_HOLD_MS = 220;
-
-/**
  * Index of the slot box the point is over (boxes grown by `slop`), or -1. Slots are far enough apart that the first hit is the only
  * one; ties (a point in two grown boxes) go to the slot whose centre is nearer.
  */

@@ -8,6 +8,7 @@ import {
   BELT,
   type BeltRule,
   type BeltSlot,
+  beltDrinkOrder,
   beltView,
   type FightLogEntry,
   type GameState,
@@ -354,18 +355,84 @@ describe('drinking out of a fight (idle), live == offline', () => {
     expect([19_999, 20_000, 39_999, 40_000, 60_000].map((ms) => 25 - countIn(simulate(s, T0 + ms).state, 0))).toEqual([1, 2, 2, 3, 4]);
   });
 
-  it('slot order on a tie: slot 1 first, and its drink can make the later slots\' rules false', () => {
+  describe('the drink priority (owner decision 2026-11-07): lowest-HP rule, then higher tier of a group, then slot order', () => {
     const run = (slots: BeltSlot[], hp: number) => simulate(idle(hp, slots), T0 + MS).state;
-    // hp 200 <= 237: the Greater (+60 = 260) first makes the T1 slot's rule (<= 237) false; the T1 first (+50 = 250) does the same
-    let r = run([slotOf(GREATER), slotOf(T1)], 200);
-    expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([24, 25, 260]);
-    r = run([slotOf(T1), slotOf(GREATER)], 200);
-    expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([24, 25, 250]);
-    // hp 100: both rules still hold after the first drink, but the two potions share one cooldown: only slot 1 drinks (Greater +60)
-    r = run([slotOf(GREATER), slotOf(T1)], 100);
-    expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([24, 25, 160]);
-    r = run([slotOf(T1), slotOf(GREATER)], 100);
-    expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([24, 25, 150]);
+    // hp 100 is under 25% (118) and under 50% (237): every rule holds; the shared cooldown lets ONE health potion drink.
+    it('the tiers are explicit numbers in the config', () => {
+      expect([ITEMS[T1].tier, ITEMS[GREATER].tier]).toEqual([1, 2]);
+    });
+
+    it('a 25% slot beats a 50% slot when both trigger, in both slot positions', () => {
+      let r = run([slotOf(T1, 25, 'hp_below_25'), slotOf(T1, 25, 'hp_below_50')], 100);
+      expect([countIn(r, 0), countIn(r, 1)]).toEqual([24, 25]);
+      r = run([slotOf(T1, 25, 'hp_below_50'), slotOf(T1, 25, 'hp_below_25')], 100);
+      expect([countIn(r, 0), countIn(r, 1)]).toEqual([25, 24]);
+      // 25% over 50% even against a stronger potion in the 50% slot
+      r = run([slotOf(GREATER, 25, 'hp_below_50'), slotOf(T1, 25, 'hp_below_25')], 100);
+      expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([25, 24, 150]);
+    });
+
+    it('only the rules that hold compete: at 200 HP the 25% slot does not hold, the 50% slot drinks', () => {
+      const r = run([slotOf(T1, 25, 'hp_below_25'), slotOf(T1, 25, 'hp_below_50')], 200);
+      expect([countIn(r, 0), countIn(r, 1)]).toEqual([25, 24]);
+    });
+
+    it('the Greater beats the T1 with the same rule, whatever the slot order', () => {
+      for (const rule of ['hp_below_25', 'hp_below_50', 'always'] as const) {
+        let r = run([slotOf(T1, 25, rule), slotOf(GREATER, 25, rule)], 100);
+        expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([25, 24, 160]);
+        r = run([slotOf(GREATER, 25, rule), slotOf(T1, 25, rule)], 100);
+        expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([24, 25, 160]);
+      }
+      // the Greater (first, 1 left) drinks at 0 s and its slot empties; the T1 only drinks once the shared cooldown ends
+      const s2 = idle(100, [slotOf(T1, 5), slotOf(GREATER, 1)]);
+      const before = simulate(s2, T0 + 19_999).state;
+      expect([countIn(before, 0), beltOf(before)[1]]).toEqual([5, null]);
+      expect(countIn(simulate(s2, T0 + 20_000).state, 0)).toBe(4);
+    });
+
+    it('slot order is the last tiebreak: same rule, same potion', () => {
+      const r = run([slotOf(T1, 25, 'hp_below_50'), slotOf(T1, 25, 'hp_below_50'), slotOf(T1, 25, 'hp_below_50')], 100);
+      expect([countIn(r, 0), countIn(r, 1), countIn(r, 2)]).toEqual([24, 25, 25]);
+    });
+
+    it('Always comes last: a 50% slot beats it, and so does a 25% slot, whatever the potion', () => {
+      let r = run([slotOf(GREATER, 25, 'always'), slotOf(T1, 25, 'hp_below_50')], 100);
+      expect([countIn(r, 0), countIn(r, 1)]).toEqual([25, 24]);
+      r = run([slotOf(GREATER, 25, 'always'), slotOf(T1, 25, 'hp_below_25')], 100);
+      expect([countIn(r, 0), countIn(r, 1)]).toEqual([25, 24]);
+      // above 50% only Always can hold
+      r = run([slotOf(T1, 25, 'hp_below_50'), slotOf(T1, 25, 'always')], 300);
+      expect([countIn(r, 0), countIn(r, 1)]).toEqual([25, 24]);
+    });
+
+    it('its drink can make a later slot\'s rule false (HP is read again after every drink)', () => {
+      // hp 200 <= 237: the Greater (+60 = 260) makes the 50% rule false; the other slot is a different group so the cooldown does not block it
+      const s = idle(200, [slotOf(T1, 25, 'hp_below_50'), slotOf(GREATER, 25, 'hp_below_50')]);
+      const r = simulate(s, T0 + MS).state;
+      expect([countIn(r, 0), countIn(r, 1), r.character.hp]).toEqual([25, 24, 260]);
+    });
+
+    it('beltDrinkOrder: rule, then group by first slot and tier, then slot order; empty slots are left out', () => {
+      const o = (slots: (BeltSlot | null)[]) => beltDrinkOrder(slots as BeltSlot[]);
+      expect(o([slotOf(T1, 1, 'always'), slotOf(T1, 1, 'hp_below_50'), null, slotOf(T1, 1, 'hp_below_25')])).toEqual([3, 1, 0]);
+      expect(o([slotOf(T1), slotOf(GREATER), slotOf(T1), slotOf(GREATER)])).toEqual([1, 3, 0, 2]);
+      expect(o([slotOf(T1, 1, 'always'), slotOf(GREATER, 1, 'hp_below_25'), slotOf(GREATER, 1, 'always'), slotOf(T1, 1, 'hp_below_25')])).toEqual([1, 3, 2, 0]);
+    });
+
+    it('split invariance and live == offline with a mixed belt', () => {
+      const s = idle(1, [slotOf(T1, 6, 'always'), slotOf(GREATER, 6, 'hp_below_50'), slotOf(T1, 6, 'hp_below_25'), slotOf(GREATER, 6, 'always')]);
+      const total = 3 * 60 * SEC;
+      const whole = simulate(s, T0 + total);
+      for (const cut of [1, 777, 20 * SEC, 20 * SEC + 1, 95 * SEC]) {
+        const a = simulate(s, T0 + cut);
+        const b = simulate(a.state, T0 + total);
+        expect(hashState(b.state)).toBe(hashState(whole.state));
+      }
+      let live = s;
+      for (let t = 1; t <= 180; t++) live = simulate(live, T0 + t * SEC).state;
+      expect(hashState(live)).toBe(hashState(whole.state));
+    });
   });
 
   it('the cooldown is per GROUP: two slots of one type, or of the two health potions, drink one after the other, never together', () => {
@@ -377,17 +444,17 @@ describe('drinking out of a fight (idle), live == offline', () => {
     r = simulate(same, T0 + 60 * SEC).state; // slot 1 empties at t = 40 s (its 3rd), slot 2 takes over at 60 s
     expect(beltOf(r)[0]).toBeNull();
     expect(countIn(r, 1)).toBe(2);
-    // T1 and Greater share the cooldown: slot 1 (T1) drinks at 0 s, the Greater slot waits; slot 1 is first again at 20 s, and so on
+    // T1 and Greater share the cooldown: the Greater (higher tier, slot 2) drinks at 0 s, the T1 slot waits for the shared cooldown
     const mixed = simulate(idle(1, [slotOf(T1, 3, 'always'), slotOf(GREATER, 3, 'always')]), T0 + MS).state;
-    expect([countIn(mixed, 0), countIn(mixed, 1)]).toEqual([2, 3]);
-    expect(potionReadyAt(mixed, GREATER)).toBe(T0 + 20_000); // the T1 drink put the Greater on cooldown too
+    expect([countIn(mixed, 0), countIn(mixed, 1)]).toEqual([3, 2]);
+    expect(potionReadyAt(mixed, GREATER)).toBe(T0 + 20_000); // the Greater drink put the T1 on cooldown too
     expect(potionReadyAt(mixed, T1)).toBe(T0 + 20_000);
     expect(mixed.potionCooldowns).toEqual({ health: T0 + 20_000 });
-    const later = simulate(idle(1, [slotOf(T1, 1, 'always'), slotOf(GREATER, 3, 'always')]), T0 + 40 * SEC).state; // T1 at 0 s empties its slot, Greater at 20 s and 40 s
-    expect([beltOf(later)[0], countIn(later, 1)]).toEqual([null, 1]);
+    const later = simulate(idle(1, [slotOf(T1, 3, 'always'), slotOf(GREATER, 1, 'always')]), T0 + 40 * SEC).state; // Greater at 0 s empties its slot, T1 at 20 s and 40 s
+    expect([countIn(later, 0), beltOf(later)[1]]).toEqual([1, null]);
   });
 
-  it('a Greater slot in front blocks a T1 slot behind it exactly the same way (slot order decides, not the potion)', () => {
+  it('a Greater slot in front blocks a T1 slot behind it (same rule: the higher tier goes first anyway)', () => {
     const r = simulate(idle(1, [slotOf(GREATER, 3, 'always'), slotOf(T1, 3, 'always')]), T0 + 20 * SEC).state;
     expect([countIn(r, 0), countIn(r, 1)]).toEqual([1, 3]); // Greater at 0 s and 20 s, the T1 slot never gets its turn
   });
@@ -426,9 +493,9 @@ describe('drinking out of a fight (idle), live == offline', () => {
   });
 
   it('the summary counts every drink by type; merged ticks add up', () => {
-    // one T1 (0 s), then the slot is empty and the Greater slot drinks at 20 s and 40 s (the two types share one cooldown)
-    const r = simulate(idle(1, [slotOf(T1, 1, 'always'), slotOf(GREATER, 25, 'always')]), T0 + 45 * SEC);
-    expect(r.summary.potionsUsed).toEqual({ [T1]: 1, [GREATER]: 2 });
+    // the one Greater first (0 s, higher tier), then the slot is empty and the T1 slot drinks at 20 s and 40 s (the two types share one cooldown)
+    const r = simulate(idle(1, [slotOf(T1, 25, 'always'), slotOf(GREATER, 1, 'always')]), T0 + 45 * SEC);
+    expect(r.summary.potionsUsed).toEqual({ [GREATER]: 1, [T1]: 2 });
   });
 
   it('woodcutting, a dungeon search, training and idle: one simulate == any split == a tick every second', () => {
