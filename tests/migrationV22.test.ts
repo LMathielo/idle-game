@@ -118,21 +118,28 @@ describe('v22 -> v23', () => {
   });
 
   it('plays on exactly as the untouched v22 engine played it: the same fight end, the same stream, the same rewards, the same log', () => {
+    // 1.26.0 (mob drops) changed the drop draws on purpose: the stage gear chance and the herb are new draws after the gold, and the
+    // Chieftain's table is Troll Head + Potion Belt (no Tusk). The reference (written by the untouched 1.25.0 engine) still holds for
+    // everything the fight itself decides; its `rewards` items and the RNG state after the rewards are the 1.26.0 values below.
+    const NOW = {
+      pack: { rewards: { gold: 428, items: { copper_helm: 1, old_bone: 2 }, gears: [{ defId: 'copper_helm', itemId: 'copper_helm#1', quality: 33, rarity: 'common' }] }, rng: 2445880944 }, // was gold 442, { old_bone: 1 }, rng want.rng (2509822141 before the T1 Health Potion roll)
+      boss: { rewards: { items: { potion_belt: 1 } }, rng: 240652691 }, // was { chieftains_tusk: 1 } (the Tusk left the table)
+    };
     const cases = [
-      [pack, REF.pack, 60 * SEC],
-      [boss, REF.boss, 130 * SEC],
+      [pack, REF.pack, 60 * SEC, NOW.pack],
+      [boss, REF.boss, 130 * SEC, NOW.boss],
     ] as const;
-    for (const [s, ref, ms] of cases) {
+    for (const [s, ref, ms, now] of cases) {
       const r = simulate(s, s.time.lastSimulatedAt + ms).state;
       const f = r.dungeon.lastFight!;
       const want = ref.fightEnd;
       expect(f, ref.engine).toMatchObject({ won: want.won, endReason: want.endReason, durationMs: want.durationMs, heroHpEnd: want.heroHpEnd, dungeonId: want.lastDungeon, difficulty: want.difficulty });
-      expect(f.rewards).toEqual(want.rewards);
+      expect(f.rewards).toEqual({ ...want.rewards, ...now.rewards });
       expect(f.log).toHaveLength(want.logLen);
       expect(f.enemyHpEnd).toBe(want.enemyHpEnd);
       expect(f.mobs).toEqual(want.mobs);
-      expect(r.rng.seed).toBe(want.rng);
-      expect(r.character).toMatchObject({ gold: want.gold, xp: want.xp, level: want.level, hp: want.hp });
+      expect(r.rng.seed).toBe(now.rng); // was want.rng
+      expect(r.character).toMatchObject({ gold: want.gold + (('gold' in now.rewards ? now.rewards.gold : want.rewards.gold) - want.rewards.gold), xp: want.xp, level: want.level, hp: want.hp });
       expect(r.dungeon.byDungeon).toEqual(want.byDungeon);
       expect(r.dungeon.bosses).toEqual(want.bosses);
       expect(r.dungeon.totals).toEqual(want.totals);

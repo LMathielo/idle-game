@@ -106,16 +106,41 @@ export type DungeonDef = {
   search: SearchTiming;
   /** null = open from the start. */
   unlock: UnlockRule | null;
-  /** Win only. A loss gives nothing. Rolled in this order: gold, then each drop. */
+  /**
+   * Win only. A loss gives nothing. Per mob (a pack rolls once per mob), in this order on the main RNG stream: gold, the gear drop's
+   * chance (1.26.0; on a hit: the piece, its colour, its quality), then each item drop in this order. EVERY entry rolls on its own,
+   * whatever else dropped (docs/ENGINE.md "Drop tables").
+   */
   rewards: {
     heroXp: number;
     gold: { min: number; max: number };
+    /** Optional gear drop (Skeleton and Troll: Copper pieces). Same on every difficulty. */
+    gear?: GearDropDef;
     drops: readonly { itemId: string; chance: number }[];
   };
 };
 
 /** Every tier: 2:00 at core DEX 0 (owner decision 2026-11-05, engine 1.18.0); core DEX shortens it on the diminishing curve, never under 1:00. */
 const searchFrom = (baseMinutes: number): SearchTiming => ({ baseMs: baseMinutes * MIN_MS, minMs: 1 * MIN_MS });
+
+/**
+ * The Copper combat pieces a Skeleton or Troll kill can drop (no tools): equal weights. Owner decision 2026-11-06: the same piece list,
+ * colour table (white 75 / green 25), quality (0..50) on Normal, Hard and Extreme; only the chance differs per monster.
+ */
+const COPPER_GEAR_PIECES = ['copper_sword', 'copper_helm', 'copper_chestplate', 'copper_shield', 'copper_greaves', 'copper_gloves', 'copper_boots'].map((itemId) => ({
+  itemId,
+  weight: 1,
+}));
+
+const copperGearDrop = (chance: number): GearDropDef => ({
+  chance,
+  pieces: COPPER_GEAR_PIECES,
+  rarityWeights: [
+    { value: 'common' as ItemRarity, weight: 75 },
+    { value: 'uncommon' as ItemRarity, weight: 25 },
+  ],
+  quality: { min: 0, max: 50 },
+});
 
 // Owner-approved tier table (2026-10-26; search times and Rat XP rebalanced 2026-10-27; every search 2:00 since 2026-11-05). Tiers 4–5 are out of reach until Training raises attributes.
 // Insertion order is the display order (DUNGEON_IDS).
@@ -129,7 +154,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     enemyId: 'rat',
     search: searchFrom(2), // core DEX 0 → 2:00, 10 → 1:51
     unlock: null,
-    rewards: { heroXp: 35, gold: { min: 2, max: 5 }, drops: [{ itemId: 'rat_skin', chance: 0.5 }] },
+    rewards: { heroXp: 35, gold: { min: 2, max: 5 }, drops: [{ itemId: 'rat_skin', chance: 0.5 }, { itemId: 'health_potion_t1', chance: 0.15 }] },
   },
   bat_cave: {
     id: 'bat_cave',
@@ -140,7 +165,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     enemyId: 'bat',
     search: searchFrom(2), // core DEX 0 → 2:00
     unlock: { dungeonId: 'rat_cellar', wins: 10 },
-    rewards: { heroXp: 60, gold: { min: 6, max: 12 }, drops: [{ itemId: 'bat_wing', chance: 0.4 }] },
+    rewards: { heroXp: 60, gold: { min: 6, max: 12 }, drops: [{ itemId: 'bat_wing', chance: 0.4 }, { itemId: 'health_potion_t1', chance: 0.15 }] },
   },
   wolf_den: {
     id: 'wolf_den',
@@ -151,7 +176,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     enemyId: 'wolf',
     search: searchFrom(2), // core DEX 0 → 2:00
     unlock: { dungeonId: 'bat_cave', wins: 15 },
-    rewards: { heroXp: 140, gold: { min: 15, max: 30 }, drops: [{ itemId: 'wolf_pelt', chance: 0.3 }] },
+    rewards: { heroXp: 140, gold: { min: 15, max: 30 }, drops: [{ itemId: 'wolf_pelt', chance: 0.3 }, { itemId: 'health_potion_t1', chance: 0.15 }] },
   },
   forgotten_crypt: {
     id: 'forgotten_crypt',
@@ -162,7 +187,17 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     enemyId: 'skeleton',
     search: searchFrom(2), // core DEX 0 → 2:00
     unlock: { dungeonId: 'wolf_den', wins: 25 },
-    rewards: { heroXp: 300, gold: { min: 35, max: 60 }, drops: [{ itemId: 'old_bone', chance: 0.25 }] },
+    // 1.26.0: 5% Copper gear per kill and a Wild Sage (5%), each independent of the Old Bone.
+    rewards: {
+      heroXp: 300,
+      gold: { min: 35, max: 60 },
+      gear: copperGearDrop(0.05),
+      drops: [
+        { itemId: 'old_bone', chance: 0.25 },
+        { itemId: 'wild_sage', chance: 0.05 },
+        { itemId: 'health_potion_t1', chance: 0.15 },
+      ],
+    },
   },
   troll_bridge: {
     id: 'troll_bridge',
@@ -173,20 +208,33 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     enemyId: 'troll',
     search: searchFrom(2), // core DEX 0 → 2:00
     unlock: { dungeonId: 'forgotten_crypt', wins: 40 },
-    rewards: { heroXp: 650, gold: { min: 80, max: 130 }, drops: [{ itemId: 'troll_hide', chance: 0.2 }] },
+    // 1.26.0: 10% Copper gear per kill and a Wild Sage (5%), each independent of the Troll Hide.
+    rewards: {
+      heroXp: 650,
+      gold: { min: 80, max: 130 },
+      gear: copperGearDrop(0.1),
+      drops: [
+        { itemId: 'troll_hide', chance: 0.2 },
+        { itemId: 'wild_sage', chance: 0.05 },
+        { itemId: 'health_potion_t1', chance: 0.15 },
+      ],
+    },
   },
 };
 
 // ---------- bosses and dungeon tiers (1.20.0) ----------
 
-/** A boss's drop of one gear piece (rolled with the existing gear machinery: colour table, then a quality in [min, max]). */
-export type BossGearDrop = {
+/** A monster's drop of one gear piece (rolled with the existing gear machinery: colour table, then a quality in [min, max]). */
+export type GearDropDef = {
   chance: number;
   /** One piece is picked by weight. */
   pieces: readonly { itemId: string; weight: number }[];
   rarityWeights: readonly RarityWeight[];
   quality: { min: number; max: number };
 };
+
+/** Kept for readers of the 1.20.0 name. */
+export type BossGearDrop = GearDropDef;
 
 export type BossDef = {
   id: BossId;
@@ -206,7 +254,8 @@ export type BossDef = {
   rewards: {
     heroXp: number;
     gold: { min: number; max: number };
-    gear: BossGearDrop;
+    gear: GearDropDef;
+    /** Rolled in this order, each on its own; an item with ItemDef.unique that the hero owns is skipped (after its draw). */
     drops: readonly { itemId: string; chance: number }[];
   };
 };
@@ -232,7 +281,12 @@ export const BOSSES: Record<BossId, BossDef> = {
         ],
         quality: { min: 0, max: GEAR.drops.maxQuality },
       },
-      drops: [{ itemId: 'chieftains_tusk', chance: 0.5 }],
+      // Chieftain's Tusk removed from the table in 1.26.0 (owner decision 2026-11-06); the Troll Head replaces it. The belt is 100% but
+      // unique: it is skipped while the hero owns one (its chance is still drawn, see rollItemDrop).
+      drops: [
+        { itemId: 'troll_head', chance: 0.25 },
+        { itemId: 'potion_belt', chance: 1 },
+      ],
     },
   },
 };

@@ -354,8 +354,16 @@ export type FightRewards = {
   /** Items that dropped but did not fit (inventory full). */
   itemsLost: Record<string, number>;
   /** Boss gear drop that went into the inventory (1.20.0): the new piece's instance id, so the result can reveal it. */
-  gear?: { itemId: string; defId: string; rarity: ItemRarity; quality: number };
+  gear?: DroppedGear;
+  /**
+   * Stage gear drops that went into the inventory (1.26.0), in pack order: a Hard / Extreme pack can drop several, each mob rolls its own.
+   * Absent = none (and in every older save). Shown in the last-fight box; there is no reveal for them.
+   */
+  gears?: DroppedGear[];
 };
+
+/** A gear piece a monster dropped and that went into the inventory. */
+export type DroppedGear = { itemId: string; defId: string; rarity: ItemRarity; quality: number };
 
 /**
  * Why a fight ended: the enemy or the hero reached 0 HP, the fight time limit was reached (a loss), the hero

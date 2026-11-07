@@ -115,6 +115,9 @@ export const ITEM_IMAGES: Record<ItemId, ImageSourcePropType> = {
   stone_shield: require('../../../assets/images/items/stone_shield.png'),
   stone_sword: require('../../../assets/images/items/stone_sword.png'),
   troll_hide: require('../../../assets/images/items/troll_hide.png'),
+  troll_head: require('../../../assets/images/items/troll_head.png'),
+  wild_sage: require('../../../assets/images/items/wild_sage.png'),
+  potion_belt: require('../../../assets/images/items/potion_belt.png'),
   // PLACEHOLDER (1.20.0): the Chieftain's Tusk reuses the troll hide icon until real art is approved (docs/TECH_DEBT.md).
   chieftains_tusk: require('../../../assets/images/items/troll_hide.png'),
   wolf_pelt: require('../../../assets/images/items/wolf_pelt.png'),

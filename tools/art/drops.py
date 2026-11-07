@@ -243,17 +243,121 @@ def greater_potion():
     return flask(c, 16, 10.5, 8, 7, 14, 3, extra=deco, glow=True)
 
 
+SAGE = ramp('#1a2a24', '#2f4a3c', '#4e7258', '#74966e', '#a0b88c', '#c8d8b0')
+
+
+def wild_sage():
+    """A sprig of sage: a curved stem, paired grey-green leaves, a violet flower spike at the tip."""
+    c = Canvas(32, 32)
+    stem = c.m_line([(15, 30), (14, 24), (16, 17), (16, 10), (16, 5)])
+    c.fill(stem, LEATHER[3]); c.fill(stem & (c.xx == 14), LEATHER[2])
+    leaves = [(10, 25, 5.2, 2.6), (21, 24, 5.2, 2.6), (10, 18, 4.8, 2.4), (22, 17, 4.8, 2.4), (11, 12, 4, 2.1), (21, 11, 4, 2.1)]
+    allm = c.empty()
+    for cx, cy, rx, ry in leaves:
+        m = c.m_ellipse(cx, cy, rx, ry)
+        c.shade(m, SAGE, soft=1.4, dither=False)
+        # centre vein
+        c.fill(c.m_line([(cx - rx + 1, cy), (cx + rx - 1, cy)]) & m, SAGE[1])
+        c.outline(m, OUT_LIT, OUT)
+        allm |= m
+    c.fill(stem & ~allm & (c.yy > 26), LEATHER[3])
+    c.outline(stem & (c.yy > 26), OUT)
+    # flower spike
+    spike = c.m_rect(15, 3, 16, 9)
+    c.fill(spike, VIOLET[3]); c.fill(spike & (c.xx == 15), VIOLET[4])
+    for p in ((14, 5), (17, 6), (14, 8), (17, 3)):
+        c.px(*p, VIOLET[3])
+    c.px(15, 3, VIOLET[5]); c.px(14, 5, VIOLET[4])
+    c.outline(spike | c.m_rect(14, 5, 14, 5) | c.m_rect(17, 6, 17, 6) | c.m_rect(14, 8, 14, 8) | c.m_rect(17, 3, 17, 3), OUT_LIT, OUT)
+    return c
+
+
+def troll_head():
+    """A trophy head of a Troll Chieftain: green skin, heavy brow, glowing eyes, two bone tusks, a red neck stump."""
+    c = Canvas(32, 32)
+    neck = c.m_ellipse(16, 26, 7, 3)
+    c.fill(neck, RED[1]); c.fill(neck & (c.yy < 26), RED[2])
+    c.fill(c.m_ellipse(16, 26, 3, 1.2), '#e8d8c0')
+    c.outline(neck, OUT)
+    ears = c.m_poly([(5, 14), (0, 9), (6, 11)]) | c.m_poly([(27, 14), (32, 9), (26, 11)])
+    c.shade(ears, TROLL, soft=1.2, dither=False)
+    c.outline(ears, OUT_LIT, OUT)
+    head = c.m_ellipse(16, 14, 10.5, 11.5)
+    c.shade(head, TROLL, soft=3)
+    # heavy brow, shadowed eyes
+    brow = c.m_rect(8, 9, 24, 10)
+    c.fill(brow & head, TROLL[1])
+    for x in (11, 12, 20, 21):
+        c.px(x, 12, '#ffd36b'); c.px(x, 13, '#ff8a3a') if x in (12, 20) else None
+    c.px(11, 12, '#ff8a3a'); c.px(21, 12, '#ff8a3a')
+    c.fill(c.m_rect(10, 11, 13, 11) & head, TROLL[0]); c.fill(c.m_rect(19, 11, 22, 11) & head, TROLL[0])
+    # flat nose
+    c.fill(c.m_rect(15, 14, 16, 16) & head, TROLL[3]); c.px(14, 17, TROLL[0]); c.px(17, 17, TROLL[0])
+    # wide mouth
+    mouth = c.m_rect(9, 19, 23, 21)
+    c.fill(mouth & head, '#2a1018'); c.fill(c.m_rect(10, 19, 22, 19) & head, '#4a1a22')
+    # tusks
+    for x0 in (10, 21):
+        t = c.m_poly([(x0, 21), (x0 + 2, 21), (x0 + 1, 15)])
+        c.fill(t, BONE[3]); c.fill(t & (c.xx == x0), BONE[4]); c.fill(c.m_rect(x0 + 1, 19, x0 + 1, 21) & t, BONE[2])
+        c.outline(t, OUT_LIT, OUT) if False else None
+    # warts and a scar
+    for p in ((8, 15), (24, 16), (13, 7), (20, 6), (22, 12)):
+        c.px(*p, TROLL[5]); c.px(p[0], p[1] + 1, TROLL[1])
+    c.fill(c.m_line([(11, 6), (14, 8)]), '#a8c07a')
+    # hair tufts
+    for p in ((12, 2), (16, 1), (20, 2), (14, 3), (18, 3)):
+        c.px(*p, '#2a2220'); c.px(p[0], p[1] + 1, '#3e3230')
+    c.outline(head, OUT_LIT, OUT)
+    return c
+
+
+def potion_belt():
+    """A leather belt with a brass buckle and four small vials hanging from it (the belt is epic: a violet glow on the buckle)."""
+    c = Canvas(32, 32)
+    liquids = [RED[1:5], ramp('#10243a', '#1e4a7a', '#3a7ac8', '#74b0f0', '#c0e0ff'), ramp('#10301a', '#1e5a2c', '#3a9a48', '#74d070', '#c0f0b0')[0:4], VIOLET[1:5]]
+    for cx, liq in zip((5, 11, 21, 27), liquids):
+        body = c.m_ellipse(cx, 25, 2.6, 3.2)
+        neck = c.m_rect(cx - 1, 18, cx, 21)
+        glass = body | neck
+        c.fill(glass, GLASS[2]); c.fill(glass & (c.xx >= cx), GLASS[1])
+        l = body & (c.yy >= 23)
+        c.shade(l, liq, soft=1.2, dither=False)
+        c.px(cx - 1, 24, GLASS[3])
+        c.outline(glass, OUT_LIT, OUT)
+        ck = c.m_rect(cx - 1, 18, cx, 19)
+        c.fill(ck, LEATHER[3]); c.px(cx - 1, 18, LEATHER[4])
+        c.outline(ck, OUT)
+    belt = c.m_rect(0, 10, 31, 17)
+    c.shade(belt, LEATHER, mode='flat', soft=1, dither=False)
+    c.fill(belt & (c.yy == 10), LEATHER[4]); c.fill(belt & (c.yy == 17), LEATHER[1])
+    for x in range(1, 31, 3):
+        c.px(x, 12, LEATHER[4]); c.px(x, 15, LEATHER[1])
+    c.outline(belt, OUT_LIT, OUT)
+    # brass buckle
+    buckle = c.m_rect(12, 8, 19, 19)
+    c.shade(buckle, GOLD, mode='flat', soft=1, dither=False)
+    hole = c.m_rect(14, 10, 17, 17)
+    c.fill(hole, LEATHER[2])
+    c.fill(c.m_rect(14, 13, 17, 14), GOLD[3])  # tongue
+    c.glow(15.5, 13.5, 9, '#7a4ad8', .45, steps=3, mask=buckle)
+    c.outline(buckle, OUT_LIT, OUT)
+    return c
+
+
 SET = [('rat_skin', rat_skin, 'Rat Skin', '🐾'), ('bat_wing', bat_wing, 'Bat Wing', '🪽'), ('wolf_pelt', wolf_pelt, 'Wolf Pelt', '🧥'),
        ('old_bone', old_bone, 'Old Bone', '🦴'), ('troll_hide', troll_hide, 'Troll Hide', '🟫'), ('bread', bread, 'Bread', '🍞'),
        ('bird_nest', bird_nest, 'Bird Nest', '🪺'), ('geode', geode, 'Geode', '🔮'),
-       ('health_potion_t1', potion, 'Health Potion (T1)', '🧪'), ('greater_health_potion', greater_potion, 'Greater Health Potion', '⚗️')]
+       ('health_potion_t1', potion, 'Health Potion (T1)', '🧪'), ('greater_health_potion', greater_potion, 'Greater Health Potion', '⚗️'),
+       ('wild_sage', wild_sage, 'Wild Sage', '🌿'), ('troll_head', troll_head, 'Troll Head', '💀'), ('potion_belt', potion_belt, 'Potion Belt', '🎒')]
 
 if __name__ == '__main__':
     os.makedirs(OUTDIR, exist_ok=True)
     from PIL import Image, ImageDraw
     S = 5
-    sheet = Image.new('RGB', (5 * (32 * S + 12) + 12, 2 * (32 * S + 12) + 12), (58, 42, 28))
-    slots = Image.new('RGB', (10 * 80 + 12, 92), (27, 20, 16)); d = ImageDraw.Draw(slots)
+    rows = (len(SET) + 4) // 5
+    sheet = Image.new('RGB', (5 * (32 * S + 12) + 12, rows * (32 * S + 12) + 12), (58, 42, 28))
+    slots = Image.new('RGB', (len(SET) * 80 + 12, 92), (27, 20, 16)); d = ImageDraw.Draw(slots)
     for i, (n, fn, _, _) in enumerate(SET):
         c = fn()
         c.save(f'{OUTDIR}/{n}_1x.png', 1); c.save(f'{OUTDIR}/{n}.png', 4)

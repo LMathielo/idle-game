@@ -197,6 +197,7 @@ describe('rolling a pack', () => {
     let rng = skip(s.rng, 2);
     rng = nextInt(rng, DUNGEONS.rat_cellar.rewards.gold.min, DUNGEONS.rat_cellar.rewards.gold.max).rng;
     rng = chance(rng, 0.5).rng;
+    rng = chance(rng, 0.15).rng; // 1.26.0: the Health Potion roll after the skin
     expect(at.rng).toEqual(rng);
   });
 });
@@ -368,6 +369,7 @@ describe('rewards: the whole run only, per mob, on a full clear', () => {
           const drop = chance(rng, 0.5);
           rng = drop.rng;
           if (drop.value) skins += 1;
+          rng = chance(rng, 0.15).rng; // 1.26.0: the Health Potion drop (15% per mob), after the skin
         }
         expect(f.rewards.heroXp, `${d} ${seed} xp`).toBe(xp);
         expect(f.rewards.gold, `${d} ${seed} gold`).toBe(gold);
@@ -527,15 +529,16 @@ describe('the Troll Chieftain on Hard and Extreme', () => {
     }
   });
 
-  it('the Chieftain stays one mob whatever the difficulty (no pack), and the Tusk drop is unchanged (50%)', () => {
+  it('the Chieftain stays one mob whatever the difficulty (no pack), and the Troll Head drop is the same 25% on Extreme (1.26.0: it replaced the Tusk)', () => {
     let tusks = 0;
     const N = 400;
     for (let seed = 1; seed <= N; seed++) {
       const done = simulate(enter(slayer('extreme', seed * 17), 'extreme'), T0 + 10 * SEC).state;
       expect(done.dungeon.lastFight!.mobs).toHaveLength(1);
-      if (done.dungeon.lastFight!.rewards.items.chieftains_tusk) tusks += 1;
+      expect(done.dungeon.lastFight!.rewards.items.chieftains_tusk).toBeUndefined();
+      if (done.dungeon.lastFight!.rewards.items.troll_head) tusks += 1;
     }
-    expect(Math.abs(tusks / N - 0.5)).toBeLessThan(0.08);
+    expect(Math.abs(tusks / N - 0.25)).toBeLessThan(0.07);
   });
 });
 
@@ -704,6 +707,7 @@ describe('golden pack fights (fixed seed, fixed hero: any change of the pack rul
   };
 
   it('a Hard Wolf Den pack of 4 (3 plain, 1 Veteran): the hero wins', () => {
+    // 1.26.0: the Health Potion roll (15% per mob) after each mob's loot moves the stream: gold was 183, wolf_pelt 2, rng 2660333600 (now below).
     // 1.25.0 combat opening (hero at 0, monsters at 300 ms): only the clock moved -- durationMs was 23000, logHash was 95eff8a3; strikes, HP, rewards and the stream are the same.
     expect(fightFingerprint(play(openGame(25, 20261126), 'wolf_den', 'hard'))).toMatchInlineSnapshot(`
       {
@@ -719,13 +723,13 @@ describe('golden pack fights (fixed seed, fixed hero: any change of the pack rul
           "base:220:0",
         ],
         "rewards": {
-          "gold": 183,
+          "gold": 157,
           "heroXp": 1260,
           "items": {
-            "wolf_pelt": 2,
+            "wolf_pelt": 1,
           },
         },
-        "rng": 2660333600,
+        "rng": 1396662260,
         "strikes": 78,
         "won": true,
       }
@@ -733,6 +737,7 @@ describe('golden pack fights (fixed seed, fixed hero: any change of the pack rul
   });
 
   it('an Extreme Rat Cellar pack of 10 (8 Veteran, 2 Extreme): an unbeatable hero clears it', () => {
+    // 1.26.0: the Health Potion roll per mob moves the stream: gold was 452, rat_skin 1 (and no potion), rng 4051887320 (now below).
     // 1.25.0 combat opening: durationMs was 10000, logHash was d1386011; everything else is the same.
     expect(fightFingerprint(play(godGame(20261112), 'rat_cellar', 'extreme'))).toMatchInlineSnapshot(`
       {
@@ -754,13 +759,14 @@ describe('golden pack fights (fixed seed, fixed hero: any change of the pack rul
           "veteran:360:0",
         ],
         "rewards": {
-          "gold": 452,
+          "gold": 528,
           "heroXp": 4480,
           "items": {
-            "rat_skin": 1,
+            "health_potion_t1": 1,
+            "rat_skin": 4,
           },
         },
-        "rng": 4051887320,
+        "rng": 892708970,
         "strikes": 55,
         "won": true,
       }

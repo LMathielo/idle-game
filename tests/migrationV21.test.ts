@@ -104,10 +104,12 @@ describe('v21 -> v22', () => {
       const f = r.dungeon.lastFight!;
       const want = REF[key];
       expect(f).toMatchObject({ won: want.won, endReason: want.endReason, durationMs: want.durationMs, heroHpEnd: want.heroHpEnd, dungeonId: want.lastDungeon, difficulty: 'normal' });
-      expect(f.rewards).toEqual(want.rewards);
+      // 1.26.0 (mob drops): the Troll Bridge win now draws a gear chance and a Wild Sage chance after the gold, so the Troll Hide roll
+      // reads another point of the stream (it hits now; it missed before) and the stream ends elsewhere. Gold, XP and the fight are unchanged.
+      expect(f.rewards).toEqual({ ...want.rewards, items: { troll_hide: 1 } }); // was items {}
       expect(f.log).toHaveLength(want.logLen);
       expect(f.enemyHpEnd).toBe(want.enemyHpEnd);
-      expect(r.rng.seed, key).toBe(want.rng);
+      expect(r.rng.seed, key).toBe(921236456); // was want.rng; 3384637939 before the T1 Health Potion roll (1.26.0)
       expect(r.character).toMatchObject({ gold: want.gold, xp: want.xp, level: want.level, hp: want.hp });
       expect(r.dungeon.byDungeon.troll_bridge).toEqual(want.troll_bridge);
       expect(r.dungeon.totals).toEqual(want.totals);

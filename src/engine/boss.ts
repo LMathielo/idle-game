@@ -9,8 +9,9 @@
 // Reward roll order on a win, all on the main RNG stream:
 //   1. hero XP (no draw)      2. gold: one draw                 3. gear drop: one chance draw; on a hit three more, in this order:
 //   the piece (equal weights), its colour (uncommon 75 / rare 25), its quality (uniform 0..70)
-//   4. each material drop in config order: one chance draw each, independent of the gear drop
-// A gear piece or material that does not fit in the inventory is lost (and reported in the result).
+//   4. each item drop in config order: one chance draw each, independent of the gear drop and of each other (1.26.0: the Troll Head
+//      at 25%, then the Potion Belt at 100%, which is skipped while the hero owns one; it still makes its draw)
+// A gear piece or item that does not fit in the inventory is lost (and reported in the result).
 //
 // Difficulty (1.24.0): the same boss on Hard / Extreme has x2 / x8 HP, damage, armor and magic resist (regen keeps its % of max HP; Heavy
 // Bash, the 120 s limit and the 10 stamina entry are unchanged), x2 / x8 XP and gold, and a better gear colour table. The draws are the same.
@@ -33,11 +34,8 @@ import {
   snapshotUnlocks,
   stageTotalsAt,
 } from './difficulty';
-import { GEAR } from './config/gear';
-import { getItemDef } from './config/items';
-import { affixStream, rollAffixes, rollQuality, rollRarity } from './gear';
-import { addStackable, makeItem } from './inventory';
-import { chance, nextInt, weightedPick } from './rng';
+import { rollGearDrop, rollItemDrop } from './drops';
+import { nextInt } from './rng';
 import { getDerivedStats } from './stats';
 import type {
   BossActivity,
@@ -236,34 +234,10 @@ export function finishBossFight(draft: GameState, activity: BossActivity, outcom
     draft.character.gold += goldGained;
     rewards.gold = goldGained;
 
-    const hit = chance(draft.rng, r.gear.chance);
-    draft.rng = hit.rng;
-    if (hit.value) {
-      const piece = weightedPick(draft.rng, r.gear.pieces.map((p) => ({ value: p.itemId, weight: p.weight })));
-      const rarity = rollRarity(piece.rng, rule.rarityWeights ?? r.gear.rarityWeights);
-      const quality = rollQuality(rarity.rng, r.gear.quality.min, r.gear.quality.max);
-      draft.rng = quality.rng;
-      const defId = piece.value;
-      // Affixes (1.22.0) come from a salted sub-stream of the main RNG after these draws: the main stream is not advanced.
-      const affixes = rollAffixes(affixStream(quality.rng, GEAR.drops.affixSalt), getItemDef(defId)?.slot, rarity.value).value;
-      if (getItemDef(defId) && draft.inventory.items.length < draft.inventory.capacity) {
-        const itemId = `${defId}#${draft.nextItemSerial}`;
-        draft.nextItemSerial += 1;
-        draft.inventory.items.push(makeItem(defId, 1, itemId, { quality: quality.value, rarity: rarity.value, affixes }));
-        bump(rewards.items, defId, 1);
-        rewards.gear = { itemId, defId, rarity: rarity.value, quality: quality.value };
-      } else {
-        bump(rewards.itemsLost, defId, 1);
-      }
-    }
-    for (const drop of r.drops) {
-      const roll = chance(draft.rng, drop.chance);
-      draft.rng = roll.rng;
-      if (!roll.value) continue;
-      const { added, lost } = addStackable(draft.inventory, drop.itemId, 1);
-      bump(rewards.items, drop.itemId, added);
-      bump(rewards.itemsLost, drop.itemId, lost);
-    }
+    // Gear drop (affixes come from a salted sub-stream: the main stream is not advanced by them), then each item drop, independent.
+    const dropped = rollGearDrop(draft, r.gear, rule.rarityWeights ?? r.gear.rarityWeights, rewards);
+    if (dropped) rewards.gear = dropped;
+    for (const drop of r.drops) rollItemDrop(draft, drop, rewards);
   }
 
   draft.dungeon.lastFight = {

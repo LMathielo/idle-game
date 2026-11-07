@@ -27,6 +27,11 @@ export type ItemDef = {
   /** Gold per unit when the merchant sells it. Only items the merchant can stock have one. Gear: for a common piece (× the listing's rarity multiplier). */
   buyPrice?: number;
   stackable: boolean;
+  /**
+   * true = the hero owns at most one (1.26.0, the Potion Belt): a drop of it is skipped while heroOwnsItem() says he has one. Only for
+   * non-stackable, non-gear items. Missing = false.
+   */
+  unique?: boolean;
   slot?: EquipmentSlot;
   /** Weapons: damage range at 100% quality, before percent bonuses and attributes. Integers, min <= max. */
   damage?: { min: number; max: number };
@@ -156,6 +161,7 @@ export const ITEMS = {
   old_bone: junk('old_bone', 'Old Bone', '🦴', 25, 'Dug out of the Forgotten Crypt.'),
   troll_hide: junk('troll_hide', 'Troll Hide', '🟫', 60, 'Tough hide from under the Troll Bridge.'),
   // Boss material (1.20.0): rare (blue), stackable, not sellable until crafting uses it. Placeholder art (the troll hide icon).
+  // No longer dropped since 1.26.0 (the Troll Head replaced it); the definition stays so Tusks already in saves keep rendering and behaving.
   chieftains_tusk: {
     id: 'chieftains_tusk',
     name: "Chieftain's Tusk",
@@ -165,6 +171,37 @@ export const ITEMS = {
     sellPrice: 1,
     sellable: false,
     stackable: true,
+  },
+  // Ingredient (1.26.0): tier 1 herb dropped by Skeletons and Trolls; potion brewing comes later.
+  wild_sage: {
+    id: 'wild_sage',
+    name: 'Wild Sage',
+    icon: '🌿',
+    rarity: 'common',
+    description: 'A tier 1 herb that grows among the ruins. An ingredient for potions (brewing is coming later).',
+    sellPrice: 10,
+    stackable: true,
+  },
+  // Boss material (1.26.0): replaces the Chieftain's Tusk as the boss drop. Rare (blue), stackable, sells for 250.
+  troll_head: {
+    id: 'troll_head',
+    name: 'Troll Head',
+    icon: '💀',
+    rarity: 'rare',
+    description: 'The head of a Troll Chieftain. Keep it: it will open the next dungeon level.',
+    sellPrice: 250,
+    stackable: true,
+  },
+  // Unique epic item (1.26.0): at most one owned; not gear, so no rarity price multiplier. No slot, no use yet.
+  potion_belt: {
+    id: 'potion_belt',
+    name: 'Potion Belt',
+    icon: '🎒',
+    rarity: 'epic',
+    description: 'Holds potions that are used automatically during fights (coming soon). You can own only one.',
+    sellPrice: 100,
+    stackable: false,
+    unique: true,
   },
   health_potion_t1: {
     id: 'health_potion_t1',

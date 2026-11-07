@@ -8,7 +8,7 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 
 | | `dev` (test preview) | `main` (approved) |
 | --- | --- | --- |
-| Engine | **1.25.0** | 1.1.0 |
+| Engine | **1.26.0** | 1.1.0 |
 | Save | **v23** | v2 |
 | Contents | Everything below, up to the combat opening and the variant creatures (hero strikes at 0, monsters at 0.3 s; Hard / Extreme variants as their own creatures; art pending owner approval), the difficulty tiers (Hard / Extreme for Tier 1, pack fights; art pending owner approval), the Crafting debug buttons (Force craft, Finish now), the compact Crafting recipe list and the Done reveal fix (UI only), gear rarity tiers and affixes (#36), on top of the first boss, the stats rework (#33) and the locked start (#32), plus the pixel art once merged | M1 only (PRs #1–#2) |
 
@@ -20,6 +20,18 @@ Details live elsewhere: product decisions and tables in [`PRODUCT.md`](PRODUCT.m
 ## Release notes (`dev`)
 
 Newest first. One entry per merged PR. Engine/save bumps are noted where they happened.
+
+### Engine 1.26.0 · save v23 (unchanged)
+- **Mob drops** (`feat/mob-drops`; owner decisions 2026-11-06; **new item art pending owner approval**):
+  - **Independent rolls:** every entry of a monster's drop table rolls on its own (rule written in ENGINE.md "Drop tables", code in `src/engine/drops.ts`, shared by stage kills and the boss).
+  - **Copper gear:** Skeleton 5% and Troll 10% per kill, one of the seven Copper combat pieces, white 75 / green 25, quality 0-50, the same on every difficulty (each mob of a pack rolls its own). No reveal; the dungeon's last-fight box lists the pieces; the away summary counts them gained and lost.
+  - **Wild Sage** (herb, 5% per Skeleton / Troll kill, sells 10), **Troll Head** (25% per Chieftain win, sells 250), **Potion Belt** (unique, epic, 100% per Chieftain win while you own none, sells 100; no mechanics yet). The Chieftain's Tusk is no longer dropped; existing Tusks are untouched.
+  - **Health Potion (T1):** every stage mob (Rat, Bat, Wolf, Skeleton, Troll) also drops one at 15% per kill (independent entry, last in each table, per mob on packs, same on every difficulty; not the boss).
+  - **Roll order:** per mob gold -> gear chance (piece, colour, quality) -> material -> herb (Skeleton / Troll) -> Health Potion; boss gold -> gear -> Troll Head -> Potion Belt. The belt's chance is drawn even when skipped (stream independent of the bag).
+  - **Engine-only bump, no save migration** (`FightRewards.gears` is optional). Goldens: the 1.3.0-1.17.0 scripts run on the legacy engine copy without the potion drop (pins unchanged); `golden119`, the pack goldens and the frozen-save continuations were re-pinned (old values noted at each pin).
+  - **UI:** loot lists show the Copper gear chance, the herb, and on the boss the Troll Head and the Potion Belt ("Already owned" when you have one).
+  - **Art (pending owner approval):** `items/wild_sage.png`, `troll_head.png`, `potion_belt.png` (`tools/art/drops.py`).
+  - **Tests:** `tests/mobDrops.test.ts`, the boss reward tests in `tests/firstBoss.test.ts`.
 
 ### Engine 1.25.0 · save v23
 - **Combat opening and variant creatures** (`feat/combat-opening`; owner-approved 2026-11-06; **new art pending owner approval**):
@@ -227,7 +239,7 @@ Newest first. One entry per merged PR. Engine/save bumps are noted where they ha
 Decided and scoped; ready to brief to an engineer. Top = next.
 
 0. **Difficulty tiers: owner to try Hard / Extreme and approve the new art** (three skulls; the variant creatures and the Troll Chieftain sprite: Plague Bat, Shadow Wolf, Bone Champion, Magma Troll, Troll Chieftain, 1.25.0). Then decide the balance (Hard may be easy for a Gold-tier hero; Extreme is a wall; see the table in ENGINE.md). Tier 2 will reuse the same difficulty system.
-0b. **Boss tuning: decided 2026-11-05, keep as is** (see PRODUCT.md decision log). Still open: real art for the Tusk (the Chieftain's sprite is new in 1.25.0, pending approval).
+0b. **Boss tuning: decided 2026-11-05, keep as is** (see PRODUCT.md decision log). Still open: the new item art (Wild Sage, Troll Head, Potion Belt, 1.26.0) and the Chieftain's sprite (1.25.0) await approval. The Tusk is no longer dropped, so its placeholder art matters only for old saves.
 1. **Enemy tier check after the stats rework:** the 1.19.0 balance sim (PR for `feat/stats-rework`) shows the Skeleton falls at core 10 from Lv1 and the Troll at core 20 even at Lv1/Lv5, where 1.18 needed Lv10-15. Decide the targets, then retune enemy HP / damage / armor (and the core curves) where a tier is off. Earlier note: since 1.17.0 a level gives 5 points to spend instead of +5 on every attribute (20 per level), so level growth drops a lot and the 1.16.0 "dungeons are easy" concern may be gone. Sim each tier with typical builds (all STR/END, mixed) and only retune enemy HP / damage / armor where a tier is now off its target effort. (Normal STR counting toward WS / MS was decided: yes, 1.17.0.)
 2. **Release `dev` → `main`.** Owner action after testing the `dev` preview.
 3. **Gathering refactor (before any third gathering skill).** A shared gathering core (`GatheringDef` keyed by skill: one generic start, advance, skip and view) while keeping per-skill configs separate. Shared parity tests via `describe.each([woodcutting, mining])`. Agreed in the PR #15 review.
@@ -256,7 +268,7 @@ Ideas and open questions. Each needs owner decisions before it can be briefed.
 - Crafting pipes 5–8: a premium purchase.
 
 **Combat and dungeons**
-- Multi-enemy runs (needs a save-shape change: `ActiveFight` holds one enemy). The first boss shipped in 1.20.0; Tier 2 and its boss, boss recipes for the Chieftain's Tusk, bad-luck protection and auto-repeat for bosses are not built.
+- Multi-enemy runs (needs a save-shape change: `ActiveFight` holds one enemy). The first boss shipped in 1.20.0; Tier 2 and its boss, dungeon level 2 (the Troll Head opens it), the Potion Belt's slot and mechanics, potion brewing from Wild Sage, bad-luck protection and auto-repeat for bosses are not built.
 - **Enemies with magic damage (gives magic resist a use).** Enemies have magic resist since 1.19.0 but only hit physically.
 - Hit chance (crits shipped in 1.19.0); a combat use for mana.
 - Attack-speed gear (the `attackIntervalModMs` hook exists, unused).
