@@ -61,6 +61,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #43, 25] `src/components/dungeon/DungeonModal.tsx` ~1107/1130 — the last-fight box lists stage gear twice (rewards line + a "Drop:" row each) and the group a11y label repeats them. Fix: leave gear out of the items line when `gears` lists it.
 - [PR #43, 25] `src/components/dungeon/DungeonModal.tsx` ~1131 — every gear row in `LastFight` shares one `gearRef`; harmless today (stage drops have no View button). Fix: per-row refs if stage drops get one.
 - [PR #43, 25] `src/components/dungeon/DungeonModal.tsx` `BossDetail` — the Potion Belt note hardcodes the item name. Fix: build it from the unique drop's `itemName`.
+- [PR #44, 55] `src/components/belt/BeltPanel.tsx` ~253 — each bag row's pan (`minDistance: 6`, no direction limit) sits inside the bag ScrollView, so a vertical scroll swipe can start a drag once the list scrolls (many potion types / small phones). Fix: activate on long-press or horizontal-first (`activeOffsetX` + `failOffsetY`), or arbitrate with a native ScrollView gesture.
+- [PR #44, 30] `src/components/belt/BeltPanel.tsx` ~105-116 — drop rects come from async `measureInWindow` at layout / drag start; on Android edge-to-edge the window coords may differ from the gesture's `absoluteY` by the status bar (hidden by the 10 pt slop). Fix: check alignment on device; re-measure on layout shifts.
 
 ## Engine and data
 
@@ -82,6 +84,9 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #36, 30] `src/engine/migrations.ts` `v21Slot` — infers the tool slot from the defId suffix when `slot` is missing (corrupt saves only). Fix: read the catalog slot.
 - [PR #36, 25] `src/engine/gear.ts` `perkOf` — no check of the perk kind against the slot (save tampering only). Fix: validate on load once a server exists.
 - [PR #41, 20] `src/engine/migrations.ts` `migrateV21toV22` — hardcodes `{ '1': 'normal' }` while `newGame` builds it from `DUNGEON_TIERS`; a future tier relies on the Normal fallback. Fix: fine for a frozen migration; keep the fallback tested when Tier 2 lands.
+- [PR #44, 30] `src/engine/belt.ts` `walkWithBelt` — past `MAX_ACTIONS_PER_SIMULATION` cuts the rest runs as one piece without drinks, so split invariance holds only below the action cap. Fix: say so in ENGINE.md or add a test at the cap.
+- [PR #44, 20] `src/engine/belt.ts` `beltNextEventMs` — the walk is cut at every held type's cooldown end even when HP is full or no rule can fire (perf only, bounded by the guard). Fix: skip cuts that cannot trigger a drink.
+- [PR #44, 20] `src/engine/combat.ts` `resolveFight` — ignores the belt; only used as a read-only preview (`index.ts`), so a preview of a belted hero is pessimistic. Fix: document, or feed the belt into the preview if it is ever shown to players.
 
 ## Tests
 
