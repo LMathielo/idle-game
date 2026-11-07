@@ -86,5 +86,6 @@ export function newGame(seed: number, now: number): GameState {
       skills,
     },
     inventory,
+    storage: { items: [] },
   };
 }

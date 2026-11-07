@@ -12,3 +12,10 @@ export function collectedItemIdOf(res: DispatchResult, jobId?: number): string |
   for (const e of res.events) if (e.type === 'CRAFT_COLLECTED' && (jobId === undefined || e.jobId === jobId)) return e.itemId;
   return null;
 }
+
+/** The ITEMS_DEPOSITED event a DEPOSIT_ALL / DEPOSIT_STACKED just produced (what moved, what stayed in the bag), or null for a refusal or a duplicate. */
+export function depositedOf(res: DispatchResult): { moved: number; stayed: number } | null {
+  if (!res.ok) return null;
+  for (const e of res.events) if (e.type === 'ITEMS_DEPOSITED') return { moved: e.moved, stayed: e.stayed };
+  return null;
+}

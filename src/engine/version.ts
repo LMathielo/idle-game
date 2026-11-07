@@ -1,5 +1,5 @@
 /** Engine rules version, stored on every action_log row. Bump when rules change outcomes. */
-export const ENGINE_VERSION = '1.28.0';
+export const ENGINE_VERSION = '1.29.0';
 
 /**
  * Every engine version that ever shipped, oldest first, with the save version it wrote. Append a row on
@@ -37,6 +37,7 @@ export const RELEASED_ENGINES: readonly { engine: string; save: number }[] = [
   { engine: '1.26.0', save: 23 }, // engine-only bump: mob drops (stage Copper gear, Wild Sage, Troll Head, unique Potion Belt; the Tusk leaves the table); optional rewards.gears
   { engine: '1.27.0', save: 24 }, // Potion Belt: the accessory slot, belt contents on the item, potion cooldowns, drinks by rule in simulate(), BELT_* commands
   { engine: '1.28.0', save: 25 }, // the bag is a grid with gaps: Item.cell, new items fill the first empty cell, MOVE_ITEM, UNEQUIP_ITEM toCell, SWAP_RINGS
+  { engine: '1.29.0', save: 26 }, // Storage: a second grid (state.storage), DEPOSIT_ALL / DEPOSIT_STACKED / STORAGE_MOVE, storage pays builds, upgrades and crafts first, upgradable to Lv5
 ];
 
 /** Position of a released engine version in RELEASED_ENGINES, or -1 when it never shipped. */

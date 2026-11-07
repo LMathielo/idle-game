@@ -570,6 +570,7 @@ describe('save version ↔ engine version (RELEASED_ENGINES)', () => {
       ['1.26.0', 23],
       ['1.27.0', 24],
       ['1.28.0', 25],
+      ['1.29.0', 26],
     ]);
   });
 });
@@ -1285,7 +1286,7 @@ describe('golden', () => {
     expect(activity).toBeNull(); // v10: woodcutting stops (its building starts locked)
     expect(training).toEqual(newTrainingState());
     const { character: _rc, saveVersion: _rv, activity: _ra, inventory: _ri, ...rawRest } = raw;
-    expect(rest).toEqual({ ...rawRest, potionCooldowns: {} }); // v24: no potion cooldown running
+    expect(rest).toEqual({ ...rawRest, potionCooldowns: {}, storage: { items: [] } }); // v24: no potion cooldown running; v26: an empty storage
 
     // New: full HP at level 5 (50 + 10 × 4), empty fight state.
     expect(s.character.level).toBe(5);
@@ -1352,7 +1353,8 @@ describe('golden 1.13.0: the Crafting house', () => {
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
     // 1.25.0: re-pinned (was 11f7779b): the combat opening shifted every fight (see the header).
     // 1.28.0: only the engine label moved; the hash is unchanged (seen in the v24 shape, asV24: no bag cells; the bag's items and list order are the 1.27.0 ones).
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.28.0', hash: '60c1b72a' });
+    // 1.29.0: again only the engine label (asV24 also takes the new `storage` off; the script never touches it).
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.29.0', hash: '60c1b72a' });
   });
 });
 
@@ -1460,7 +1462,8 @@ describe('golden 1.15.0: continuous material pipes', () => {
     // +INT affix adds 5 mana (140 -> 145; the hash above is seen without affixes, the mana is the one real difference). rng, gold, HP, items: identical.
     // 1.25.0: re-pinned (was gold 10,218, hash 6d9814be): the combat opening.
     // 1.28.0: only the engine label moved; the hash is unchanged (seen in the v24 shape, asV24: no bag cells; the bag's items and list order are the 1.27.0 ones).
-    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.28.0', gold: 10186, hash: '059ced31' });
+    // 1.29.0: again only the engine label (asV24 also takes the new `storage` off; the script never touches it).
+    expect({ engineVersion: ENGINE_VERSION, gold: s.character.gold, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.29.0', gold: 10186, hash: '059ced31' });
   });
 });
 
@@ -1537,7 +1540,8 @@ describe('golden 1.16.0: normal and core attributes', () => {
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
     // 1.25.0: re-pinned (was 233aa32a): the combat opening.
     // 1.28.0: only the engine label moved; the hash is unchanged (seen in the v24 shape, asV24: no bag cells; the bag's items and list order are the 1.27.0 ones).
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.28.0', hash: 'a9a3d620' });
+    // 1.29.0: again only the engine label (asV24 also takes the new `storage` off; the script never touches it).
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.29.0', hash: 'a9a3d620' });
   });
 });
 
@@ -1582,6 +1586,7 @@ describe('golden 1.17.0: spendable points, total STR → WS, mana', () => {
     // 1.20.0: the hash is the 1.19.0 one seen in the v19 shape (asV19: no boss counters or v20 fight fields); no outcome of this script moved.
     // 1.25.0: re-pinned (was 3be73d3c): the combat opening.
     // 1.28.0: only the engine label moved; the hash is unchanged (seen in the v24 shape, asV24: no bag cells; the bag's items and list order are the 1.27.0 ones).
-    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.28.0', hash: '8b52e922' });
+    // 1.29.0: again only the engine label (asV24 also takes the new `storage` off; the script never touches it).
+    expect({ engineVersion: ENGINE_VERSION, hash: hashState(asV19(s)) }).toEqual({ engineVersion: '1.29.0', hash: '8b52e922' });
   });
 });

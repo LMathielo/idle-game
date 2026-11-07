@@ -77,7 +77,7 @@ const EMPTY = null;
 describe('the layout', () => {
   it('a new game: the starting bread in cell 0, the other 19 cells empty', () => {
     const s = newGame(1, T0);
-    expect(s.saveVersion).toBe(25);
+    expect(s.saveVersion).toBe(26);
     expect(grid(s)).toEqual(['bread', ...Array(19).fill(EMPTY)]);
     expectBagValid(s);
   });

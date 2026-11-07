@@ -11,7 +11,8 @@
 //   X10_CRAFT     on the craft in progress: 9× more inputs now + max(1, ceil(9 × craft minutes)) stamina → 10× output;
 //                 only that craft (the next is ×1 again)
 //   INSTA_CRAFT   ceil(remaining minutes) stamina finishes the current craft now (also a ×10 one)
-//   STOP_CRAFT    ends a material job: refunds the inputs of the craft in progress (×10 included) and any prepaid ones
+//   STOP_CRAFT    ends a material job: refunds the inputs of the craft in progress (×10 included) and any prepaid ones (to the bag; the
+//                 storage takes what the bag has no room for)
 //   COLLECT_CRAFT a ready gear piece goes into the inventory (Done)
 //   DEBUG_FORCE_CRAFT   (1.23.0) START_CRAFT whose first craft (the one piece for gear) takes and needs no inputs; the job
 //                 carries `free` until the next craft starts, so Stop / Cancel refund nothing for it (no minting)
@@ -24,11 +25,12 @@
 // refunds its inputs (a ready job cannot be cancelled).
 //
 // Pipes are NOT an activity: they never use the hero and never stop (or get stopped by) gathering, dungeons or
-// training. They share one inventory: at one instant they draw their inputs in pipe order, after the hero, the builder
-// and the crews (see world.ts).
+// training. They share one stock (1.29.0: the storage first, then the bag; stock.ts) and pay their inputs from it: at one instant they
+// draw them in pipe order, after the hero, the builder and the crews (see world.ts). The OUTPUT of a craft, a refund's overflow aside, goes
+// to the bag only.
 import { intCraftReductionBp } from './attributes';
 import { levelBonuses } from './bonuses';
-import { consumeItem, isBuilt } from './buildings';
+import { isBuilt } from './buildings';
 import { BUILDINGS } from './config/buildings';
 import { CRAFTING, isRecipeId, RECIPE_IDS, RECIPES, type RecipeDef, type RecipeId } from './config/crafting';
 import { GEAR } from './config/gear';
@@ -36,7 +38,7 @@ import { getItemDef } from './config/items';
 import { BASIS_POINTS } from './config/stats';
 import { affixStream, gearRarityDetail, type GearRarityDetail, gearStatsAt, type GearStats, rarityOdds, rollAffixes, rollQuality, rollRarity } from './gear';
 import { addStackable, freeSlots, makeItem, placeInBag } from './inventory';
-import { itemQuantity } from './selectors';
+import { countItem, refundItems, takeItem } from './stock';
 import type { CraftingState, CraftJob, GameEvent, GameState, Inventory, ItemRarity, SimulationSummary } from './types';
 
 export type CraftErrorCode =
@@ -118,7 +120,7 @@ function inputsFor(recipe: RecipeDef, crafts: number): ItemAmount[] {
 /** Inputs short for `crafts` x1 crafts right now (have < need), in recipe order. */
 function shortInputs(state: GameState, recipe: RecipeDef, crafts: number): { defId: string; have: number; need: number }[] {
   return inputsFor(recipe, crafts)
-    .map((i) => ({ defId: i.defId, have: itemQuantity(state, i.defId), need: i.quantity }))
+    .map((i) => ({ defId: i.defId, have: countItem(state, i.defId), need: i.quantity }))
     .filter((i) => i.have < i.need);
 }
 
@@ -127,12 +129,6 @@ const nameOf = (defId: string) => getItemDef(defId)?.name ?? defId;
 /** Can a stackable item go into the inventory (an existing stack, or a free slot)? */
 function canAdd(inventory: Inventory, defId: string): boolean {
   return inventory.items.some((i) => i.stackable && i.defId === defId) || inventory.items.length < inventory.capacity;
-}
-
-/** Refunds that would need more new stacks than there are free slots: how many slots are missing (0 = fits). */
-function slotsShort(inventory: Inventory, items: ItemAmount[]): number {
-  const newStacks = new Set(items.filter((i) => i.quantity > 0 && !inventory.items.some((it) => it.stackable && it.defId === i.defId)).map((i) => i.defId));
-  return Math.max(0, newStacks.size - freeSlots(inventory));
 }
 
 /** Bonus to every gear craft's quality floor, percent points (a hook for later upgrades; GEAR.craft.minQuality, 0 for now). */
@@ -178,7 +174,7 @@ function startNextCraft(draft: GameState, index: number, job: CraftJob, events: 
     job.x10 = false;
     return false;
   } else {
-    for (const i of recipe.inputs) consumeItem(draft, i.defId, i.quantity);
+    for (const i of recipe.inputs) takeItem(draft, i.defId, i.quantity);
   }
   // Each craft's duration is fixed when it starts: an upgrade or trained INT counts from here.
   job.craftMs = craftMs(draft, job.recipeId);
@@ -386,7 +382,7 @@ export function startCraft(
   }
   if (invest > maxCost) return err('COST_CHANGED', `This job now costs ${invest} stamina, more than the ${maxCost} shown`);
   if (invest > draft.stamina.current) return err('NOT_ENOUGH_STAMINA', `Needs ${invest} stamina, has ${draft.stamina.current}`);
-  if (!free) for (const i of recipe.inputs) consumeItem(draft, i.defId, i.quantity);
+  if (!free) for (const i of recipe.inputs) takeItem(draft, i.defId, i.quantity);
   if (invest > 0) draft.stamina = { ...draft.stamina, current: draft.stamina.current - invest };
   // The piece is rolled now, the moment it is paid for: quality, then rarity (two draws of the main stream). A rare or epic piece
   // then rolls its affixes (1.22.0) from a salted sub-stream, so the main stream is exactly what it was.
@@ -424,12 +420,11 @@ export function stopRefund(job: CraftJob): ItemAmount[] {
   return inputsFor(recipe, current + (job.prepaid ?? 0)).filter((i) => i.quantity > 0);
 }
 
-/** Shared by STOP_CRAFT and CANCEL_CRAFT once the job is checked: refund (or INVENTORY_FULL, nothing changes) and free the pipe. */
+/** Shared by STOP_CRAFT and CANCEL_CRAFT once the job is checked: refund (bag first, then storage; or INVENTORY_FULL, nothing changes) and free the pipe. */
 function endJob(draft: GameState, index: number, job: CraftJob, events: GameEvent[], event: 'CRAFT_STOPPED' | 'CRAFT_JOB_CANCELLED'): CraftError {
-  const refund = stopRefund(job);
-  const short = slotsShort(draft.inventory, refund);
+  // The refund goes back to the bag; only what the bag has no room for goes to the storage (1.29.0); with room in neither, nothing changes.
+  const short = refundItems(draft, stopRefund(job));
   if (short > 0) return err('INVENTORY_FULL', `Free ${short} inventory slot(s) first: the refunded materials need room`);
-  for (const i of refund) addStackable(draft.inventory, i.defId, i.quantity);
   draft.crafting.pipes[index] = null;
   events.push({ type: event, pipe: index, jobId: job.id });
   return null;
@@ -550,14 +545,14 @@ export function x10Craft(draft: GameState, cmd: { pipe: unknown; jobId: unknown;
   if (isGearJob(job)) return err('INVALID_COMMAND', 'Gear is crafted one piece at a time');
   if (job.x10) return err('ALREADY_X10', 'This craft is already ×10');
   const cost = x10TapCost(job);
-  const missing = cost.items.filter((i) => itemQuantity(draft, i.defId) < i.quantity);
+  const missing = cost.items.filter((i) => countItem(draft, i.defId) < i.quantity);
   if (missing.length > 0) {
-    const text = missing.map((i) => `${i.quantity} ${nameOf(i.defId)} (you have ${itemQuantity(draft, i.defId)})`).join(', ');
+    const text = missing.map((i) => `${i.quantity} ${nameOf(i.defId)} (you have ${countItem(draft, i.defId)})`).join(', ');
     return err('NOT_ENOUGH_ITEMS', `×10 needs ${text}`);
   }
   if (cost.stamina > (cmd.maxCost as number)) return err('COST_CHANGED', `×10 now costs ${cost.stamina} stamina, more than the ${String(cmd.maxCost)} shown`);
   if (draft.stamina.current < cost.stamina) return err('NOT_ENOUGH_STAMINA', `Needs ${cost.stamina} stamina, has ${draft.stamina.current}`);
-  for (const i of cost.items) consumeItem(draft, i.defId, i.quantity);
+  for (const i of cost.items) takeItem(draft, i.defId, i.quantity);
   draft.stamina = { ...draft.stamina, current: draft.stamina.current - cost.stamina };
   job.x10 = true;
   events.push({ type: 'CRAFT_X10', pipe: index, jobId: job.id, craft: job.done + 1, stamina: cost.stamina });
@@ -640,7 +635,7 @@ export function recipeView(state: GameState, recipeId: RecipeId): RecipeView {
     name: r.name,
     kind: r.kind,
     tier: r.tier,
-    inputs: r.inputs.map((i) => ({ defId: i.defId, perCraft: i.quantity, have: itemQuantity(state, i.defId) })),
+    inputs: r.inputs.map((i) => ({ defId: i.defId, perCraft: i.quantity, have: countItem(state, i.defId) })),
     output: { defId: r.output.defId, perCraft: r.output.quantity },
     craftMs: craftMs(state, recipeId),
     enough: shortInputs(state, r, 1).length === 0,
@@ -696,7 +691,7 @@ export type PipeView = { index: number; slot: PipeSlotState; job: CraftJobView |
 function x10TapView(state: GameState, job: CraftJob): X10TapView | null {
   if (job.status !== 'running' || job.x10 || isGearJob(job)) return null;
   const cost = x10TapCost(job);
-  const short = cost.items.find((i) => itemQuantity(state, i.defId) < i.quantity);
+  const short = cost.items.find((i) => countItem(state, i.defId) < i.quantity);
   const blocked = short ? `Needs ${short.quantity} ${nameOf(short.defId)}` : state.stamina.current < cost.stamina ? 'Not enough stamina' : null;
   return { ...cost, blocked };
 }

@@ -3,7 +3,7 @@
 // add MIGRATIONS[oldVersion] and a fixture test of the old version.
 import type { GameState } from './types';
 
-export const CURRENT_SAVE_VERSION = 25 as const;
+export const CURRENT_SAVE_VERSION = 26 as const;
 
 export type SaveDoc = Record<string, unknown> & { saveVersion?: unknown };
 export type Migration = (doc: SaveDoc) => SaveDoc;
@@ -35,6 +35,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   22: migrateV22toV23,
   23: migrateV23toV24,
   24: migrateV24toV25,
+  25: migrateV25toV26,
 };
 
 // ---- v2 → v3 (2026-10-26): 4 attributes, derived stats, stamina ----
@@ -1000,6 +1001,16 @@ function migrateV24toV25(doc: SaveDoc): SaveDoc {
   const capacity = typeof inv.capacity === 'number' && Number.isInteger(inv.capacity) && inv.capacity >= 0 ? inv.capacity : V25_DEFAULT_CAPACITY;
   out.inventory = { ...inv, items: inv.items.map((it, index) => (isDoc(it) && index < capacity ? { ...it, cell: index } : it)) };
   return out;
+}
+
+// ---- v25 → v26 (2026-11-07): the Storage ----
+// The save gets an EMPTY storage (`storage: { items: [] }`). Its capacity is not stored: it follows the Storage building's level (50 cells
+// at Lv1, +20 per level; 0 while the building is locked), so an unbuilt Storage gets the container and no cells, and a save whose Storage
+// is already built (only ever Lv1: it could not be upgraded before) simply starts with 50 empty cells. Nothing else changes, so every
+// outcome is the 1.28.0 one. An existing `storage` field (never written by an older engine) is kept.
+
+function migrateV25toV26(doc: SaveDoc): SaveDoc {
+  return { ...doc, saveVersion: 26, storage: isDoc(doc.storage) && Array.isArray(doc.storage.items) ? doc.storage : { items: [] } };
 }
 
 export class SaveVersionError extends Error {}

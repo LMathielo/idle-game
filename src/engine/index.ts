@@ -156,7 +156,9 @@ export {
 } from './merchant';
 export { isEquipmentSlot } from './equipment';
 export { type DragSource, type DragTarget, type DropCommand, dropCommand } from './dragDrop';
-export { bagCells, emptyBeltSlots, firstEmptyCell, freeSlots, heroOwnsItem, itemInCell } from './inventory';
+export { bagCells, emptyBeltSlots, firstEmptyCell, freeSlots, heroOwnsItem, itemInCell, storageBox } from './inventory';
+export { bagCount, countItem, storageCount } from './stock';
+export { canMove, depositPreview, planMove, storageView, type DepositPreview, type MovePlan, type MoveResult, type Side, type StorageErrorCode, type StorageView } from './storage';
 export {
   bagPotions,
   beltDrinkOrder,
@@ -218,6 +220,7 @@ export {
   sellPriceBonusBp,
   sellPriceOf,
   sellPriceOfItem,
+  storageCapacity,
   trainingXpPerMinute,
   workerCap,
   yieldBonusParts,

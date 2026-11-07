@@ -6,6 +6,7 @@
 //   worker cap        = the Town Hall level's workerCap (0 before the Town Hall is built)
 //   stock slots       = the Merchant level's stockSlots
 //   training XP / min = the Training Grounds level's trainingXpPerMin (1 … 5)
+//   storage cells     = the Storage level's storageSlots (50 / 70 / 90 / 110 / 130; 0 while locked)
 import { BUILDING_IDS, BUILDINGS, type LevelBonuses } from './config/buildings';
 import { getItemDef } from './config/items';
 import { BASIS_POINTS } from './config/stats';
@@ -80,6 +81,11 @@ export function workerCap(state: Buildings): number {
 /** Merchant stock slots per refresh at its current level. */
 export function merchantStockSlots(state: Buildings): number {
   return levelBonuses(state, 'merchant').stockSlots ?? BUILDINGS.merchant.levels[0].stockSlots ?? 0;
+}
+
+/** Cells of the storage grid at its current level (0 while Storage is locked). Never stored: the level is the only source (1.29.0). */
+export function storageCapacity(state: Buildings): number {
+  return levelBonuses(state, 'storage').storageSlots ?? 0;
 }
 
 /**

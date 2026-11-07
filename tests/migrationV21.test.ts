@@ -53,8 +53,8 @@ describe('v21 -> v22', () => {
   const s = loadSave(V21);
 
   it('loads as the current save; the main RNG, the clock and everything else are untouched', () => {
-    expect(CURRENT_SAVE_VERSION).toBe(25);
-    expect(s.saveVersion).toBe(25);
+    expect(CURRENT_SAVE_VERSION).toBe(26);
+    expect(s.saveVersion).toBe(26);
     expect(s.rng).toEqual(V21.rng);
     expect(s.time).toEqual(V21.time);
     // Taking the new shape off again gives the fixture byte for byte.
