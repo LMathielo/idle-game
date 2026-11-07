@@ -55,6 +55,12 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #41, 30] `src/components/dungeon/FightReplay.tsx` — leftover `export { AnimatedHpBar }` after it moved to `HpBars.tsx`. Fix: remove the re-export.
 - [PR #42, 25] `src/components/dungeon/FightReplay.tsx:31` — the replay shows the first log line at once, assuming it is the hero's opening strike; a pre-1.25.0 `lastFight` whose first line is a monster strike shows it immediately too. Fix: reveal at once only entries with `atMs === 0`.
 - [PR #42, 20] `src/engine/danger.ts` `bossDangerHint` — `heroHeadStartMs = interval − 0` makes the hint slightly optimistic for slow heroes. Fix: derive the head start from both opening offsets.
+- [PR #43, 50] `src/components/dungeon/DungeonModal.tsx` ~864/903 — the boss loot list's "Already owned" combines `getItemDef(id)?.unique` and `heroOwnsItem` in the UI (three times, incl. the a11y label). Fix: an engine selector (e.g. `dropOwnedView(state, itemId)`) the UI only reads.
+- [PR #43, 45] `src/components/dungeon/DungeonModal.tsx` ~746 — the stage `LastFight` gets a `gears` array built inline each render (with an inventory `.some` per piece, unused on stages), defeating its `memo`. Fix: pass `rewards.gears` through (useMemo) and compute `inBag` only for the boss.
+- [PR #43, 30] `src/components/dungeon/DungeonModal.tsx` ~1070-1085 — `gearSetName` / `gearDropNote` derive the set name ("Copper") by splitting the item id / regex on the name. Fix: a `setName` on `GearDropDef` or read it from the gear set config.
+- [PR #43, 25] `src/components/dungeon/DungeonModal.tsx` ~1107/1130 — the last-fight box lists stage gear twice (rewards line + a "Drop:" row each) and the group a11y label repeats them. Fix: leave gear out of the items line when `gears` lists it.
+- [PR #43, 25] `src/components/dungeon/DungeonModal.tsx` ~1131 — every gear row in `LastFight` shares one `gearRef`; harmless today (stage drops have no View button). Fix: per-row refs if stage drops get one.
+- [PR #43, 25] `src/components/dungeon/DungeonModal.tsx` `BossDetail` — the Potion Belt note hardcodes the item name. Fix: build it from the unique drop's `itemName`.
 
 ## Engine and data
 
@@ -103,6 +109,7 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #42, 40] `tests/fixtures/save-v22*.json` — no generator or source commit is recorded, so it cannot be checked that the untouched #41 engine wrote them (not the new one). Fix: note the #41 commit SHA and the command in the fixture header or a README line.
 - [PR #42, 30] `tests/migrationV22.test.ts` — the frozen v22 fixtures cover a Hard pack and the boss but no Normal 1v1 fight in progress (the most common save). Fix: add a small frozen Normal mid-fight fixture.
 - [PR #42, 20] `tests/golden.test.ts` — the inline-snapshot re-pins and the `q3 − q4` 500 → 550 gold change carry no "was" note. Fix: annotate them like the other pins.
+- [PR #43, 40] `tests/mobDrops.test.ts` ~156-183 — the seeded independence-by-rates test has loose tolerances (e.g. ±0.04 on 0.05) and could not catch a small coupling; the real proof is the draw-order test. Fix: tighten to ~3 standard errors or rename it a smoke test.
 
 ## Docs and workflow
 
