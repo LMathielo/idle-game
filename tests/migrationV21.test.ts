@@ -109,7 +109,7 @@ describe('v21 -> v22', () => {
       expect(f.rewards).toEqual({ ...want.rewards, items: { troll_hide: 1 } }); // was items {}
       expect(f.log).toHaveLength(want.logLen);
       expect(f.enemyHpEnd).toBe(want.enemyHpEnd);
-      expect(r.rng.seed, key).toBe(3384637939); // was want.rng
+      expect(r.rng.seed, key).toBe(921236456); // was want.rng; 3384637939 before the T1 Health Potion roll (1.26.0)
       expect(r.character).toMatchObject({ gold: want.gold, xp: want.xp, level: want.level, hp: want.hp });
       expect(r.dungeon.byDungeon.troll_bridge).toEqual(want.troll_bridge);
       expect(r.dungeon.totals).toEqual(want.totals);

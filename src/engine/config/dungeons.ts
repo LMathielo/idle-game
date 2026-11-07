@@ -154,7 +154,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     enemyId: 'rat',
     search: searchFrom(2), // core DEX 0 → 2:00, 10 → 1:51
     unlock: null,
-    rewards: { heroXp: 35, gold: { min: 2, max: 5 }, drops: [{ itemId: 'rat_skin', chance: 0.5 }] },
+    rewards: { heroXp: 35, gold: { min: 2, max: 5 }, drops: [{ itemId: 'rat_skin', chance: 0.5 }, { itemId: 'health_potion_t1', chance: 0.15 }] },
   },
   bat_cave: {
     id: 'bat_cave',
@@ -165,7 +165,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     enemyId: 'bat',
     search: searchFrom(2), // core DEX 0 → 2:00
     unlock: { dungeonId: 'rat_cellar', wins: 10 },
-    rewards: { heroXp: 60, gold: { min: 6, max: 12 }, drops: [{ itemId: 'bat_wing', chance: 0.4 }] },
+    rewards: { heroXp: 60, gold: { min: 6, max: 12 }, drops: [{ itemId: 'bat_wing', chance: 0.4 }, { itemId: 'health_potion_t1', chance: 0.15 }] },
   },
   wolf_den: {
     id: 'wolf_den',
@@ -176,7 +176,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
     enemyId: 'wolf',
     search: searchFrom(2), // core DEX 0 → 2:00
     unlock: { dungeonId: 'bat_cave', wins: 15 },
-    rewards: { heroXp: 140, gold: { min: 15, max: 30 }, drops: [{ itemId: 'wolf_pelt', chance: 0.3 }] },
+    rewards: { heroXp: 140, gold: { min: 15, max: 30 }, drops: [{ itemId: 'wolf_pelt', chance: 0.3 }, { itemId: 'health_potion_t1', chance: 0.15 }] },
   },
   forgotten_crypt: {
     id: 'forgotten_crypt',
@@ -195,6 +195,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
       drops: [
         { itemId: 'old_bone', chance: 0.25 },
         { itemId: 'wild_sage', chance: 0.05 },
+        { itemId: 'health_potion_t1', chance: 0.15 },
       ],
     },
   },
@@ -215,6 +216,7 @@ export const DUNGEONS: Record<DungeonId, DungeonDef> = {
       drops: [
         { itemId: 'troll_hide', chance: 0.2 },
         { itemId: 'wild_sage', chance: 0.05 },
+        { itemId: 'health_potion_t1', chance: 0.15 },
       ],
     },
   },

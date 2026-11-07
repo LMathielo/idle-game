@@ -151,7 +151,7 @@ describe('golden 1.19.0: a whole game from newGame', () => {
     // 1.22.0: the whole-state hash moved only because saveVersion is 21 now (this game never holds a rare or epic piece): in the v20 shape
     // it is still the 1.20.0 pin, so no outcome of the game changed.
     // 1.24.0: and seen in the v21 shape (asV21: no difficulty fields) the whole-state hash of the game is the 1.22.0 one.
-    expect(hashState({ ...asV21(s), saveVersion: 20 } as unknown as GameState)).toBe('2adc197d'); // 1.25.0: re-pinned (was 2e1282a3): the combat opening shifts every fight
+    expect(hashState({ ...asV21(s), saveVersion: 20 } as unknown as GameState)).toBe('fd7a5543'); // 1.26.0: re-pinned (was 2adc197d): the Health Potion roll per kill; 1.25.0: was 2e1282a3: the combat opening shifts every fight
     expect({
       level: s.character.level,
       gold: s.character.gold,
@@ -162,6 +162,8 @@ describe('golden 1.19.0: a whole game from newGame', () => {
       lastFight: { dungeonId: s.dungeon.lastFight!.dungeonId, won: s.dungeon.lastFight!.won, ms: s.dungeon.lastFight!.durationMs, strikes: s.dungeon.lastFight!.log.length },
       rng: s.rng,
       hash: hashState(asV21(s)),
+    // 1.26.0: re-pinned from the new engine (the Health Potion roll per kill shifts the stream). Was: gold 1211, hash 13541eac, rng seed 1837312982,
+    // hp regen progress 135 (now 132).
     }).toMatchInlineSnapshot(`
       {
         "dungeon": {
@@ -176,10 +178,10 @@ describe('golden 1.19.0: a whole game from newGame', () => {
             "wins": 147,
           },
         },
-        "gold": 1211,
-        "hash": "13541eac",
+        "gold": 1209,
+        "hash": "301259fa",
         "hp": [
-          135,
+          132,
           4212000,
         ],
         "lastFight": {
@@ -194,7 +196,7 @@ describe('golden 1.19.0: a whole game from newGame', () => {
           0,
         ],
         "rng": {
-          "seed": 1837312982,
+          "seed": 1182748412,
         },
         "spent": {
           "dexterity": 6,

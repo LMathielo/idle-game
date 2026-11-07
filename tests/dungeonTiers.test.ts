@@ -94,11 +94,11 @@ describe('tier table (config)', () => {
       ];
     });
     expect(table).toEqual([
-      [1, 'Rat Cellar', 'Rat 30 · 3–5 · 2', 2, '1000 ms', '—', '35 · 2–5', 'rat_skin 0.5'],
-      [2, 'Bat Cave', 'Bat 60 · 6–9 · 6', 2, '1000 ms', '10 in rat_cellar', '60 · 6–12', 'bat_wing 0.4'],
-      [3, 'Wolf Den', 'Wolf 110 · 10–14 · 12', 2, '1000 ms', '15 in bat_cave', '140 · 15–30', 'wolf_pelt 0.3'],
-      [4, 'Forgotten Crypt', 'Skeleton 180 · 15–20 · 20', 2, '1000 ms', '25 in wolf_den', '300 · 35–60', 'old_bone 0.25,wild_sage 0.05'],
-      [5, 'Troll Bridge', 'Troll 300 · 22–30 · 30', 2, '1000 ms', '40 in forgotten_crypt', '650 · 80–130', 'troll_hide 0.2,wild_sage 0.05'],
+      [1, 'Rat Cellar', 'Rat 30 · 3–5 · 2', 2, '1000 ms', '—', '35 · 2–5', 'rat_skin 0.5,health_potion_t1 0.15'],
+      [2, 'Bat Cave', 'Bat 60 · 6–9 · 6', 2, '1000 ms', '10 in rat_cellar', '60 · 6–12', 'bat_wing 0.4,health_potion_t1 0.15'],
+      [3, 'Wolf Den', 'Wolf 110 · 10–14 · 12', 2, '1000 ms', '15 in bat_cave', '140 · 15–30', 'wolf_pelt 0.3,health_potion_t1 0.15'],
+      [4, 'Forgotten Crypt', 'Skeleton 180 · 15–20 · 20', 2, '1000 ms', '25 in wolf_den', '300 · 35–60', 'old_bone 0.25,wild_sage 0.05,health_potion_t1 0.15'],
+      [5, 'Troll Bridge', 'Troll 300 · 22–30 · 30', 2, '1000 ms', '40 in forgotten_crypt', '650 · 80–130', 'troll_hide 0.2,wild_sage 0.05,health_potion_t1 0.15'],
     ]);
   });
 

@@ -122,8 +122,8 @@ describe('v22 -> v23', () => {
     // Chieftain's table is Troll Head + Potion Belt (no Tusk). The reference (written by the untouched 1.25.0 engine) still holds for
     // everything the fight itself decides; its `rewards` items and the RNG state after the rewards are the 1.26.0 values below.
     const NOW = {
-      pack: { items: { wild_sage: 1 }, rng: 2509822141 }, // was { old_bone: 1 }
-      boss: { items: { potion_belt: 1 }, rng: 240652691 }, // was { chieftains_tusk: 1 } (the Tusk left the table)
+      pack: { rewards: { gold: 428, items: { copper_helm: 1, old_bone: 2 }, gears: [{ defId: 'copper_helm', itemId: 'copper_helm#1', quality: 33, rarity: 'common' }] }, rng: 2445880944 }, // was gold 442, { old_bone: 1 }, rng want.rng (2509822141 before the T1 Health Potion roll)
+      boss: { rewards: { items: { potion_belt: 1 } }, rng: 240652691 }, // was { chieftains_tusk: 1 } (the Tusk left the table)
     };
     const cases = [
       [pack, REF.pack, 60 * SEC, NOW.pack],
@@ -134,12 +134,12 @@ describe('v22 -> v23', () => {
       const f = r.dungeon.lastFight!;
       const want = ref.fightEnd;
       expect(f, ref.engine).toMatchObject({ won: want.won, endReason: want.endReason, durationMs: want.durationMs, heroHpEnd: want.heroHpEnd, dungeonId: want.lastDungeon, difficulty: want.difficulty });
-      expect(f.rewards).toEqual({ ...want.rewards, items: now.items });
+      expect(f.rewards).toEqual({ ...want.rewards, ...now.rewards });
       expect(f.log).toHaveLength(want.logLen);
       expect(f.enemyHpEnd).toBe(want.enemyHpEnd);
       expect(f.mobs).toEqual(want.mobs);
       expect(r.rng.seed).toBe(now.rng); // was want.rng
-      expect(r.character).toMatchObject({ gold: want.gold, xp: want.xp, level: want.level, hp: want.hp });
+      expect(r.character).toMatchObject({ gold: want.gold + (('gold' in now.rewards ? now.rewards.gold : want.rewards.gold) - want.rewards.gold), xp: want.xp, level: want.level, hp: want.hp });
       expect(r.dungeon.byDungeon).toEqual(want.byDungeon);
       expect(r.dungeon.bosses).toEqual(want.bosses);
       expect(r.dungeon.totals).toEqual(want.totals);

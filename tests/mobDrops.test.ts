@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyCommand,
+  BOSSES,
   chance,
   COMBAT,
   createRng,
@@ -29,6 +30,8 @@ const COPPER = ['copper_sword', 'copper_helm', 'copper_chestplate', 'copper_shie
 const TRIPLE_SEED = 440;
 const GOLDEN_FIRST_PIECES = ['3:copper_gloves:common:24', '4:copper_helm:common:3', '13:copper_sword:common:4', '24:copper_shield:common:13', '26:copper_gloves:common:50', '31:copper_chestplate:common:3'];
 const GOLDEN_PIECE_COUNT = 378;
+/** 1.26.0: every stage mob drops a T1 Health Potion, 15%, last in its table. */
+const POTION = { itemId: 'health_potion_t1', chance: 0.15 };
 const tb = (wins: number) => ({ runs: wins, wins, losses: 0 });
 
 /** A hero no stage or pack can stop (huge STR and END), every stage open on every difficulty, a big bag. */
@@ -76,8 +79,8 @@ describe('data (owner decisions 2026-11-06)', () => {
   });
 
   it('the Wild Sage (5%) is a separate entry after the stage material, only for the Skeleton and the Troll; Rat, Bat and Wolf have no gear and no herb', () => {
-    expect(DUNGEONS.forgotten_crypt.rewards.drops).toEqual([{ itemId: 'old_bone', chance: 0.25 }, { itemId: 'wild_sage', chance: 0.05 }]);
-    expect(DUNGEONS.troll_bridge.rewards.drops).toEqual([{ itemId: 'troll_hide', chance: 0.2 }, { itemId: 'wild_sage', chance: 0.05 }]);
+    expect(DUNGEONS.forgotten_crypt.rewards.drops).toEqual([{ itemId: 'old_bone', chance: 0.25 }, { itemId: 'wild_sage', chance: 0.05 }, POTION]);
+    expect(DUNGEONS.troll_bridge.rewards.drops).toEqual([{ itemId: 'troll_hide', chance: 0.2 }, { itemId: 'wild_sage', chance: 0.05 }, POTION]);
     for (const id of ['rat_cellar', 'bat_cave', 'wolf_den'] as const) {
       expect(DUNGEONS[id].rewards.gear).toBeUndefined();
       expect(DUNGEONS[id].rewards.drops.map((d) => d.itemId)).not.toContain('wild_sage');
@@ -101,7 +104,7 @@ describe('rates and independence (seeded, many kills)', () => {
       gear += copperCount(fight);
       sage += herb(fight);
       bone += fight.rewards.items.old_bone ?? 0;
-      for (const k of Object.keys(fight.rewards.items)) expect(['old_bone', 'wild_sage', ...COPPER]).toContain(k);
+      for (const k of Object.keys(fight.rewards.items)) expect(['old_bone', 'wild_sage', 'health_potion_t1', ...COPPER]).toContain(k);
     }
     expect(Math.abs(gear / N - 0.05)).toBeLessThan(0.016);
     expect(Math.abs(sage / N - 0.05)).toBeLessThan(0.016);
@@ -188,9 +191,71 @@ describe('rates and independence (seeded, many kills)', () => {
         const { fight } = kill(id, seed);
         expect(fight.rewards.gears).toBeUndefined();
         expect(fight.rewards.items.wild_sage).toBeUndefined();
-        expect(Object.keys(fight.rewards.items).every((k) => k === DUNGEONS[id].rewards.drops[0].itemId)).toBe(true);
+        expect(Object.keys(fight.rewards.items).every((k) => k === DUNGEONS[id].rewards.drops[0].itemId || k === 'health_potion_t1')).toBe(true);
       }
     }
+  });
+});
+
+describe('T1 Health Potion: 15% per stage mob, its own entry, last in every stage table', () => {
+  const potions = (f: FightRecord) => f.rewards.items.health_potion_t1 ?? 0;
+
+  it('every stage drops it at ~15% per kill on Normal, independent of the stage material; the boss does not drop it', () => {
+    for (const id of ['rat_cellar', 'bat_cave', 'wolf_den', 'forgotten_crypt', 'troll_bridge'] as const) {
+      const N = 4000;
+      let p = 0;
+      let mat = 0;
+      let both = 0;
+      const material = DUNGEONS[id].rewards.drops[0];
+      for (const seed of count(N)) {
+        const { fight } = kill(id, seed + 7_000);
+        const a = potions(fight) > 0;
+        const b = (fight.rewards.items[material.itemId] ?? 0) > 0;
+        if (a) p += 1;
+        if (b) mat += 1;
+        if (a && b) both += 1;
+      }
+      expect(Math.abs(p / N - 0.15), id).toBeLessThan(0.022);
+      expect(Math.abs(both / Math.max(1, mat) - 0.15), `${id} given its material`).toBeLessThan(0.05);
+      expect(DUNGEONS[id].rewards.drops.at(-1)).toEqual(POTION);
+    }
+    expect(BOSSES.troll_chieftain.rewards.drops.map((d) => d.itemId)).not.toContain('health_potion_t1');
+  });
+
+  it('same 15% per MOB on Hard and Extreme packs (each mob rolls its own)', () => {
+    for (const difficulty of ['hard', 'extreme'] as const) {
+      let mobs = 0;
+      let got = 0;
+      for (const seed of count(400)) {
+        const { fight } = kill('troll_bridge', seed, difficulty);
+        mobs += fight.mobs.length;
+        got += potions(fight);
+      }
+      expect(Math.abs(got / mobs - 0.15), difficulty).toBeLessThan(0.025);
+    }
+  });
+
+  it('stacks with the potions already owned (one stack), and is lost and reported when the bag is full and none is owned', () => {
+    let stacked = false;
+    for (const seed of count(200)) {
+      const s: GameState = { ...GOD, inventory: { ...GOD.inventory, items: [...GOD.inventory.items, makeItem('health_potion_t1', 5)] } };
+      const r = kill('rat_cellar', seed, 'normal', s);
+      if (potions(r.fight) > 0) {
+        stacked = true;
+        expect(r.state.inventory.items.filter((i) => i.defId === 'health_potion_t1')).toHaveLength(1);
+        expect(r.state.inventory.items.find((i) => i.defId === 'health_potion_t1')!.quantity).toBe(5 + potions(r.fight));
+      }
+    }
+    expect(stacked).toBe(true);
+    const junk = Array.from({ length: GOD.inventory.capacity - GOD.inventory.items.length }, (_, i) => ({ ...makeItem('troll_hide', 1, `junk#${i}`), stackable: false as const }));
+    const full: GameState = { ...GOD, inventory: { ...GOD.inventory, items: [...GOD.inventory.items, ...junk.map(({ quantity: _q, ...j }) => j)] } };
+    let lost = false;
+    for (const seed of count(200)) {
+      const r = kill('rat_cellar', seed, 'normal', full);
+      expect(potions(r.fight)).toBe(0);
+      if ((r.fight.rewards.itemsLost.health_potion_t1 ?? 0) > 0) lost = true;
+    }
+    expect(lost).toBe(true);
   });
 });
 
@@ -220,6 +285,9 @@ describe('the roll order and the draws (deterministic)', () => {
       const sage = chance(rng, 0.05);
       rng = sage.rng;
       expect(herb(fight) > 0).toBe(sage.value);
+      const potion = chance(rng, 0.15);
+      rng = potion.rng;
+      expect((fight.rewards.items.health_potion_t1 ?? 0) > 0).toBe(potion.value);
       expect(state.rng).toEqual(rng); // exactly these draws, nothing else (the affix stream is salted: the main one is not advanced)
     }
   });

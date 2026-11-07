@@ -147,8 +147,13 @@ async function loadEngineWithSearchMinutes(minutes: Record<DungeonId, number>) {
   vi.doMock('../src/engine/config/dungeons', async () => {
     const actual = await vi.importActual<typeof import('../src/engine/config/dungeons')>('../src/engine/config/dungeons');
     const DUNGEONS = Object.fromEntries(
-      Object.entries(actual.DUNGEONS).map(([id, d]) => [id, { ...d, search: { ...d.search, baseMs: minutes[id as DungeonId] * 60_000 } }]),
-    ) as typeof actual.DUNGEONS;
+      // 1.26.0: the T1 Health Potion drop (15% per stage mob) is taken off again here: every pin below was taken before it existed, and
+      // an extra draw per win would move the stream of all of them. The current rules are pinned in tests/golden119.test.ts and tests/mobDrops.test.ts.
+      Object.entries(actual.DUNGEONS).map(([id, d]) => [
+        id,
+        { ...d, search: { ...d.search, baseMs: minutes[id as DungeonId] * 60_000 }, rewards: { ...d.rewards, drops: d.rewards.drops.filter((x) => x.itemId !== 'health_potion_t1') } },
+      ]),
+    ) as unknown as typeof actual.DUNGEONS;
     return { ...actual, DUNGEONS };
   });
   const engine = await import('../src/engine');
