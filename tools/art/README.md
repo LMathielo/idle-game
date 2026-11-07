@@ -29,7 +29,7 @@ anchor and draw order). Commit the generated files with the change. Never edit t
 | `equipment.py` | tiered equipment (sword, helm, chestplate, shield, greaves, gloves, boots) |
 | `gear_named.py` | starter gear and gathering tools, plus the crafted Stone / Copper / Silver / Gold axes and pickaxes |
 | `materials.py` | logs, planks, stone, ores, ingots |
-| `drops.py` | monster drops, junk, potions |
+| `drops.py` | monster drops (incl. the Wild Sage herb and the Troll Head), junk, potions, the Potion Belt |
 | `gather.py` | trees and hero skill icons |
 | `build_assets.py` | exports everything into `assets/images/` |
 

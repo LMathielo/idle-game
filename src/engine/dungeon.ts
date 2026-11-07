@@ -23,8 +23,8 @@ import {
 } from './combat';
 import { emitNewUnlocks, isDifficultyUnlocked, isStageUnlocked, plainMob, rollPack, scaledUnlockWins, scaleStat, setStageTotals, snapshotUnlocks, stageTotalsAt } from './difficulty';
 import { regenHeroPools } from './hp';
-import { addStackable } from './inventory';
-import { chance, nextInt } from './rng';
+import { rollGearDrop, rollItemDrop } from './drops';
+import { nextInt } from './rng';
 import { activityTimeMs, type CoreInput, dexActivityReductionBp } from './attributes';
 import { getDerivedStats } from './stats';
 import type {
@@ -123,8 +123,8 @@ export function recordDungeonResults(
 
 /**
  * Ends the fight of the current run and applies its outcome, then starts the next search at once.
- * Win (the whole pack killed): for each mob in pack order, its hero XP (stage XP × its multiplier), its gold (one roll × its multiplier)
- * and then each of the stage's drop rolls; a drop is lost when the inventory is full. The hero keeps the HP left.
+ * Win (the whole pack killed): for each mob in pack order, its hero XP (stage XP × its multiplier), its gold (one roll × its multiplier),
+ * the stage's gear drop roll (if any) and then each of its item drop rolls, all independent; a drop is lost when the inventory is full. The hero keeps the HP left.
  * Loss (any reason): nothing, kills made before it included, and the hero ends at 0 HP. Mutates `draft` (owned by the caller).
  */
 function finishFight(draft: GameState, activity: DungeonActivity, outcome: FightOutcome, summary: SimulationSummary | null, events: GameEvent[]): void {
@@ -137,20 +137,18 @@ function finishFight(draft: GameState, activity: DungeonActivity, outcome: Fight
   const rewards: FightRewards = { heroXp: 0, gold: 0, items: {}, itemsLost: {} };
   if (won) {
     const r = dungeon.rewards;
-    // Per mob, in pack order: gold (one draw), then the drops (one draw each, in config order). XP needs no draw.
+    // Per mob, in pack order (every entry rolls on its own, drops.ts): gold (one draw), the gear drop (one chance draw; on a hit the
+    // piece, its colour, its quality), then each item drop (one draw each, in config order: the material, then the herb). XP needs no draw.
     for (const mob of outcome.mobs) {
       rewards.heroXp += scaleStat(r.heroXp, mob.multBp);
       const gold = nextInt(draft.rng, r.gold.min, r.gold.max);
       draft.rng = gold.rng;
       rewards.gold += scaleStat(gold.value, mob.multBp);
-      for (const drop of r.drops) {
-        const roll = chance(draft.rng, drop.chance);
-        draft.rng = roll.rng;
-        if (!roll.value) continue;
-        const { added, lost } = addStackable(draft.inventory, drop.itemId, 1);
-        bump(rewards.items, drop.itemId, added);
-        bump(rewards.itemsLost, drop.itemId, lost);
+      if (r.gear) {
+        const dropped = rollGearDrop(draft, r.gear, r.gear.rarityWeights, rewards);
+        if (dropped) (rewards.gears ??= []).push(dropped);
       }
+      for (const drop of r.drops) rollItemDrop(draft, drop, rewards);
     }
     if (rewards.heroXp > 0) grantHeroXp(draft, rewards.heroXp, summary, events);
     draft.character.gold += rewards.gold;

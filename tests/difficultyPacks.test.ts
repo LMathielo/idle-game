@@ -527,15 +527,16 @@ describe('the Troll Chieftain on Hard and Extreme', () => {
     }
   });
 
-  it('the Chieftain stays one mob whatever the difficulty (no pack), and the Tusk drop is unchanged (50%)', () => {
+  it('the Chieftain stays one mob whatever the difficulty (no pack), and the Troll Head drop is the same 25% on Extreme (1.26.0: it replaced the Tusk)', () => {
     let tusks = 0;
     const N = 400;
     for (let seed = 1; seed <= N; seed++) {
       const done = simulate(enter(slayer('extreme', seed * 17), 'extreme'), T0 + 10 * SEC).state;
       expect(done.dungeon.lastFight!.mobs).toHaveLength(1);
-      if (done.dungeon.lastFight!.rewards.items.chieftains_tusk) tusks += 1;
+      expect(done.dungeon.lastFight!.rewards.items.chieftains_tusk).toBeUndefined();
+      if (done.dungeon.lastFight!.rewards.items.troll_head) tusks += 1;
     }
-    expect(Math.abs(tusks / N - 0.5)).toBeLessThan(0.08);
+    expect(Math.abs(tusks / N - 0.25)).toBeLessThan(0.07);
   });
 });
 

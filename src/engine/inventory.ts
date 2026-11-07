@@ -3,7 +3,7 @@
 import { GEAR } from './config/gear';
 import { getItemDef } from './config/items';
 import { copyAffixes } from './gear';
-import type { GearRoll, Inventory, Item } from './types';
+import type { GameState, GearRoll, Inventory, Item } from './types';
 
 /**
  * A new item instance. Gear (an item with a slot) carries `roll` (its quality, rarity and, for rare / epic, its affixes), by default
@@ -40,6 +40,15 @@ export function addStackable(inventory: Inventory, defId: string, quantity: numb
   if (inventory.items.length >= inventory.capacity) return { added: 0, lost: quantity };
   inventory.items.push(makeItem(defId, quantity));
   return { added: quantity, lost: 0 };
+}
+
+/**
+ * True when the hero owns at least one of the item. The single ownership check of unique items (ItemDef.unique, e.g. the Potion Belt):
+ * today items live only in the inventory, so it looks only there. A future equipment slot or storage extends THIS function and
+ * nothing else (the drop roll, the loot list and the tests all call it). Read-only.
+ */
+export function heroOwnsItem(state: Pick<GameState, 'inventory'>, defId: string): boolean {
+  return state.inventory.items.some((i) => i.defId === defId);
 }
 
 /** Inventory slots still free (never negative). */

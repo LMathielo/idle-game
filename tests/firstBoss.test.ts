@@ -25,8 +25,10 @@ import {
   ENEMIES,
   type FightLogEntry,
   type GameState,
+  baseSellPrice,
   getDerivedStats,
   hashState,
+  heroOwnsItem,
   isBossUnlocked,
   chance,
   loadSave,
@@ -40,6 +42,8 @@ import {
   weightedPick,
 } from '../src/engine';
 import { rollQuality, rollRarity } from '../src/engine/gear';
+import { getItemDef } from '../src/engine/config/items';
+import { makeItem } from '../src/engine/inventory';
 import { enemyCombatSide, enemyFightOptions, enemyHpAt, enemyRegen, heroCombatSide, newFight, nextFightEvent, resolveFight, strike } from '../src/engine/combat';
 import { asV21, bossHero, bossSlayer, builtGame, cmd, fightSide, HOUR, makeClient, SEC, T0, withTrollBridgeWins, woodcuttingGame } from './helpers';
 
@@ -93,7 +97,7 @@ describe('boss data', () => {
     expect(BOSSES.troll_chieftain).toMatchObject({ unlock: { dungeonId: 'troll_bridge', wins: 50 }, entryStamina: 10 });
     expect(BOSSES.troll_chieftain.rewards).toMatchObject({ heroXp: 2000, gold: { min: 300, max: 450 } });
     expect(BOSSES.troll_chieftain.rewards.gear.chance).toBe(0.35);
-    expect(BOSSES.troll_chieftain.rewards.drops).toEqual([{ itemId: 'chieftains_tusk', chance: 0.5 }]);
+    expect(BOSSES.troll_chieftain.rewards.drops).toEqual([{ itemId: 'troll_head', chance: 0.25 }, { itemId: 'potion_belt', chance: 1 }]); // 1.26.0: was the Tusk at 0.5
     // The five stage dungeons keep their ids and are Tier 1, stages 1..5.
     expect(DUNGEON_IDS).toEqual(['rat_cellar', 'bat_cave', 'wolf_den', 'forgotten_crypt', 'troll_bridge']);
     expect(DUNGEON_IDS.map((id) => [DUNGEONS[id].tier, DUNGEONS[id].stage])).toEqual([[1, 1], [1, 2], [1, 3], [1, 4], [1, 5]]);
@@ -551,11 +555,11 @@ describe('rewards', () => {
     expect(r.summary.goldGained).toBe(r.fight.rewards.gold);
   });
 
-  it('gear drop ~35% (equal pieces, uncommon 75 / rare 25, quality 0..70) and a Tusk ~50%, independent of each other', () => {
+  it('gear drop ~35% (equal pieces, uncommon 75 / rare 25, quality 0..70) and a Troll Head ~25%, independent of each other', () => {
     const N = 600;
     const all = wins(N);
     let gear = 0;
-    let tusk = 0;
+    let head = 0;
     let both = 0;
     const pieces: Record<string, number> = {};
     const rarities: Record<string, number> = {};
@@ -563,7 +567,7 @@ describe('rewards', () => {
     let qMax = 0;
     for (const r of all) {
       const g = r.fight.rewards.gear;
-      const t = (r.fight.rewards.items.chieftains_tusk ?? 0) > 0;
+      const t = (r.fight.rewards.items.troll_head ?? 0) > 0;
       if (g) {
         gear++;
         pieces[g.defId] = (pieces[g.defId] ?? 0) + 1;
@@ -573,16 +577,16 @@ describe('rewards', () => {
         const item = r.state.inventory.items.find((i) => i.id === g.itemId)!;
         expect(item).toMatchObject({ defId: g.defId, rarity: g.rarity, quality: g.quality });
       }
-      if (t) tusk++;
+      if (t) head++;
       if (g && t) both++;
     }
     expect(gear / N).toBeGreaterThan(0.3);
     expect(gear / N).toBeLessThan(0.4);
-    expect(tusk / N).toBeGreaterThan(0.45);
-    expect(tusk / N).toBeLessThan(0.55);
-    // independent: P(both) ~ 0.35 * 0.5 = 0.175
-    expect(both / N).toBeGreaterThan(0.12);
-    expect(both / N).toBeLessThan(0.23);
+    expect(head / N).toBeGreaterThan(0.2);
+    expect(head / N).toBeLessThan(0.3);
+    // independent: P(both) ~ 0.35 * 0.25 = 0.0875
+    expect(both / N).toBeGreaterThan(0.05);
+    expect(both / N).toBeLessThan(0.13);
     expect(Object.keys(pieces).sort()).toEqual(['iron_boots', 'iron_chestplate', 'iron_gloves', 'iron_helm', 'iron_shield', 'iron_sword']);
     for (const n of Object.values(pieces)) expect(n / gear).toBeGreaterThan(0.08); // ~1/6 each
     expect(Object.keys(rarities).sort()).toEqual(['rare', 'uncommon']);
@@ -593,50 +597,147 @@ describe('rewards', () => {
     expect(qMax).toBeLessThanOrEqual(70);
   });
 
-  it('the Tusk is a rare, stackable material; two wins stack in one slot', () => {
-    let first: GameState | null = null;
-    for (let seed = 1; seed < 100 && !first; seed++) {
-      const r = fightAll(bossSlayer(seed));
-      if ((r.fight.rewards.items.chieftains_tusk ?? 0) > 0) first = r.state;
-    }
-    expect(first).not.toBeNull();
-    const stack = first!.inventory.items.filter((i) => i.defId === 'chieftains_tusk');
-    expect(stack).toHaveLength(1);
-    expect(stack[0]).toMatchObject({ stackable: true, quantity: 1 });
+  it("the Chieftain's table is the Troll Head (25%) then the Potion Belt (100%, unique); the Tusk no longer drops", () => {
+    expect(BOSSES.troll_chieftain.rewards.drops).toEqual([{ itemId: 'troll_head', chance: 0.25 }, { itemId: 'potion_belt', chance: 1 }]);
+    for (const r of wins(300)) expect(r.fight.rewards.items.chieftains_tusk).toBeUndefined();
   });
 
-  it('the Tusk is not sellable (data: sellable false); the Merchant refuses it', () => {
-    let state: GameState | null = null;
-    for (let seed = 1; seed < 100 && !state; seed++) {
-      const r = fightAll(bossSlayer(seed));
-      if ((r.fight.rewards.items.chieftains_tusk ?? 0) > 0) state = r.state;
-    }
-    const tusk = state!.inventory.items.find((i) => i.defId === 'chieftains_tusk')!;
-    const sell = applyCommand(state!, cmd({ type: 'SELL_ITEM', itemId: tusk.id, quantity: 1 }), T0 + 200 * SEC);
+  it('a Tusk already in a save still exists: rare, stackable, kept, and the Merchant still refuses it (sellable false)', () => {
+    expect(getItemDef('chieftains_tusk')).toMatchObject({ rarity: 'rare', stackable: true, sellable: false });
+    const s = bossSlayer(3);
+    const withTusks: GameState = { ...s, inventory: { ...s.inventory, items: [...s.inventory.items, makeItem('chieftains_tusk', 4)] } };
+    const after = fightAll(withTusks).state; // a boss win leaves the stack alone
+    expect(after.inventory.items.find((i) => i.defId === 'chieftains_tusk')).toMatchObject({ stackable: true, quantity: 4 });
+    expect(baseSellPrice(after.inventory.items.find((i) => i.defId === 'chieftains_tusk')!)).toBe(0);
+    const sell = applyCommand(after, cmd({ type: 'SELL_ITEM', itemId: 'chieftains_tusk', quantity: 1 }), after.time.lastSimulatedAt + SEC);
     expect(sell.ok).toBe(false);
     if (!sell.ok) expect(sell.error.code).toBe('NOT_SELLABLE');
   });
 
-  it('full inventory: the gear piece and the Tusk are LOST (reported in itemsLost), the fight still pays XP and gold', () => {
+  it('the Troll Head is a rare, stackable material that sells for 250; two drops stack in one slot', () => {
+    expect(getItemDef('troll_head')).toMatchObject({ rarity: 'rare', stackable: true, sellPrice: 250 });
+    expect(getItemDef('troll_head')!.description).toMatch(/dungeon level/i);
+    let second: GameState | null = null;
+    for (let seed = 1; seed < 200 && !second; seed++) {
+      const s = bossSlayer(seed);
+      const withHead: GameState = { ...s, inventory: { ...s.inventory, items: [...s.inventory.items, makeItem('troll_head', 1)] } };
+      const r = fightAll(withHead);
+      if ((r.fight.rewards.items.troll_head ?? 0) > 0) second = r.state;
+    }
+    expect(second).not.toBeNull();
+    const stack = second!.inventory.items.filter((i) => i.defId === 'troll_head');
+    expect(stack).toHaveLength(1);
+    expect(stack[0]).toMatchObject({ stackable: true, quantity: 2 });
+    const gold = second!.character.gold;
+    const sell = applyCommand(second!, cmd({ type: 'SELL_ITEM', itemId: 'troll_head', quantity: 2 }), second!.time.lastSimulatedAt + SEC);
+    if (!sell.ok) throw new Error(sell.error.message);
+    expect(sell.state.character.gold - gold).toBe(500);
+  });
+
+  describe('the Potion Belt (unique: at most one owned)', () => {
+    const owns = (s: GameState) => s.inventory.items.filter((i) => i.defId === 'potion_belt').length;
+    const withBelt = (s: GameState): GameState => ({ ...s, inventory: { ...s.inventory, items: [...s.inventory.items, makeItem('potion_belt')] } });
+    /** Another boss fight on a state that already fought one (the clock continues from where the state is). */
+    const fightAgain = (s: GameState) => {
+      const now = s.time.lastSimulatedAt;
+      const entered = applyCommand(s, cmd(ENTER), now);
+      if (!entered.ok) throw new Error(`${entered.error.code}: ${entered.error.message}`);
+      const sim = simulate(entered.state, now + 130 * SEC);
+      return { state: sim.state, fight: sim.state.dungeon.lastFight! };
+    };
+
+    it('is epic, not stackable, not gear (no slot, no quality), unique, sells for 100 flat', () => {
+      const def = getItemDef('potion_belt')!;
+      expect(def).toMatchObject({ rarity: 'epic', stackable: false, unique: true, sellPrice: 100 });
+      expect(def.slot).toBeUndefined();
+      expect(def.description).toMatch(/automatically/i);
+      const item = makeItem('potion_belt');
+      expect(item).toMatchObject({ id: 'potion_belt', defId: 'potion_belt' });
+      expect(item.slot).toBeUndefined();
+      expect(item.quality).toBeUndefined();
+      expect(baseSellPrice(item)).toBe(100); // no rarity price multiplier: it is not gear
+    });
+
+    it('drops on EVERY win while the hero does not own one, as one item in one slot', () => {
+      for (const r of wins(40)) {
+        expect(r.fight.rewards.items.potion_belt).toBe(1);
+        expect(owns(r.state)).toBe(1);
+        expect(heroOwnsItem(r.state, 'potion_belt')).toBe(true);
+      }
+    });
+
+    it('never a second one while one is owned: nothing is added and nothing is reported lost', () => {
+      for (const r of wins(40, withBelt)) {
+        expect(r.fight.rewards.items.potion_belt).toBeUndefined();
+        expect(r.fight.rewards.itemsLost.potion_belt).toBeUndefined();
+        expect(owns(r.state)).toBe(1);
+      }
+    });
+
+    it('the roll draws from the RNG even when skipped: the stream does not depend on what the bag holds', () => {
+      for (let seed = 1; seed <= 12; seed++) {
+        const without = fightAll(bossSlayer(seed));
+        const owned = fightAll(withBelt(bossSlayer(seed)));
+        expect(owned.state.rng).toEqual(without.state.rng);
+        expect(owned.fight.rewards.gold).toBe(without.fight.rewards.gold);
+      }
+    });
+
+    it('sells for 100 gold; once sold, the next win drops it again', () => {
+      const first = fightAll(bossSlayer(5));
+      expect(owns(first.state)).toBe(1);
+      const gold = first.state.character.gold;
+      const sold = applyCommand(first.state, cmd({ type: 'SELL_ITEM', itemId: 'potion_belt', quantity: 1 }), first.state.time.lastSimulatedAt + SEC);
+      if (!sold.ok) throw new Error(sold.error.message);
+      expect(sold.state.character.gold - gold).toBe(100);
+      expect(owns(sold.state)).toBe(0);
+      expect(heroOwnsItem(sold.state, 'potion_belt')).toBe(false);
+      const again = fightAgain(sold.state);
+      expect(again.fight).toMatchObject({ won: true });
+      expect(again.fight.rewards.items.potion_belt).toBe(1);
+      expect(owns(again.state)).toBe(1);
+    });
+
+    it('lost to a full bag (reported), so the next win with room drops it again', () => {
+      const fillUp = (s: GameState): GameState => {
+        const junk = Array.from({ length: s.inventory.capacity - s.inventory.items.length }, (_, i) => makeItem('troll_hide', 1, `junk#${i}`));
+        return { ...s, inventory: { ...s.inventory, items: [...s.inventory.items, ...junk.map((j) => ({ ...j, stackable: false as const }))] } };
+      };
+      const full = fightAll(fillUp(bossSlayer(6)));
+      expect(full.fight.rewards.items.potion_belt).toBeUndefined();
+      expect(full.fight.rewards.itemsLost.potion_belt).toBe(1);
+      expect(owns(full.state)).toBe(0);
+      expect(full.summary.itemsLost.potion_belt).toBe(1);
+      // Make room (a gear piece, a Troll Head and the belt may all drop on the next win) and fight again.
+      const roomy: GameState = { ...full.state, inventory: { ...full.state.inventory, items: full.state.inventory.items.slice(0, -3) } };
+      const again = fightAgain(roomy);
+      expect(again.fight.rewards.items.potion_belt).toBe(1);
+      expect(owns(again.state)).toBe(1);
+    });
+  });
+
+  it('full inventory: the gear piece, the Troll Head and the belt are LOST (reported in itemsLost), the fight still pays XP and gold', () => {
     const fillUp = (s: GameState): GameState => {
       const junk = Array.from({ length: s.inventory.capacity - s.inventory.items.length }, (_, i) => ({ id: `junk#${i}`, defId: 'troll_hide', name: 'x', icon: 'x', stackable: false } as unknown as GameState['inventory']['items'][number]));
       return { ...s, inventory: { ...s.inventory, items: [...s.inventory.items, ...junk] } };
     };
     const all = wins(200, fillUp);
     const lostGear = all.find((r) => Object.keys(r.fight.rewards.itemsLost).some((k) => k.startsWith('iron_')));
-    const lostTusk = all.find((r) => (r.fight.rewards.itemsLost.chieftains_tusk ?? 0) > 0);
+    const lostHead = all.find((r) => (r.fight.rewards.itemsLost.troll_head ?? 0) > 0);
     expect(lostGear).toBeDefined();
-    expect(lostTusk).toBeDefined();
+    expect(lostHead).toBeDefined();
     for (const r of all) {
       expect(r.fight.rewards.gear).toBeUndefined();
-      expect(r.fight.rewards.items.chieftains_tusk).toBeUndefined();
+      expect(r.fight.rewards.items.troll_head).toBeUndefined();
+      expect(r.fight.rewards.items.potion_belt).toBeUndefined();
+      expect(r.fight.rewards.itemsLost.potion_belt).toBe(1);
       expect(r.state.inventory.items.length).toBe(r.state.inventory.capacity);
       expect(r.fight.rewards.heroXp).toBe(2000);
       expect(r.summary.itemsLost).toEqual(r.fight.rewards.itemsLost);
     }
   });
 
-  it('INVARIANT: the reward draws are on the main stream in the documented order (gold, gear chance, [piece, colour, quality], Tusk chance)', () => {
+  it('INVARIANT: the reward draws are on the main stream in the documented order (gold, gear chance, [piece, colour, quality], Troll Head chance, Potion Belt chance)', () => {
     const gear = BOSSES.troll_chieftain.rewards.gear;
     for (let seed = 1; seed <= 25; seed++) {
       const { fight, state } = fightAll(bossSlayer(seed));
@@ -656,9 +757,11 @@ describe('rewards', () => {
         rng = quality.rng;
         expect(fight.rewards.gear).toMatchObject({ defId: piece.value, rarity: rarity.value, quality: quality.value });
       }
-      const tusk = chance(rng, 0.5);
-      rng = tusk.rng;
-      expect((fight.rewards.items.chieftains_tusk ?? 0) > 0).toBe(tusk.value);
+      const head = chance(rng, 0.25);
+      rng = head.rng;
+      expect((fight.rewards.items.troll_head ?? 0) > 0).toBe(head.value);
+      rng = nextDraw(rng); // the Potion Belt's roll (chance 1): one draw, owned or not
+      expect(fight.rewards.items.potion_belt).toBe(1);
       expect(state.rng).toEqual(rng);
     }
   });
@@ -686,20 +789,20 @@ describe('golden fight (pins the RNG draw order, Bash and a stun)', () => {
       '6000 h7 roll67 p37 d37 -> 883 (boss 883)',
       '6300 e7 roll27 p11 d11 -> 386 (boss 884)',
     ]);
-    expect(fight).toMatchObject({ won: true, endReason: 'enemy_defeated', durationMs: 35_000, enemyHpEnd: 0, rewards: { heroXp: 2000, gold: 410, items: {}, itemsLost: {} } });
+    expect(fight).toMatchObject({ won: true, endReason: 'enemy_defeated', durationMs: 35_000, enemyHpEnd: 0, rewards: { heroXp: 2000, gold: 410, items: { potion_belt: 1 }, itemsLost: {} } }); // 1.26.0: the belt (items was {})
     expect(fight.log).toHaveLength(71);
     expect(fight.log.filter((e) => e.skill).map((e) => [e.strike, e.stun ?? 0])).toEqual([[3, 3], [10, 0], [17, 0], [24, 0], [31, 0]]);
     expect(fight.log.filter((e) => e.stunned)).toHaveLength(3);
     // 1.24.0: the first boss win opens Hard
     expect(events.map((e) => e.type)).toEqual(['FIGHT_RESOLVED', 'DIFFICULTY_UNLOCKED', 'ACTIVITY_STOPPED']);
     expect(summary.boss).toEqual({ fights: 1, wins: 1, losses: 0 });
-    expect(state.rng).toEqual({ seed: 2072178003 });
+    expect(state.rng).toEqual({ seed: 3903743816 }); // 1.26.0: was 2072178003 (the Troll Head and Potion Belt rolls come after the gear chance)
     // 1.22.0: d611449f is the 1.20.0 hash df20ce2e in the v21 shape (only saveVersion moved: no gear dropped here, so no affixes).
     // 1.24.0: seen in the v21 shape (asV21: no difficulty fields, the fight's one enemy flat) the hash is still the 1.22.0 one: no outcome moved.
     // 1.25.0: re-pinned (was d611449f / df20ce2e). The RNG state above is unchanged (same draws in the same order); the hashes moved because the fight's
     // strike times, its duration and the boss's regen at each strike differ.
-    expect(hashState(asV21(state))).toBe('16eeaa39');
-    expect(hashState({ ...asV21(state), saveVersion: 20 } as unknown as GameState)).toBe('dc459450');
+    expect(hashState(asV21(state))).toBe('cee70c6b'); // 1.26.0: was 16eeaa39 (the belt in the bag, the stream moved)
+    expect(hashState({ ...asV21(state), saveVersion: 20 } as unknown as GameState)).toBe('1291201a'); // 1.26.0: was dc459450
   });
 
   it('seed 1: a loss with five stuns (12 strikes lost): the hero falls at 37.3 s', () => {

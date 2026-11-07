@@ -662,6 +662,21 @@
   "h": 32,
   "scale": 8
  },
+ "items/wild_sage.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/troll_head.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
+ "items/potion_belt.png": {
+  "w": 32,
+  "h": 32,
+  "scale": 8
+ },
  "trees/oak.png": {
   "w": 32,
   "h": 32,

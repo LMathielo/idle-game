@@ -40,6 +40,9 @@ import {
   type GameState,
   type MobVariant,
   getDerivedStats,
+  getItemDef,
+  type GearDropDef,
+  heroOwnsItem,
   hpView,
   isBossId,
   mobTypes,
@@ -657,7 +660,7 @@ function DungeonDetail({
           accessible
           accessibilityLabel={`Loot ${packed ? 'per mob, on a full clear' : 'on a win'}: ${kinds
             .map((k) => `${k.name} ${scaleStat(d.rewards.heroXp, k.multBp)} hero XP, gold ${range(scaleStat(d.rewards.gold.min, k.multBp), scaleStat(d.rewards.gold.max, k.multBp))}`)
-            .join('; ')}; ${d.rewards.drops.map((x) => `${itemName(x.itemId)} ${percent(x.chance)} chance`).join(', ')}`}
+            .join('; ')}; ${d.rewards.gear ? `${percent(d.rewards.gear.chance)} chance of a ${gearSetName(d.rewards.gear)} gear piece, ` : ''}${d.rewards.drops.map((x) => `${itemName(x.itemId)} ${percent(x.chance)} chance`).join(', ')}; each drop rolls on its own`}
         >
           {kinds.map((k) => (
             <View key={k.variant}>
@@ -666,6 +669,12 @@ function DungeonDetail({
               <StatLine icon={<GameIcon name="gold" />} label="Gold" value={range(scaleStat(d.rewards.gold.min, k.multBp), scaleStat(d.rewards.gold.max, k.multBp))} />
             </View>
           ))}
+          {d.rewards.gear ? (
+            <>
+              <StatLine icon={<ItemIcon defId={d.rewards.gear.pieces[0].itemId} size={20} />} label={`${gearSetName(d.rewards.gear)} gear`} value={`${percent(d.rewards.gear.chance)}${packed ? ' per mob' : ''}`} />
+              <Text style={styles.abilityNote}>{gearDropNote(d.rewards.gear)}</Text>
+            </>
+          ) : null}
           {d.rewards.drops.map((x) => (
             <StatLine key={x.itemId} icon={<ItemIcon defId={x.itemId} size={20} />} label={itemName(x.itemId)} value={`${percent(x.chance)}${packed ? ' per mob' : ''}`} />
           ))}
@@ -734,6 +743,7 @@ function DungeonDetail({
         ) : lastFight ? (
           <LastFight
             fight={lastFight}
+            gears={lastFight.won ? (lastFight.rewards.gears ?? []).map((g) => ({ ...g, inBag: state.inventory.items.some((i) => i.id === g.itemId) })) : []}
             onReplay={() => {
               setReplayKey((k) => k + 1);
               setReplay(lastFight);
@@ -850,6 +860,8 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
   const scaled = bossRewardsAt(id, difficulty);
   const weightTotal = scaled.rarityWeights.reduce((n, x) => n + x.weight, 0);
   const gearOdds = scaled.rarityWeights.map((w) => `${RARITY_COLOR_NAMES[w.value]} ${Math.round((w.weight * 100) / weightTotal)}%`).join(', ');
+  /** What a boss drop shows as its odds: a unique item the hero already owns reads "Owned" (it will not drop again until he has none). */
+  const dropValue = (itemId: string, chancePct: string) => (getItemDef(itemId)?.unique && heroOwnsItem(state, itemId) ? 'Already owned' : chancePct);
 
   return (
     <View>
@@ -888,7 +900,7 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
         <Text style={styles.subTitle}>Rewards (win only)</Text>
         <View
           accessible
-          accessibilityLabel={`Rewards on a win${onLevel}: ${scaled.heroXp} hero XP, ${range(scaled.gold.min, scaled.gold.max)} gold, ${percent(rewards.gear.chance)} chance of an Iron gear piece, ${rewards.drops.map((x) => `${itemName(x.itemId)} ${percent(x.chance)} chance`).join(', ')}`}
+          accessibilityLabel={`Rewards on a win${onLevel}: ${scaled.heroXp} hero XP, ${range(scaled.gold.min, scaled.gold.max)} gold, ${percent(rewards.gear.chance)} chance of an Iron gear piece, ${rewards.drops.map((x) => (getItemDef(x.itemId)?.unique ? `${itemName(x.itemId)}: ${dropValue(x.itemId, `${percent(x.chance)} chance`)}${heroOwnsItem(state, x.itemId) ? ', you own one and only one can be owned' : ', only if you do not own one'}` : `${itemName(x.itemId)} ${percent(x.chance)} chance`)).join(', ')}; each drop rolls on its own`}
         >
           <StatLine icon={<GameIcon name="hero_xp" />} label="Hero XP" value={`+${formatNumber(scaled.heroXp)}`} />
           <StatLine icon={<GameIcon name="gold" />} label="Gold" value={range(scaled.gold.min, scaled.gold.max)} />
@@ -897,8 +909,9 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
             Sword, helm, chestplate, shield, gloves or boots, equal odds. {gearOdds}; quality 0–{rewards.gear.quality.max}%.
           </Text>
           {rewards.drops.map((x) => (
-            <StatLine key={x.itemId} icon={<ItemIcon defId={x.itemId} size={20} />} label={itemName(x.itemId)} value={percent(x.chance)} />
+            <StatLine key={x.itemId} icon={<ItemIcon defId={x.itemId} size={20} />} label={itemName(x.itemId)} value={dropValue(x.itemId, percent(x.chance))} />
           ))}
+          {rewards.drops.some((x) => getItemDef(x.itemId)?.unique) ? <Text style={styles.abilityNote}>The Potion Belt drops on every win while you do not own one. You can own only one.</Text> : null}
         </View>
       </Panel>
 
@@ -952,7 +965,7 @@ function BossDetail({ id, state, running, paused, onBack }: { id: BossId; state:
           <View ref={lastBoxRef} collapsable={false}>
             <LastFight
               fight={lastFight}
-              gear={gear}
+              gears={gear ? [gear] : []}
               onShowGear={showGear}
               onReplay={() => {
                 setReplayKey((k) => k + 1);
@@ -1054,19 +1067,35 @@ const RunControls = memo(function RunControls({
   );
 });
 
+/** "Copper": the set a gear drop's pieces belong to (their ids are `<set>_<piece>`). */
+function gearSetName(g: GearDropDef): string {
+  const set = g.pieces[0].itemId.split('_')[0];
+  return set.charAt(0).toUpperCase() + set.slice(1);
+}
+
+/** "Sword, helm, ... or boots, equal odds. White 75%, Green 25%; quality 0-50%." for a stage gear drop (same on every difficulty). */
+function gearDropNote(g: GearDropDef): string {
+  const names = g.pieces.map((p) => itemName(p.itemId).replace(/^\S+ /, '').toLowerCase());
+  const total = g.rarityWeights.reduce((n, w) => n + w.weight, 0);
+  const odds = g.rarityWeights.map((w) => `${RARITY_COLOR_NAMES[w.value]} ${Math.round((w.weight * 100) / total)}%`).join(', ');
+  const list = `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
+  return `${list.charAt(0).toUpperCase()}${list.slice(1)}, equal odds. ${odds}; quality 0–${g.quality.max}%. Same on every difficulty.`;
+}
+
 /** The piece a boss win dropped, for the last-fight box: its colour and quality words, and whether it is still in the bag. */
 type DroppedGear = { itemId: string; defId: string; rarity: ReturnType<typeof rarityOf>; quality: number; inBag: boolean };
 
 const LastFight = memo(function LastFight({
   fight,
   onReplay,
-  gear,
+  gears,
   onShowGear,
 }: {
   fight: FightRecord;
   onReplay: () => void;
-  gear?: DroppedGear | null;
-  /** Opens the gear popover (with Equip) anchored on the given element. */
+  /** The gear this win dropped (a boss: at most one, with a View button; a stage: one per piece, a pack can drop several, no reveal). */
+  gears?: DroppedGear[];
+  /** Opens the gear popover (with Equip) anchored on the given element; only the boss passes it. */
   onShowGear?: (node: HostInstance | null) => void;
 }) {
   const r = fight.rewards;
@@ -1098,14 +1127,17 @@ const LastFight = memo(function LastFight({
           </Text>
         ))}
       </View>
-      {gear ? (
-        <View ref={gearRef} collapsable={false} style={styles.gearBox}>
-          <Text style={[styles.gearText, { color: rarityColors[gear.rarity] }]}>
+      {(gears ?? []).map((gear) => (
+        <View key={gear.itemId} ref={gearRef} collapsable={false} style={styles.gearBox}>
+          <Text
+            style={[styles.gearText, { color: rarityColors[gear.rarity] }]}
+            accessibilityLabel={`Dropped ${itemName(gear.defId)}, ${RARITY_COLOR_NAMES[gear.rarity]}, quality ${gear.quality} percent`}
+          >
             Drop: {itemName(gear.defId)} · {RARITY_COLOR_NAMES[gear.rarity]} · Quality {gear.quality}%
           </Text>
           {gear.inBag && onShowGear ? <PixelButton label="View" onPress={() => onShowGear(gearRef.current)} accessibilityLabel={`View the ${itemName(gear.defId)} you won`} /> : null}
         </View>
-      ) : null}
+      ))}
       <PixelButton label="Replay" onPress={onReplay} accessibilityLabel="Replay the last fight" />
     </View>
   );

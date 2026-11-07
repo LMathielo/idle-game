@@ -155,7 +155,7 @@ export {
   type MerchantView,
 } from './merchant';
 export { isEquipmentSlot } from './equipment';
-export { freeSlots } from './inventory';
+export { freeSlots, heroOwnsItem } from './inventory';
 export {
   advanceMining,
   mineActivityView,
