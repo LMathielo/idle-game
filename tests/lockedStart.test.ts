@@ -125,18 +125,12 @@ describe('BUILD: Merchant and Storage (Town Hall Lv1 + 100 gold + 10 oak logs + 
   });
 });
 
-describe('Storage: a building with no function and no upgrades', () => {
-  const built = () => withBuilt(newGame(1, T0), ['town_hall', 'storage']);
-
-  it('no bonuses at any level: not upgradable (data-driven), the Upgrade entry is hidden', () => {
-    for (const bonuses of BUILDINGS.storage.levels) expect(bonuses).toEqual({});
-    const v = upgradeView(built(), 'storage');
-    expect(v).toMatchObject({ level: 1, nextLevel: 2, block: 'not_upgradable' }); // UpgradeEntry renders nothing for this block
-  });
-
-  it('UPGRADE_BUILDING is refused with NOT_UPGRADABLE; nothing is paid', () => {
-    const s = { ...built(), character: { ...built().character, gold: 1_000_000 } };
-    expect(run(s, { type: 'UPGRADE_BUILDING', buildingId: 'storage', level: 2 })).toMatchObject({ ok: false, error: { code: 'NOT_UPGRADABLE' } });
+describe('Storage: built like the Merchant (since 1.29.0 it has a function and upgrades: tests/storage.test.ts)', () => {
+  it('its levels give storage slots (50 / 70 / 90 / 110 / 130), so it is upgradable', () => {
+    expect(BUILDINGS.storage.levels.map((b) => b.storageSlots)).toEqual([50, 70, 90, 110, 130]);
+    const s = withBuilt(newGame(1, T0), ['town_hall', 'storage']);
+    expect(upgradeView(s, 'storage')).toMatchObject({ level: 1, nextLevel: 2 });
+    expect(upgradeView(s, 'storage').block).not.toBe('not_upgradable');
   });
 
   it('while unbuilt: UPGRADE_BUILDING is BUILDING_LOCKED', () => {

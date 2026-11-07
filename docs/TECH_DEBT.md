@@ -64,6 +64,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #44, 30] `src/components/belt/BeltPanel.tsx` ~105-116 — drop rects come from async `measureInWindow` at layout / drag start; on Android edge-to-edge the window coords may differ from the gesture's `absoluteY` by the status bar (hidden by the 10 pt slop). Fix: check alignment on device; re-measure on layout shifts.
 - [PR #45, 25] `src/app/(tabs)/hero.tsx` ~87 — the Hero ScrollView is not disabled during a drag; if an active pan does not take the touch from the native scroll on a device, the page scrolls under the finger and drop rects go stale. Fix: check on iOS + Android; if it scrolls, `scrollEnabled={false}` while dragging.
 - [PR #45, 20] `src/components/ui/drag/dragKit.tsx` `onFinalize` — `onEnd` is scheduled on every touch end (taps, scroll swipes) even when the pan never activated. Fix: track activation in a shared value and skip.
+- [PR #46, 45] `src/components/storage/StorageModal.tsx` CellGrid — up to 130 + 20 un-virtualized cells, each with a pan, a highlight worklet and a measure on drag start; may hitch on low-end Android at Lv5. Fix: profile; measure only visible cells or mount the highlight only for hovered / source boxes.
+- [PR #46, 40] `src/components/storage/StorageModal.tsx` notice — "Storage full" notice ignores the bottom safe-area inset and is not announced on iOS (`accessibilityLiveRegion` is Android only). Fix: add the inset and `AccessibilityInfo.announceForAccessibility`.
 
 ## Engine and data
 
@@ -88,6 +90,8 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #44, 30] `src/engine/belt.ts` `walkWithBelt` — past `MAX_ACTIONS_PER_SIMULATION` cuts the rest runs as one piece without drinks, so split invariance holds only below the action cap. Fix: say so in ENGINE.md or add a test at the cap.
 - [PR #44, 20] `src/engine/belt.ts` `beltNextEventMs` — the walk is cut at every held type's cooldown end even when HP is full or no rule can fire (perf only, bounded by the guard). Fix: skip cuts that cannot trigger a drink.
 - [PR #44, 20] `src/engine/combat.ts` `resolveFight` — ignores the belt; only used as a read-only preview (`index.ts`), so a preview of a belted hero is pessimistic. Fix: document, or feed the belt into the preview if it is ever shown to players.
+- [PR #46, 25] `src/engine/inventory.ts` `heroOwnsItem` — `storage?` is optional, so a caller without storage silently skips the check. Fix: make it required.
+- [PR #46, 15] `src/engine/storage.ts` `canMove` / `dropCommand` — call `planMove` without `settleCells` (the command settles first); only matters for a damaged save. Fix: settle a copy first.
 
 ## Tests
 
@@ -132,3 +136,4 @@ Last gathered: 2026-10-31, from the review comments on PRs #2–#19 and checked 
 - [PR #40, 25] `src/app/(tabs)/hero.tsx` / `src/components/merchant/MerchantModal.tsx` - a single `busyScope` is overwritten by the latest send; going back to an item still in flight re-enables its buttons (the engine rejects the duplicate). Fix: a Set of in-flight scopes.
 - [PR #44, 40] `docs/PRODUCT.md` / `docs/ENGINE.md` — older Potion Belt rows still say slot order is the only tie rule; mark them superseded by the 2026-11-07 drink priority.
 - [PR #45, 40] `docs/CODEMAP.md` belt line — stray parenthetical "(the pure `slotAt` drop test now lives in ...)" where the `beltDrag.ts` entry was. Fix: rewrite the line.
+- [PR #46, 20] `src/engine/selectors.ts` `itemQuantity` — now counts storage too (ActivityStrip log / ore counts). Fix: note it in PRODUCT.md.

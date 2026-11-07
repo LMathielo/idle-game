@@ -66,8 +66,9 @@ export type Item = {
    */
   belt?: BeltSlot[];
   /**
-   * Bag items only (save v25): the cell the item sits in, an integer 0..capacity-1, unique within the bag. The bag is a grid with gaps; the
-   * list order of `inventory.items` means nothing. Equipped items carry none (equipping drops it, unequipping assigns one). See inventory.ts.
+   * Bag and storage items only (save v25; storage since v26): the cell the item sits in, an integer 0..capacity-1, unique within its container.
+   * Both are grids with gaps; the list order of `inventory.items` / `storage.items` means nothing. Equipped items carry none (equipping drops it,
+   * unequipping assigns one). See inventory.ts.
    */
   cell?: number;
 };
@@ -134,6 +135,15 @@ export type Character = {
 export type Inventory = {
   /** Number of stacks / unique items the inventory can hold. */
   capacity: number;
+  items: Item[];
+};
+
+/**
+ * The Storage building's grid (save v26, engine 1.29.0): the same cell model as the bag (items with `cell`, gaps allowed, one stack per
+ * stackable defId, unlimited stack quantity). **Its capacity is not stored**: it follows the Storage level (`storageCapacity`, 50 / 70 /
+ * 90 / 110 / 130; 0 while the building is locked), so an upgrade needs no extra state. `storageBox` (inventory.ts) pairs the two.
+ */
+export type StorageState = {
   items: Item[];
 };
 
@@ -619,7 +629,7 @@ export type MerchantState = {
 };
 
 export type GameState = {
-  saveVersion: 25;
+  saveVersion: 26;
   rng: RngState;
   time: {
     /** Engine time up to which the state has been simulated (epoch ms). */
@@ -658,6 +668,8 @@ export type GameState = {
   flags: GameFlags;
   character: Character;
   inventory: Inventory;
+  /** Save v26. The Storage building's grid (a second container beside the bag). See StorageState. */
+  storage: StorageState;
 };
 
 // ---------- Events & summaries ----------
@@ -715,6 +727,12 @@ export type GameEvent =
   | { type: 'CRAFT_READY'; pipe: number; jobId: number; defId: string }
   /** COLLECT_CRAFT: the gear piece went into the inventory as `itemId`; the pipe is idle. */
   | { type: 'CRAFT_COLLECTED'; pipe: number; jobId: number; itemId: string; defId: string }
+  /**
+   * DEPOSIT_ALL / DEPOSIT_STACKED (1.29.0): `moved` bag entries (stacks / pieces) went into storage; `stayed` entries the command would
+   * have moved (DEPOSIT_ALL: everything else in the bag) stayed in the bag because storage was full. Always 0 for DEPOSIT_STACKED (merges
+   * need no room).
+   */
+  | { type: 'ITEMS_DEPOSITED'; mode: 'all' | 'stacked'; moved: number; stayed: number }
   /** CANCEL_CRAFT (gear): the job ended early, its inputs refunded. */
   | { type: 'CRAFT_JOB_CANCELLED'; pipe: number; jobId: number }
   | { type: 'PIPE_UNLOCKED'; pipes: number };

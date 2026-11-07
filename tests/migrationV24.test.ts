@@ -82,8 +82,8 @@ describe('v24 -> v25', () => {
   const s = loadSave(V24);
 
   it('loads as the current save; nothing but the cells differs from the document', () => {
-    expect(CURRENT_SAVE_VERSION).toBe(25);
-    expect(s.saveVersion).toBe(25);
+    expect(CURRENT_SAVE_VERSION).toBe(26);
+    expect(s.saveVersion).toBe(26);
     expect(s.rng).toEqual(V24.rng);
     expect(s.time).toEqual(V24.time);
     // Taking the cells off again gives the fixture byte for byte.
@@ -152,9 +152,9 @@ describe('v24 -> v25', () => {
     expect(noCap.inventory.items.filter((i: any) => i.cell !== undefined)).toHaveLength(20);
   });
 
-  it('the release table: 1.28.0 wrote save 25', () => {
-    expect(RELEASED_ENGINES.at(-1)).toEqual({ engine: '1.28.0', save: 25 });
-    expect(ENGINE_VERSION).toBe('1.28.0');
+  it('the release table: 1.28.0 wrote save 25 (1.29.0 wrote 26: tests/migrationV25.test.ts)', () => {
+    expect(RELEASED_ENGINES.find((r) => r.engine === '1.28.0')).toEqual({ engine: '1.28.0', save: 25 });
+    expect(ENGINE_VERSION).toBe('1.29.0');
   });
 });
 

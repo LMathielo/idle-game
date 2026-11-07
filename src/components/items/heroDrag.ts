@@ -43,7 +43,7 @@ export function boxTarget(index: number, capacity: number): DragTarget | null {
 }
 
 /** 1 for every drop box that accepts `source` (the engine's `dropCommand` says so), else 0. */
-export function acceptingBoxes(state: Pick<GameState, 'inventory' | 'character'>, source: DragSource): number[] {
+export function acceptingBoxes(state: Pick<GameState, 'inventory' | 'character' | 'storage' | 'buildings'>, source: DragSource): number[] {
   const { capacity } = state.inventory;
   return Array.from({ length: dropBoxCount(capacity) }, (_, i) => {
     const target = boxTarget(i, capacity);

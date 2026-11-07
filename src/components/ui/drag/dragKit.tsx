@@ -23,10 +23,11 @@ import { colors } from '../../../theme';
 import { ItemIcon } from '../../art/Sprites';
 import { DRAG_HOLD_MS } from '../dragHold';
 import { measureAnchor } from '../InfoPopover';
-import { type DropRect, slotAt, TAP_SLOP_SQ } from './dropTargets';
+import { clipRect, type DropRect, slotAt, TAP_SLOP_SQ } from './dropTargets';
 
 export const GHOST_SIZE = 44;
 const NO_RECT: DropRect = { x: 0, y: 0, width: 0, height: 0 };
+const NO_CLIP = (): number => -1;
 /** The ghost flying home and fading after a drop that does nothing, ms. */
 const SPRING_BACK = { duration: 160 };
 
@@ -35,6 +36,13 @@ export type DragSurface = {
   layerRef: RefObject<HostInstance | null>;
   /** Registers (node) or unregisters (null) drop box `index`. Boxes that are not mounted have no rect and never match. */
   setTarget: (index: number, node: HostInstance | null) => void;
+  /** Registers (node) or unregisters (null) clip node `slot`: the viewport of a scrolling list, see `clipOf`. */
+  setClip: (slot: number, node: HostInstance | null) => void;
+  /**
+   * Which clip node (a `setClip` slot) a box is cut by, or -1 for none. A box scrolled out of its list's viewport then has no rect, so it
+   * is not a drop box under another section. Set by the screen (default: none).
+   */
+  clipOf: MutableRefObject<(index: number) => number>;
   /** Measures the layer and every registered box. Call when a drag starts and when the layout moved under it. */
   measure: () => void;
   /** Sets the ghost's icon (an item's defId; null = none). */
@@ -57,8 +65,8 @@ export type DragSurface = {
   ghostOn: SharedValue<number>;
 };
 
-/** `count` drop boxes. `allowAll`: every box accepts until the screen says otherwise (the belt's four slots). */
-export function useDragSurface(count: number, allowAll = false): DragSurface {
+/** `count` drop boxes. `allowAll`: every box accepts until the screen says otherwise (the belt's four slots). `clipCount`: clip nodes (scroll viewports). */
+export function useDragSurface(count: number, allowAll = false, clipCount = 0): DragSurface {
   const rects = useSharedValue<DropRect[]>(Array.from({ length: count }, () => NO_RECT));
   const allowed = useSharedValue<number[]>(Array.from({ length: count }, () => (allowAll ? 1 : 0)));
   const hover = useSharedValue(-1);
@@ -72,21 +80,42 @@ export function useDragSurface(count: number, allowAll = false): DragSurface {
   const ghostOn = useSharedValue(0);
   const layerRef = useRef<HostInstance | null>(null);
   const targets = useRef<(HostInstance | null)[]>([]);
+  const clips = useRef<(HostInstance | null)[]>([]);
+  const clipOf = useRef<(index: number) => number>(NO_CLIP);
   const ghostIcon = useRef<((defId: string | null) => void) | null>(null);
   const countRef = useRef(count);
   countRef.current = count;
+  const clipCountRef = useRef(clipCount);
+  clipCountRef.current = clipCount;
 
   const setTarget = useCallback((index: number, node: HostInstance | null) => {
     targets.current[index] = node;
   }, []);
+  const setClip = useCallback((slot: number, node: HostInstance | null) => {
+    clips.current[slot] = node;
+  }, []);
   const measure = useCallback(() => {
     const n = countRef.current;
-    void Promise.all([measureAnchor(layerRef.current), ...Array.from({ length: n }, (_, i) => measureAnchor(targets.current[i]))]).then(([layer, ...boxes]) => {
+    const k = clipCountRef.current;
+    void Promise.all([
+      measureAnchor(layerRef.current),
+      Promise.all(Array.from({ length: n }, (_, i) => measureAnchor(targets.current[i]))),
+      Promise.all(Array.from({ length: k }, (_, i) => measureAnchor(clips.current[i]))),
+    ]).then(([layer, boxes, views]) => {
       if (layer) {
         originX.set(layer.x);
         originY.set(layer.y);
       }
-      rects.set(boxes.map((b) => (b ? { x: b.x, y: b.y, width: b.width, height: b.height } : NO_RECT)));
+      rects.set(
+        boxes.map((b, i) => {
+          if (!b) return NO_RECT;
+          const rect = { x: b.x, y: b.y, width: b.width, height: b.height };
+          const slot = clipOf.current(i);
+          const view = slot >= 0 ? views[slot] : undefined;
+          if (slot < 0) return rect;
+          return (view ? clipRect(rect, view) : null) ?? NO_RECT;
+        }),
+      );
     });
   }, [originX, originY, rects]);
   const ghostStyle = useAnimatedStyle(() => ({
@@ -95,8 +124,8 @@ export function useDragSurface(count: number, allowAll = false): DragSurface {
   }));
 
   return useMemo(
-    () => ({ layerRef, setTarget, measure, ghostIcon, ghostStyle, rects, allowed, hover, sourceIndex, dragX, dragY, downX, downY, originX, originY, ghostOn }),
-    [setTarget, measure, ghostStyle, rects, allowed, hover, sourceIndex, dragX, dragY, downX, downY, originX, originY, ghostOn],
+    () => ({ layerRef, setTarget, setClip, clipOf, measure, ghostIcon, ghostStyle, rects, allowed, hover, sourceIndex, dragX, dragY, downX, downY, originX, originY, ghostOn }),
+    [setTarget, setClip, measure, ghostStyle, rects, allowed, hover, sourceIndex, dragX, dragY, downX, downY, originX, originY, ghostOn],
   );
 }
 

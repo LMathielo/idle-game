@@ -85,6 +85,7 @@ export function advanceWorld(
   draft.workers = cloneState(draft.workers);
   draft.character = { ...draft.character };
   draft.inventory = cloneState(draft.inventory);
+  draft.storage = cloneState(draft.storage); // the pipes pay from the storage first (1.29.0)
   draft.rng = { ...draft.rng };
   draft.crafting = cloneState(draft.crafting);
   let left = grantedMs;

@@ -359,16 +359,34 @@ export function v24Doc<D extends Record<string, any>>(doc: D): D {
  * gets the document as the CURRENT save loads it. Idempotent.
  */
 export function v25Doc<D extends Record<string, any>>(doc: D): D {
-  if (!Array.isArray(doc.inventory?.items)) return doc;
+  if (!Array.isArray(doc.inventory?.items)) return v26Doc(doc);
   const capacity = typeof doc.inventory.capacity === 'number' ? doc.inventory.capacity : 20;
-  return { ...doc, inventory: { ...doc.inventory, items: doc.inventory.items.map((i: any, n: number) => (n < capacity && i && typeof i === 'object' ? { ...i, cell: n } : i)) } } as D;
+  return v26Doc({ ...doc, inventory: { ...doc.inventory, items: doc.inventory.items.map((i: any, n: number) => (n < capacity && i && typeof i === 'object' ? { ...i, cell: n } : i)) } }) as D;
+}
+
+/**
+ * What the v25 -> v26 migration does to a raw document (the Storage, engine 1.29.0): an empty `storage` is added. v25Doc chains to it, so a
+ * test that wraps an old fixture in v22Doc ... v25Doc gets the document as the CURRENT save loads it. Idempotent.
+ */
+export function v26Doc<D extends Record<string, any>>(doc: D): D {
+  return { ...doc, storage: doc.storage ?? { items: [] } } as D;
+}
+
+/**
+ * A 1.29.0 state seen in the v25 shape: no `storage` (save v26). Only the SHAPE: a script that never touches the storage plays exactly as
+ * 1.28.0 did (its payments, counts and refunds read an empty storage), so seen like this its hash is the 1.28.0 one.
+ */
+export function asV25(s: GameState): GameState {
+  const { storage: _storage, ...rest } = s;
+  return { ...rest, saveVersion: 25 } as unknown as GameState;
 }
 
 /**
  * A 1.28.0 state seen in the v24 shape: no bag cells (save v25). Only the SHAPE: the items and their list order are the 1.27.0 ones, so a
  * script that plays the same commands has the 1.27.0 hash.
  */
-export function asV24(s: GameState): GameState {
+export function asV24(state: GameState): GameState {
+  const s = asV25(state);
   const strip = (i: any) => {
     if (!i || typeof i !== 'object' || !('cell' in i)) return i;
     const { cell: _c, ...item } = i;

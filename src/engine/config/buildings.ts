@@ -28,6 +28,8 @@ export type LevelBonuses = {
   craftTimeBp?: number;
   /** Crafting house: extra output of normal (material) items, in basis points (1 000 = +10%). */
   craftYieldBp?: number;
+  /** Storage (1.29.0): cells of the storage grid at this level. */
+  storageSlots?: number;
 };
 
 /** Town Hall: Lv2+ gives +20% wood/stone/ore yield and +20% sell prices; Lv3–5 only raise the worker cap (for now). */
@@ -45,8 +47,9 @@ const gatheringLevels = (kind: GatheringKind): readonly LevelBonuses[] => [{}, {
 /** Merchant: stock slots = 5 + 2 × (level − 1). */
 const MERCHANT_LEVELS: readonly LevelBonuses[] = [{ stockSlots: 5 }, { stockSlots: 7 }, { stockSlots: 9 }, { stockSlots: 11 }, { stockSlots: 13 }];
 
-/** Storage: built, no function yet (owner decision 2026-11-04): no bonus at any level, so it can't be upgraded. */
-const STORAGE_LEVELS: readonly LevelBonuses[] = [{}, {}, {}, {}, {}];
+/** Storage (owner decision 2026-11-07, 1.29.0): 50 cells at Lv1, +20 per level above it (50 / 70 / 90 / 110 / 130). */
+export const STORAGE = { baseSlots: 50, slotsPerLevel: 20 } as const;
+const STORAGE_LEVELS: readonly LevelBonuses[] = Array.from({ length: BUILDING_MAX_LEVEL }, (_, i) => ({ storageSlots: STORAGE.baseSlots + STORAGE.slotsPerLevel * i }));
 
 /** What Merchant and Storage cost besides gold (10 oak logs + 10 stone each; owner-approved 2026-11-04). */
 const TOWN_BUILDING_ITEMS = [
@@ -232,11 +235,10 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     id: 'storage',
     name: 'Storage',
     icon: '📦',
-    description: 'A warehouse for your goods. Coming soon: it has no use yet.',
+    description: 'A warehouse for your goods. Holds a second, bigger grid of items; its materials also pay for builds, upgrades and crafts.',
     requirements: { buildings: [{ buildingId: 'town_hall', level: 1 }], items: TOWN_BUILDING_ITEMS, gold: 100 },
     upgrades: BUILDING_UPGRADES,
     cappedByTownHall: true,
-    // No bonuses at any level: the next level gives nothing, so it is never upgradable (NOT_UPGRADABLE, data-driven).
     levels: STORAGE_LEVELS,
   },
 };

@@ -64,8 +64,8 @@ describe('v23 -> v24', () => {
   const s = loadSave(V23);
 
   it('loads as the current save; nothing but the new fields differs from the document', () => {
-    expect(CURRENT_SAVE_VERSION).toBe(25);
-    expect(s.saveVersion).toBe(25);
+    expect(CURRENT_SAVE_VERSION).toBe(26);
+    expect(s.saveVersion).toBe(26);
     expect(s.potionCooldowns).toEqual({});
     expect(s.rng).toEqual(V23.rng);
     expect(s.time).toEqual(V23.time);
@@ -124,9 +124,9 @@ describe('v23 -> v24', () => {
     expect(MIGRATIONS[23](JSON.parse(JSON.stringify(V23))).saveVersion).toBe(24);
   });
 
-  it('the release table: 1.27.0 wrote save 24 (1.28.0 wrote 25: tests/migrationV24.test.ts)', () => {
+  it('the release table: 1.27.0 wrote save 24 (1.28.0 wrote 25: tests/migrationV24.test.ts; 1.29.0 wrote 26: tests/migrationV25.test.ts)', () => {
     expect(RELEASED_ENGINES.find((r) => r.engine === '1.27.0')).toEqual({ engine: '1.27.0', save: 24 });
-    expect(ENGINE_VERSION).toBe('1.28.0');
+    expect(ENGINE_VERSION).toBe('1.29.0');
   });
 });
 

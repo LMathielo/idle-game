@@ -370,7 +370,9 @@ describe('Stop and insta', () => {
     const r = run(waiting, { type: 'STOP_CRAFT', pipe: 0, jobId: 1 }, T0);
     expect(r.ok && [r.state.crafting.pipes[0], qty(r.state, 'oak_logs')]).toEqual([null, 1]);
     // The first craft took the last 2 logs (stack gone); every slot filled: the refund has no room.
-    const full = fill(apply(game({ oak_logs: 2 }), start(0, 'oak_plank'), T0));
+    // (Since 1.29.0 a built Storage would take the refund: it is locked here; tests/storage.test.ts covers the refund into storage.)
+    const bagFull = fill(apply(game({ oak_logs: 2 }), start(0, 'oak_plank'), T0));
+    const full = { ...bagFull, buildings: { ...bagFull.buildings, storage: { state: 'locked' as const, level: 0 } } };
     expectError(full, { type: 'STOP_CRAFT', pipe: 0, jobId: 1 }, 'INVENTORY_FULL');
   });
 

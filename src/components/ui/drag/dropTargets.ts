@@ -43,3 +43,12 @@ export function slotAt(rects: readonly DropRect[], x: number, y: number, slop?: 
   }
   return best;
 }
+
+/** The part of `rect` inside `clip` (a scroll view's viewport), or null when none of it is visible. A cell scrolled out of its list must not be a drop box. */
+export function clipRect(rect: DropRect, clip: DropRect): DropRect | null {
+  const x = Math.max(rect.x, clip.x);
+  const y = Math.max(rect.y, clip.y);
+  const right = Math.min(rect.x + rect.width, clip.x + clip.width);
+  const bottom = Math.min(rect.y + rect.height, clip.y + clip.height);
+  return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null;
+}

@@ -6,11 +6,20 @@
 // the position. A NEW item goes to the first empty cell, a stackable joins its stack's cell. `placeInBag` is the ONLY way an item enters the
 // bag (with `placeInCell`, for an item aimed at a chosen empty cell; tests/bagCells.test.ts scans the engine for any other push), and `moveItem` (equipment.ts) is the only way a cell changes besides
 // equip / unequip, which hand a cell from one piece to another.
+//
+// THE STORAGE (1.29.0, save v26) IS THE SAME GRID: `state.storage.items` with the same cell model, its capacity following the Storage level
+// (`storageBox`). Every helper below that takes `Pick<Inventory, 'items' | 'capacity'>` works on either container. Its entries are
+// `placeInStorage` / `placeInStorageCell` (the same two functions as the bag's, aimed at the storage box), also here: the source-scan test
+// allows pushes into a container in this file only.
+import { storageCapacity } from './bonuses';
 import { BELT } from './config/belt';
 import { GEAR } from './config/gear';
 import { getItemDef } from './config/items';
 import { copyAffixes, isGearDef } from './gear';
 import type { BeltSlot, Character, GameState, GearRoll, Inventory, Item } from './types';
+
+/** Either container: a bag-like grid (`capacity` cells and the items in them). */
+export type Box = Pick<Inventory, 'items' | 'capacity'>;
 
 /**
  * A new item instance. Gear (an item with a slot) carries `roll` (its quality, rarity and, for rare / epic, its affixes), by default
@@ -67,8 +76,8 @@ export function cellsOf(inventory: Pick<Inventory, 'items' | 'capacity'>): (numb
   });
 }
 
-/** The bag as the grid the player sees: `capacity` entries, the item in each cell or null. Read-only (the UI's single view of the bag). */
-export function bagCells(inventory: Pick<Inventory, 'items' | 'capacity'>): (Item | null)[] {
+/** A container as the grid the player sees (the bag; the storage via `storageBox`): `capacity` entries, the item in each cell or null. Read-only (the UI's single view of the bag). */
+export function bagCells(inventory: Box): (Item | null)[] {
   const grid: (Item | null)[] = Array.from({ length: Math.max(0, inventory.capacity) }, () => null);
   const cells = cellsOf(inventory);
   inventory.items.forEach((item, i) => {
@@ -101,17 +110,31 @@ export function firstEmptyCell(inventory: Pick<Inventory, 'items' | 'capacity'>)
   return -1;
 }
 
+/** First-empty-cell entry shared by both containers. False (nothing changes) when the box is full. */
+function pushFirstEmpty(box: Inventory, item: Item): boolean {
+  settleCells(box);
+  const cell = firstEmptyCell(box);
+  if (cell < 0) return false;
+  item.cell = cell;
+  box.items.push(item);
+  return true;
+}
+
+/** Chosen-cell entry shared by both containers. False (nothing changes) unless `cell` is an empty cell of the box. */
+function pushInCell(box: Inventory, item: Item, cell: number): boolean {
+  settleCells(box);
+  if (!validCell(cell, box.capacity) || box.items.some((i) => i.cell === cell)) return false;
+  item.cell = cell;
+  box.items.push(item);
+  return true;
+}
+
 /**
  * THE way an item enters the bag: into the first empty cell. False (nothing changes) when the bag is full. Any `cell` the item carries
  * is replaced. Mutates `inventory` (callers pass a draft copy).
  */
 export function placeInBag(inventory: Inventory, item: Item): boolean {
-  settleCells(inventory);
-  const cell = firstEmptyCell(inventory);
-  if (cell < 0) return false;
-  item.cell = cell;
-  inventory.items.push(item);
-  return true;
+  return pushFirstEmpty(inventory, item);
 }
 
 /**
@@ -119,11 +142,26 @@ export function placeInBag(inventory: Inventory, item: Item): boolean {
  * bag. False (nothing changes) when it is not. Mutates `inventory` (callers pass a draft copy).
  */
 export function placeInCell(inventory: Inventory, item: Item, cell: number): boolean {
-  settleCells(inventory);
-  if (!validCell(cell, inventory.capacity) || inventory.items.some((i) => i.cell === cell)) return false;
-  item.cell = cell;
-  inventory.items.push(item);
-  return true;
+  return pushInCell(inventory, item, cell);
+}
+
+/**
+ * The storage as a grid (1.29.0): its capacity (the Storage level's cells, 0 while locked) and the SAME items array as `state.storage`,
+ * so what the grid helpers do to `box.items` (cells settled, items spliced or pushed) is done to the state. Read-only users get the view;
+ * writers pass a draft copy they own.
+ */
+export function storageBox(state: Pick<GameState, 'storage' | 'buildings'>): Inventory {
+  return { capacity: storageCapacity(state), items: state.storage.items };
+}
+
+/** The storage's way in: the first empty cell. False (nothing changes) when storage is full (or locked: no cells). Mutates `state.storage`. */
+export function placeInStorage(state: Pick<GameState, 'storage' | 'buildings'>, item: Item): boolean {
+  return pushFirstEmpty(storageBox(state), item);
+}
+
+/** The storage's way in for a chosen cell, which must be an empty cell of the storage. False (nothing changes) when it is not. Mutates `state.storage`. */
+export function placeInStorageCell(state: Pick<GameState, 'storage' | 'buildings'>, item: Item, cell: number): boolean {
+  return pushInCell(storageBox(state), item, cell);
 }
 
 /**
@@ -141,12 +179,19 @@ export function addStackable(inventory: Inventory, defId: string, quantity: numb
 }
 
 /**
- * True when the hero owns at least one of the item: in the inventory or worn (1.27.0: an equipped Potion Belt counts, so the Chieftain does not
- * drop a second one while it is worn). The single ownership check of unique items (ItemDef.unique, e.g. the Potion Belt); a future storage
- * extends THIS function and nothing else (the drop roll, the loot list and the tests all call it). Read-only.
+ * True when the hero owns at least one of the item: in the inventory, in the storage (1.29.0) or worn (1.27.0: an equipped Potion Belt counts,
+ * so the Chieftain does not drop a second one while it is worn or stored). The single ownership check of unique items (ItemDef.unique, e.g.
+ * the Potion Belt): the drop roll, the loot list and the tests all call it. Read-only.
  */
-export function heroOwnsItem(state: { inventory: Pick<Inventory, 'items'>; character: Pick<Character, 'equipment'> }, defId: string): boolean {
-  return state.inventory.items.some((i) => i.defId === defId) || Object.values(state.character.equipment).some((i) => i?.defId === defId);
+export function heroOwnsItem(
+  state: { inventory: Pick<Inventory, 'items'>; storage?: Pick<Inventory, 'items'>; character: Pick<Character, 'equipment'> },
+  defId: string,
+): boolean {
+  return (
+    state.inventory.items.some((i) => i.defId === defId) ||
+    (state.storage?.items.some((i) => i.defId === defId) ?? false) ||
+    Object.values(state.character.equipment).some((i) => i?.defId === defId)
+  );
 }
 
 /** Inventory slots still free (never negative). */

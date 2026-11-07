@@ -71,8 +71,8 @@ describe('v20 → v21', () => {
   const s = loadSave(V20);
 
   it('loads as the current save; the main RNG, the clock and everything else are untouched', () => {
-    expect(CURRENT_SAVE_VERSION).toBe(25);
-    expect(s.saveVersion).toBe(25);
+    expect(CURRENT_SAVE_VERSION).toBe(26);
+    expect(s.saveVersion).toBe(26);
     expect(s.rng).toEqual(V20.rng);
     expect(s.time).toEqual(V20.time);
     // Nothing lost or changed but the affixes: with them stripped and the version put back, the document is the fixture byte for byte.

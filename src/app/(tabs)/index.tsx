@@ -16,10 +16,6 @@ import type { AnchorRect } from '../../components/ui/InfoPopover';
 import { type ActivityKind, type BuildingId, constructionView, craftingSign, isBuilt } from '../../engine';
 import { colors, fonts } from '../../theme';
 
-const COMING_SOON: Record<Exclude<VillageAction, 'woodcutting' | 'mine' | 'town_hall' | 'dungeon' | 'training' | 'merchant' | 'crafting'>, string> = {
-  storage: 'Storage',
-};
-
 /** Signs whose building has to be built first (every sign but the Dungeon, which is always open). */
 const SIGN_BUILDING: Partial<Record<VillageAction, BuildingId>> = {
   storage: 'storage',
@@ -43,7 +39,7 @@ const BUILDING_SIGN: Record<BuildingId, VillageAction> = {
 };
 
 /** The full-screen modal each built sign opens. */
-const SIGN_ROUTE: Partial<Record<VillageAction, '/dungeon' | '/training' | '/woodcutting' | '/mine' | '/merchant' | '/town-hall' | '/crafting'>> = {
+const SIGN_ROUTE: Partial<Record<VillageAction, '/dungeon' | '/training' | '/woodcutting' | '/mine' | '/merchant' | '/town-hall' | '/crafting' | '/storage'>> = {
   dungeon: '/dungeon',
   training: '/training',
   woodcutting: '/woodcutting',
@@ -51,6 +47,7 @@ const SIGN_ROUTE: Partial<Record<VillageAction, '/dungeon' | '/training' | '/woo
   merchant: '/merchant',
   town_hall: '/town-hall',
   crafting: '/crafting',
+  storage: '/storage',
 };
 
 /** The sign highlighted while an activity runs. */
@@ -122,13 +119,9 @@ export default function VillageScreen() {
         return;
       }
       const route = SIGN_ROUTE[action];
-      if (route) {
-        router.push(route);
-        return;
-      }
-      showToast(`${COMING_SOON[action as keyof typeof COMING_SOON]}: coming soon`);
+      if (route) router.push(route);
     },
-    [locked, showToast],
+    [locked],
   );
   const closeSheet = useCallback(() => setBuilding(null), []);
   const onBuilt = useCallback(

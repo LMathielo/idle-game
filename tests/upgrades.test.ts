@@ -120,12 +120,11 @@ describe('UPGRADE_BUILDING', () => {
     }
   });
 
-  it('every building with bonus data reaches every level (Training Grounds since 1.11.0); Storage has none (1.18.0)', async () => {
+  it('every building has bonus data for every level (Training Grounds since 1.11.0; Storage since 1.29.0)', async () => {
     const { hasLevelBonuses } = await import('../src/engine');
-    for (const id of BUILDING_IDS.filter((b) => b !== 'storage')) {
+    for (const id of BUILDING_IDS) {
       for (let l = 2; l <= BUILDING_MAX_LEVEL; l += 1) expect(hasLevelBonuses(id, l)).toBe(true);
     }
-    for (let l = 2; l <= BUILDING_MAX_LEVEL; l += 1) expect(hasLevelBonuses('storage', l)).toBe(false);
   });
 
   it('a building whose next level has no bonus data is still not upgradable: NOT_UPGRADABLE, nothing paid', async () => {

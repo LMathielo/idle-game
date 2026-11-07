@@ -3,22 +3,35 @@
 // commands MOVE_ITEM / EQUIP_ITEM / UNEQUIP_ITEM / SWAP_RINGS, and tests/dragDrop.test.ts checks, for every pair of source and target in
 // several states, that the answer is a command iff the engine would accept it. The UI never decides what is allowed: it asks here, and
 // the engine validates again when the command runs.
+//
+// Storage (1.29.0): a bag or storage item can also be dropped on a storage cell, a bag cell or on a whole section ('area': no cell, the
+// stack of its type there or the first free cell). Those answers are STORAGE_MOVE and come from the planner the command itself runs
+// (storage.ts `planMove`), so there is one rule, not two.
 import { getItemDef } from './config/items';
 import { fitsSlot } from './equipment';
 import { itemInCell } from './inventory';
+import { planMove } from './storage';
 import type { EquipmentSlot, GameState } from './types';
 
-/** What the player picked up: a bag item (by id) or the piece worn in a slot. */
-export type DragSource = { kind: 'bag'; itemId: string } | { kind: 'slot'; slot: EquipmentSlot };
-/** Where the finger let go: a bag cell or an equipment slot. */
-export type DragTarget = { kind: 'cell'; cell: number } | { kind: 'slot'; slot: EquipmentSlot };
+/** What the player picked up: a bag item (by id), a storage item (by id) or the piece worn in a slot. */
+export type DragSource = { kind: 'bag'; itemId: string } | { kind: 'slot'; slot: EquipmentSlot } | { kind: 'storage'; itemId: string };
+/**
+ * Where the finger let go: a bag cell, an equipment slot, a storage cell, or a whole section of the Storage modal (`area`: not on a cell,
+ * which sends the item to that container's stack of its type, else its first free cell).
+ */
+export type DragTarget =
+  | { kind: 'cell'; cell: number }
+  | { kind: 'slot'; slot: EquipmentSlot }
+  | { kind: 'storage_cell'; cell: number }
+  | { kind: 'area'; side: 'bag' | 'storage' };
 
 /** The command a drop sends (the client adds the id). */
 export type DropCommand =
   | { type: 'MOVE_ITEM'; itemId: string; toCell: number }
   | { type: 'EQUIP_ITEM'; itemId: string; slot: EquipmentSlot }
   | { type: 'UNEQUIP_ITEM'; slot: EquipmentSlot; toCell: number }
-  | { type: 'SWAP_RINGS' };
+  | { type: 'SWAP_RINGS' }
+  | { type: 'STORAGE_MOVE'; from: 'bag' | 'storage'; itemId: string; to: 'bag' | 'storage'; toCell?: number };
 
 const RINGS: readonly EquipmentSlot[] = ['ring1', 'ring2'];
 
@@ -28,9 +41,22 @@ function fits(defId: string, slot: EquipmentSlot): boolean {
   return !!def?.slot && !def.stackable && fitsSlot(def.slot, slot);
 }
 
-export function dropCommand(state: Pick<GameState, 'inventory' | 'character'>, source: DragSource, target: DragTarget): DropCommand | null {
+/** The STORAGE_MOVE a drop on `to` (a cell of it, or none) would send, or null when the planner refuses it. */
+function storageMove(state: Pick<GameState, 'inventory' | 'storage' | 'buildings'>, from: 'bag' | 'storage', itemId: string, to: 'bag' | 'storage', toCell?: number): DropCommand | null {
+  if (!planMove(state, from, itemId, to, toCell).ok) return null;
+  return toCell === undefined ? { type: 'STORAGE_MOVE', from, itemId, to } : { type: 'STORAGE_MOVE', from, itemId, to, toCell };
+}
+
+export function dropCommand(state: Pick<GameState, 'inventory' | 'character' | 'storage' | 'buildings'>, source: DragSource, target: DragTarget): DropCommand | null {
   const { inventory, character } = state;
   const validCell = (cell: number) => Number.isInteger(cell) && cell >= 0 && cell < inventory.capacity;
+  if (source.kind === 'storage') {
+    if (target.kind === 'cell') return storageMove(state, 'storage', source.itemId, 'bag', target.cell);
+    if (target.kind === 'storage_cell') return storageMove(state, 'storage', source.itemId, 'storage', target.cell);
+    return target.kind === 'area' && target.side === 'bag' ? storageMove(state, 'storage', source.itemId, 'bag') : null;
+  }
+  if (target.kind === 'storage_cell') return source.kind === 'bag' ? storageMove(state, 'bag', source.itemId, 'storage', target.cell) : null;
+  if (target.kind === 'area') return source.kind === 'bag' && target.side === 'storage' ? storageMove(state, 'bag', source.itemId, 'storage') : null;
   if (source.kind === 'bag') {
     const item = inventory.items.find((i) => i.id === source.itemId);
     if (!item) return null;

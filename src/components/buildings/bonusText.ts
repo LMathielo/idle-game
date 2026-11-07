@@ -16,6 +16,7 @@ export function bonusLines(b: LevelBonuses): string[] {
   if (b.sellPriceBp) out.push(`${formatBonusBp(b.sellPriceBp)} merchant sell prices`);
   if (b.workerCap) out.push(`${b.workerCap} worker slots`);
   if (b.stockSlots) out.push(`${b.stockSlots} stock slots`);
+  if (b.storageSlots) out.push(`${b.storageSlots} slots`);
   if (b.trainingXpPerMin) out.push(`${b.trainingXpPerMin} training XP per minute`);
   // Crafting house: the time multiplier as a reduction ("−19% craft time"); 100% gives no line.
   if (b.craftTimeBp !== undefined && b.craftTimeBp < BASIS_POINTS) out.push(`−${formatPercentBp(BASIS_POINTS - b.craftTimeBp)} craft time`);

@@ -16,6 +16,7 @@ import { BOSSES, DUNGEONS, isBossId, isDungeonId } from './config/dungeons';
 import { beginFight, forfeitFight, isDungeonUnlocked, recordDungeonResults, searchMsFor, settleFightStart, skipCost } from './dungeon';
 import { checkDifficulty, type DifficultyErrorCode, selectedDifficulty } from './difficulty';
 import { equipItem, moveItem, swapRings, unequipItem, useItem } from './equipment';
+import { depositAll, depositStacked, moveStored, type StorageErrorCode } from './storage';
 import { markDebugUsed } from './flags';
 import { addMerchantCharge, buyItem, type ItemError, type ItemErrorCode, refreshMerchant, sellItem } from './merchant';
 import { maxHpOf } from './hp';
@@ -163,6 +164,23 @@ export type Command =
    * Refused: NOT_IN_INVENTORY, INVALID_CELL, SAME_CELL.
    */
   | { id: string; type: 'MOVE_ITEM'; itemId: string; toCell: number }
+  /**
+   * Storage (1.29.0), all refused with BUILDING_LOCKED while the Storage is not built. Moves EVERY bag item into storage: stackables
+   * merge into their stack there first, the rest take the lowest free storage cells in bag-cell order; what does not fit stays in the bag
+   * (ITEMS_DEPOSITED says how many entries). Equipped items never move; a Potion Belt keeps its contents. Refused: NOTHING_TO_MOVE (empty
+   * bag), CONTAINER_FULL (not one entry could move).
+   */
+  | { id: string; type: 'DEPOSIT_ALL' }
+  /** Merges the bag stacks whose type already has a stack in storage into it. Gear never moves. Refused: NOTHING_TO_MOVE. */
+  | { id: string; type: 'DEPOSIT_STACKED' }
+  /**
+   * Moves the whole stack / piece `itemId` of container `from` (the bag and the storage can each hold a stack with the same id) to
+   * container `to`, aimed at `toCell` (optional): bag <-> storage
+   * or inside the storage. Onto an empty cell it moves, onto another item it swaps, onto its own type it merges; a move that would make a
+   * second stack of a type merges into the existing one; without a cell: the stack of its type there, else the first free cell. Bag to
+   * bag is MOVE_ITEM. Refused: BUILDING_LOCKED, NOT_IN_INVENTORY, INVALID_CELL, INVALID_COMMAND, SAME_CELL, CONTAINER_FULL.
+   */
+  | { id: string; type: 'STORAGE_MOVE'; from: 'bag' | 'storage'; itemId: string; to: 'bag' | 'storage'; toCell?: number }
   /** Ring 1 and Ring 2 trade places (a ring beside an empty ring slot moves into it). SLOT_EMPTY when both are empty. */
   | { id: string; type: 'SWAP_RINGS' }
   /** Uses one unit of a consumable (Health Potion: +heal HP, capped at max; HP_FULL at max HP; ON_COOLDOWN while that potion's cooldown group runs, 1.27.0). */
@@ -259,6 +277,7 @@ export type CommandErrorCode =
   | 'NOT_ENOUGH_GOLD'
   | 'NOT_ENOUGH_POINTS'
   | ItemErrorCode
+  | StorageErrorCode
   | CraftErrorCode
   | 'DEBUG_DISABLED';
 
@@ -739,6 +758,21 @@ export function applyCommand(state: GameState, cmd: Command, now: number, option
     }
     case 'MOVE_ITEM': {
       const e = moveItem(draft, cmd.itemId, cmd.toCell);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'DEPOSIT_ALL': {
+      const e = depositAll(draft, events);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'DEPOSIT_STACKED': {
+      const e = depositStacked(draft, events);
+      if (e) return fail(e.code, e.message);
+      break;
+    }
+    case 'STORAGE_MOVE': {
+      const e = moveStored(draft, cmd.from, cmd.itemId, cmd.to, cmd.toCell);
       if (e) return fail(e.code, e.message);
       break;
     }

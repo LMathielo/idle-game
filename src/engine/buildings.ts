@@ -2,14 +2,14 @@
 // and the Build / Upgrade sheet views. See docs/ENGINE.md ("Buildings"). Requirements and costs are data
 // (config/buildings.ts).
 //
-//   BUILD validates every requirement first, then consumes gold and items and builds at once (level 1).
+//   BUILD validates every requirement first, then consumes gold and items (the storage first, then the bag: stock.ts) and builds at once (level 1).
 //   UPGRADE_BUILDING validates the level cap (5, and never above the Town Hall) and the cost, pays up front and
 //   starts the builder; the upgrade completes inside simulate() on the granted (capped) time.
 //   A locked building can't be used: the activity it hosts refuses to start (BUILDING_LOCKED).
 import { bonusesAt } from './bonuses';
 import { BUILDING_IDS, BUILDING_MAX_LEVEL, BUILDINGS, type LevelBonuses, type UpgradeCost } from './config/buildings';
 import { getItemDef } from './config/items';
-import { itemQuantity } from './selectors';
+import { countItem, takeItem } from './stock';
 import type { ActivityKind, BuildingId, BuildingState, Construction, GameEvent, GameState, SimulationSummary } from './types';
 
 /** A new save: every building locked (1.18.0: the Merchant and Storage too). */
@@ -55,7 +55,7 @@ export type UpgradeBlock =
   | 'town_hall'
   /** The builder is busy with an upgrade (this building's or another's). */
   | 'builder_busy'
-  /** Gold or items missing (see `cost`). */
+  /** Gold or items missing (see `cost`; items count the storage and the bag). */
   | 'cost';
 
 export type UpgradeView = {
@@ -99,7 +99,7 @@ export type BuildingView = {
 function itemAndGoldViews(state: GameState, items: readonly { defId: string; quantity: number }[], gold: number | undefined): RequirementView[] {
   const out: RequirementView[] = [];
   for (const it of items) {
-    const have = itemQuantity(state, it.defId);
+    const have = countItem(state, it.defId);
     out.push({ kind: 'item', defId: it.defId, need: it.quantity, have, met: have >= it.quantity });
   }
   if (gold !== undefined) {
@@ -196,28 +196,6 @@ export function buildingsView(state: GameState): BuildingView[] {
   return BUILDING_IDS.map((id) => buildingView(state, id));
 }
 
-/** Removes `quantity` of a stackable item from the inventory (the caller checked there is enough). Mutates. */
-export function consumeItem(draft: GameState, defId: string, quantity: number): void {
-  let left = quantity;
-  const items = draft.inventory.items;
-  for (let i = 0; i < items.length && left > 0; ) {
-    const it = items[i];
-    if (it.defId !== defId) {
-      i += 1;
-      continue;
-    }
-    const have = it.stackable ? (it.quantity ?? 1) : 1;
-    const take = Math.min(have, left);
-    left -= take;
-    if (have - take > 0) {
-      it.quantity = have - take;
-      i += 1;
-    } else {
-      items.splice(i, 1);
-    }
-  }
-}
-
 /**
  * Builds now (level 1) and applies the building's effects. Consumes nothing: BUILD pays first, the debug build
  * pays nothing. Mutates `draft` (a full copy owned by the caller).
@@ -242,7 +220,7 @@ export function build(draft: GameState, buildingId: BuildingId, events: GameEven
   const missing = requirementViews(draft, buildingId).filter((r) => !r.met);
   if (missing.length > 0) return { code: 'REQUIREMENTS_NOT_MET', message: `${def.name} needs ${missing.map(describeMissing).join(', ')}` };
   const r = def.requirements;
-  for (const it of r.items ?? []) consumeItem(draft, it.defId, it.quantity);
+  for (const it of r.items ?? []) takeItem(draft, it.defId, it.quantity);
   if (r.gold) draft.character.gold -= r.gold;
   completeBuilding(draft, buildingId, events);
   return null;
@@ -273,7 +251,7 @@ export function startUpgrade(draft: GameState, buildingId: BuildingId, level: un
   if (missing.length > 0) {
     return { code: 'REQUIREMENTS_NOT_MET', message: `Level ${level} needs ${missing.map(describeMissing).join(', ')}` };
   }
-  for (const it of cost.items) consumeItem(draft, it.defId, it.quantity);
+  for (const it of cost.items) takeItem(draft, it.defId, it.quantity);
   draft.character.gold -= cost.gold;
   draft.construction = { buildingId, level, durationMs: cost.durationMs, progressMs: 0, startedAt: now };
   events.push({ type: 'CONSTRUCTION_STARTED', buildingId, level });

@@ -52,6 +52,7 @@ They let us move logic to a server later without a rewrite.
 5. **Combat produces a log**; the UI replays it. Visuals never affect outcomes.
 6. **Saves are versioned** (`saveVersion`); add a migration when the shape changes.
 7. **Tunables live in data** (`src/engine/config`), not code.
+8. **Two item containers** (1.29.0): the bag (`inventory`) and the Storage (`storage`) share one cell model. Items enter either only through `placeInBag` / `placeInStorage` (`inventory.ts`); builds, upgrades and crafts count and take items only through `countItem` / `takeItem` / `refundItems` (`stock.ts`: storage first, refunds to the bag first). A scan test enforces the first rule. UI: `src/components/storage/`, route `src/app/storage.tsx`.
 
 Engine rules get Vitest tests. UI stays thin.
 

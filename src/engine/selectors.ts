@@ -2,6 +2,7 @@
 import { bossRunView, type BossRunView } from './boss';
 import { dungeonRunView, type DungeonRunView } from './dungeon';
 import { mineActivityView, type MineActivityView } from './mining';
+import { countItem } from './stock';
 import { attributeTrainingView, type AttributeTrainingView } from './training';
 import type { GameState } from './types';
 import { woodcutActivityView, type WoodcutActivityView } from './woodcutting';
@@ -24,7 +25,7 @@ export function activityView(state: GameState): ActivityView | null {
   return woodcutActivityView(state);
 }
 
-/** Total quantity of an item definition across the inventory. */
+/** Total quantity of an item definition the hero can pay with: the storage and the bag together (1.29.0; stock.ts). */
 export function itemQuantity(state: GameState, defId: string): number {
-  return state.inventory.items.filter((i) => i.defId === defId).reduce((n, i) => n + (i.quantity ?? 1), 0);
+  return countItem(state, defId);
 }

@@ -41,6 +41,9 @@ export const LOG_TYPES = [
   'EQUIP_ITEM',
   'UNEQUIP_ITEM',
   'MOVE_ITEM',
+  'DEPOSIT_ALL',
+  'DEPOSIT_STACKED',
+  'STORAGE_MOVE',
   'SWAP_RINGS',
   'USE_ITEM',
   'BELT_PUT',
@@ -191,6 +194,9 @@ export function replayStep(state: GameState | null, entry: ReplayEntry, prev?: R
     case 'EQUIP_ITEM':
     case 'UNEQUIP_ITEM':
     case 'MOVE_ITEM':
+    case 'DEPOSIT_ALL':
+    case 'DEPOSIT_STACKED':
+    case 'STORAGE_MOVE':
     case 'SWAP_RINGS':
     case 'USE_ITEM':
     case 'BELT_PUT':
